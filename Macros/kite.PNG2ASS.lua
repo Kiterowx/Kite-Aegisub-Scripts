@@ -1,25 +1,23 @@
 script_name        = "PNG2ASS"
-script_description = "Convert PNG images into ASS drawing lines"
+script_description = "Convert images and SVG files into ASS drawing lines"
 script_author      = "Kiterow"
-script_version     = "1.1.4"
+script_version     = "1.4.1"
 script_namespace   = "kite.PNG2ASS"
-local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-local HOTKEY_MENU_SCRIPT = script_name
 
 local PNG2ASS = {}
 
-local is_windows = package.config:sub(1, 1) == "\\"
-local sep = is_windows and "\\" or "/"
 local module_name = "ass_png2ass"
 local config_file_name = "kite.PNG2ASS.conf"
-local default_install_source = "git+https://github.com/Kitherow/kite-png2ass.git"
+local default_install_source = "git+https://github.com/Kiterowx/kite-png2ass.git"
+local IMAGE_FILTER = "Images (.png .jpg .jpeg .webp .bmp .tif .svg)|"
+    .. "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.tga;*.svg"
 
 local depctrl
 do
     local ok, DependencyControl = pcall(require, "l0.DependencyControl")
     if ok and DependencyControl then
         depctrl = DependencyControl({
-            feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
             {
                 {
                     "aka.command",
@@ -29,43 +27,45 @@ do
                 },
                 {
                     "kite.UI",
-                    version = "1.0.0",
-                    url = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-                    feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+                    version = "1.1.0",
+                    url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+                    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+                },
+                {
+                    "kite.PyBridge",
+                    version = "1.4.2",
+                    url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+                    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+                },
+                {
+                    "kite.LineOps",
+                    version = "1.5.0",
+                    url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+                    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
                 },
             }
         })
     end
 end
 
-local command_api
 local KiteUI
+local PyBridge
+local LineOps
 do
     if depctrl and depctrl.requireModules then
-        local ok, api, ui = pcall(function()
+        local ok, _, ui, bridge, lineops = pcall(function()
             return depctrl:requireModules()
         end)
-        if ok and api then
-            command_api = api
+        if ok then
             KiteUI = ui
-        end
-    end
-    if not command_api then
-        local ok, api = pcall(require, "aka.command")
-        if ok and api then
-            command_api = api
+            PyBridge = bridge
+            LineOps = lineops
         end
     end
 end
 KiteUI = KiteUI or require("kite.UI")
-
-local lfs
-do
-    local ok, module = pcall(require, "lfs")
-    if ok and module then
-        lfs = module
-    end
-end
+PyBridge = PyBridge or require("kite.PyBridge")
+LineOps = LineOps or require("kite.LineOps")
 
 local DEFAULTS = {
     python = "python",
@@ -76,7 +76,9 @@ local DEFAULTS = {
     p_scale = 4,
     simplify = 1.0,
     min_area = 2,
-    max_chars = 200000,
+    max_chars = 1000000,
+    max_pixels = 40000000,
+    denoise = 0,
     position = "0,0",
     x = 0,
     y = 0,
@@ -90,61 +92,14 @@ local MODES = { "auto", "alpha", "white-matte", "dark-matte", "luma", "color" }
 local POSITIONS = { "0,0", "Active pos", "Manual" }
 local COLORS = { "style", "source" }
 
-local function trim(value)
-    value = tostring(value or "")
-    value = value:gsub("^%s+", "")
-    value = value:gsub("%s+$", "")
-    return value
-end
+local trim = LineOps.trim
+local join_path = PyBridge.joinPath
+local file_exists = PyBridge.fileExists
+local write_file = PyBridge.writeFile
+local copy_line = LineOps.copy
 
-local function shell_quote(value)
-    value = tostring(value or "")
-    if is_windows then
-        return '"' .. value:gsub('"', '""') .. '"'
-    end
-    return "'" .. value:gsub("'", "'\\''") .. "'"
-end
-
-local function join_path(left, right)
-    left = tostring(left or "")
-    right = tostring(right or "")
-    if left == "" then
-        return right
-    end
-    local tail = left:sub(-1)
-    if tail == "\\" or tail == "/" then
-        return left .. right
-    end
-    return left .. sep .. right
-end
-
-local function file_exists(path)
-    local handle = io.open(path, "rb")
-    if handle then
-        handle:close()
-        return true
-    end
-    return false
-end
-
-local function read_file(path)
-    local handle = io.open(path, "rb")
-    if not handle then
-        return nil
-    end
-    local content = handle:read("*a")
-    handle:close()
-    return content
-end
-
-local function write_file(path, content)
-    local handle = io.open(path, "wb")
-    if not handle then
-        return false
-    end
-    handle:write(content or "")
-    handle:close()
-    return true
+local function read_file(path, limit)
+    return PyBridge.readFile(path, limit)
 end
 
 local function read_lines(path)
@@ -162,24 +117,7 @@ local function read_lines(path)
     return lines
 end
 
-local function ensure_dir(path)
-    if trim(path) == "" then
-        return false
-    end
-    if lfs then
-        local attr = lfs.attributes(path)
-        if attr and attr.mode == "directory" then
-            return true
-        end
-        return lfs.mkdir(path) ~= nil
-    end
-    if is_windows then
-        os.execute("cmd /c if not exist " .. shell_quote(path) .. " mkdir " .. shell_quote(path))
-    else
-        os.execute("mkdir -p " .. shell_quote(path))
-    end
-    return true
-end
+local ensure_dir = PyBridge.ensureDir
 
 local function show_message(message)
     aegisub.dialog.display({
@@ -204,39 +142,14 @@ local function continue_after_many_lines(message)
     return button == "Continue"
 end
 
-local function command_ok(status)
-    return status == true or status == 0
-end
-
-local function command_program(value)
-    value = trim(value)
-    if value == "" then
-        value = DEFAULTS.python
-    end
-    if value:find("[\\/]") then
-        return shell_quote(value)
-    end
-    return value
-end
-
-local function wrap_command(command, log_path)
-    command = tostring(command or ""):gsub("\r?\n", " && ")
-    if log_path and trim(log_path) ~= "" then
-        command = command .. " > " .. shell_quote(log_path) .. " 2>&1"
-    end
-    if is_windows then
-        return 'cmd /c "' .. command .. '"'
-    end
-    return command
-end
-
 local function run_command(command, log_path)
-    if command_api and command_api.run_cmd_c then
-        local output, ok = command_api.run_cmd_c(command, true)
-        write_file(log_path, output or "")
-        return ok == true
+    if not command or trim(command) == "" then
+        write_file(log_path, "Command could not be built.")
+        return false
     end
-    return command_ok(os.execute(wrap_command(command, log_path)))
+    local ok, log = PyBridge.run(command)
+    write_file(log_path, log or "")
+    return ok
 end
 
 local function run_command_dialog(title, command, ok_message)
@@ -321,11 +234,10 @@ local function local_package_source()
 end
 
 local function default_python()
-    local path = join_path(join_path(join_path(script_dir(), "ass_png2ass"), ".venv"), is_windows and "Scripts\\python.exe" or "bin/python")
-    if file_exists(path) then
-        return path
-    end
-    return DEFAULTS.python
+    return PyBridge.resolvePython(
+        "",
+        join_path(join_path(script_dir(), "ass_png2ass"), ".venv")
+    )
 end
 
 local function default_config()
@@ -363,6 +275,8 @@ local PNG_SETTINGS = KiteUI.settings(script_namespace, script_version, {
         y = DEFAULTS.y,
         blur = DEFAULTS.blur,
         max_chars = DEFAULTS.max_chars,
+        max_pixels = DEFAULTS.max_pixels,
+        denoise = DEFAULTS.denoise,
     },
 }, {
     { path = config_path(false), format = "key_value", target = "package" },
@@ -386,43 +300,43 @@ local function write_config(cfg)
     return PNG_SETTINGS:write()
 end
 
+local function python_path_error(value)
+    local python = trim(value)
+    if not python:find("[/\\]") or file_exists(python) then return nil end
+    return "The configured Python interpreter was not found.\nPath: " .. python
+        .. "\nOpen PNG2ASS/Backend/Configure and set Python to python or select an existing interpreter."
+end
+
 function temp_paths()
-    local stamp = os.date("%Y%m%d%H%M%S") .. "_" .. tostring(math.random(100000, 999999))
-    local out_name = "png2ass_" .. stamp .. ".txt"
-    local list_name = "png2ass_" .. stamp .. ".list"
-    local sequence_name = "png2ass_" .. stamp .. ".seq"
-    local log_name = "png2ass_" .. stamp .. ".log"
-    local cmd_log_name = "png2ass_" .. stamp .. ".cmd.log"
-    local out_path = decoded_path("?temp/" .. out_name)
-    local list_path = decoded_path("?temp/" .. list_name)
-    local sequence_path = decoded_path("?temp/" .. sequence_name)
-    local log_path = decoded_path("?temp/" .. log_name)
-    local cmd_log_path = decoded_path("?temp/" .. cmd_log_name)
-    if out_path and list_path and sequence_path and log_path and cmd_log_path then
-        return { out = out_path, list = list_path, sequence = sequence_path, log = log_path, cmdlog = cmd_log_path }
+    local paths = PyBridge.tempPaths("png2ass", {
+        out = ".txt",
+        list = ".list",
+        sequence = ".seq",
+        log = ".log",
+        cmdlog = ".cmd.log",
+    })
+    if paths then
+        return paths
     end
     local temp = join_path(script_dir(), "temp")
     ensure_dir(temp)
+    local stamp = os.date("%Y%m%d%H%M%S")
     return {
-        out = out_path or join_path(temp, out_name),
-        list = list_path or join_path(temp, list_name),
-        sequence = sequence_path or join_path(temp, sequence_name),
-        log = log_path or join_path(temp, log_name),
-        cmdlog = cmd_log_path or join_path(temp, cmd_log_name),
+        out = join_path(temp, "png2ass_" .. stamp .. ".txt"),
+        list = join_path(temp, "png2ass_" .. stamp .. ".list"),
+        sequence = join_path(temp, "png2ass_" .. stamp .. ".seq"),
+        log = join_path(temp, "png2ass_" .. stamp .. ".log"),
+        cmdlog = join_path(temp, "png2ass_" .. stamp .. ".cmd.log"),
     }
 end
 
 local function active_pos(text)
-    local x, y = tostring(text or ""):match("\\pos%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)")
-    return tonumber(x), tonumber(y)
-end
-
-local function copy_line(line)
-    local out = {}
-    for key, value in pairs(line) do
-        out[key] = value
+    local calls = LineOps.tagCalls(text, { pos = true })
+    for index = #calls, 1, -1 do
+        local x, y = calls[index].value:match("^%(%s*([%+%-]?[%d%.]+)%s*,%s*([%+%-]?[%d%.]+)%s*%)$")
+        if x and y then return tonumber(x), tonumber(y) end
     end
-    return out
+    return nil, nil
 end
 
 local function natural_key(path)
@@ -435,27 +349,31 @@ end
 
 local function normalize_paths(value)
     local paths = {}
-    if type(value) == "table" then
-        for _, path in ipairs(value) do
-            if type(path) == "string" and trim(path) ~= "" then
-                paths[#paths + 1] = path
-            end
+    local seen = {}
+    local values = type(value) == "table" and value or { value }
+    for _, path in ipairs(values) do
+        path = type(path) == "string" and trim(path) or ""
+        local key = path:lower()
+        if path ~= "" and not seen[key] then
+            seen[key] = true
+            paths[#paths + 1] = path
         end
-    elseif type(value) == "string" and trim(value) ~= "" then
-        paths[#paths + 1] = value
     end
     table.sort(paths, function(left, right)
-        return natural_key(left) < natural_key(right)
+        local left_key = natural_key(left)
+        local right_key = natural_key(right)
+        if left_key == right_key then return left:lower() < right:lower() end
+        return left_key < right_key
     end)
     return paths
 end
 
 local function select_pngs()
     local result = aegisub.dialog.open(
-        "Select PNG Images",
+        "Select Images",
         "",
         script_dir(),
-        "PNG files (.png)|*.png",
+        IMAGE_FILTER,
         true,
         true
     )
@@ -490,28 +408,60 @@ local function package_config_dialog(title, buttons)
     return button, result
 end
 
-local function check_package(cfg, quiet)
-    local paths = temp_paths()
-    local command = command_program(cfg.python) .. " -m " .. module_name .. " --check-dependencies --quiet"
-    local ok = run_command(command, paths.cmdlog)
-    if not ok and not quiet then
-        local log = read_file(paths.cmdlog) or "Package check failed."
-        show_message(log)
+local function status_value(text, key)
+    return tostring(text or ""):match('"' .. key .. '"%s*:%s*"(.-)"')
+end
+
+local function status_boolean(text, key)
+    local value = tostring(text or ""):match('"' .. key .. '"%s*:%s*(%a+)')
+    if value == "true" then return true end
+    if value == "false" then return false end
+    return nil
+end
+
+local function package_status(cfg)
+    local command, message = PyBridge.moduleCommand(cfg.python, module_name, { "--status", "--source", cfg.install_source })
+    if not command then return false, message end
+    return PyBridge.run(command)
+end
+
+local function status_summary(detail)
+    local installed = status_value(detail, "installed_version") or "unknown"
+    local latest = status_value(detail, "latest_version") or "unavailable"
+    local ready = status_boolean(detail, "ready")
+    local update_available = status_boolean(detail, "update_available")
+    local update_error = status_value(detail, "update_error")
+    local lines = {
+        "Package: kite-png2ass",
+        "Installed: " .. installed,
+        "Source version: " .. latest,
+        "Runtime: " .. (ready == false and "needs repair" or "ready"),
+    }
+    if update_available == true then
+        lines[#lines + 1] = "Update: available"
+    elseif latest ~= "unavailable" then
+        lines[#lines + 1] = "Update: not required"
+    else
+        lines[#lines + 1] = "Update check: " .. (update_error or "unavailable")
     end
-    return ok, paths
+    return table.concat(lines, "\n"), ready, update_available
+end
+
+local function backend_action(message, buttons)
+    local button = aegisub.dialog.display({
+        { class = "textbox", value = tostring(message or ""), x = 0, y = 0, width = 70, height = 12 },
+    }, buttons, { ok = buttons[1], close = buttons[#buttons] })
+    return button
 end
 
 local function install_package_main()
-    local _, cfg = package_config_dialog("PNG2ASS Package", { "Execute", "Cancel" })
-    write_config(cfg)
-    local python = command_program(cfg.python)
-    local command = table.concat({
-        python .. " -m ensurepip",
-        python .. " -m pip install --upgrade pip setuptools wheel",
-        python .. " -m pip install --upgrade --no-build-isolation " .. shell_quote(cfg.install_source),
-        python .. " -m " .. module_name .. " --check-dependencies",
-    }, "\n")
-    run_command_dialog("PNG2ASS Package", command, "Package is installed and ready.")
+    local cfg = read_config()
+    local missing_python = python_path_error(cfg.python)
+    if missing_python then cancel_with(missing_python) end
+    local install, install_error = PyBridge.installCommand(cfg.python, cfg.install_source)
+    local check, check_error = PyBridge.moduleCommand(cfg.python, module_name, { "--status", "--source", cfg.install_source })
+    if not install or not check then cancel_with(install_error or check_error or "Package command could not be built.") end
+    run_command_dialog("PNG2ASS Package", PyBridge.chain(install, check), "Package is installed and ready.")
 end
 
 local function configure_package_main()
@@ -522,13 +472,33 @@ end
 
 local function check_package_main()
     local cfg = read_config()
-    if check_package(cfg, true) then
-        show_message("Package is ready.")
+    local missing_python = python_path_error(cfg.python)
+    if missing_python then
+        local action = backend_action(missing_python, { "Configure", "Close" })
+        if action == "Configure" then return configure_package_main() end
+        return
+    end
+    local ok, detail = package_status(cfg)
+    if not ok then
+        local action = backend_action(
+            "The kite-png2ass package was not found or could not start.\n\n" .. tostring(detail or ""),
+            { "Install", "Configure", "Close" }
+        )
+        if action == "Install" then return install_package_main() end
+        if action == "Configure" then return configure_package_main() end
+        return
+    end
+
+    local summary, ready, update_available = status_summary(detail)
+    if ready == false then
+        local action = backend_action(summary, { "Repair", "Configure", "Close" })
+        if action == "Repair" then return install_package_main() end
+        if action == "Configure" then return configure_package_main() end
+    elseif update_available == true then
+        local action = backend_action(summary, { "Update", "Close" })
+        if action == "Update" then return install_package_main() end
     else
-        local paths = temp_paths()
-        run_command(command_program(cfg.python) .. " -m " .. module_name .. " --check-dependencies", paths.cmdlog)
-        show_message(read_file(paths.cmdlog) or "Package check failed.")
-        aegisub.cancel()
+        show_message(summary)
     end
 end
 
@@ -566,9 +536,13 @@ local function create_dialog(line, cfg, image_count, frame_count)
         y = { class = "intedit", name = "y", value = py or saved.y, min = -20000, max = 20000, x = 12, y = 4, width = 3, height = 1 },
         blur_label = { class = "label", label = "Blur", x = 0, y = 5, width = 2, height = 1 },
         blur = { class = "floatedit", name = "blur", value = saved.blur, min = 0, max = 20, step = 0.1, x = 2, y = 5, width = 3, height = 1 },
-        max_label = { class = "label", label = "Max chars", x = 5, y = 5, width = 3, height = 1 },
-        max_chars = { class = "intedit", name = "max_chars", value = saved.max_chars, min = 1000, max = 2000000, x = 8, y = 5, width = 4, height = 1 },
-        count_label = { class = "label", label = count_label, x = 0, y = 6, width = 15, height = 1 },
+        denoise_label = { class = "label", label = "Denoise", x = 5, y = 5, width = 2, height = 1 },
+        denoise = { class = "intedit", name = "denoise", value = saved.denoise, min = 0, max = 5, x = 7, y = 5, width = 2, height = 1 },
+        max_label = { class = "label", label = "Max chars", x = 9, y = 5, width = 3, height = 1 },
+        max_chars = { class = "intedit", name = "max_chars", value = saved.max_chars, min = 1000, max = 8000000, x = 12, y = 5, width = 3, height = 1 },
+        pixels_label = { class = "label", label = "Max pixels", x = 0, y = 6, width = 3, height = 1 },
+        max_pixels = { class = "intedit", name = "max_pixels", value = saved.max_pixels, min = 250000, max = 200000000, x = 3, y = 6, width = 5, height = 1 },
+        count_label = { class = "label", label = count_label, x = 8, y = 6, width = 7, height = 1 },
         python_label = { class = "label", label = "Python", x = 0, y = 7, width = 2, height = 1 },
         python = { class = "edit", name = "python", value = cfg.python, x = 2, y = 7, width = 11, height = 1 },
     }
@@ -589,62 +563,45 @@ local function persist_options(options, cfg)
     write_config(cfg)
 end
 
-local function build_command(paths, png_path, options, pos_x, pos_y, allow_many_lines)
-    local parts = {
-        command_program(options.python),
-        "-m", module_name,
-        "--input", shell_quote(png_path),
-        "--mode", shell_quote(options.mode),
-        "--engine", shell_quote(options.engine),
+local function conversion_arguments(paths, options, pos_x, pos_y, allow_many_lines)
+    local arguments = {
+        "--mode", options.mode,
+        "--engine", options.engine,
         "--threshold", tostring(options.threshold),
         "--p-scale", tostring(options.p_scale),
         "--simplify", tostring(options.simplify),
         "--min-area", tostring(options.min_area),
         "--max-chars", tostring(options.max_chars),
+        "--max-pixels", tostring(options.max_pixels),
+        "--denoise", tostring(options.denoise),
         "--filter-speckle", tostring(options.filter_speckle),
         "--pos-x", tostring(pos_x),
         "--pos-y", tostring(pos_y),
         "--blur", tostring(options.blur),
-        "--out", shell_quote(paths.out),
-        "--log", shell_quote(paths.log),
+        "--log", paths.log,
         "--quiet",
     }
-    if options.color == "source" or options.mode == "color" then
-        parts[#parts + 1] = "--keep-color"
-    end
-    if allow_many_lines then
-        parts[#parts + 1] = "--allow-many-lines"
-    end
-    return table.concat(parts, " ")
+    if options.color == "source" or options.mode == "color" then arguments[#arguments + 1] = "--keep-color" end
+    if allow_many_lines then arguments[#arguments + 1] = "--allow-many-lines" end
+    return arguments
+end
+
+local function build_command(paths, image_path, options, pos_x, pos_y, allow_many_lines)
+    local arguments = { "--input", image_path }
+    local common = conversion_arguments(paths, options, pos_x, pos_y, allow_many_lines)
+    for _, value in ipairs(common) do arguments[#arguments + 1] = value end
+    arguments[#arguments + 1] = "--out"
+    arguments[#arguments + 1] = paths.out
+    return PyBridge.moduleCommand(options.python, module_name, arguments)
 end
 
 local function build_sequence_command(paths, options, pos_x, pos_y, allow_many_lines)
-    local parts = {
-        command_program(options.python),
-        "-m", module_name,
-        "--input-list", shell_quote(paths.list),
-        "--mode", shell_quote(options.mode),
-        "--engine", shell_quote(options.engine),
-        "--threshold", tostring(options.threshold),
-        "--p-scale", tostring(options.p_scale),
-        "--simplify", tostring(options.simplify),
-        "--min-area", tostring(options.min_area),
-        "--max-chars", tostring(options.max_chars),
-        "--filter-speckle", tostring(options.filter_speckle),
-        "--pos-x", tostring(pos_x),
-        "--pos-y", tostring(pos_y),
-        "--blur", tostring(options.blur),
-        "--sequence-out", shell_quote(paths.sequence),
-        "--log", shell_quote(paths.log),
-        "--quiet",
-    }
-    if options.color == "source" or options.mode == "color" then
-        parts[#parts + 1] = "--keep-color"
-    end
-    if allow_many_lines then
-        parts[#parts + 1] = "--allow-many-lines"
-    end
-    return table.concat(parts, " ")
+    local arguments = { "--input-list", paths.list }
+    local common = conversion_arguments(paths, options, pos_x, pos_y, allow_many_lines)
+    for _, value in ipairs(common) do arguments[#arguments + 1] = value end
+    arguments[#arguments + 1] = "--sequence-out"
+    arguments[#arguments + 1] = paths.sequence
+    return PyBridge.moduleCommand(options.python, module_name, arguments)
 end
 
 local function resolve_position(options, line)
@@ -658,70 +615,49 @@ local function resolve_position(options, line)
     return 0, 0
 end
 
-local function insert_shapes(subs, index, ass_lines)
-    local source = subs[index]
-    local new_sel = {}
-    for i, ass_text in ipairs(ass_lines) do
-        local new_line = copy_line(source)
-        new_line.layer = (tonumber(source.layer) or 0) + 1
-        new_line.text = ass_text
-        subs.insert(index + i, new_line)
-        new_sel[#new_sel + 1] = index + i
-    end
-    return new_sel
+local MAX_SEQUENCE_FRAMES = 10000
+local MAX_SEQUENCE_LINES = 500000
+local MAX_SEQUENCE_CHARS = 100000000
+
+local function make_shape_line(source, ass_text, start_time, end_time)
+    local line = copy_line(source)
+    line.comment = false
+    line.layer = (tonumber(source.layer) or 0) + 1
+    line.text = ass_text
+    if start_time ~= nil then line.start_time = start_time end
+    if end_time ~= nil then line.end_time = end_time end
+    return line
 end
 
-local function selected_dialogue_indices(subs, sel)
-    local indices = {}
-    for _, index in ipairs(sel or {}) do
-        local line = subs[index]
-        if line and line.class == "dialogue" then
-            indices[#indices + 1] = index
-        end
+local function selected_dialogue_records(subs, sel)
+    local records, rejected = LineOps.selectedLines(subs, sel, function(line)
+        return line and line.class == "dialogue" and not line.comment
+    end, true)
+    if not records or #records == 0 then
+        local suffix = rejected and #rejected > 0 and (" Invalid rows: " .. table.concat(rejected, ", ")) or ""
+        return nil, "Select only uncommented dialogue lines." .. suffix
     end
-    table.sort(indices)
-    return indices
-end
-
-local function round_to_cs(time)
-    time = tonumber(time) or 0
-    return (time + 5) - ((time + 5) % 10)
+    return records
 end
 
 local function build_frame_jobs(subs, sel)
-    if not aegisub.frame_from_ms or not aegisub.ms_from_frame then
-        return nil, "A loaded video is required to map images to frames."
-    end
-
+    if not aegisub.frame_from_ms or not aegisub.ms_from_frame then return nil, "A loaded video is required to map images to frames." end
+    local records, message = selected_dialogue_records(subs, sel)
+    if not records then return nil, message end
     local jobs = {}
-    local indices = selected_dialogue_indices(subs, sel)
-    if #indices == 0 then
-        return nil, "Select at least one dialogue line."
-    end
-
-    for _, index in ipairs(indices) do
-        local line = subs[index]
-        local start_frame = aegisub.frame_from_ms(round_to_cs(line.start_time))
-        local end_frame = aegisub.frame_from_ms(round_to_cs(line.end_time))
-        if not start_frame or not end_frame then
-            return nil, "Could not read frame timing from the selected lines."
-        end
-        if end_frame <= start_frame then
-            return nil, "Selected line " .. tostring(index) .. " is shorter than one frame."
-        end
-
+    for _, record in ipairs(records) do
+        local start_frame = aegisub.frame_from_ms(tonumber(record.line.start_time) or 0)
+        local end_frame = aegisub.frame_from_ms(tonumber(record.line.end_time) or 0)
+        if not start_frame or not end_frame then return nil, "Could not read frame timing from selected row " .. tostring(record.index) .. "." end
+        if end_frame <= start_frame then return nil, "Selected row " .. tostring(record.index) .. " is shorter than one frame." end
         for frame = start_frame, end_frame - 1 do
+            if #jobs >= MAX_SEQUENCE_FRAMES then return nil, "Selected ranges exceed the " .. tostring(MAX_SEQUENCE_FRAMES) .. " frame limit." end
             local start_ms = aegisub.ms_from_frame(frame)
             local end_ms = aegisub.ms_from_frame(frame + 1)
-            if not start_ms or not end_ms then
-                return nil, "Could not convert frame timing to milliseconds."
-            end
-            if end_ms <= start_ms then
-                return nil, "Invalid frame timing at frame " .. tostring(frame) .. "."
-            end
+            if not start_ms or not end_ms or end_ms <= start_ms then return nil, "Invalid frame timing at frame " .. tostring(frame) .. "." end
             jobs[#jobs + 1] = {
-                index = index,
-                line = line,
+                index = record.index,
+                line = copy_line(record.line),
                 frame = frame,
                 start_time = start_ms,
                 end_time = end_ms,
@@ -729,232 +665,173 @@ local function build_frame_jobs(subs, sel)
             }
         end
     end
-
-    if #jobs == 0 then
-        return nil, "The selected lines do not cover any frames."
-    end
+    if #jobs == 0 then return nil, "The selected lines do not cover any frames." end
     return jobs
 end
 
-local function read_sequence(path)
-    local content = read_file(path)
-    if not content then
-        return nil, "Sequence output was not created."
-    end
-
+local function read_sequence(path, expected_frames)
+    local content, message = read_file(path, MAX_SEQUENCE_CHARS + 1)
+    if not content then return nil, message or "Sequence output was not created." end
+    if #content > MAX_SEQUENCE_CHARS then return nil, "Sequence output exceeds the character limit." end
     local rows = {}
-    for line in (content .. "\n"):gmatch("([^\r\n]*)\r?\n") do
-        rows[#rows + 1] = line
-    end
-    if trim(rows[1]) ~= "PNG2ASS_SEQUENCE 1" then
-        return nil, "Sequence output has an unsupported format."
-    end
-
+    for line in (content .. "\n"):gmatch("([^\r\n]*)\r?\n") do rows[#rows + 1] = line end
+    if trim(rows[1]) ~= "PNG2ASS_SEQUENCE 1" then return nil, "Sequence output has an unsupported format." end
     local frames = {}
-    local i = 2
-    while i <= #rows do
-        local row = trim(rows[i])
+    local expected_index = 1
+    local total_lines = 0
+    local cursor = 2
+    while cursor <= #rows do
+        local row = trim(rows[cursor])
         if row == "" then
-            i = i + 1
+            cursor = cursor + 1
         else
             local frame_index = tonumber(row:match("^FRAME%s+(%d+)$"))
-            if not frame_index then
-                return nil, "Sequence output is malformed near line " .. tostring(i) .. "."
-            end
-            i = i + 1
-            local count = tonumber(trim(rows[i] or ""):match("^LINES%s+(%d+)$"))
-            if not count then
-                return nil, "Sequence output is missing a line count for frame " .. tostring(frame_index) .. "."
-            end
-            i = i + 1
+            if not frame_index or frame_index ~= expected_index then return nil, "Sequence frame order is invalid near line " .. tostring(cursor) .. "." end
+            cursor = cursor + 1
+            local count = tonumber(trim(rows[cursor] or ""):match("^LINES%s+(%d+)$"))
+            if not count or count < 1 then return nil, "Sequence output has an invalid line count for frame " .. tostring(frame_index) .. "." end
+            total_lines = total_lines + count
+            if total_lines > MAX_SEQUENCE_LINES then return nil, "Sequence output exceeds the ASS line limit." end
+            cursor = cursor + 1
             local ass_lines = {}
             for _ = 1, count do
-                if i > #rows then
-                    return nil, "Sequence output ended before frame " .. tostring(frame_index) .. " was complete."
-                end
-                ass_lines[#ass_lines + 1] = rows[i]
-                i = i + 1
+                if cursor > #rows then return nil, "Sequence output ended before frame " .. tostring(frame_index) .. " was complete." end
+                if trim(rows[cursor]) == "" then return nil, "Sequence output contains an empty ASS line for frame " .. tostring(frame_index) .. "." end
+                ass_lines[#ass_lines + 1] = rows[cursor]
+                cursor = cursor + 1
             end
             frames[frame_index] = ass_lines
+            expected_index = expected_index + 1
         end
     end
-
+    local frame_count = expected_index - 1
+    if expected_frames and frame_count ~= expected_frames then return nil, "Sequence output contains " .. tostring(frame_count) .. " frames; expected " .. tostring(expected_frames) .. "." end
     return frames
 end
 
-local function insert_sequence_shapes(subs, jobs, frames)
-    local groups = {}
-    local indices = {}
-    for _, job in ipairs(jobs) do
-        if not groups[job.index] then
-            groups[job.index] = {}
-            indices[#indices + 1] = job.index
-        end
-        groups[job.index][#groups[job.index] + 1] = job
-    end
-    table.sort(indices, function(left, right)
-        return left > right
+local function insert_shapes(subs, index, ass_lines)
+    local source = copy_line(subs[index])
+    local lines = {}
+    for _, ass_text in ipairs(ass_lines) do lines[#lines + 1] = make_shape_line(source, ass_text) end
+    return LineOps.transaction(subs, script_name, function()
+        return LineOps.insertLines(subs, { { index = index + 1, lines = lines } })
     end)
+end
 
-    for _, index in ipairs(indices) do
-        local insert_at = index
-        local inserted = 0
-        for _, job in ipairs(groups[index]) do
-            local ass_lines = frames[job.sequence_index]
-            if not ass_lines or #ass_lines == 0 then
-                cancel_with("Missing converted shape for frame " .. tostring(job.sequence_index) .. ".")
-            end
-            for _, ass_text in ipairs(ass_lines) do
-                local new_line = copy_line(job.line)
-                new_line.layer = (tonumber(job.line.layer) or 0) + 1
-                new_line.start_time = job.start_time
-                new_line.end_time = job.end_time
-                new_line.text = ass_text
-                subs.insert(insert_at + inserted + 1, new_line)
-                inserted = inserted + 1
-            end
+local function insert_sequence_shapes(subs, jobs, frames)
+    local grouped = {}
+    local order = {}
+    for _, job in ipairs(jobs) do
+        local ass_lines = frames[job.sequence_index]
+        if not ass_lines or #ass_lines == 0 then return nil, "Missing converted shape for frame " .. tostring(job.sequence_index) .. "." end
+        if not grouped[job.index] then grouped[job.index] = {}; order[#order + 1] = job.index end
+        for _, ass_text in ipairs(ass_lines) do
+            grouped[job.index][#grouped[job.index] + 1] = make_shape_line(job.line, ass_text, job.start_time, job.end_time)
         end
     end
+    table.sort(order)
+    local operations = {}
+    for _, index in ipairs(order) do operations[#operations + 1] = { index = index + 1, lines = grouped[index] } end
+    return LineOps.transaction(subs, script_name, function() return LineOps.insertLines(subs, operations) end)
 end
 
 function PNG2ASS.main(subs, sel, active_line)
-    if not sel or #sel == 0 then
-        cancel_with("Select one dialogue line first.")
+    local records, selection_error = selected_dialogue_records(subs, sel)
+    if not records then cancel_with(selection_error) end
+    local index = records[1].index
+    for _, record in ipairs(records) do
+        if record.index == active_line then index = record.index; break end
     end
-    local index = active_line or sel[1]
     local line = subs[index]
-    if not line or line.class ~= "dialogue" then
-        index = sel[1]
-        line = subs[index]
-    end
-    if not line or line.class ~= "dialogue" then
-        cancel_with("Select one dialogue line first.")
-    end
     local cfg = read_config()
     local image_paths = select_pngs()
-    local frame_jobs = nil
+    local frame_jobs
     if #image_paths > 1 then
-        local err
-        frame_jobs, err = build_frame_jobs(subs, sel)
-        if not frame_jobs then
-            cancel_with(err)
-        end
+        local message
+        frame_jobs, message = build_frame_jobs(subs, sel)
+        if not frame_jobs then cancel_with(message) end
         if #image_paths ~= #frame_jobs then
             cancel_with("Image count does not match selected frame count.\n\nImages: " .. tostring(#image_paths) .. "\nFrames: " .. tostring(#frame_jobs))
         end
     end
-
     local options = create_dialog(line, cfg, #image_paths, frame_jobs and #frame_jobs or nil)
     local paths = temp_paths()
     local pos_x, pos_y = resolve_position(options, line)
-
     if #image_paths == 1 then
         local command = build_command(paths, image_paths[1], options, pos_x, pos_y, false)
         local ok = run_command(command, paths.cmdlog)
         local ass_lines = read_lines(paths.out)
+        local log
         if not ok or not ass_lines or #ass_lines == 0 then
-            local log = read_file(paths.log)
-            if not log or trim(log) == "" then
-                log = read_file(paths.cmdlog)
-            end
+            log = read_file(paths.log)
+            if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
             if continue_after_many_lines(log) then
                 command = build_command(paths, image_paths[1], options, pos_x, pos_y, true)
                 ok = run_command(command, paths.cmdlog)
                 ass_lines = read_lines(paths.out)
                 if not ok or not ass_lines or #ass_lines == 0 then
                     log = read_file(paths.log)
-                    if not log or trim(log) == "" then
-                        log = read_file(paths.cmdlog)
-                    end
+                    if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
                 end
             end
-            if not ok or not ass_lines or #ass_lines == 0 then
-                if log and trim(log) ~= "" then
-                    cancel_with(log)
-                end
-                cancel_with("PNG conversion failed. Use Check Package or Install/Update Package.")
-            end
+        end
+        if not ok or not ass_lines or #ass_lines == 0 then
+            PyBridge.cleanup(paths)
+            cancel_with(log and trim(log) ~= "" and log or "PNG conversion failed. Use Backend/Check or Backend/Install or Update.")
         end
         local new_sel = insert_shapes(subs, index, ass_lines)
         persist_options(options, cfg)
-        aegisub.set_undo_point(script_name)
+        PyBridge.cleanup(paths)
         return new_sel
     end
-
-    write_file(paths.list, table.concat(image_paths, "\n"))
+    local wrote, write_error = write_file(paths.list, table.concat(image_paths, "\n"))
+    if not wrote then PyBridge.cleanup(paths); cancel_with(write_error or "Could not create the image list.") end
     local command = build_sequence_command(paths, options, pos_x, pos_y, false)
     local ok = run_command(command, paths.cmdlog)
-    local frames, parse_error = read_sequence(paths.sequence)
+    local frames, parse_error = read_sequence(paths.sequence, #frame_jobs)
+    local log
     if not ok or not frames then
-        local log = read_file(paths.log)
-        if not log or trim(log) == "" then
-            log = read_file(paths.cmdlog)
-        end
+        log = read_file(paths.log)
+        if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
         if continue_after_many_lines(log) then
             command = build_sequence_command(paths, options, pos_x, pos_y, true)
             ok = run_command(command, paths.cmdlog)
-            frames, parse_error = read_sequence(paths.sequence)
+            frames, parse_error = read_sequence(paths.sequence, #frame_jobs)
             if not ok or not frames then
                 log = read_file(paths.log)
-                if not log or trim(log) == "" then
-                    log = read_file(paths.cmdlog)
-                end
+                if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
             end
         end
-        if not ok or not frames then
-            if log and trim(log) ~= "" then
-                cancel_with(log)
-            end
-            cancel_with(parse_error or "PNG sequence conversion failed. Use Check Package or Install/Update Package.")
-        end
     end
-
-    for i = 1, #frame_jobs do
-        if not frames[i] or #frames[i] == 0 then
-            cancel_with("Missing converted shape for frame " .. tostring(i) .. ".")
-        end
+    if not ok or not frames then
+        PyBridge.cleanup(paths)
+        cancel_with(log and trim(log) ~= "" and log or parse_error or "PNG sequence conversion failed. Use Backend/Check or Backend/Install or Update.")
     end
-    insert_sequence_shapes(subs, frame_jobs, frames)
+    local new_sel, insert_error = insert_sequence_shapes(subs, frame_jobs, frames)
+    if not new_sel then PyBridge.cleanup(paths); cancel_with(insert_error) end
     persist_options(options, cfg)
-    aegisub.set_undo_point(script_name)
-    return sel
+    PyBridge.cleanup(paths)
+    return new_sel
 end
 
 function PNG2ASS.can_run(subs, sel)
-    if not sel or #sel == 0 then
-        return false
-    end
-    for _, index in ipairs(sel) do
-        local line = subs[index]
-        if line and line.class == "dialogue" then
-            return true
-        end
-    end
-    return false
+    local records = selected_dialogue_records(subs, sel)
+    return records ~= nil
 end
 
 if aegisub and aegisub.register_macro then
-    local hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT
+    local entries = {
+        { script_name, script_description, PNG2ASS.main, PNG2ASS.can_run },
+        { "Backend/Check", "Check installation, dependencies and available updates", check_package_main },
+        { "Backend/Install or Update", "Install or update kite-png2ass from the configured repository", install_package_main },
+        { "Backend/Configure", "Configure Python and package source", configure_package_main },
+    }
     if depctrl and depctrl.registerMacro and depctrl.registerMacros then
-        depctrl:registerMacros({
-            { script_name, script_description, PNG2ASS.main, PNG2ASS.can_run },
-            { "Install or Update Package", "Install or update the Python package", install_package_main },
-            { "Check Package", "Check the Python package", check_package_main },
-            { "Configure Package", "Configure Python and package source", configure_package_main },
-            { hotkey_path .. "/Execute", "Hotkey action. " .. script_description, PNG2ASS.main, PNG2ASS.can_run },
-            { hotkey_path .. "/Install or Update Package", "Hotkey action. Install or update the Python package", install_package_main },
-            { hotkey_path .. "/Check Package", "Hotkey action. Check the Python package", check_package_main },
-            { hotkey_path .. "/Configure Package", "Hotkey action. Configure Python and package source", configure_package_main },
-        })
+        depctrl:registerMacros(entries)
     else
-        aegisub.register_macro(script_name .. "/" .. script_name, script_description, PNG2ASS.main, PNG2ASS.can_run)
-        aegisub.register_macro(script_name .. "/Install or Update Package", "Install or update the Python package", install_package_main)
-        aegisub.register_macro(script_name .. "/Check Package", "Check the Python package", check_package_main)
-        aegisub.register_macro(script_name .. "/Configure Package", "Configure Python and package source", configure_package_main)
-        aegisub.register_macro(hotkey_path .. "/Execute", "Hotkey action. " .. script_description, PNG2ASS.main, PNG2ASS.can_run)
-        aegisub.register_macro(hotkey_path .. "/Install or Update Package", "Hotkey action. Install or update the Python package", install_package_main)
-        aegisub.register_macro(hotkey_path .. "/Check Package", "Hotkey action. Check the Python package", check_package_main)
-        aegisub.register_macro(hotkey_path .. "/Configure Package", "Hotkey action. Configure Python and package source", configure_package_main)
+        for _, entry in ipairs(entries) do
+            aegisub.register_macro(script_name .. "/" .. entry[1], entry[2], entry[3], entry[4])
+        end
     end
 end
 

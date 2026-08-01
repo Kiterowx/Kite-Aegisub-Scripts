@@ -1,10 +1,10 @@
-# AddTexture 2.0.6
+# AddTexture 2.0.8
 
 AddTexture applies pasted ASS drawing textures to selected text outlines.
 
 Menu root: `AddTexture`
 
-Hotkey path: `: Kite Hotkeys :/AddTexture/Execute`
+The `AddTexture` entry itself can be assigned as a hotkey in Aegisub.
 
 Namespace: `kite.AddTexture`
 

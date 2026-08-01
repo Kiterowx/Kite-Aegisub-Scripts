@@ -1,28 +1,30 @@
 export script_name        = "Snapshoter"
 export script_description = "Capture subtitle frames, frame lists, frame sequences, and clip crops from the loaded video"
 export script_author      = "Kiterow"
-export script_version     = "1.5.9"
+export script_version     = "1.6.0"
 export script_namespace   = "kite.Snapshoter"
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "Snapshoter"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
     {"a-mo.LineCollection", version: "1.3.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
-    {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-      feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     {"a-mo.Tags", version: "1.3.4", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
     {"a-mo.Log", version: "1.0.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
+    {"kite.PyBridge", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-LineCollection, KiteUI, Tags, log, ASS = depctrl\requireModules!
+LineCollection, KiteUI, Tags, log, ASS, PyBridge, LineOps = depctrl\requireModules!
 
 ConfigHandler = (interface, file_name, _has_sections, version) ->
   KiteUI.dialogHandler interface, script_namespace, version, {
@@ -31,62 +33,12 @@ ConfigHandler = (interface, file_name, _has_sections, version) ->
 
 CONFIG_FILE = "kite-snapshoter.json"
 
-isWindows = package.config\sub(1, 1) == "\\"
-sep = isWindows and "\\" or "/"
-
-CAPTURE_MODES = {
-  "Selected lines"
-  "Frame list"
-  "Frame sequence"
-  "Clip crop"
-  "Manual rectangle"
-  "Densest subtitle frame"
-}
-
-TIMING_MODES = {
-  "Midpoint"
-  "Start and end"
-  "Start, middle, end"
-  "Current video frame"
-}
-
-CLIP_OUTPUTS = {
-  "Rectangle crop"
-  "Clip alpha crop"
-  "Clip alpha full frame"
-  "Drawing alpha crop"
-  "Drawing alpha full frame"
-}
-
-choice_or_default = (value, items, defaultValue) ->
-  for item in *items
-    return item if value == item
-  defaultValue
-
-normalize_mode = (value) ->
-  if value == "Rectangular clip" then "Clip crop" else value
-
-normalize_clip_output = (value) ->
-  switch value
-    when "Vector alpha crop" then "Clip alpha crop"
-    when "Vector alpha full frame" then "Clip alpha full frame"
-    else value
-
-round_ms = (value) ->
-  math.floor((tonumber(value) or 0) + 0.5)
-
-trim = (value) ->
-  text = tostring(value or "")
-  text = text\gsub "^%s+", ""
-  text = text\gsub "%s+$", ""
-  text
-
-file_exists = (path) ->
-  file = io.open path, "rb"
-  if file
-    file\close!
-    return true
-  false
+round_ms = LineOps.round
+trim = LineOps.trim
+file_exists = PyBridge.fileExists
+join_path = PyBridge.joinPath
+write_file = PyBridge.writeFile
+remove_file = PyBridge.removeFile
 
 dir_name = (path) ->
   tostring(path or "")\match("^(.*)[\\/]") or ""
@@ -96,7 +48,7 @@ base_name = (path) ->
   name\gsub "%.[^%.]*$", ""
 
 safe_name = (text, defaultValue = "snapshoter") ->
-  value = trim(text)\gsub("[\\/:*?\"<>|]+", "_")\gsub("%s+", "_")
+  value = trim(text)\gsub('[\\/:*?"<>|]+', "_")\gsub("%s+", "_")
   value = value\gsub "_+", "_"
   value = value\gsub "^_+", ""
   value = value\gsub "_+$", ""
@@ -106,47 +58,12 @@ safe_name = (text, defaultValue = "snapshoter") ->
   return defaultValue if value == "." or value == ".." or value\match("^%.+$") or reserved
   if value == "" then defaultValue else value
 
-join_path = (left, right) ->
-  left = tostring(left or "")
-  right = tostring(right or "")
-  return right if left == ""
-  tail = left\sub -1
-  if tail == "\\" or tail == "/"
-    left .. right
-  else
-    left .. sep .. right
-
-write_file = (path, content) ->
-  file = io.open path, "w"
-  return false unless file
-  file\write content or ""
-  file\close!
-  true
-
 read_file = (path, maxBytes = 8192) ->
-  file = io.open path, "rb"
-  return "" unless file
-  content = file\read(maxBytes) or ""
-  file\close!
-  content
+  content = PyBridge.readFile path, maxBytes
+  content or ""
 
 decoded_path = (spec) ->
-  return "" unless aegisub.decode_path
-  ok, path = pcall aegisub.decode_path, spec
-  if ok and type(path) == "string" and path != spec
-    path
-  else
-    ""
-
-shell_quote = (value) ->
-  value = tostring(value or "")
-  if isWindows
-    '"' .. value\gsub('"', '""') .. '"'
-  else
-    "'" .. value\gsub("'", "'\\''") .. "'"
-
-arg_quote = (value) ->
-  shell_quote value
+  LineOps.decodedPath(spec) or ""
 
 filter_path_quote = (value) ->
   value = tostring(value or "")\gsub "\\", "/"
@@ -156,34 +73,10 @@ filter_path_quote = (value) ->
 
 ffmpeg_executable = (value) ->
   exe = trim value
-  exe = "ffmpeg" if exe == ""
-  lower = exe\lower!
-  if isWindows and (lower == "ffmpeg" or lower == "ffmpeg.exe")
-    for candidate in *{
-      "C:\\Windows\\ffmpeg.exe"
-      "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe"
-    }
-      return candidate if file_exists candidate
-  exe
-
-command_quote = (value) ->
-  exe = ffmpeg_executable value
-  arg_quote exe
-
-os_command = (command) ->
-  command = tostring(command or "")
-  if isWindows then '"' .. command .. '"' else command
+  if exe == "" then "ffmpeg" else exe
 
 ensure_dir = (path) ->
-  return false if trim(path) == ""
-  if isWindows
-    os.execute 'cmd /c if not exist ' .. shell_quote(path) .. ' mkdir ' .. shell_quote(path)
-  else
-    os.execute 'mkdir -p ' .. shell_quote(path)
-  true
-
-command_ok = (status) ->
-  status == true or status == 0
+  PyBridge.ensureDir path
 
 show_message = (text) ->
   aegisub.dialog.display {
@@ -198,22 +91,9 @@ video_path = ->
   return path if path != "" and file_exists path
   nil
 
-project_props = ->
-  return {} unless aegisub and aegisub.project_properties
-  ok, props = pcall aegisub.project_properties
-  if ok and type(props) == "table" then props else {}
-
-folder_from_file = (path) ->
-  path = trim path
-  return "" if path == ""
-  folder = dir_name path
-  if folder != "" then folder else ""
-
 project_folder = (video) ->
-  props = project_props!
-  for key in *{ "filename", "script_file" }
-    folder = folder_from_file props[key]
-    return folder if folder != ""
+  folder = LineOps.subtitleFolder! or ""
+  return folder if folder != ""
   scriptDir = decoded_path "?script"
   return scriptDir if scriptDir != ""
   dir_name video
@@ -242,6 +122,18 @@ file_time = (ms) ->
 
 ffmpeg_time = (ms) ->
   string.format "%.3f", math.max(0, tonumber(ms) or 0) / 1000
+
+frame_seek_ms = (ms) ->
+  value = tonumber(ms) or 0
+  return value unless aegisub and aegisub.frame_from_ms and aegisub.ms_from_frame
+  frame = aegisub.frame_from_ms value
+  return value unless frame
+  startMs = aegisub.ms_from_frame frame
+  nextMs = aegisub.ms_from_frame frame + 1
+  if startMs and nextMs and nextMs > startMs
+    (startMs + nextMs) / 2
+  else
+    value
 
 clean_text = (text) ->
   text = tostring(text or "")\gsub "%b{}", ""
@@ -716,11 +608,9 @@ crop_filter = (crop) ->
   string.format "crop=%d:%d:%d:%d", crop.w, crop.h, crop.x, crop.y
 
 run_command = (command, errPath = nil) ->
-  if errPath and errPath != ""
-    return nil unless write_file errPath, ""
-    os.execute os_command("#{command} 2> #{arg_quote(errPath)}")
-  else
-    os.execute os_command(command)
+  ok, output = PyBridge.run command
+  write_file errPath, output or "" if errPath and errPath != ""
+  ok, output
 
 ffmpeg_error_path = (outDir, job, suffix = "error") ->
   join_path temp_folder(outDir), "_snapshoter_ffmpeg_#{safe_name(base_name(job.name), "capture")}_#{suffix}.txt"
@@ -731,19 +621,17 @@ ffmpeg_error_message = (label, path, errPath) ->
   if details != ""
     message ..= "\n\nFFmpeg:\n#{details}"
   else
-    message ..= "\n\nFFmpeg did not write stderr. Check that the output folder can create temporary files and PNG files."
+    message ..= "\n\nFFmpeg did not return diagnostic output."
   message
 
 run_ffmpeg = (command, outDir, job, label, path) ->
   errPath = ffmpeg_error_path outDir, job, safe_name(label, "error")
-  status = run_command command, errPath
-  if status == nil and not file_exists errPath
-    return false, "Snapshoter could not create a temporary FFmpeg stderr file:\n#{errPath}\n\nCheck write access to the output folder."
-  if command_ok status
-    os.remove errPath
+  ok = run_command command, errPath
+  if ok
+    remove_file errPath
     return true, nil
   message = ffmpeg_error_message label, path, errPath
-  os.remove errPath
+  remove_file errPath
   false, message
 
 mask_ass_path = (outDir, job) ->
@@ -777,14 +665,15 @@ write_mask_ass = (path, maskText, playX, playY) ->
   write_file path, table.concat(rows, "\n")
 
 capture_command = (video, ffmpeg, job, outPath) ->
-  command = command_quote(ffmpeg) ..
-    " -hide_banner -loglevel error -y -ss " .. ffmpeg_time(job.time) ..
-    " -i " .. arg_quote(video) ..
-    " -frames:v 1"
+  arguments = {
+    "-hide_banner", "-loglevel", "error", "-y", "-ss", ffmpeg_time(frame_seek_ms job.time),
+    "-i", video, "-frames:v", "1"
+  }
   if job.crop
-    command ..= " -vf " .. arg_quote(crop_filter job.crop)
-  command ..= " " .. arg_quote(outPath)
-  command
+    table.insert arguments, "-vf"
+    table.insert arguments, crop_filter job.crop
+  table.insert arguments, outPath
+  PyBridge.commandLine ffmpeg_executable(ffmpeg), arguments
 
 alpha_capture_command = (video, ffmpeg, job, outPath, maskPath, videoW, videoH) ->
   assFilter = filter_path_quote maskPath
@@ -794,20 +683,18 @@ alpha_capture_command = (video, ffmpeg, job, outPath, maskPath, videoW, videoH) 
   sourceW = math.floor((tonumber(videoW) or 1) + 0.5)
   sourceH = math.floor((tonumber(videoH) or 1) + 0.5)
   source = "color=c=black:s=#{sourceW}x#{sourceH}:d=1"
-  command_quote(ffmpeg) ..
-    " -hide_banner -loglevel error -y -ss " .. ffmpeg_time(job.time) ..
-    " -i " .. arg_quote(video) ..
-    " -f lavfi -i " .. arg_quote(source) ..
-    " -filter_complex " .. arg_quote(filter) ..
-    " -map " .. arg_quote("[out]") ..
-    " -frames:v 1 " .. arg_quote(outPath)
+  PyBridge.commandLine ffmpeg_executable(ffmpeg), {
+    "-hide_banner", "-loglevel", "error", "-y", "-ss", ffmpeg_time(frame_seek_ms job.time),
+    "-i", video, "-f", "lavfi", "-i", source, "-filter_complex", filter,
+    "-map", "[out]", "-frames:v", "1", outPath
+  }
 
 cropdetect_command = (ffmpeg, imagePath) ->
-  command_quote(ffmpeg) ..
-    " -hide_banner -loglevel info -y" ..
-    " -i " .. arg_quote(imagePath) ..
-    " -vf " .. arg_quote("alphaextract,cropdetect=limit=1:round=2:reset=0:skip=0") ..
-    " -frames:v 1 -f null -"
+  PyBridge.commandLine ffmpeg_executable(ffmpeg), {
+    "-hide_banner", "-loglevel", "info", "-y", "-i", imagePath,
+    "-vf", "alphaextract,cropdetect=limit=1:round=2:reset=0:skip=0",
+    "-frames:v", "1", "-f", "null", "-"
+  }
 
 parse_cropdetect = (text) ->
   crop = nil
@@ -817,22 +704,20 @@ parse_cropdetect = (text) ->
 
 detect_alpha_crop = (ffmpeg, imagePath, outDir, job) ->
   errPath = ffmpeg_error_path outDir, job, "cropdetect"
-  command = cropdetect_command ffmpeg, imagePath
-  status = run_command command, errPath
+  ok = run_command cropdetect_command(ffmpeg, imagePath), errPath
   details = read_file errPath, 12000
-  os.remove errPath
+  remove_file errPath
   detailsText = trim details
-  return nil, "FFmpeg returned an error while detecting alpha bounds:\n#{imagePath}\n\nFFmpeg:\n#{detailsText}" unless command_ok status
+  return nil, "FFmpeg returned an error while detecting alpha bounds:\n#{imagePath}\n\nFFmpeg:\n#{detailsText}" unless ok
   crop = parse_cropdetect details
   return nil, "FFmpeg could not detect a non-transparent alpha area in:\n#{imagePath}" unless crop
   crop, nil
 
 crop_png_command = (ffmpeg, imagePath, crop, outPath) ->
-  command_quote(ffmpeg) ..
-    " -hide_banner -loglevel error -y" ..
-    " -i " .. arg_quote(imagePath) ..
-    " -vf " .. arg_quote(crop_filter crop) ..
-    " -frames:v 1 " .. arg_quote(outPath)
+  PyBridge.commandLine ffmpeg_executable(ffmpeg), {
+    "-hide_banner", "-loglevel", "error", "-y", "-i", imagePath,
+    "-vf", crop_filter(crop), "-frames:v", "1", outPath
+  }
 
 job_without_alpha_crop = (job) ->
   copy = {}
@@ -842,8 +727,11 @@ job_without_alpha_crop = (job) ->
   copy
 
 run_capture_jobs = (video, outDir, cfg, jobs) ->
-  ensure_dir outDir
-  for job in *jobs
+  made, make_error = ensure_dir outDir
+  return false, "Could not create output folder: #{make_error or outDir}" unless made
+  total = #jobs
+  for index, job in ipairs jobs
+    LineOps.progress "Capturing #{index}/#{total}", 100 * (index - 1) / math.max(1, total)
     outPath = join_path outDir, job.name
     if job.alphaMaskText
       maskPath = mask_ass_path outDir, job
@@ -854,28 +742,29 @@ run_capture_jobs = (video, outDir, cfg, jobs) ->
         fullJob = job_without_alpha_crop job
         ok, message = run_ffmpeg alpha_capture_command(video, cfg.ffmpeg, fullJob, tempPath, maskPath, cfg.videoW, cfg.videoH), outDir, job, "writing alpha mask", tempPath
         unless ok
-          os.remove maskPath
-          os.remove tempPath
+          remove_file maskPath
+          remove_file tempPath
           return false, message
         crop, message = detect_alpha_crop cfg.ffmpeg, tempPath, outDir, job
         unless crop
-          os.remove maskPath
-          os.remove tempPath
+          remove_file maskPath
+          remove_file tempPath
           return false, message
         ok, message = run_ffmpeg crop_png_command(cfg.ffmpeg, tempPath, crop, outPath), outDir, job, "writing cropped PNG", outPath
-        os.remove tempPath
+        remove_file tempPath
         unless ok
-          os.remove maskPath
+          remove_file maskPath
           return false, message
       else
         ok, message = run_ffmpeg alpha_capture_command(video, cfg.ffmpeg, job, outPath, maskPath, cfg.videoW, cfg.videoH), outDir, job, "writing PNG", outPath
         unless ok
-          os.remove maskPath
+          remove_file maskPath
           return false, message
-      os.remove maskPath
+      remove_file maskPath
     else
       ok, message = run_ffmpeg capture_command(video, cfg.ffmpeg, job, outPath), outDir, job, "writing PNG", outPath
       return false, message unless ok
+  LineOps.progress "Capture complete", 100
   true, nil
 
 ass_field = (value, fallback = "") ->
@@ -1065,15 +954,16 @@ sequence_output_items = (outputs, assPath) ->
   items
 
 sequence_command = (video, ffmpeg, range, filter, pattern) ->
-  command = command_quote(ffmpeg) ..
-    " -hide_banner -loglevel error -y -ss " .. ffmpeg_time(range.startMs) ..
-    " -i " .. arg_quote(video) ..
-    " -an -frames:v " .. tostring(range.frameCount) ..
-    " -start_number " .. tostring(range.startFrame) ..
-    " -vsync 0"
-  command ..= " -vf " .. arg_quote(filter) if filter and filter != ""
-  command ..= " " .. arg_quote(pattern)
-  command
+  arguments = {
+    "-hide_banner", "-loglevel", "error", "-y", "-ss", ffmpeg_time(range.startMs),
+    "-i", video, "-an", "-frames:v", tostring(range.frameCount),
+    "-start_number", tostring(range.startFrame), "-vsync", "0"
+  }
+  if filter and filter != ""
+    table.insert arguments, "-vf"
+    table.insert arguments, filter
+  table.insert arguments, pattern
+  PyBridge.commandLine ffmpeg_executable(ffmpeg), arguments
 
 sequence_output_dir = (snapshotsDir, sequenceDir, itemCount, item, flatten) ->
   return snapshotsDir if flatten
@@ -1090,7 +980,8 @@ run_frame_sequence = (subs, lines, video, outDir, cfg) ->
   return false, "Select at least one timed dialogue line for Frame sequence." unless lines and #lines > 0
   range = sequence_range lines
   return false, "Could not build a frame range from the selected lines." unless range
-  ensure_dir outDir
+  made, make_error = ensure_dir outDir
+  return false, "Could not create output folder: #{make_error or outDir}" unless made
 
   outputs = sequence_outputs cfg
   return false, "Select at least one Frame sequence output." if sequence_output_count(outputs) == 0
@@ -1106,19 +997,24 @@ run_frame_sequence = (subs, lines, video, outDir, cfg) ->
   aegisub.progress.task "Extracting frame sequence with FFmpeg"
   sequenceName = sequence_folder_name range
   sequenceDir = if cfg.flatSnapshots then outDir else join_path outDir, sequenceName
-  ensure_dir sequenceDir unless cfg.flatSnapshots
+  unless cfg.flatSnapshots
+    made, make_error = ensure_dir sequenceDir
+    return false, "Could not create sequence folder: #{make_error or sequenceDir}" unless made
   items = sequence_output_items outputs, assPath
   outputDirs = {}
   for item in *items
     dir = sequence_output_dir outDir, sequenceDir, #items, item, cfg.flatSnapshots
-    ensure_dir dir
+    made, make_error = ensure_dir dir
+    unless made
+      remove_file assPath if assPath != ""
+      return false, "Could not create sequence output folder: #{make_error or dir}"
     outputDirs[item.key] = dir
     pattern = sequence_output_pattern dir, item, range, cfg.flatSnapshots, sequenceName
-    status = os.execute sequence_command video, cfg.ffmpeg, range, item.filter, pattern
-    unless command_ok status
-      os.remove assPath if assPath != ""
-      return false, "FFmpeg returned an error while writing sequence frames to:\n#{dir}"
-  os.remove assPath if assPath != ""
+    ok, details = PyBridge.run sequence_command(video, cfg.ffmpeg, range, item.filter, pattern)
+    unless ok
+      remove_file assPath if assPath != ""
+      return false, "FFmpeg returned an error while writing sequence frames to:\n#{dir}\n\n#{details or ''}"
+  remove_file assPath if assPath != ""
 
   message = "Frame sequence written to:\n#{outDir}"
   message ..= "\nFrames: #{range.startFrame}-#{range.endFrame} (#{range.frameCount})"
@@ -1236,7 +1132,10 @@ snapshoter = (subs, sel) ->
   cfg.playY = tonumber(collection.meta and collection.meta.PlayResY) or cfg.videoH
 
   outDir = snapshots_folder video
-  ensure_dir outDir
+  made, make_error = ensure_dir outDir
+  unless made
+    show_message "Could not create Snapshots folder: #{make_error or outDir}"
+    return
 
   if cfg.mode == "Frame sequence"
     ok, message = run_frame_sequence subs, lines, video, outDir, cfg
@@ -1270,10 +1169,7 @@ snapshoter = (subs, sel) ->
   else
     show_message errorMessage
 
-hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/Execute"
 if depctrl and depctrl.registerMacro
   depctrl\registerMacro script_name, script_description, snapshoter, can_run, nil, false
-  depctrl\registerMacro hotkey_path, "Hotkey action. " .. script_description, snapshoter, can_run, nil, false
 else
   aegisub.register_macro script_name, script_description, snapshoter, can_run
-  aegisub.register_macro hotkey_path, "Hotkey action. " .. script_description, snapshoter, can_run

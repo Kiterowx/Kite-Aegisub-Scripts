@@ -1,4 +1,4 @@
-local UI = { version = "1.0.0" }
+local UI = { version = "1.1.1" }
 
 local function safe_require(name)
     local ok, value = pcall(require, name)
@@ -7,6 +7,7 @@ local function safe_require(name)
 end
 
 local json = safe_require("json")
+local aegisubUtil = safe_require("aegisub.util")
 local DependencyControl = safe_require("l0.DependencyControl")
 local ConfigHandler = DependencyControl and DependencyControl.ConfigHandler or nil
 local depctrl
@@ -16,14 +17,18 @@ if DependencyControl then
         version = UI.version,
         description = "Shared Kite dialog and settings utilities",
         author = "Kiterow",
-        url = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
+        url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.UI",
-        feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     })
 end
 
 local function copy(value, seen)
     if type(value) ~= "table" then return value end
+    if aegisubUtil and type(aegisubUtil.deep_copy) == "function" then
+        local ok, result = pcall(aegisubUtil.deep_copy, value)
+        if ok then return result end
+    end
     seen = seen or {}
     if seen[value] then return seen[value] end
     local out = {}
@@ -49,13 +54,37 @@ local function read_file(file_name)
     return data
 end
 
+local write_counter = 0
+
 local function write_file(file_name, data)
-    local file = io.open(path(file_name), "wb")
-    if not file then return false end
-    local ok = file:write(data)
-    file:flush()
-    file:close()
-    return ok and true or false
+    file_name = path(file_name)
+    write_counter = write_counter + 1
+    local temporary = file_name .. ".temporary." .. tostring(os.time()) .. "." .. tostring(write_counter)
+    local file, message = io.open(temporary, "wb")
+    if not file then return false, message end
+    local ok, write_message = file:write(data or "")
+    if ok then file:flush() end
+    local close_ok, close_message = file:close()
+    if not ok or close_ok == false then
+        os.remove(temporary)
+        return false, write_message or close_message
+    end
+    local backup = file_name .. ".replacement-backup"
+    local existing = io.open(file_name, "rb")
+    if existing then
+        existing:close()
+        os.remove(backup)
+        local moved, move_message = os.rename(file_name, backup)
+        if not moved then os.remove(temporary); return false, move_message end
+    end
+    local moved, move_message = os.rename(temporary, file_name)
+    if not moved then
+        os.rename(backup, file_name)
+        os.remove(temporary)
+        return false, move_message
+    end
+    os.remove(backup)
+    return true
 end
 
 local function valid_json(data)
@@ -180,38 +209,61 @@ end
 local Store = {}
 Store.__index = Store
 
+function Store:migrateNamespace()
+    if not self.handler or type(self.legacy_namespaces) ~= "table" then return false end
+    if type(self.handler.userConfig) ~= "table" or next(self.handler.userConfig) ~= nil then return false end
+    if type(self.handler.getSectionHandler) ~= "function" or type(self.handler.import) ~= "function" then return false end
+    for _, namespace in ipairs(self.legacy_namespaces) do
+        if type(namespace) == "string" and namespace ~= "" and namespace ~= self.namespace then
+            local ok, source = pcall(self.handler.getSectionHandler, self.handler, {namespace}, {}, true)
+            if ok and source and type(source.userConfig) == "table" and next(source.userConfig) ~= nil then
+                local imported, changed = pcall(self.handler.import, self.handler, source)
+                if imported and changed then
+                    local written = self:write()
+                    if written and type(source.delete) == "function" then pcall(source.delete, source) end
+                    return written and true or false
+                end
+            end
+        end
+    end
+    return false
+end
+
 function Store:load()
-    if self.loaded then return self end
-    self.loaded = true
-    if not self.handler then return self end
+    if self.loaded then return self, true end
+    if not self.handler then self.loaded = true; return self, true end
     local current = read_file(self.file_name)
     if current and not valid_json(current) then
         local previous = read_file(self.file_name .. ".last-good")
         if valid_json(previous) then write_file(self.file_name, previous) end
     end
     local ok, found = pcall(function() return self.handler:load() end)
-    if ok and found then return self end
+    if not ok then return self, false, found end
+    self:migrateNamespace()
     local migrated = false
-    for _, source in ipairs(self.legacy_sources) do
-        local decoded = read_legacy(source)
-        if decoded then
-            for section, defaults in pairs(self.defaults) do
-                local incoming = decoded[section]
-                if incoming == nil and source.target == section then incoming = decoded end
-                if incoming ~= nil then
-                    self.handler.c[section] = sanitize(defaults, incoming)
-                    migrated = true
+    if not found then
+        for _, source in ipairs(self.legacy_sources) do
+            local decoded = read_legacy(source)
+            if decoded then
+                for section, defaults in pairs(self.defaults) do
+                    local incoming = decoded[section]
+                    if incoming == nil and source.target == section then incoming = decoded end
+                    if incoming ~= nil then
+                        self.handler.c[section] = sanitize(defaults, incoming)
+                        migrated = true
+                    end
                 end
             end
         end
     end
+    self.loaded = true
     if migrated then self:write() end
-    return self
+    return self, true
 end
 
 function Store:values(section)
     self:load()
-    local values = self.handler and self.handler.c[section] or nil
+    local values = self.handler and self.handler.c[section] or self.memory[section]
     return sanitize(self.defaults[section] or {}, values or {})
 end
 
@@ -250,12 +302,26 @@ function Store:update(section, result, allowlist)
             end
         end
     end
-    if self.handler then self.handler.c[section] = values end
+    if self.handler then self.handler.c[section] = values else self.memory[section] = copy(values) end
     return copy(values)
 end
 
+function Store:reset(section)
+    self:load()
+    if section ~= nil then
+        local values = copy(self.defaults[section] or {})
+        if self.handler then self.handler.c[section] = values else self.memory[section] = values end
+        return values
+    end
+    for name, defaults in pairs(self.defaults) do
+        local values = copy(defaults)
+        if self.handler then self.handler.c[name] = values else self.memory[name] = values end
+    end
+    return copy(self.defaults)
+end
+
 function Store:write()
-    if not self.handler then return false, "DependencyControl.ConfigHandler unavailable" end
+    if not self.handler then return true end
     self.handler.c.__version = self.version
     local previous = read_file(self.file_name)
     if valid_json(previous) then write_file(self.file_name .. ".last-good", previous) end
@@ -270,7 +336,7 @@ function Store:write()
     return true
 end
 
-function UI.settings(namespace, version, defaults, legacy_sources)
+function UI.settings(namespace, version, defaults, legacy_sources, legacy_namespaces)
     assert(type(namespace) == "string" and namespace ~= "", "namespace required")
     defaults = copy(defaults or {})
     local handler
@@ -278,16 +344,22 @@ function UI.settings(namespace, version, defaults, legacy_sources)
     if ConfigHandler then
         local payload = copy(defaults)
         payload.__version = version
-        handler = ConfigHandler(file_name, payload, {namespace}, true)
+        if type(ConfigHandler.getView) == "function" then
+            handler = assert(ConfigHandler:getView(file_name, {namespace}, payload))
+        else
+            handler = ConfigHandler(file_name, payload, {namespace}, true)
+        end
     end
     return setmetatable({
         namespace = namespace,
         version = tostring(version or "0.0.0"),
         defaults = defaults,
         legacy_sources = legacy_sources or {},
+        legacy_namespaces = legacy_namespaces or {},
         handler = handler,
         file_name = file_name,
         loaded = false,
+        memory = copy(defaults),
     }, Store)
 end
 
@@ -339,11 +411,16 @@ end
 
 function DialogHandler:updateConfiguration(result, section_names)
     local names = section_names
-    if type(names) ~= "table" then names = {names} end
+    if names == nil then
+        names = {}
+        for section in pairs(self.interface) do names[#names + 1] = section end
+    elseif type(names) ~= "table" then
+        names = {names}
+    end
     for _, section in ipairs(names) do
         local storage = self.aliases[section] or section
         local source = result
-        if result and result[section] and section_names and type(section_names) == "table" then source = result[section] end
+        if result and result[section] and type(section_names) == "table" then source = result[section] end
         self.configuration[section] = self.store:update(storage, source or {})
     end
     self.read_called = true
@@ -359,7 +436,13 @@ function DialogHandler:write()
 end
 
 function DialogHandler:delete()
-    return false
+    for section in pairs(self.interface) do
+        local storage = self.aliases[section] or section
+        self.store:reset(storage)
+        self.configuration[section] = copy(self.defaults[storage] or {})
+    end
+    self.read_called = true
+    return self.store:write()
 end
 
 function UI.dialogHandler(interface, namespace, version, legacy_sources, aliases)

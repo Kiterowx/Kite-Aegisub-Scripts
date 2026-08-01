@@ -1,10 +1,8 @@
 export script_name        = "Wave2json"
 export script_description = "Export the active audio waveform to JSON."
 export script_author      = "Kiterow"
-export script_version     = "1.2.0"
+export script_version     = "1.3.0"
 export script_namespace   = "kite.Wave2json"
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "Wave2json"
 
 SAMPLE_RATE       = 48000
 CHANNELS          = 1
@@ -17,6 +15,7 @@ MAX_STREAM_INDEX  = 63
 
 haveDepCtrl, DependencyControl = pcall require, "l0.DependencyControl"
 depctrl = nil
+local PyBridge, LineOps
 if haveDepCtrl and DependencyControl
   depctrl = DependencyControl{
     name: script_name
@@ -24,31 +23,28 @@ if haveDepCtrl and DependencyControl
     author: script_author
     version: script_version
     namespace: script_namespace
-    feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"
+    feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+    {
+      {"kite.PyBridge", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    }
   }
 
-is_windows = package.config\sub(1, 1) == "\\"
-path_sep = is_windows and "\\" or "/"
+if depctrl
+  PyBridge, LineOps = depctrl\requireModules!
+else
+  PyBridge = require "kite.PyBridge"
+  LineOps = require "kite.LineOps"
 
-trim = (value) ->
-  text = if value == nil then "" else tostring value
-  text = text\gsub "^%s+", ""
-  text\gsub "%s+$", ""
-
-round_int = (value) ->
-  math.floor((tonumber(value) or 0) + 0.5)
+trim = LineOps.trim
+round_int = LineOps.round
+file_exists = PyBridge.fileExists
+join_path = PyBridge.joinPath
+write_file = PyBridge.writeFile
+remove_file = PyBridge.removeFile
 
 ffmpeg_time = (ms) ->
   string.format "%.3f", math.max(0, tonumber(ms) or 0) / 1000
-
-file_exists = (path) ->
-  return false if trim(path) == ""
-  file = io.open path, "rb"
-  if file
-    file\close!
-    true
-  else
-    false
 
 dir_name = (path) ->
   tostring(path or "")\match("^(.*)[\\/]") or ""
@@ -57,16 +53,6 @@ base_name = (path) ->
   name = tostring(path or "")\match("([^\\/]+)$") or tostring(path or "")
   name = name\gsub "%.[^%.\\/]*$", ""
   if name == "" then "waveform" else name
-
-join_path = (left, right) ->
-  left = tostring(left or "")
-  right = tostring(right or "")
-  return right if left == ""
-  tail = left\sub -1
-  if tail == "\\" or tail == "/"
-    left .. right
-  else
-    left .. path_sep .. right
 
 safe_name = (value, fallback = "wave2json") ->
   out = trim(value)\gsub("[\\/:*?\"<>|]+", "_")\gsub("%s+", "_")
@@ -80,64 +66,47 @@ safe_name = (value, fallback = "wave2json") ->
   out
 
 decoded_path = (spec) ->
-  return "" unless aegisub and aegisub.decode_path
-  ok, path = pcall aegisub.decode_path, spec
-  if ok and type(path) == "string" and path != spec then path else ""
+  LineOps.decodedPath(spec) or ""
 
 project_props = ->
-  return {} unless aegisub and aegisub.project_properties
-  ok, props = pcall aegisub.project_properties
-  if ok and type(props) == "table" then props else {}
+  LineOps.projectProperties!
 
 script_file_path = ->
-  path = decoded_path "?script"
-  if path != "" and file_exists path then path else ""
+  LineOps.subtitlePath! or ""
+
+selected_line_ranges = (subs, sel) ->
+  records, rejected = LineOps.selectedLines subs, sel, ((line) ->
+    line and line.class == "dialogue" and not line.comment and tonumber(line.end_time) and tonumber(line.start_time) and tonumber(line.end_time) > tonumber(line.start_time)
+  ), true
+  unless records and #records > 0
+    suffix = if rejected and #rejected > 0 then " Invalid rows: " .. table.concat(rejected, ", ") else ""
+    return nil, "Select only uncommented dialogue lines with valid timing." .. suffix
+  ranges = {}
+  for record in *records
+    start_ms = math.max 0, round_int record.line.start_time
+    end_ms = math.max start_ms, round_int record.line.end_time
+    ranges[#ranges + 1] = {
+      :start_ms
+      :end_ms
+      duration_ms: end_ms - start_ms
+      line_count: 1
+      line_index: record.index
+    }
+  ranges
 
 selection_range = (subs, sel) ->
-  return nil, "Select at least one timed subtitle line." unless sel and #sel > 0
-  start_ms, end_ms = nil, nil
-  count = 0
-  for index in *sel
-    line = subs and subs[index]
-    if line and line.class == "dialogue"
-      line_start = tonumber line.start_time
-      line_end = tonumber line.end_time
-      if line_start and line_end and line_end > line_start
-        start_ms = line_start if start_ms == nil or line_start < start_ms
-        end_ms = line_end if end_ms == nil or line_end > end_ms
-        count += 1
-  return nil, "Select at least one subtitle line with valid timing." if count == 0
-  start_ms = math.max 0, round_int start_ms
-  end_ms = math.max start_ms, round_int end_ms
-  return nil, "The selected subtitle time range is empty." unless end_ms > start_ms
+  ranges, message = selected_line_ranges subs, sel
+  return nil, message unless ranges
+  start_ms, end_ms = ranges[1].start_ms, ranges[1].end_ms
+  for range in *ranges
+    start_ms = range.start_ms if range.start_ms < start_ms
+    end_ms = range.end_ms if range.end_ms > end_ms
   {
     :start_ms
     :end_ms
     duration_ms: end_ms - start_ms
-    line_count: count
+    line_count: #ranges
   }
-
-selected_line_ranges = (subs, sel) ->
-  return nil, "Select at least one timed subtitle line." unless sel and #sel > 0
-  ranges = {}
-  for index in *sel
-    line = subs and subs[index]
-    if line and line.class == "dialogue"
-      line_start = tonumber line.start_time
-      line_end = tonumber line.end_time
-      if line_start and line_end and line_end > line_start
-        start_ms = math.max 0, round_int line_start
-        end_ms = math.max start_ms, round_int line_end
-        if end_ms > start_ms
-          ranges[#ranges + 1] = {
-            :start_ms
-            :end_ms
-            duration_ms: end_ms - start_ms
-            line_count: 1
-            line_index: index
-          }
-  return nil, "Select at least one subtitle line with valid timing." if #ranges == 0
-  ranges
 
 media_candidate = ->
   props = project_props!
@@ -176,48 +145,16 @@ line_output_path = (base_output, media, range, order) ->
   line_no = string.format "%03d", math.max(1, tonumber(order) or 1)
   join_path folder, "#{stem}_line#{line_no}#{range_suffix range}.waveform.json"
 
-shell_quote = (value) ->
-  value = tostring(value or "")
-  if is_windows
-    '"' .. value\gsub('"', '""') .. '"'
-  else
-    "'" .. value\gsub("'", "'\\''") .. "'"
-
-batch_escape = (value) ->
-  tostring(value or "")\gsub "%%", "%%%%"
-
-script_quote = (value) ->
-  if is_windows
-    shell_quote batch_escape value
-  else
-    shell_quote value
-
-command_quote = (value) ->
-  exe = trim value
-  exe = "ffmpeg" if exe == ""
-  script_quote exe
-
-write_file = (path, content) ->
-  file = io.open path, "wb"
-  return false unless file
-  file\write content or ""
-  file\close!
-  true
-
-remove_file = (path) ->
-  os.remove path if path and path != ""
-
 progress_title = (text) ->
-  return unless aegisub and aegisub.progress and aegisub.progress.title
-  pcall aegisub.progress.title, text
+  if aegisub and aegisub.progress and aegisub.progress.title
+    pcall aegisub.progress.title, tostring(text or "")
+  LineOps.checkCancelled!
 
 progress_task = (text) ->
-  return unless aegisub and aegisub.progress and aegisub.progress.task
-  pcall aegisub.progress.task, text
+  LineOps.progress text
 
 progress_set = (value) ->
-  return unless aegisub and aegisub.progress and aegisub.progress.set
-  pcall aegisub.progress.set, math.max(0, math.min(100, tonumber(value) or 0))
+  LineOps.progress nil, value
 
 progress_cancelled = ->
   return false unless aegisub and aegisub.progress and aegisub.progress.is_cancelled
@@ -225,52 +162,31 @@ progress_cancelled = ->
   ok and cancelled == true
 
 show_message = (text) ->
-  pcall aegisub.log, tostring(text or "") .. "\n" if aegisub and aegisub.log
+  if aegisub and aegisub.dialog and aegisub.dialog.display
+    aegisub.dialog.display {
+      {class: "textbox", value: tostring(text or ""), x: 0, y: 0, width: 60, height: 12}
+    }, {"OK"}
+  elseif aegisub and aegisub.log
+    pcall aegisub.log, tostring(text or "") .. "\n"
 
-command_ok = (status) ->
-  status == true or status == 0
-
-unique_prefix = (folder) ->
-  seed = "#{os.time!}_#{math.random 100000, 999999}"
-  join_path folder, "wave2json_#{seed}"
-
-write_ffmpeg_script = (cfg, pcm_path, log_path, script_path) ->
+run_ffmpeg = (cfg, pcm_path, log_path) ->
   stream = math.max 0, math.min MAX_STREAM_INDEX, math.floor(tonumber(cfg.stream) or 0)
-  trim_args = ""
+  arguments = {
+    "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", cfg.media
+  }
   if cfg.range and (tonumber(cfg.range.duration_ms) or 0) > 0
-    trim_args = " -ss " .. ffmpeg_time(cfg.range.start_ms) .. " -t " .. ffmpeg_time(cfg.range.duration_ms)
-  cmd = command_quote(cfg.ffmpeg) ..
-    " -hide_banner -nostdin -loglevel error -y" ..
-    " -i " .. script_quote(cfg.media) ..
-    trim_args ..
-    " -map 0:a:" .. tostring(stream) ..
-    " -vn -ac #{CHANNELS} -ar #{SAMPLE_RATE} -f s16le " ..
-    script_quote(pcm_path)
-  if is_windows
-    rows = {
-      "@echo off"
-      "setlocal"
-      cmd .. " > " .. script_quote(log_path) .. " 2>&1"
-      "exit /b %ERRORLEVEL%"
-      ""
-    }
-    write_file script_path, table.concat rows, "\r\n"
-  else
-    rows = {
-      "#!/bin/sh"
-      cmd .. " > " .. script_quote(log_path) .. " 2>&1"
-      "exit $?"
-      ""
-    }
-    ok = write_file script_path, table.concat rows, "\n"
-    os.execute "chmod +x " .. script_quote(script_path) if ok
-    ok
-
-run_script = (script_path) ->
-  if is_windows
-    os.execute 'cmd /c ' .. shell_quote(script_path)
-  else
-    os.execute script_quote script_path
+    table.insert arguments, "-ss"
+    table.insert arguments, ffmpeg_time cfg.range.start_ms
+    table.insert arguments, "-t"
+    table.insert arguments, ffmpeg_time cfg.range.duration_ms
+  for value in *{
+    "-map", "0:a:#{stream}", "-vn", "-ac", tostring(CHANNELS), "-ar", tostring(SAMPLE_RATE), "-f", "s16le", pcm_path
+  }
+    table.insert arguments, value
+  command = PyBridge.commandLine cfg.ffmpeg, arguments
+  ok, output = PyBridge.run command
+  write_file log_path, output or ""
+  ok, output
 
 read_config = ->
   media = media_candidate!
@@ -400,7 +316,7 @@ process_pcm = (pcm_path, temp_prefix, total_bytes = nil) ->
     pyramid\emit_pair 1, current_min, current_max
   pyramid\flush!
 
-  duration_ms = round_int total_samples * 1000 / SAMPLE_RATE
+  duration_ms = round_int(total_samples * 1000 / SAMPLE_RATE)
   { :pyramid, :duration_ms, :total_samples }, nil
 
 copy_level_peaks = (out, level) ->
@@ -419,7 +335,8 @@ copy_level_peaks = (out, level) ->
   true
 
 write_json = (output_path, result) ->
-  out = io.open output_path, "wb"
+  temporary = "#{output_path}.temporary.#{os.time!}.#{math.random 100000, 999999}"
+  out = io.open temporary, "wb"
   return false, "Could not write JSON output." unless out
   pyramid = result.pyramid
   out\write "{\n"
@@ -451,13 +368,17 @@ write_json = (output_path, result) ->
     ok = copy_level_peaks out, level
     unless ok
       out\close!
+      remove_file temporary
       return false, "Could not read temporary level file."
     out\write "]\n"
     out\write "    }"
   out\write "\n  ]\n"
   out\write "}\n"
+  out\flush!
   out\close!
-  true, nil
+  replaced, message = PyBridge.replaceFile temporary, output_path
+  remove_file temporary unless replaced
+  replaced, message or (replaced and nil or "Could not replace JSON output.")
 
 file_size = (path) ->
   file = io.open path, "rb"
@@ -470,28 +391,24 @@ export_waveform = (cfg) ->
   return false, "Choose an audio or video file." if trim(cfg.media) == ""
   return false, "Media file does not exist:\n#{cfg.media}" unless file_exists cfg.media
   return false, "Choose a JSON output path." if trim(cfg.output) == ""
-
   root = output_root cfg.output, cfg.media
   return false, "Could not resolve an output folder." if trim(root) == ""
-  prefix = unique_prefix root
-  pcm_path = "#{prefix}.s16le"
-  log_path = "#{prefix}.ffmpeg.log"
-  script_path = if is_windows then "#{prefix}.bat" else "#{prefix}.sh"
-
-  cleanup_paths = { pcm_path, log_path, script_path }
+  made, make_error = PyBridge.ensureDir root
+  return false, "Could not create output folder: #{make_error or root}" unless made
+  paths, path_error = PyBridge.tempPaths "wave2json", {pcm: ".s16le", log: ".ffmpeg.log", prefix: ""}
+  return false, path_error or "Could not create temporary paths." unless paths
   pcall_ok, success, message = pcall ->
     progress_title script_name
     progress_task "Decoding audio with FFmpeg"
     progress_set 5
-    unless write_ffmpeg_script cfg, pcm_path, log_path, script_path
-      return false, "Could not write the FFmpeg script."
-    status = run_script script_path
-    unless command_ok status
-      return false, "FFmpeg could not decode the selected audio stream.\nLog:\n#{log_path}"
-    size = file_size pcm_path
-    return false, "FFmpeg produced an empty PCM file.\nLog:\n#{log_path}" if size <= 0
+    ok_ffmpeg = run_ffmpeg cfg, paths.pcm, paths.log
+    unless ok_ffmpeg
+      detail = PyBridge.readFile(paths.log, 65536) or ""
+      return false, "FFmpeg could not decode the selected audio stream.\n#{detail}"
+    size = file_size paths.pcm
+    return false, "FFmpeg produced an empty PCM file." if size <= 0
     progress_set 20
-    result, err = process_pcm pcm_path, prefix, size
+    result, err = process_pcm paths.pcm, paths.prefix, size
     return false, err if err
     result.range = cfg.range
     progress_task "Writing JSON"
@@ -501,15 +418,9 @@ export_waveform = (cfg) ->
     return false, json_err unless ok_json
     progress_set 100
     range_text = if cfg.range then "\nRange: #{cfg.range.start_ms} ms - #{cfg.range.end_ms} ms" else ""
-    true, "Waveform JSON written:\n#{cfg.output}\n#{range_text}\n\nDuration: #{result.duration_ms} ms\nLevels: #{#result.pyramid.levels}"
-
-  for path in *cleanup_paths
-    remove_file path
-
-  if pcall_ok
-    success, message
-  else
-    false, tostring success
+    true, "Waveform JSON written:\n#{cfg.output}#{range_text}\n\nDuration: #{result.duration_ms} ms\nLevels: #{#result.pyramid.levels}"
+  PyBridge.cleanup paths
+  if pcall_ok then success, message else false, tostring success
 
 export_line_ranges = (cfg, ranges) ->
   return false, "Select at least one subtitle line with valid timing." unless ranges and #ranges > 0
@@ -531,22 +442,60 @@ export_line_ranges = (cfg, ranges) ->
   folder = dir_name(first_output or cfg.output)
   true, "Waveform JSON files written: #{#ranges}\nFolder: #{folder}\nFirst: #{first_output}\nLast: #{last_output}"
 
-main = (subs, sel) ->
-  cfg, cfg_err = read_config!
+read_base_config = ->
+  cfg, message = read_config!
   unless cfg
-    show_message cfg_err
-    return
+    show_message message
+    return nil
+  cfg
+
+main_full = (subs, sel) ->
+  cfg = read_base_config!
+  return unless cfg
   ok, message = export_waveform cfg
   show_message message
 
-can_run = (subs, sel) ->
-  true, script_description
+main_selection = (subs, sel) ->
+  cfg = read_base_config!
+  return unless cfg
+  range, range_error = selection_range subs, sel
+  unless range
+    show_message range_error
+    return
+  cfg.range = range
+  cfg.output = default_output_path cfg.media, range
+  ok, message = export_waveform cfg
+  show_message message
+
+main_each = (subs, sel) ->
+  cfg = read_base_config!
+  return unless cfg
+  ranges, range_error = selected_line_ranges subs, sel
+  unless ranges
+    show_message range_error
+    return
+  first = ranges[1]
+  cfg.output = default_output_path cfg.media, first
+  ok, message = export_line_ranges cfg, ranges
+  show_message message
+
+can_run_full = ->
+  media = media_candidate!
+  trim(media) != ""
+
+can_run_selection = (subs, sel) ->
+  ranges = selected_line_ranges subs, sel
+  ranges != nil and can_run_full!
+
+macros = {
+  {"Full audio", "Export the complete active audio waveform to JSON.", main_full, can_run_full}
+  {"Selected span", "Export one waveform covering the selected subtitle span.", main_selection, can_run_selection}
+  {"Each selected line", "Export one waveform JSON per selected subtitle line.", main_each, can_run_selection}
+}
 
 if aegisub and aegisub.register_macro
-  hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/Execute"
-  if depctrl and depctrl.registerMacro
-    depctrl\registerMacro script_name, script_description, main, can_run, nil, false
-    depctrl\registerMacro hotkey_path, "Hotkey action. " .. script_description, main, can_run, nil, false
+  if depctrl and depctrl.registerMacros
+    depctrl\registerMacros macros
   else
-    aegisub.register_macro script_name, script_description, main, can_run
-    aegisub.register_macro hotkey_path, "Hotkey action. " .. script_description, main, can_run
+    for macro in *macros
+      aegisub.register_macro "#{script_name}/#{macro[1]}", macro[2], macro[3], macro[4]

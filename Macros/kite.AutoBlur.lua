@@ -1,10 +1,8 @@
-script_name = "Auto Blur"
+script_name = "AutoBlur"
 script_description = "Match a sign's \\blur to frame sharpness with fixed or tracked sample points and time-varying blur curves."
 script_author = "Kiterow"
-script_version = "2.0.3"
+script_version = "2.0.7"
 script_namespace = "kite.AutoBlur"
-local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-local HOTKEY_MENU_SCRIPT = script_name
 
 local function safeRequire(m)
     local ok, mod = pcall(require, m)
@@ -25,10 +23,10 @@ if DependencyControl then
         author = script_author,
         version = script_version,
         namespace = script_namespace,
-        feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.UI", version = "1.0.0", url = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-              feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.UI", version = "1.1.0", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
     })
     if okRecord then depctrl = record end
@@ -438,7 +436,7 @@ local function showDialog(initialCoord, initialData, defaults)
     defaults = defaults or {}
     local dlg = {
         {class = "label", x = 0, y = 0, width = 9, height = 1,
-         label = "AUTO BLUR"},
+         label = "AutoBlur"},
 
         {class = "label", x = 0, y = 1, width = 9,
          label = "BG sample point  x,y  (auto-filled from \\clip pin, \\pos, \\move, or clipboard):"},
@@ -643,12 +641,9 @@ local function canRun(subs, sel)
 end
 
 if aegisub and aegisub.register_macro then
-    local hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/Execute"
     if depctrl and depctrl.registerMacro then
         depctrl:registerMacro(script_name, script_description, main, canRun, nil, false)
-        depctrl:registerMacro(hotkey_path, "Hotkey action. " .. script_description, main, canRun, nil, false)
     else
         aegisub.register_macro(script_name, script_description, main, canRun)
-        aegisub.register_macro(hotkey_path, "Hotkey action. " .. script_description, main, canRun)
     end
 end

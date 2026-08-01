@@ -1,7 +1,7 @@
 script_name        = "Chrono Suite"
 script_description = "Suite for subtitle timing, QC, cleanup, and workflow toolkit"
 script_author      = "Kiterow"
-script_version     = "1.1.2"
+script_version     = "1.3.0"
 script_namespace   = "kite.ChronoSuite"
 
 include("karaskel.lua")
@@ -86,10 +86,11 @@ local function safeRequire(mod) local ok,m = pcall(require, mod); if ok then ret
 
 local DependencyControl = safeRequire("l0.DependencyControl")
 local depRec, ASS, Functional, re, KiteUI, Timing
+local Kite = {}
 
 if DependencyControl then
     local ok, rec = pcall(DependencyControl, {
-        feed        = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
             { "l0.ASSFoundation", version = "0.5.0",
               url  = "https://github.com/TypesettingTools/ASSFoundation",
@@ -98,18 +99,30 @@ if DependencyControl then
               url  = "https://github.com/TypesettingTools/Functional",
               feed = "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json" },
             { "aegisub.re" },
-            { "kite.UI", version = "1.0.0",
-              url  = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-              feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Timing", version = "1.0.0", optional = true,
-              url  = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-              feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.UI", version = "1.1.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.Timing", version = "1.2.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.PyBridge", version = "1.4.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.Media", version = "1.2.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.LineOps", version = "1.5.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
     })
     if ok and rec then
         depRec = rec
-        local okMods, mASS, mFunctional, mRe, mKiteUI, mTiming = pcall(function() return depRec:requireModules() end)
-        if okMods then ASS, Functional, re, KiteUI, Timing = mASS, mFunctional, mRe, mKiteUI, mTiming end
+        local okMods, mASS, mFunctional, mRe, mKiteUI, mTiming, mPyBridge, mMedia, mLineOps = pcall(function() return depRec:requireModules() end)
+        if okMods then
+            ASS, Functional, re, KiteUI, Timing = mASS, mFunctional, mRe, mKiteUI, mTiming
+            Kite.PyBridge, Kite.Media, Kite.LineOps = mPyBridge, mMedia, mLineOps
+        end
     end
 end
 ASS        = ASS        or safeRequire("l0.ASSFoundation")
@@ -117,6 +130,9 @@ Functional = Functional or safeRequire("l0.Functional")
 re         = re         or safeRequire("aegisub.re")
 KiteUI     = KiteUI     or safeRequire("kite.UI")
 Timing     = Timing     or safeRequire("kite.Timing")
+Kite.PyBridge = Kite.PyBridge or safeRequire("kite.PyBridge")
+Kite.Media = Kite.Media or safeRequire("kite.Media")
+Kite.LineOps = Kite.LineOps or safeRequire("kite.LineOps")
 
 local FunctionalString  = type(Functional) == "table" and Functional.string  or nil
 local FunctionalMath    = type(Functional) == "table" and Functional.math    or nil
@@ -686,6 +702,7 @@ local LOCALE_PATCH = {
         err_scxvid_not_found     = "SCXvid not found:\n%s",
         err_ffmpeg_not_found     = "FFmpeg not found:\n%s",
         err_cannot_create_batch  = "Error: cannot create temp batch file",
+        err_cannot_create_directory = "Error: cannot create the working directory",
         err_cannot_create_shell  = "Error: cannot create temp shell script",
         err_no_lines_selected    = "No lines selected.",
         err_not_inside_fold      = "Active line is not inside a fold.\nMove to a line within a fold group.",
@@ -693,16 +710,14 @@ local LOCALE_PATCH = {
         err_cannot_write_file    = "Could not write to:\n%s",
         err_shift_min_two        = "Shift First requires at least 2 lines.",
         err_shift_first_two      = "Shift First requires the first two selected lines to be dialogue lines.",
-        err_no_styles            = "No styles found in selected lines.",
-        err_no_styles_delete     = "No lines to delete. All selected lines have a kept style.",
         err_tolerance_positive   = "Tolerance must be a positive number.",
         err_paste_mpvqc          = "Paste mpvQC text first.",
         err_no_mpvqc_comments    = "No mpvQC comments found.",
-        msg_process_started      = "Process started.\nLog: %s",
+        msg_process_done         = "Process completed.\nLog: %s",
+        err_process_failed       = "Process failed.\n\n%s",
         msg_ae_saved             = "AE keyframe data saved to:\n%s",
         msg_kite_done            = "Kite Timing: %d changes from %d selected lines.",
         msg_replacer_done        = "Text Replacer: %d lines modified.",
-        msg_filter_done          = "Deleted %d lines, kept %d.",
         msg_mpvqc_done           = "mpv QC done.\nLines modified: %d",
         msg_remover_done         = "Remover Assistant done.\nLines modified: %d\nLines deleted: %d",
         err_remover_none         = "Select at least one remover option.",
@@ -712,10 +727,6 @@ local LOCALE_PATCH = {
         lbl_original_text        = "ORIGINAL TEXT",
         lbl_replacement_text     = "REPLACEMENT TEXT",
         lbl_replacer_help        = "Each line in Original matches the corresponding line in Replacement. Tags preserved.",
-        lbl_styles_filter_help   = "Styles in selection.\nRemove the ones to DELETE; keep the rest.",
-        lbl_styles_filter_warn   = "Lines whose style is NOT in the list will be deleted.",
-        lbl_styles_filter_empty  = "WARNING: list is empty.\nThis will delete ALL selected lines. Continue?",
-        lbl_styles_filter_sum    = "Summary:\n  Keep:   %d lines\n  Delete: %d lines\n\nProceed?",
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerance (ms):",
         lbl_mpvqc_paste          = "Paste mpvQC text:",
@@ -746,9 +757,6 @@ local LOCALE_PATCH = {
         btn_import               = "Import",
         btn_replace_all          = "Replace All",
         btn_apply                = "Execute",
-        btn_filter               = "Filter",
-        btn_yes_delete_all       = "Yes, delete all",
-        btn_yes_proceed          = "Yes, proceed",
     },
     es = {
         err_no_active_dialogue   = "No se encontraron líneas de diálogo activas válidas.",
@@ -756,6 +764,7 @@ local LOCALE_PATCH = {
         err_scxvid_not_found     = "SCXvid no encontrado:\n%s",
         err_ffmpeg_not_found     = "FFmpeg no encontrado:\n%s",
         err_cannot_create_batch  = "Error: no se pudo crear el archivo batch temporal",
+        err_cannot_create_directory = "Error: no se pudo crear el directorio de trabajo",
         err_cannot_create_shell  = "Error: no se pudo crear el script shell temporal",
         err_no_lines_selected    = "Sin líneas seleccionadas.",
         err_not_inside_fold      = "La línea activa no está dentro de un fold.\nMuévete a una línea dentro de un grupo fold.",
@@ -763,16 +772,14 @@ local LOCALE_PATCH = {
         err_cannot_write_file    = "No se pudo escribir en:\n%s",
         err_shift_min_two        = "Shift First requiere al menos 2 líneas.",
         err_shift_first_two      = "Shift First requiere que las dos primeras líneas seleccionadas sean diálogo.",
-        err_no_styles            = "No se encontraron estilos en las líneas seleccionadas.",
-        err_no_styles_delete     = "No hay líneas que eliminar. Todas las líneas tienen un estilo conservado.",
         err_tolerance_positive   = "La tolerancia debe ser un número positivo.",
         err_paste_mpvqc          = "Pega primero el texto de mpvQC.",
         err_no_mpvqc_comments    = "No se encontraron comentarios de mpvQC.",
-        msg_process_started      = "Proceso iniciado.\nLog: %s",
+        msg_process_done         = "Proceso finalizado.\nLog: %s",
+        err_process_failed       = "El proceso falló.\n\n%s",
         msg_ae_saved             = "Datos AE guardados en:\n%s",
         msg_kite_done            = "Kite Timing: %d cambios en %d líneas seleccionadas.",
         msg_replacer_done        = "Text Replacer: %d líneas modificadas.",
-        msg_filter_done          = "Se eliminaron %d líneas, se conservaron %d.",
         msg_mpvqc_done           = "mpv QC finalizado.\nLíneas modificadas: %d",
         msg_remover_done         = "Remover Assistant finalizado.\nLíneas modificadas: %d\nLíneas eliminadas: %d",
         err_remover_none         = "Selecciona al menos una opcion de limpieza.",
@@ -782,10 +789,6 @@ local LOCALE_PATCH = {
         lbl_original_text        = "TEXTO ORIGINAL",
         lbl_replacement_text     = "TEXTO DE REEMPLAZO",
         lbl_replacer_help        = "Cada línea de Original corresponde a la misma línea en Reemplazo. Los tags se conservan.",
-        lbl_styles_filter_help   = "Estilos en la selección.\nElimina los que quieras BORRAR; conserva el resto.",
-        lbl_styles_filter_warn   = "Las líneas cuyo estilo NO esté en la lista serán eliminadas.",
-        lbl_styles_filter_empty  = "AVISO: la lista está vacía.\nEsto eliminará TODAS las líneas seleccionadas. ¿Continuar?",
-        lbl_styles_filter_sum    = "Resumen:\n  Conservar: %d líneas\n  Eliminar:  %d líneas\n\n¿Proceder?",
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerancia (ms):",
         lbl_mpvqc_paste          = "Pega el texto de mpvQC:",
@@ -816,9 +819,6 @@ local LOCALE_PATCH = {
         btn_import               = "Importar",
         btn_replace_all          = "Reemplazar todo",
         btn_apply                = "Execute",
-        btn_filter               = "Filtrar",
-        btn_yes_delete_all       = "Sí, eliminar todo",
-        btn_yes_proceed          = "Sí, proceder",
     },
     pt = {
         err_no_active_dialogue   = "Nenhuma linha de diálogo ativa válida encontrada.",
@@ -826,6 +826,7 @@ local LOCALE_PATCH = {
         err_scxvid_not_found     = "SCXvid não encontrado:\n%s",
         err_ffmpeg_not_found     = "FFmpeg não encontrado:\n%s",
         err_cannot_create_batch  = "Erro: não foi possível criar o arquivo batch temporário",
+        err_cannot_create_directory = "Erro: não foi possível criar o diretório de trabalho",
         err_cannot_create_shell  = "Erro: não foi possível criar o script shell temporário",
         err_no_lines_selected    = "Nenhuma linha selecionada.",
         err_not_inside_fold      = "A linha ativa não está dentro de um fold.\nVá para uma linha dentro de um grupo fold.",
@@ -833,16 +834,14 @@ local LOCALE_PATCH = {
         err_cannot_write_file    = "Não foi possível gravar em:\n%s",
         err_shift_min_two        = "Shift First requer pelo menos 2 linhas.",
         err_shift_first_two      = "Shift First requer que as duas primeiras linhas selecionadas sejam diálogo.",
-        err_no_styles            = "Nenhum estilo encontrado nas linhas selecionadas.",
-        err_no_styles_delete     = "Nenhuma linha para apagar. Todas as linhas têm um estilo preservado.",
         err_tolerance_positive   = "A tolerância deve ser um número positivo.",
         err_paste_mpvqc          = "Cole primeiro o texto do mpvQC.",
         err_no_mpvqc_comments    = "Nenhum comentário do mpvQC encontrado.",
-        msg_process_started      = "Processo iniciado.\nLog: %s",
+        msg_process_done         = "Processo concluído.\nLog: %s",
+        err_process_failed       = "O processo falhou.\n\n%s",
         msg_ae_saved             = "Dados AE salvos em:\n%s",
         msg_kite_done            = "Kite Timing: %d alterações em %d linhas selecionadas.",
         msg_replacer_done        = "Text Replacer: %d linhas modificadas.",
-        msg_filter_done          = "Apagadas %d linhas, mantidas %d.",
         msg_mpvqc_done           = "mpv QC concluído.\nLinhas modificadas: %d",
         msg_remover_done         = "Remover Assistant concluido.\nLinhas modificadas: %d\nLinhas apagadas: %d",
         err_remover_none         = "Selecione pelo menos uma opcao de limpeza.",
@@ -852,10 +851,6 @@ local LOCALE_PATCH = {
         lbl_original_text        = "TEXTO ORIGINAL",
         lbl_replacement_text     = "TEXTO DE SUBSTITUIÇÃO",
         lbl_replacer_help        = "Cada linha em Original corresponde à mesma linha em Substituição. Tags são preservados.",
-        lbl_styles_filter_help   = "Estilos na seleção.\nRemova os que deseja APAGAR; mantenha o resto.",
-        lbl_styles_filter_warn   = "Linhas cujo estilo NÃO estiver na lista serão apagadas.",
-        lbl_styles_filter_empty  = "AVISO: a lista está vazia.\nIsto apagará TODAS as linhas selecionadas. Continuar?",
-        lbl_styles_filter_sum    = "Resumo:\n  Manter:  %d linhas\n  Apagar:  %d linhas\n\nProsseguir?",
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerância (ms):",
         lbl_mpvqc_paste          = "Cole o texto do mpvQC:",
@@ -886,9 +881,6 @@ local LOCALE_PATCH = {
         btn_import               = "Importar",
         btn_replace_all          = "Substituir tudo",
         btn_apply                = "Execute",
-        btn_filter               = "Filtrar",
-        btn_yes_delete_all       = "Sim, apagar tudo",
-        btn_yes_proceed          = "Sim, prosseguir",
     },
 }
 
@@ -921,9 +913,9 @@ local EMPHASIS_LANG = {
         scream_btn_analyze  = "Analyze",
         scream_msg_no_media = "Scream Detector: no audio or video file is loaded.",
         scream_msg_no_folder= "Scream Detector: could not find a folder for the analysis files.",
-        scream_msg_no_batch = "Scream Detector: could not create the analysis batch.",
+        scream_msg_no_batch = "Scream Detector: could not create the analysis workspace.",
         scream_msg_running  = "Scream Detector: running FFmpeg analysis.\nThis can take a while.",
-        scream_msg_no_log   = "Scream Detector: no audio samples found in the log.\nBatch: %s",
+        scream_msg_no_log   = "Scream Detector: no audio samples found in the analysis log.\nLog: %s",
         scream_msg_done     = "Scream Detector: marked %d of %d lines.\nSamples: %d\nMedian avg: %.2f dB | MAD: %.2f dB",
         scream_help         = "Scream Detector marks lines whose interval is statistically loud.\n\n"
                               .. "Average line dB: mean power inside each subtitle interval (closer to 0 is stricter).\n"
@@ -951,9 +943,9 @@ local EMPHASIS_LANG = {
         scream_btn_analyze  = "Analizar",
         scream_msg_no_media = "Scream Detector: no hay audio o vídeo cargado.",
         scream_msg_no_folder= "Scream Detector: no se encontró carpeta para los archivos de análisis.",
-        scream_msg_no_batch = "Scream Detector: no se pudo crear el batch de análisis.",
+        scream_msg_no_batch = "Scream Detector: no se pudo crear el espacio de análisis.",
         scream_msg_running  = "Scream Detector: ejecutando análisis de FFmpeg.\nPuede tardar un rato.",
-        scream_msg_no_log   = "Scream Detector: no se encontraron muestras en el log.\nBatch: %s",
+        scream_msg_no_log   = "Scream Detector: no se encontraron muestras en el registro de análisis.\nRegistro: %s",
         scream_msg_done     = "Scream Detector: marcadas %d de %d líneas.\nMuestras: %d\nMediana promedio: %.2f dB | MAD: %.2f dB",
         scream_help         = "Scream Detector marca líneas cuyo intervalo es estadísticamente fuerte.\n\n"
                               .. "Promedio dB: potencia media en el intervalo de cada subtítulo (más cerca de 0 es más estricto).\n"
@@ -981,9 +973,9 @@ local EMPHASIS_LANG = {
         scream_btn_analyze  = "Analisar",
         scream_msg_no_media = "Scream Detector: nenhum áudio ou vídeo carregado.",
         scream_msg_no_folder= "Scream Detector: não foi encontrada pasta para os arquivos de análise.",
-        scream_msg_no_batch = "Scream Detector: não foi possível criar o batch de análise.",
+        scream_msg_no_batch = "Scream Detector: não foi possível criar o espaço de análise.",
         scream_msg_running  = "Scream Detector: executando análise do FFmpeg.\nPode demorar.",
-        scream_msg_no_log   = "Scream Detector: nenhuma amostra encontrada no log.\nBatch: %s",
+        scream_msg_no_log   = "Scream Detector: nenhuma amostra encontrada no registro de análise.\nRegistro: %s",
         scream_msg_done     = "Scream Detector: marcadas %d de %d linhas.\nAmostras: %d\nMediana média: %.2f dB | MAD: %.2f dB",
         scream_help         = "Scream Detector marca linhas cujo intervalo é estatisticamente forte.\n\n"
                               .. "Média dB: potência média no intervalo de cada legenda (mais perto de 0 é mais estrito).\n"
@@ -1065,7 +1057,7 @@ local UI = {
             ["Sort Odd Even"]="Sort odd/even", ["Count CPS"]="Count CPS", ["Import Text"]="Import text", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Add lead-in left", ["Add Lead-In Right"]="Add lead-in right", ["Add Lead-Out Left"]="Add lead-out left", ["Add Lead-Out Right"]="Add lead-out right", ["Chain Left"]="Chain left", ["Chain Right"]="Chain right",
             ["Shift First"]="Shift first", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
-            ["AE Export"]="AE export", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC", ["Style Filter"]="Style filter",
+            ["AE Export"]="AE export", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
         },
         es = {
             ["en"]="Inglés", ["es"]="Español", ["pt"]="Portugués",
@@ -1105,7 +1097,7 @@ local UI = {
             ["Sort Odd Even"]="Ordenar impar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in izquierda", ["Add Lead-In Right"]="Lead-in derecha", ["Add Lead-Out Left"]="Lead-out izquierda", ["Add Lead-Out Right"]="Lead-out derecha", ["Chain Left"]="Encadenar izquierda", ["Chain Right"]="Encadenar derecha",
             ["Shift First"]="Desplazar desde primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
-            ["AE Export"]="Exportar AE", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC", ["Style Filter"]="Filtro de estilo",
+            ["AE Export"]="Exportar AE", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
         },
         pt = {
             ["en"]="Inglês", ["es"]="Espanhol", ["pt"]="Português",
@@ -1145,7 +1137,7 @@ local UI = {
             ["Sort Odd Even"]="Ordenar ímpar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in esquerda", ["Add Lead-In Right"]="Lead-in direita", ["Add Lead-Out Left"]="Lead-out esquerda", ["Add Lead-Out Right"]="Lead-out direita", ["Chain Left"]="Encadear esquerda", ["Chain Right"]="Encadear direita",
             ["Shift First"]="Deslocar desde primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
-            ["AE Export"]="Exportar AE", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC", ["Style Filter"]="Filtro de estilo",
+            ["AE Export"]="Exportar AE", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
         },
     },
 }
@@ -1521,10 +1513,6 @@ ______________
    9.4. Remover Assistant: removes selected visible signs, spacing
         tokens, comments, and known override tags without toggling them
         back on when absent.
-   9.5. Style Filter: filters or deletes lines by style with a
-        confirmation dialog.
-
-
 10. AUTO TIMING
 _______________
 
@@ -1981,10 +1969,6 @@ _____________________
    9.4. Remover Assistant: elimina signos visibles, espacios,
         comentarios y override tags conocidos sin alternarlos si no
         existen.
-   9.5. Style Filter: filtra o elimina líneas por estilo con diálogo
-        de confirmación.
-
-
 10. AUTO TIMING
 _______________
 
@@ -2432,10 +2416,6 @@ _____________________
    9.4. Remover Assistant: remove sinais visíveis, espaços,
         comentários e override tags conhecidos sem alterná-los quando
         ausentes.
-   9.5. Style Filter: filtra ou apaga linhas por estilo com diálogo
-        de confirmação.
-
-
 10. AUTO TIMING
 _______________
 
@@ -2812,7 +2792,10 @@ local function stripComments(text)
     end)
 end
 
-local function visibleText(text) return stripComments(stripTags(text)):gsub("\\[Nnh]", " ") end
+local function visibleText(text)
+    if Kite.LineOps then return Kite.LineOps.visibleText(text) end
+    return stripComments(stripTags(text)):gsub("\\[Nnh]", " ")
+end
 
 local function countCharacters(text)
     local n = 0
@@ -2836,14 +2819,6 @@ end
 
 local function validateDuration(l) return l.end_time and l.start_time and l.end_time > l.start_time end
 
-local function addTag(l, tag, force)
-    if not l.effect then l.effect = "" end
-    local clean = tag:gsub("[%[%]]", "")
-    local pat = "%[" .. clean:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1") .. "[^%]]*%]"
-    if force or not l.effect:match(pat) then
-        l.effect = (l.effect == "" and tag or l.effect .. " " .. tag)
-    end
-end
 
 local function addEffectMarker(line, marker)
     marker = normalizeString(marker); if marker == "" then return end
@@ -4486,7 +4461,7 @@ function TagOperations.parseActor(subs, sel)
     local function allocDur(seg, T)
         local c = 0
         for _, s in ipairs(seg) do
-            local txt = s.text:gsub("{[^}]*}", ""):gsub("%s+", "")
+            local txt = visibleText(s.text):gsub("%s+", "")
             c = c + unicodeLenSafe(txt)
         end
         local d, r = {}, T
@@ -4496,7 +4471,7 @@ function TagOperations.parseActor(subs, sel)
             d[#seg] = T - s * (#seg - 1)
         else
             for i, s in ipairs(seg) do
-                local txt = s.text:gsub("{[^}]*}", ""):gsub("%s+", "")
+                local txt = visibleText(s.text):gsub("%s+", "")
                 local len = unicodeLenSafe(txt)
                 if i == #seg then d[i] = r
                 else local v = math.floor(T * len / c); d[i] = v; r = r - v end
@@ -6299,6 +6274,7 @@ local function get_cfg()
 end
 
 local function visible_text(text)
+    if Kite.LineOps then return trim(Kite.LineOps.visibleText(text)) end
     local s = tostring(text or "")
     s = s:gsub("{[^}]*}", "")
     s = s:gsub("\\[Nn]", " ")
@@ -6334,7 +6310,7 @@ end
 local function is_spoken(line, cfg)
     if not line or line.comment then return false end
     local raw = tostring(line.text or "")
-    if raw:find("\\p%d") then return false end
+    if Kite.LineOps and Kite.LineOps.hasDrawing(raw) then return false end
     if visible_text(raw) == "" then return false end
     local effect = tostring(line.effect or ""):lower()
     if effect:find("template", 1, true) or effect:find("karaoke", 1, true) or effect:find("code", 1, true) then return false end
@@ -7463,114 +7439,56 @@ end
 
 local runScxvid, screamDetector
 do
-local function quoteWin(p)  return '"' .. normalizeString(p):gsub('"', '""') .. '"' end
-local function quoteUnix(p) return "'" .. normalizeString(p):gsub("'", "'\\''") .. "'" end
-
 function runScxvid()
     resolveConfig()
-    local scx = currentConfig.scxvid_path
-    local ffm = currentConfig.ffmpeg_path
-    local sfx = currentConfig.scxvid_suffix
-    local props = aegisub.project_properties()
-    local video = props and props.video_file
-    if not video or video == "" then showMsg(L("err_no_video")); return end
-    local isWindows = package.config:sub(1, 1) == "\\"
-    local function fExists(p) if p == "" then return false end; local f = io.open(p); if f then f:close(); return true end end
-    local function dirName(p) return p:match("^(.*)[\\/]") or "" end
-    local function baseName(p) return (p:gsub("^.*[\\/]", ""):gsub("%.[^.]+$", "")) end
-    local SCX = (scx ~= "" and scx or (isWindows and "scxvid.exe" or "scxvid"))
-    local FFM = (ffm ~= "" and ffm or "ffmpeg")
-    if scx ~= "" and not fExists(scx) then showMsg(string.format(L("err_scxvid_not_found"), scx)); return end
-    if ffm ~= "" and not fExists(ffm) then showMsg(string.format(L("err_ffmpeg_not_found"), ffm)); return end
-    local dir = dirName(video)
-    local sep = isWindows and "\\" or "/"
-    local outLog = dir .. (dir ~= "" and sep or "") .. baseName(video) .. (sfx ~= "" and sfx or "_keyframes.log")
-    if isWindows then
-        local bat = aegisub.decode_path("?temp/scxvid_run.bat")
-        local f = io.open(bat, "w")
-        if not f then showMsg(L("err_cannot_create_batch")); return end
-        local cmd = table.concat({
-            "@echo off",
-            "setlocal",
-            "title Chrono Suite - Extract KF (SCXvid)",
-            quoteWin(FFM) .. " -hide_banner -i " .. quoteWin(video) ..
-                " -f yuv4mpegpipe -vf scale=640:360 -pix_fmt yuv420p -vsync drop - | " ..
-                quoteWin(SCX) .. " " .. quoteWin(outLog),
-            "echo.",
-            "echo Done. Output: " .. quoteWin(outLog),
-            "pause",
-            "endlocal",
-            "",
-        }, "\r\n")
-        f:write(cmd); f:close()
-        os.execute('start "" ' .. quoteWin(bat))
+    if not Kite.PyBridge or not Kite.Media then showMsg("Chrono Suite requires kite.PyBridge and kite.Media."); return end
+    local video = Kite.Media.projectPath("video")
+    if not video then showMsg(L("err_no_video")); return end
+    local scxConfigured = trimText(currentConfig.scxvid_path)
+    local ffmpegConfigured = trimText(currentConfig.ffmpeg_path)
+    local scx = scxConfigured ~= "" and scxConfigured or (Kite.PyBridge.isWindows and "scxvid.exe" or "scxvid")
+    local ffmpeg = ffmpegConfigured ~= "" and ffmpegConfigured or "ffmpeg"
+    if scxConfigured ~= "" and not Kite.PyBridge.fileExists(scxConfigured) then showMsg(string.format(L("err_scxvid_not_found"), scxConfigured)); return end
+    if ffmpegConfigured ~= "" and not Kite.PyBridge.fileExists(ffmpegConfigured) then showMsg(string.format(L("err_ffmpeg_not_found"), ffmpegConfigured)); return end
+    local directory = Kite.PyBridge.parentPath(video) or Kite.LineOps.subtitleFolder() or Kite.PyBridge.tempRoot()
+    if not directory then showMsg(L("err_cannot_create_directory")); return end
+    local fileName = video:gsub("^.*[\\/]", "")
+    local baseName = fileName:gsub("%.[^.]+$", "")
+    local suffix = trimText(currentConfig.scxvid_suffix)
+    if suffix == "" then suffix = "_keyframes.log" end
+    local outLog = Kite.PyBridge.joinPath(directory, baseName .. suffix)
+    Kite.PyBridge.removeFile(outLog)
+    local ffmpegArgs = {
+        "-hide_banner", "-nostdin", "-loglevel", "warning", "-i", video,
+        "-map", "0:v:0", "-f", "yuv4mpegpipe",
+        "-vf", "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2",
+        "-pix_fmt", "yuv420p", "-fps_mode", "drop", "-"
+    }
+    local pipeline = Kite.PyBridge.commandLine(ffmpeg, ffmpegArgs) .. " | " .. Kite.PyBridge.commandLine(scx, { outLog })
+    if aegisub.progress and aegisub.progress.task then aegisub.progress.task("Extracting SCXvid keyframes...") end
+    local ok, diagnostic = Kite.PyBridge.run(pipeline)
+    if ok and (Kite.Media.fileSize(outLog) or 0) > 0 then
+        showMsg(string.format(L("msg_process_done"), outLog))
     else
-        local sh = aegisub.decode_path("?temp/scxvid_run.sh")
-        local f = io.open(sh, "w")
-        if not f then showMsg(L("err_cannot_create_shell")); return end
-        local cmd = table.concat({
-            "#!/bin/sh",
-            quoteUnix(FFM) .. " -hide_banner -i " .. quoteUnix(video) ..
-                " -f yuv4mpegpipe -vf scale=640:360 -pix_fmt yuv420p -vsync drop - | " ..
-                quoteUnix(SCX) .. " " .. quoteUnix(outLog),
-            "",
-        }, "\n")
-        f:write(cmd); f:close()
-        os.execute("chmod +x " .. quoteUnix(sh))
-        os.execute(quoteUnix(sh) .. " &")
+        showMsg(string.format(L("err_process_failed"), tostring(diagnostic or "") .. "\n" .. outLog))
     end
-    showMsg(string.format(L("msg_process_started"), outLog))
 end
 
 local Scream = { MARKER = "[SCREAM]" }
-function Scream.decodedPath(spec)
-    if not aegisub.decode_path then return "" end
-    local ok, path = pcall(aegisub.decode_path, spec)
-    if ok and type(path) == "string" and path ~= spec then return path end
-    return ""
+
+function Scream.analysisFolder(media)
+    local folder = Kite.LineOps and Kite.LineOps.subtitleFolder and Kite.LineOps.subtitleFolder() or nil
+    folder = folder or (Kite.PyBridge and Kite.PyBridge.parentPath(media)) or (Kite.PyBridge and Kite.PyBridge.tempRoot())
+    if not folder then return nil end
+    local ok = Kite.PyBridge.ensureDir(folder)
+    if not ok then return nil end
+    return folder
 end
 
-function Scream.fileExists(path)
-    if not path or path == "" then return false end
-    local f = io.open(path, "r"); if f then f:close(); return true end
-    return false
-end
-
-function Scream.mediaPath()
-    local props = aegisub.project_properties and aegisub.project_properties() or {}
-    if type(props) == "table" then
-        for _, path in ipairs({ props.audio_file or "", props.video_file or "" }) do
-            if path ~= "" and Scream.fileExists(path) then return path end
-        end
-    end
-    for _, spec in ipairs({ "?audio", "?video" }) do
-        local p = Scream.decodedPath(spec)
-        if p ~= "" and Scream.fileExists(p) then return p end
-    end
-    return nil
-end
-
-function Scream.dirName(path)
-    return normalizeString(path):match("^(.*)[\\/]") or ""
-end
-
-function Scream.workFolder(media)
-    for _, spec in ipairs({ "?script", "?temp" }) do
-        local p = Scream.decodedPath(spec)
-        if p ~= "" then
-            if Scream.fileExists(p) then return Scream.dirName(p) end
-            return p
-        end
-    end
-    return Scream.dirName(media or "")
-end
-
-function Scream.join(folder, name)
-    if folder == "" then return name end
-    local last = folder:sub(-1)
-    if last == "\\" or last == "/" then return folder .. name end
-    local sep = package.config:sub(1, 1) == "\\" and "\\" or "/"
-    return folder .. sep .. name
+function Scream.analysisLog(media)
+    local folder = Scream.analysisFolder(media)
+    if not folder then return nil end
+    return Kite.PyBridge.joinPath(folder, "chrono_suite_scream.log")
 end
 
 function Scream.median(values)
@@ -7684,43 +7602,20 @@ function Scream.stripMarker(effect)
     return trimText(normalizeString(effect):gsub("%s*%[SCREAM%]", ""))
 end
 
-function Scream.writeBat(media, folder)
-    local isWindows = package.config:sub(1, 1) == "\\"
-    local logName = "chrono_suite_scream.log"
-    local logPath = Scream.join(folder, logName)
-    local filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.Peak_level:file=" .. logName
-    if isWindows then
-        local batPath = Scream.join(folder, "chrono_suite_scream.bat")
-        local cmd = table.concat({
-            "@echo off",
-            "setlocal",
-            "cd /d " .. quoteWin(folder),
-            "del /q " .. quoteWin(logName) .. " 2>nul",
-            "ffmpeg -hide_banner -y -i " .. quoteWin(media) .. " -map 0:a:0 -vn -af " .. quoteWin(filter) .. " -f null NUL",
-            "endlocal",
-            "",
-        }, "\r\n")
-        local f = io.open(batPath, "w"); if not f then return nil, nil end
-        f:write(cmd); f:close()
-        return batPath, logPath
+function Scream.runAnalysis(media, logPath)
+    local configured = trimText(currentConfig.ffmpeg_path)
+    if configured ~= "" and not Kite.PyBridge.fileExists(configured) then
+        return false, string.format(L("err_ffmpeg_not_found"), configured)
     end
-    local shPath = Scream.join(folder, "chrono_suite_scream.sh")
-    local cmd = table.concat({
-        "#!/bin/sh",
-        "cd " .. quoteUnix(folder),
-        "rm -f " .. quoteUnix(logName),
-        "ffmpeg -hide_banner -y -i " .. quoteUnix(media) .. " -map 0:a:0 -vn -af " .. quoteUnix(filter) .. " -f null /dev/null",
-        "",
-    }, "\n")
-    local f = io.open(shPath, "w"); if not f then return nil, nil end
-    f:write(cmd); f:close()
-    os.execute("chmod +x " .. quoteUnix(shPath))
-    return shPath, logPath
-end
-
-function Scream.runBat(batPath)
-    if package.config:sub(1, 1) == "\\" then return os.execute('cmd /c ""' .. batPath .. '""') end
-    return os.execute(quoteUnix(batPath))
+    local ffmpeg = configured ~= "" and configured or "ffmpeg"
+    Kite.PyBridge.removeFile(logPath)
+    local filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.Peak_level:file='" .. Kite.Media.filterPath(logPath) .. "'"
+    local nullOutput = Kite.PyBridge.isWindows and "NUL" or "/dev/null"
+    local args = {
+        "-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-i", media,
+        "-map", "0:a:0", "-vn", "-af", filter, "-f", "null", nullOutput
+    }
+    return Kite.PyBridge.run(Kite.PyBridge.commandLine(ffmpeg, args))
 end
 
 function Scream.configDialog()
@@ -7764,51 +7659,60 @@ end
 
 function screamDetector(subs, sel)
     resolveConfig()
-    local media = Scream.mediaPath()
+    if not Kite.PyBridge or not Kite.Media or not Kite.LineOps then showMsg("Chrono Suite requires kite.PyBridge, kite.Media and kite.LineOps."); return end
+    local media = Kite.Media.projectPath("audio", { fallbackVideo = true })
     if not media then showMsg(L("scream_msg_no_media")); return end
     local cfg = Scream.configDialog()
     if not cfg then return end
-    local folder = Scream.workFolder(media)
-    if folder == "" then showMsg(L("scream_msg_no_folder")); return end
-    local batPath, logPath = Scream.writeBat(media, folder)
-    if not batPath then showMsg(L("scream_msg_no_batch")); return end
-    if not cfg.scream_reuse_log or not Scream.fileExists(logPath) then
+    local logPath = Scream.analysisLog(media)
+    if not logPath then showMsg(L("scream_msg_no_folder")); return end
+    if not cfg.scream_reuse_log or not Kite.PyBridge.fileExists(logPath) then
         showMsg(L("scream_msg_running"))
-        Scream.runBat(batPath)
+        local ok, diagnostic = Scream.runAnalysis(media, logPath)
+        if not ok then showMsg(string.format(L("err_process_failed"), tostring(diagnostic or ""))); return end
     end
     local samples = Scream.parseLog(logPath)
-    if #samples == 0 then showMsg(string.format(L("scream_msg_no_log"), batPath)); return end
+    if #samples == 0 then showMsg(string.format(L("scream_msg_no_log"), logPath)); return end
     local lookup, restrictToSel = {}, cfg.scream_scope == "Selected lines"
     if restrictToSel and sel then for _, idx in ipairs(sel) do lookup[idx] = true end end
+    if restrictToSel and (not sel or #sel == 0) then showMsg(L("err_no_selection")); return end
     local candidates, scores, scanned = {}, {}, 0
     for i = 1, #subs do
         local line = subs[i]
         if isDialogue(line) and not line.comment and (not restrictToSel or lookup[i]) then
             scanned = scanned + 1
-            local s = Scream.scoreLine(line, samples, cfg)
-            candidates[#candidates+1] = { index = i, score = s }
-            scores[#scores+1] = s
+            local score = Scream.scoreLine(line, samples, cfg)
+            candidates[#candidates + 1] = { index = i, score = score }
+            scores[#scores + 1] = score
         end
     end
+    if scanned == 0 then showMsg(L("err_no_selection")); return end
     local medianDb, madDb, sigmaDb = Scream.robustStats(scores)
-    for _, c in ipairs(candidates) do
-        if sigmaDb > 0 then c.score.robust_z = (c.score.avg_db - medianDb) / sigmaDb end
+    for _, candidate in ipairs(candidates) do
+        if sigmaDb > 0 then candidate.score.robust_z = (candidate.score.avg_db - medianDb) / sigmaDb end
     end
-    local marked = 0
-    for _, c in ipairs(candidates) do
-        local i = c.index
-        local line = subs[i]
-        if isDialogue(line) and not line.comment then
-            if cfg.scream_clean_previous then line.effect = Scream.stripMarker(line.effect) end
-            if Scream.passes(c.score, cfg, sigmaDb) then
-                line.effect = Scream.stripMarker(line.effect)
-                line.effect = trimText(line.effect == "" and Scream.MARKER or (line.effect .. " " .. Scream.MARKER))
-                marked = marked + 1
-            end
-            subs[i] = line
+    local changes, marked = {}, 0
+    for _, candidate in ipairs(candidates) do
+        local line = subs[candidate.index]
+        local before = normalizeString(line.effect)
+        local after = before
+        if cfg.scream_clean_previous then after = Scream.stripMarker(after) end
+        if Scream.passes(candidate.score, cfg, sigmaDb) then
+            after = Scream.stripMarker(after)
+            after = trimText(after == "" and Scream.MARKER or (after .. " " .. Scream.MARKER))
+            marked = marked + 1
         end
+        if after ~= before then changes[#changes + 1] = { index = candidate.index, effect = after } end
     end
-    aegisub.set_undo_point("Chrono Suite - Scream Detector")
+    if #changes > 0 then
+        Kite.LineOps.transaction(subs, "Chrono Suite - Scream Detector", function()
+            for _, change in ipairs(changes) do
+                local line = subs[change.index]
+                line.effect = change.effect
+                subs[change.index] = line
+            end
+        end)
+    end
     showMsg(string.format(L("scream_msg_done"), marked, scanned, #samples, medianDb, madDb))
     return true
 end
@@ -8105,11 +8009,17 @@ local function aeKeyframeExport(subs, sel)
         if isDialogue(line) and validateDuration(line) then
             local text = normalizeString(line.text)
             local nf = math.max(1, math.floor((line.end_time - line.start_time) / frame_ms + 0.5))
-            local x = text:match("\\pos%(([%d%.-]+),") or "960"
-            local y = text:match("\\pos%([%d%.-]+,([%d%.-]+)%)") or "540"
-            local fscx = text:match("\\fscx([%d%.-]+)") or "100"
-            local fscy = text:match("\\fscy([%d%.-]+)") or "100"
-            local frz  = text:match("\\frz([%d%.-]+)")  or "0"
+            local position = Kite.LineOps and Kite.LineOps.lastTagCall(text, "pos") or nil
+            local positionArgs = position and Kite.LineOps.splitArguments(position.value) or {}
+            local x = tonumber(positionArgs[1]) or 960
+            local y = tonumber(positionArgs[2]) or 540
+            local function numericTag(name, fallback)
+                local call = Kite.LineOps and Kite.LineOps.lastTagCall(text, name) or nil
+                return call and tonumber(call.value) or fallback
+            end
+            local fscx = numericTag("fscx", 100)
+            local fscy = numericTag("fscy", 100)
+            local frz = numericTag("frz", 0)
             for _ = 1, nf do
                 table.insert(out_pos,   string.format("\t%d\t%s\t%s\t0\n", gframe, x, y))
                 table.insert(out_scale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
@@ -8122,9 +8032,9 @@ local function aeKeyframeExport(subs, sel)
     local payload = table.concat(out_pos) .. table.concat(out_scale) .. table.concat(out_rot)
     local save_path = aegisub.dialog.save and aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false) or nil
     if save_path and save_path ~= "" then
-        local f = io.open(save_path, "w")
-        if f then f:write(payload); f:close(); showMsg(string.format(L("msg_ae_saved"), save_path)); return end
-        showMsg(string.format(L("err_cannot_write_file"), save_path))
+        local ok, message = Kite.PyBridge.writeFile(save_path, payload)
+        if ok then showMsg(string.format(L("msg_ae_saved"), save_path)); return end
+        showMsg(string.format(L("err_cannot_write_file"), save_path) .. "\n" .. tostring(message or ""))
     end
     aegisub.log(payload)
 end
@@ -8190,7 +8100,7 @@ local function remplacer(subs, sel)
         local line = subs[i]
         if isDialogue(line) then
             local text = normalizeString(line.text)
-            local vis = text:gsub("{[^}]-}", "")
+            local vis = visibleText(text)
             local repl = map[vis]
             if repl then
                 local tags = text:match("^({[^}]-})") or ""
@@ -8231,56 +8141,6 @@ local function shiftToFirst(subs, sel)
             subs[idx] = cur
         end
     end
-end
-
-local function styleSentinel(subs, sel)
-    local seen, list = {}, ""
-    for _, i in ipairs(sel) do
-        local l = subs[i]
-        if l.class == "dialogue" and not seen[l.style] then
-            seen[l.style] = true
-            list = (list == "") and l.style or (list .. "\n" .. l.style)
-        end
-    end
-    if list == "" then showMsg(L("err_no_styles")); return end
-    local pressed, res = aegisub.dialog.display({
-        { class = "label",   label = L("lbl_styles_filter_help"),
-          x = 0, y = 0, width = 3, height = 2 },
-        { class = "textbox", name = "keep", text = list, x = 0, y = 2, width = 3, height = 8 },
-        { class = "label",   label = L("lbl_styles_filter_warn"),
-          x = 0, y = 10, width = 3, height = 1 },
-    }, { L("btn_filter"), L("btn_cancel") })
-    if pressed ~= L("btn_filter") then return end
-    local keep = {}
-    for s in (res.keep or ""):gmatch("[^\r\n]+") do
-        local clean = trimText(s); if clean ~= "" then keep[clean] = true end
-    end
-    if next(keep) == nil then
-        local p2 = aegisub.dialog.display({
-            { class = "label", label = L("lbl_styles_filter_empty"), x = 0, y = 0, width = 2, height = 2 },
-        }, { L("btn_yes_delete_all"), L("btn_cancel") })
-        if p2 ~= L("btn_yes_delete_all") then return end
-    end
-    local toDelete, kept = {}, 0
-    local sorted = {}; for _, i in ipairs(sel) do table.insert(sorted, i) end
-    table.sort(sorted, function(a, b) return a > b end)
-    for _, i in ipairs(sorted) do
-        local l = subs[i]
-        if l.class == "dialogue" then
-            if not keep[l.style] then table.insert(toDelete, i) else kept = kept + 1 end
-        end
-    end
-    if #toDelete == 0 then
-        showMsg(L("err_no_styles_delete"))
-        return
-    end
-    local p3 = aegisub.dialog.display({
-        { class = "label", label = string.format(L("lbl_styles_filter_sum"), kept, #toDelete),
-          x = 0, y = 0, width = 2, height = 4 },
-    }, { L("btn_yes_proceed"), L("btn_cancel") })
-    if p3 ~= L("btn_yes_proceed") then return end
-    for _, i in ipairs(toDelete) do subs.delete(i) end
-    showMsg(string.format(L("msg_filter_done"), #toDelete, kept))
 end
 
 local UTILITY_SECTIONS = {
@@ -8767,7 +8627,6 @@ local SUITE_TOOLS = {
     { name = "Text Replacer",       func = remplacer },
     { name = "mpv QC", func = mpvQcTool },
     { name = "Remover Assistant", func = RemoverOps.gui },
-    { name = "Style Filter", func = styleSentinel },
 }
 local SUITE_TOOL_NAMES = {}
 for _, t in ipairs(SUITE_TOOLS) do SUITE_TOOL_NAMES[#SUITE_TOOL_NAMES+1] = t.name end
@@ -9088,9 +8947,8 @@ function HotkeyMenu.migrate()
     if next(HotkeyMenu.migrations) == nil or not (aegisub and aegisub.decode_path) then return end
     local okPath, path = pcall(aegisub.decode_path, "?user/hotkey.json")
     if not okPath or not path or path == "" then return end
-    local f = io.open(path, "r")
-    if not f then return end
-    local content = f:read("*a"); f:close()
+    local content = Kite.PyBridge and Kite.PyBridge.readFile(path) or nil
+    if not content then return end
     if not content or content == "" then return end
 
     local lines = {}
@@ -9165,11 +9023,7 @@ function HotkeyMenu.migrate()
     end
     out[#out+1] = "}"
 
-    f = io.open(path, "w")
-    if not f then return end
-    f:write(table.concat(out, "\n"))
-    f:write("\n")
-    f:close()
+    if Kite.PyBridge then Kite.PyBridge.writeFile(path, table.concat(out, "\n") .. "\n") end
 end
 
 local macros = {

@@ -2,131 +2,57 @@
 
 ## Common requirement
 
-- Aegisub Automation with DependencyControl installed.
+- Aegisub Automation 4 with DependencyControl installed.
 
-## AddTexture
+`DependencyControl.json` is the authoritative package manifest. It contains the exact version, download path, SHA-1, and required modules for each macro.
 
-- `ZF.main` 2.3.0
-- `l0.ASSFoundation` 0.5.0
-- `kite.UI` 1.0.0
+## Shared Kite modules
 
-## Alecto KFX
+### `kite.LineOps` 1.5.0
 
-- `karaskel`
+Provides validated selections, safe access to the Automation 4 subtitle object, grouped insertions, transactions, rollback, visible-text analysis, drawing state, and lightweight ASS tag operations.
 
-## Auto Blur
+ASSFoundation remains the structural parser for effective tags, style cascades, typed tag classes, complete drawing geometry, and semantic serialization.
 
-- `karaskel`
-- `kite.UI` 1.0.0
-- Optional: `a-mo.DataWrapper` 1.0.2 for tracking data.
+### `kite.EventOps` 1.0.0
 
-## Chrono Suite
+Provides shared event transformations used by Rhea Signs, including visible-text cloning, Unicode stutter detection, continuous-fade cleanup, and deterministic text shuffling.
 
-- `karaskel`
-- `l0.ASSFoundation` 0.5.0
-- `l0.Functional` 0.6.0
-- `aegisub.re`
-- `kite.UI` 1.0.0
-- Optional: `kite.Timing` 1.0.2
+### `kite.Media` 1.2.0
 
-FFmpeg, SCXvid, audio/video media, keyframes, or timing-analysis files are feature-specific external inputs rather than Automation modules.
+Resolves project video, audio, timecodes, subtitle paths, selected frame windows, and CFR/VFR behavior. Chrono Suite and Moka Motion use it for media operations.
 
-- FFmpeg download: <https://ffmpeg.org/download.html>
-- Chrono Generators: <https://github.com/Kitherow/Chrono-Generators-Scripts>
+### `kite.PyBridge` 1.4.2
 
-## Cliptomaniac
+Provides platform-aware command execution through `aka.command`, Python resolution, path handling, writable temporary-folder fallback, cleanup, bounded reads, and atomic replacement. It is used by AutoMask, Chrono Suite, Moka Motion, PNG2ASS, Rhea Signs, Snapshoter, Wave2json, and Zheus.
 
-- `ZF.main` 2.3.0
-- `l0.ASSFoundation` 0.5.0
-- `arch.Perspective` 1.2.1
-- `arch.Util` 0.1.0
-- `kite.UI` 1.0.0
-- `a-mo.LineCollection` 1.3.0
-- `a-mo.Line` 1.5.3
-- `l0.Functional` 0.6.0
+### `kite.ShapeOptimizer` 1.0.0
 
-## Cope Optimizer
+Provides color clustering and horizontal or vertical gradient reduction for the Shape Color Optimizer inside Rhea Signs.
 
-- `kite.UI` 1.0.0
+### `kite.Timing` 1.2.0
 
-## Fad-Continuity
+Provides shared timing, readability, signal, waveform, keyframe, and file-discovery utilities for Chrono Suite.
 
-Fad-Continuity declares no additional modules. DependencyControl is used as the update mechanism and macro registrar.
+### `kite.UI` 1.1.1
 
-## Field Group Manager
+Provides settings by namespace, migration from supported legacy formats, deep copies, in-memory fallback, dialog helpers, and atomic settings persistence in `?user/config/kite.settings.json`.
 
-- `kite.UI` 1.0.0
+## External Automation modules
 
-## Gradient Row
+- `l0.ASSFoundation` and `l0.Functional` provide structured ASS parsing and functional collection helpers.
+- `a-mo.LineCollection`, `a-mo.Line`, `a-mo.Tags`, and related Aegisub-Motion modules provide complex line collections and motion data.
+- `arch.Math`, `arch.Perspective`, and `arch.Util` provide matrix and perspective operations.
+- `ZF.main` provides shared typesetting and geometry components.
+- `aka.command` provides hidden process execution for `kite.PyBridge`.
+- `SubInspector.Inspector` is optional for Gradient Row bounds.
+- `myaa.ASSParser` is required by Selesub.
+- `aegisub.re`, `aegisub.unicode`, `aegisub.clipboard`, `aegisub.util`, `json`, `karaskel`, and `Yutils` are used where declared by the feed.
 
-- `a-mo.LineCollection` 1.3.0
-- `a-mo.Line` 1.5.3
-- `l0.ASSFoundation` 0.5.0
-- `arch.Perspective` 1.2.1
-- `kite.UI` 1.0.0
-- Optional: `SubInspector.Inspector` 0.6.0
+## Python backends
 
-## Insert Coñete
+AutoMask uses `kite-automask` 0.4.1 and FFmpeg. EfficientSAM and LaMa are optional model downloads for segmentation and inpainting. AutoMask and PNG2ASS expose backend checks that report package readiness and compare the installed version with the configured local or GitHub source. AutoMask uses `kite-png2ass` for contour vectorization.
 
-Insert Coñete declares no additional modules. DependencyControl is used as the update mechanism and macro registrar.
+PNG2ASS uses `kite-png2ass` 1.3.0, exposed as the Python module `ass_png2ass`.
 
-## Komari
-
-Komari declares no additional modules. DependencyControl is used as the update mechanism and macro registrar.
-
-## Line Mixer
-
-Line Mixer declares no additional modules. DependencyControl is used as the update mechanism and macro registrar.
-
-## Moka Shape
-
-- `ZF.main` 2.3.0
-- `l0.ASSFoundation` 0.5.0
-- `kite.UI` 1.0.0
-
-## Obake
-
-- `l0.ASSFoundation` 0.5.0
-- `a-mo.Line` 1.5.3
-- `kite.UI` 1.0.0
-
-## PNG2ASS
-
-- `aka.command` 1.0.2
-- `kite.UI` 1.0.0
-- External Python package: `kite-png2ass` (module: `ass_png2ass`)
-
-## Rhea Signs
-
-- `karaskel`
-- `l0.ASSFoundation` 0.5.0
-- `l0.Functional` 0.6.0
-- `arch.Perspective` 1.0.0
-- `arch.Util` 0.1.0
-- `a-mo.LineCollection` 1.3.0
-- `a-mo.Line` 1.5.3
-- `kite.UI` 1.0.0
-
-## Snapshoter
-
-- `a-mo.LineCollection` 1.3.0
-- `kite.UI` 1.0.0
-- `a-mo.Tags` 1.3.4
-- `a-mo.Log` 1.0.0
-- `l0.ASSFoundation` 0.5.0
-
-## Wave2json
-
-Wave2json declares no additional Automation modules. It requires FFmpeg for media decoding.
-
-## Zheus Colormanager
-
-Zheus declares no additional modules. DependencyControl is used as the update mechanism and macro registrar.
-
-## Kite Timing
-
-`kite.Timing` is installed under `automation/include/kite/Timing.lua` and is used by [Chrono Suite](https://github.com/Kitherow/Kite-Aegisub-Scripts/blob/main/docs/ChronoSuite.md) Busy and Legacy timing workflows.
-
-## Kite UI
-
-`kite.UI` is installed under `automation/include/kite/UI.lua`. It stores stable script preferences by namespace in `?user/config/kite.settings.json` and imports supported legacy JSON, Lua-table, and key-value formats without deleting them.
+Both backends require 64-bit Python 3.10 or newer. Their `pyproject.toml` files contain the reproducible Python dependency lists.

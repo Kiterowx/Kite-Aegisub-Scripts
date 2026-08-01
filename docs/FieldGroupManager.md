@@ -1,10 +1,10 @@
-# Field Group Manager 1.0.5
+# Field Group Manager 1.1.0
 
 Field Group Manager groups unique dialogue field values and writes mapped values into another field.
 
 Menu root: `Field Group Manager`
 
-Hotkey path: `: Kite Hotkeys :/Field Group Manager/Execute`
+The `Field Group Manager` entry itself can be assigned as a hotkey in Aegisub.
 
 Namespace: `kite.FieldGroupManager`
 

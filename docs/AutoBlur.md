@@ -1,14 +1,14 @@
-# Auto Blur 2.0.3
+# AutoBlur 2.0.7
 
-Auto Blur matches a sign's `\blur` to frame sharpness with fixed or tracked sample points and time-varying blur curves.
+AutoBlur matches a sign's `\blur` to frame sharpness with fixed or tracked sample points and time-varying blur curves.
 
-Menu root: `Auto Blur`
+Menu root: `AutoBlur`
 
-Hotkey path: `: Kite Hotkeys :/Auto Blur/Execute`
+The `AutoBlur` entry itself can be assigned as a hotkey in Aegisub.
 
 Namespace: `kite.AutoBlur`
 
-Auto Blur is a standalone top-level macro.
+AutoBlur is a standalone top-level macro.
 
 ## Workflow
 
@@ -19,4 +19,4 @@ Auto Blur is a standalone top-level macro.
 
 ## Requirements
 
-Auto Blur needs a loaded video and Aegisub frame/time functions. Tracking-data mode additionally uses `a-mo.DataWrapper`.
+AutoBlur needs a loaded video and Aegisub frame/time functions. Tracking-data mode additionally uses `a-mo.DataWrapper`.

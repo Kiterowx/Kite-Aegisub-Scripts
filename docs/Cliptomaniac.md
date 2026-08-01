@@ -1,4 +1,4 @@
-# Cliptomaniac 0.2.30
+# Cliptomaniac 0.3.0
 
 Cliptomaniac is a clip toolbox for measuring, transforming, reshaping, fitting, projecting, and converting ASS clips.
 
@@ -12,6 +12,7 @@ Namespace: `kite.Cliptomaniac`
 - Clip scaling, rectangular fitting, margin expansion, toggling, copying, and diagnostics.
 - Text-to-clip, clip-to-shape, shape-to-clip, and boolean clip workflows.
 - Perspective and projected-quad operations.
+- Text fitting against clip guides, three-point quadrilateral completion, and full-duration transform-bound measurement.
 - Frame-by-frame manual move helpers.
 
 ## Dedicated entries
@@ -24,4 +25,4 @@ The hotkey branch exposes individual Cliptomaniac operations for direct assignme
 
 ## Configuration
 
-Settings persist through ConfigHandler in `kite-cliptomaniac.json`.
+Settings persist through the shared Kite UI settings store, with migration from `kite-cliptomaniac.json`.

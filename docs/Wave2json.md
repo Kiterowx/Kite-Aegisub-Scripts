@@ -1,10 +1,10 @@
-# Wave2json 1.2.0
+# Wave2json 1.3.0
 
 Wave2json exports the active audio waveform to JSON.
 
 Menu root: `Wave2json`
 
-Hotkey path: `: Kite Hotkeys :/Wave2json/Execute`
+The `Wave2json` entry itself can be assigned as a hotkey in Aegisub.
 
 Namespace: `kite.Wave2json`
 
@@ -23,4 +23,4 @@ The exporter decodes mono 48 kHz PCM through FFmpeg and writes waveform pyramid 
 
 ## Requirements
 
-Wave2json requires a loaded audio file and FFmpeg.
+Wave2json requires a loaded audio file, FFmpeg, `kite.PyBridge` 1.4.0, and `kite.LineOps` 1.5.0.

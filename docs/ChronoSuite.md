@@ -1,4 +1,4 @@
-# Chrono Suite 1.1.2
+# Chrono Suite 1.3.0
 
 Chrono Suite provides timing, audit, cleanup, data-import, and workflow tools.
 
@@ -6,7 +6,7 @@ Menu root: `Chrono Suite`
 
 Namespace: `kite.ChronoSuite`
 
-Public URL: <https://github.com/Kitherow/Kite-Aegisub-Scripts/blob/main/docs/ChronoSuite.md>
+Public URL: <https://github.com/Kiterowx/Kite-Aegisub-Scripts/blob/main/docs/ChronoSuite.md>
 
 ## Main areas
 
@@ -15,7 +15,7 @@ Public URL: <https://github.com/Kitherow/Kite-Aegisub-Scripts/blob/main/docs/Chr
 - Data Import modes for Effects, Text, Actor, initial Tags, and Song Sync.
 - Cue Timer with optional data-file auto-search on open.
 - Auto Timing with Lazy, Busy, and Legacy workflows.
-- Extra tools including AE Export, Text Replacer, mpv QC, Remover Assistant, and Style Filter.
+- Extra tools including AE Export, Text Replacer, mpv QC, and Remover Assistant.
 
 ## Dedicated entries
 
@@ -40,8 +40,10 @@ Hotkey-oriented entries are also registered under `: Kite Hotkeys :/Chrono Suite
 
 Settings persist in the Aegisub user directory as `chrono_suite_config.lua`. FFmpeg, SCXvid, keyframes, and external timing-analysis files are required only by the features that use them.
 
+Chrono Suite uses `kite.Timing` for shared timing engines, `kite.Media` for project media and frame ranges, `kite.LineOps` for subtitle operations, `kite.PyBridge` for external processes, and `kite.UI` for shared settings behavior. CFR sources can pass their verified frame rate to the encoder; VFR sources keep their original timestamps.
+
 - FFmpeg download: <https://ffmpeg.org/download.html>
-- Chrono Generators: <https://github.com/Kitherow/Chrono-Generators-Scripts>
-- Timing guide: <https://kitherow.github.io/Arquitectura-del-Timing/>
+- Chrono Generators: <https://github.com/Kiterowx/Chrono-Generators-Scripts>
+- Timing guide: <https://kiterowx.github.io/Arquitectura-del-Timing/>
 
 The script includes English, Spanish, and Portuguese interface text.

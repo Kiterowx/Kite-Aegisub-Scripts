@@ -2,16 +2,16 @@ export script_name = "Cliptomaniac"
 export script_description = "Clip toolbox for measuring, transforming, reshaping, fitting, and projecting ASS clips."
 export script_author = "Kiterow"
 export script_namespace = "kite.Cliptomaniac"
-export script_version = "0.2.30"
+export script_version = "0.3.0"
 
 
-local ZF, ASS, ArchPerspective, LineCollection, Functional, Util, AMLine, depctrl, logger
+local ZF, ASS, ArchPerspective, LineCollection, Functional, Util, AMLine, LineOps, depctrl, logger
 Core = {}
 PerspectiveTools = {}
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
       {"ZF.main", version: "2.3.0", url: "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
         feed: "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"}
@@ -19,8 +19,8 @@ depctrl = DependencyControl{
         feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
       {"arch.Perspective", version: "1.2.1", url: "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
         feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"}
-      {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-        feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
       {"a-mo.LineCollection", version: "1.3.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
         feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
       {"l0.Functional", version: "0.6.0", url: "https://github.com/TypesettingTools/Functional",
@@ -29,9 +29,11 @@ depctrl = DependencyControl{
         feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"}
       {"a-mo.Line", version: "1.5.3", url: "https://github.com/TypesettingTools/Aegisub-Motion",
         feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
+      {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     }
 }
-ZF, ASS, ArchPerspective, Core.UI, LineCollection, Functional, Util, AMLine = depctrl\requireModules!
+ZF, ASS, ArchPerspective, Core.UI, LineCollection, Functional, Util, AMLine, LineOps = depctrl\requireModules!
 logger = depctrl\getLogger!
 
 ConfigHandler = (interface, file_name, _has_sections, version) ->
@@ -56,6 +58,7 @@ language_config_handler = nil
 
 OPERATIONS = {
   "Autofit clip to text"
+  "Fit text to clip guide"
   "Create clip around text"
   "Text to clip"
   "Expand clip margin"
@@ -80,6 +83,7 @@ OPERATIONS = {
   "Rescale by rectangle clip"
   "Clip to perspective"
   "Perspective to clip"
+  "Complete quadrilateral"
   "Create strip clips"
   "Animated clip to FBF"
   "Calibrate clip X"
@@ -96,6 +100,7 @@ OPERATIONS = {
 OPERATION_LABELS = {
   en: {
     ["Autofit clip to text"]: "autofit clip to text"
+    ["Fit text to clip guide"]: "fit text to clip guide"
     ["Create clip around text"]: "create clip around text"
     ["Text to clip"]: "text to clip"
     ["Expand clip margin"]: "expand/shrink clip margin"
@@ -120,6 +125,7 @@ OPERATION_LABELS = {
     ["Rescale by rectangle clip"]: "rescale tags by rectangular clip"
     ["Clip to perspective"]: "clip to perspective"
     ["Perspective to clip"]: "perspective to clip"
+    ["Complete quadrilateral"]: "complete quadrilateral"
     ["Create strip clips"]: "create strip clips"
     ["Animated clip to FBF"]: "animated clip to FBF"
     ["Calibrate clip X"]: "calibrate clip X"
@@ -134,6 +140,7 @@ OPERATION_LABELS = {
   }
   es: {
     ["Autofit clip to text"]: "ajustar clip al texto"
+    ["Fit text to clip guide"]: "ajustar texto a guia de clip"
     ["Create clip around text"]: "crear clip alrededor del texto"
     ["Text to clip"]: "texto a clip"
     ["Expand clip margin"]: "expandir/reducir margen de clip"
@@ -158,6 +165,7 @@ OPERATION_LABELS = {
     ["Rescale by rectangle clip"]: "ajustar tags a clip rectangular"
     ["Clip to perspective"]: "clip a perspectiva"
     ["Perspective to clip"]: "perspectiva a clip"
+    ["Complete quadrilateral"]: "completar cuadrilátero"
     ["Create strip clips"]: "crear franjas de clip"
     ["Animated clip to FBF"]: "clip animado a FBF"
     ["Calibrate clip X"]: "enderezar guía clip en X"
@@ -281,6 +289,7 @@ UI_LANG = {
     bleed: "Bleed:"
     no_shrink: "No shrink"
     style_pad: "Style pad"
+    transform_max_bounds: "Include \\t maxima"
     replace_existing_clip: "Replace existing clip"
     clip_type: "Clip type:"
     close_paths: "Close paths"
@@ -340,6 +349,7 @@ UI_LANG = {
     bleed: "Solape:"
     no_shrink: "No reducir"
     style_pad: "Incluir estilo"
+    transform_max_bounds: "Incluir máximos de \\t"
     replace_existing_clip: "Reemplazar clip"
     clip_type: "Tipo:"
     close_paths: "Cerrar rutas"
@@ -405,6 +415,7 @@ DEFAULTS = {
   bleed: 1
   no_shrink: true
   style_pad: true
+  transform_max_bounds: true
   replace_clip: true
   remove_clip: true
   create_new_lines: true
@@ -431,6 +442,7 @@ DEFAULTS = {
 }
 
 MAX_STRIP_OUTPUT_LINES = 1000
+CLIP_TAG_NAMES = {"clip_rect", "iclip_rect", "clip_vect", "iclip_vect"}
 
 NUM_PATTERN = "[%+%-]?%.?%d+%.?%d*[eE]?[%+%-]?%d*"
 
@@ -590,7 +602,9 @@ Core.warn = (message) ->
     aegisub.debug.out "[Cliptomaniac] #{message}\n"
 
 MESSAGE_ES = {
+  ["No text could be fitted to a clip guide."]: "No se pudo ajustar ningun texto a una guia de clip."
   ["No perspective plane could be converted to clip."]: "No se pudo convertir ningun plano de perspectiva a clip."
+  ["No 3-point vector clip could be completed."]: "No se pudo completar ningun clip vectorial de 3 puntos."
   ["No clip points changed."]: "No cambiaron puntos de clip."
   ["No vector clip with two usable segments was found."]: "No se encontró un clip vectorial con dos segmentos usables."
   ["No line was transformed."]: "No se transformó ninguna línea."
@@ -614,6 +628,7 @@ MESSAGE_ES = {
   ["No clip was expanded."]: "No se expandió ningún clip."
   ["Text outline tools are not available."]: "Las herramientas de contorno de texto no están disponibles."
   ["No clip could be autofit."]: "No se pudo autoajustar ningún clip."
+  ["Load a video to include transform maxima over the full line duration."]: "Carga un vídeo para incluir los máximos de las transformaciones durante toda la duración de la línea."
   ["This action needs the text measuring tools."]: "Esta acción necesita las herramientas de medición de texto."
   ["No text area could be clipped."]: "No se pudo crear clip de ningún área de texto."
   ["No text or drawing outline could be converted to a clip."]: "No se pudo convertir ningún texto o dibujo a clip."
@@ -698,8 +713,48 @@ Core.override_block_spans = (text) ->
   spans
 
 Core.looks_like_override = (inner) ->
-  text = tostring(inner or "")
-  text\find("\\[%a%d]") != nil
+  tostring(inner or "")\match("^%s*\\[%a%d]") != nil
+
+Core.has_transform_tag = (text) ->
+  for block in *Core.override_block_spans text
+    continue unless Core.looks_like_override block.inner
+    return true if block.inner\find "\\t%("
+  false
+
+Core.video_resolution = ->
+  return nil unless aegisub and type(aegisub.video_size) == "function"
+  ok, x, y = pcall aegisub.video_size
+  x, y = tonumber(x), tonumber(y)
+  return nil unless ok and x and y and x > 0 and y > 0
+  x, y
+
+Core.video_loaded = ->
+  x, y = Core.video_resolution!
+  x != nil and y != nil
+
+Core.script_resolution = (line, data = nil) ->
+  positive = (value) ->
+    n = Core.finite_number value
+    if n and n > 0 then n else nil
+  sub = data and data.sub or line and line.parentCollection and line.parentCollection.sub
+  if sub
+    ok, sub_x, sub_y = pcall -> sub\script_resolution!
+    sub_x, sub_y = positive(sub_x), positive(sub_y)
+    return sub_x, sub_y if ok and sub_x and sub_y
+  read_info = (info) ->
+    info or= {}
+    positive(info.PlayResX or info.playresx or info.res_x), positive(info.PlayResY or info.playresy or info.res_y)
+  x, y = read_info(data and data.scriptInfo)
+  meta_x, meta_y = read_info(line and line.parentCollection and line.parentCollection.meta)
+  x or= meta_x
+  y or= meta_y
+  if (not x or not y) and sub and ASS and ASS.getScriptInfo
+    ok, info = pcall -> ASS\getScriptInfo sub
+    if ok and info
+      info_x, info_y = read_info info
+      x or= info_x
+      y or= info_y
+  x, y
 
 Core.span_is_in_override = (text, absolute_pos) ->
   for block in *Core.override_block_spans text
@@ -737,10 +792,9 @@ Core.insert_leading_tags = (text, payload) ->
   else
     "{" .. payload .. "}" .. text
 
-Core.strip_tags = (text) ->
-  (tostring(text or "")\gsub "{[^}]*}", "")
+Core.strip_tags = (text) -> LineOps.analyzeText(text).plain
 
-Core.visible_text = Core.strip_tags
+Core.visible_text = (text) -> LineOps.visibleText text
 
 Core.override_tags_only = (text) ->
   out = {}
@@ -879,6 +933,12 @@ Core.map_clip_tags = (text, mapper) ->
 Core.strip_clip_tags = (text) ->
   mapped = Core.map_clip_tags text, -> ""
   mapped
+
+Core.strip_all_clips_clean = (text) ->
+  stripped = Core.strip_clip_tags text
+  stripped = Core.map_override_blocks stripped, (inner) ->
+    inner\gsub "\\t%(%s*[%d%+%-%.eE,%s]*%)", ""
+  Core.clean_empty_overrides stripped
 
 Core.clip_tag_text = (name, inner) ->
   "\\" .. (name or "clip") .. "(" .. tostring(inner or "") .. ")"
@@ -2525,7 +2585,51 @@ Core.op_expand_clip_margin = (subs, sel, opts) ->
   aegisub.set_undo_point "Cliptomaniac - Expand clip margin"
   true
 
-Core.build_text_bounds = (dlg, source_line, opts) ->
+Core.transform_bounds_requested = (line, opts = {}) ->
+  opts.transform_max_bounds and Core.has_transform_tag(line and line.text or "")
+
+Core.remove_measurement_clips = (data) ->
+  data\removeTags CLIP_TAG_NAMES
+  for transform in *(data\getTags("transform") or {})
+    if transform.tags and transform.tags.removeTags
+      transform.tags\removeTags CLIP_TAG_NAMES
+  data
+
+Core.rendered_transform_bounds = (source_line, opts = {}) ->
+  return nil unless ASS and Core.transform_bounds_requested source_line, opts
+  return nil unless Core.video_loaded!
+  ok, result = pcall ->
+    data = Core.parse_ass_line source_line
+    Core.remove_measurement_clips data
+    data.isAnimated = -> true
+    bounds = data\getLineBounds false, true
+    first, last = Core.matrix_point(bounds and bounds[1]), Core.matrix_point(bounds and bounds[2])
+    return nil unless first and last
+    video_x, video_y = Core.video_resolution!
+    play_x, play_y = Core.script_resolution source_line, data
+    scale_x = (play_x or video_x) / video_x
+    scale_y = (play_y or video_y) / video_y
+    rect = Core.normalize_bounds {first.x * scale_x, first.y * scale_y, last.x * scale_x, last.y * scale_y}
+    return nil unless rect[3] > rect[1] and rect[4] > rect[2]
+    {
+      l: rect[1]
+      t: rect[2]
+      r: rect[3]
+      b: rect[4]
+      w: rect[3] - rect[1]
+      h: rect[4] - rect[2]
+      align: Core.align_for_line source_line
+      rendered: true
+      line_bounds: bounds
+    }
+  unless ok
+    Core.warn "Could not inspect transformed text bounds: #{result}"
+    return nil
+  result
+
+Core.build_text_bounds = (dlg, source_line, opts = {}) ->
+  if Core.transform_bounds_requested source_line, opts
+    return Core.rendered_transform_bounds source_line, opts
   return nil unless ZF
   prepared = Core.prepare_zf_text_line dlg, source_line
   line, call, pers, align = prepared.work, prepared.call, prepared.pers, prepared.align
@@ -2764,6 +2868,11 @@ Core.drawing_local_bounds = (data) ->
   Core.normalize_bounds {left, top, right, bottom}
 
 Core.projected_text_quad = (line, opts = {}) ->
+  if Core.transform_bounds_requested line, opts
+    shape = Core.rendered_transform_bounds line, opts
+    return nil unless shape
+    bounds = Core.pad_bounds {shape.l, shape.t, shape.r, shape.b}, tonumber(opts.margin) or 0
+    return Core.rect_points bounds
   return nil unless ArchPerspective and ArchPerspective.transformPoints
   return nil unless Core.line_needs_projected_quad line
   data, tags, width, height = nil, nil, nil, nil
@@ -2790,14 +2899,23 @@ Core.projected_text_quad = (line, opts = {}) ->
   Core.expand_quad_screen quad, margin
 
 Core.text_area_clip_tag = (dlg, line, opts = {}) ->
+  name = "clip"
+  if opts.replace_clip
+    span = Core.first_clip_span line.text
+    name = span.name if span
+  if Core.transform_bounds_requested line, opts
+    shape = Core.rendered_transform_bounds line, opts
+    return nil unless shape
+    margin = tonumber(opts.margin) or 0
+    return Core.rect_clip_tag Core.pad_bounds({shape.l, shape.t, shape.r, shape.b}, margin), name
   if quad = Core.projected_text_quad line, opts
-    return Core.vector_clip_tag quad
+    return Core.vector_clip_tag quad, name
   return nil unless dlg
   ok, shape = pcall -> Core.build_text_bounds dlg, line, opts
   return nil unless ok and shape
   margin = tonumber(opts.margin) or 0
   margin += Core.style_safe_pad line if opts.style_pad
-  Core.rect_clip_tag Core.pad_bounds({shape.l, shape.t, shape.l + shape.w, shape.t + shape.h}, margin)
+  Core.rect_clip_tag Core.pad_bounds({shape.l, shape.t, shape.l + shape.w, shape.t + shape.h}, margin), name
 
 Core.replace_or_insert_clip = (text, clip_tag, replace_existing = true) ->
   span = Core.first_clip_span text
@@ -2823,12 +2941,15 @@ Core.op_autofit_clip = (subs, sel, active, opts) ->
     sh = shape_or_err
     text_bounds = {sh.l, sh.t, sh.l + sh.w, sh.t + sh.h}
     margin = tonumber(opts.margin) or 0
-    margin += Core.style_safe_pad line if opts.style_pad
+    margin += Core.style_safe_pad line if opts.style_pad and not sh.rendered
     sections, index = Core.section_from_mode opts.autofit_mode or "Whole text", opts, old_bounds, text_bounds
     target = Core.section_bounds text_bounds, sections, index, opts, margin
     target = Core.union_bounds target, old_bounds if opts.no_shrink
     repl = Core.rect_clip_tag target, span.name
-    next_text = line.text\sub(1, span.start - 1) .. repl .. line.text\sub(span.stop + 1)
+    next_text = if sh.rendered
+      Core.insert_leading_tags Core.strip_all_clips_clean(line.text), repl
+    else
+      line.text\sub(1, span.start - 1) .. repl .. line.text\sub(span.stop + 1)
     if next_text != line.text
       line.text = next_text
       subs[i] = line
@@ -2852,7 +2973,10 @@ Core.op_create_text_clip = (subs, sel, active, opts) ->
     line = subs[i]
     clip_tag = Core.text_area_clip_tag dlg, line, opts
     continue unless clip_tag
-    next_text = Core.replace_or_insert_clip line.text or "", clip_tag, opts.replace_clip
+    next_text = if opts.replace_clip and Core.transform_bounds_requested(line, opts)
+      Core.insert_leading_tags Core.strip_all_clips_clean(line.text or ""), clip_tag
+    else
+      Core.replace_or_insert_clip line.text or "", clip_tag, opts.replace_clip
     if next_text != line.text
       line.text = next_text
       subs[i] = line
@@ -3501,6 +3625,83 @@ PerspectiveTools.valid_quad = (quad) ->
     area += p[1] * quad[j][2] - quad[j][1] * p[2]
   math.abs(area) > 0.01
 
+Core.triangle_points_from_span = (span) ->
+  kind, payload, scale = Core.clip_vector_parts_for_output span
+  return nil unless kind == "vector"
+  cmds = Core.parse_draw_commands payload
+  return nil unless cmds and #cmds >= 3 and #cmds <= 4
+  moves, lines = 0, 0
+  for i, cmd in ipairs cmds
+    if cmd.type == "m"
+      return nil unless i == 1
+      moves += 1
+    elseif cmd.type == "l"
+      lines += 1
+    elseif cmd.type == "c"
+      return nil unless i == #cmds
+    else
+      return nil
+  return nil unless moves == 1 and lines == 2
+  points = Core.anchor_points_from_commands cmds
+  return nil unless #points == 3
+  points, scale
+
+Core.projective_fourth_point = (points, plane_points) ->
+  return nil unless ArchPerspective and ArchPerspective.Quad and plane_points and #plane_points >= 4
+  plane = {}
+  for i = 1, 4
+    point = Core.matrix_point plane_points[i]
+    return nil unless point
+    plane[i] = {point.x, point.y}
+  ok_quad, quad = pcall -> ArchPerspective.Quad plane
+  return nil unless ok_quad and quad
+  point_class = quad[1] and quad[1].__class
+  return nil unless point_class
+  uv = {}
+  for i = 1, 3
+    ok_xy, xy = pcall -> point_class points[i].x, points[i].y
+    return nil unless ok_xy and xy
+    ok_uv, mapped = pcall -> quad\xy_to_uv xy
+    return nil unless ok_uv and mapped
+    uv[i] = Core.matrix_point mapped
+    return nil unless uv[i]
+  target = {
+    uv[1].x + uv[3].x - uv[2].x
+    uv[1].y + uv[3].y - uv[2].y
+  }
+  ok_point, mapped = pcall -> quad\uv_to_xy target
+  return nil unless ok_point and mapped
+  Core.matrix_point mapped
+
+Core.complete_quadrilateral_points = (points, plane_points = nil) ->
+  return nil unless points and #points == 3
+  clean = {}
+  for i = 1, 3
+    clean[i] = Core.matrix_point points[i]
+    return nil unless clean[i]
+  a, b, c = clean[1], clean[2], clean[3]
+  d = nil
+  if plane_points
+    d = Core.projective_fourth_point clean, plane_points
+    return nil unless d
+  else
+    d = {x: a.x + c.x - b.x, y: a.y + c.y - b.y}
+  completed = {a, b, c, d}
+  quad = [{point.x, point.y} for point in *completed]
+  return nil unless PerspectiveTools.valid_quad quad
+  completed
+
+Core.complete_quadrilateral_text = (line) ->
+  span = Core.first_clip_span line and line.text
+  return nil unless span
+  points, scale = Core.triangle_points_from_span span
+  return nil unless points
+  plane_points, source = Core.perspective_plane_points_for_line line
+  completed = Core.complete_quadrilateral_points points, plane_points
+  return nil unless completed
+  replacement = Core.clip_tag_text span.name, Core.vector_inner_with_scale(Core.vector_clip_inner(completed), scale)
+  Core.replace_first_clip(line.text or "", replacement), completed, source or "affine"
+
 PerspectiveTools.edge_len = (a, b) ->
   dx, dy = (b[1] or 0) - (a[1] or 0), (b[2] or 0) - (a[2] or 0)
   math.sqrt dx * dx + dy * dy
@@ -3666,7 +3867,7 @@ PerspectiveTools.effective_tags = (data) ->
 PerspectiveTools.shape_extents = (text) ->
   raw = tostring(text or "")
   return nil unless raw\find "\\p[1-9]"
-  body = Core.strip_tags raw
+  body = LineOps.analyzeText(raw).drawing
   minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
   found = false
   for sx, sy in body\gmatch "(" .. NUM_PATTERN .. ")%s+(" .. NUM_PATTERN .. ")"
@@ -3824,6 +4025,139 @@ PerspectiveTools.text_extents = (line, tags = nil) ->
   unless PerspectiveTools.valid_dim(w) and PerspectiveTools.valid_dim(h)
     w, h = PerspectiveTools.rough_text_extents line, style, state
   math.max(w, 0.01), math.max(h, 0.01)
+
+Core.leading_blocks_and_body = (text) ->
+  text = tostring text or ""
+  cursor = 1
+  for block in *Core.override_block_spans text
+    break unless block.start == cursor
+    cursor = block.stop + 1
+  text\sub(1, cursor - 1), text\sub(cursor)
+
+Core.clip_guide_axis_length = (line, axis) ->
+  span = Core.first_clip_span(line and line.text or "")
+  return nil, nil unless span
+  kind, _scale, payload = Core.clip_inner_parts span.inner
+  if kind == "rect"
+    left, top, right, bottom = unpack Core.normalize_bounds payload
+    length = if axis == "y" then bottom - top else right - left
+    return length, span
+  return nil, span unless kind == "vector"
+  segments = Core.first_path_segments Core.parse_draw_commands(payload), 1, 8
+  segment = segments and segments[1]
+  return nil, span unless segment
+  length = if axis == "y" then math.abs(segment.y2 - segment.y1) else math.abs(segment.x2 - segment.x1)
+  length, span
+
+Core.fit_guide_measure = (line) ->
+  state = Core.effective_line_state line
+  style = PerspectiveTools.measure_style line, PerspectiveTools.style(state.style, line and line.style or "Default")
+  style.align = Core.align_for_line line
+  measure = (value) ->
+    sample = tostring(value or "")\gsub "\\h", " "
+    sample = " " if sample == ""
+    if aegisub and type(aegisub.text_extents) == "function"
+      ok, width, height = pcall aegisub.text_extents, style, sample
+      if ok and PerspectiveTools.valid_dim(width) and PerspectiveTools.valid_dim(height)
+        return width, height
+    count = PerspectiveTools.text_len sample
+    fs = tonumber(style.fontsize) or 20
+    sx = tonumber(style.scale_x) or 100
+    sy = tonumber(style.scale_y) or 100
+    spacing = tonumber(style.spacing) or 0
+    width = (count * fs * 0.4042 + math.max(count - 1, 0) * spacing) * sx / 100
+    height = fs * sy / 100
+    math.max(width, 0.01), math.max(height, 0.01)
+  _width, line_height = measure "Ag"
+  measure, math.max(line_height, 0.01)
+
+Core.wrap_words_to_width = (words, max_width, measure) ->
+  rows, current = {}, {}
+  for word in *words
+    candidate = if #current == 0 then word else table.concat(current, " ") .. " " .. word
+    width = measure candidate
+    if #current > 0 and width > max_width
+      rows[#rows + 1] = table.concat current, " "
+      current = {word}
+    else
+      current[#current + 1] = word
+  rows[#rows + 1] = table.concat(current, " ") if #current > 0
+  rows
+
+Core.balance_words_to_rows = (words, row_count, measure) ->
+  row_count = Core.clamp math.floor(tonumber(row_count) or 1), 1, #words
+  widths = {}
+  for first = 1, #words
+    widths[first] = {}
+    text = ""
+    for last = first, #words
+      text = if text == "" then words[last] else text .. " " .. words[last]
+      widths[first][last] = measure text
+  costs = {[0]: {[0]: 0}}
+  cuts = {}
+  for rows = 1, row_count
+    costs[rows], cuts[rows] = {}, {}
+    for last = rows, #words
+      best, best_first = nil, nil
+      for first = rows, last
+        previous = costs[rows - 1] and costs[rows - 1][first - 1]
+        continue if previous == nil
+        score = math.max previous, widths[first][last]
+        if best == nil or score < best
+          best, best_first = score, first
+      if best_first
+        costs[rows][last] = best
+        cuts[rows][last] = best_first
+  rows, last = {}, #words
+  for row = row_count, 1, -1
+    first = cuts[row] and cuts[row][last]
+    return nil unless first
+    table.insert rows, 1, table.concat(words, " ", first, last)
+    last = first - 1
+  rows
+
+Core.fit_text_to_clip_guide_text = (line, opts = {}) ->
+  return nil, "drawing" if (Core.line_tag_value(line, "p", nil, 0) or 0) > 0
+  axis = if opts.axis == "y" then "y" else "x"
+  length, span = Core.clip_guide_axis_length line, axis
+  return nil, "no_clip" unless span
+  return nil, "zero_axis" unless length and length > 0.001
+  prefix, body = Core.leading_blocks_and_body(line and line.text or "")
+  return nil, "inline_tags" if body\find("{", 1, true) or body\find("}", 1, true)
+  normalized = tostring(body or "")\gsub("\\[Nn]", " ")\gsub("[\r\n\t]+", " ")\gsub(" +", " ")
+  normalized = Core.trim normalized
+  return nil, "no_text" if normalized == ""
+  words = [word for word in normalized\gmatch "%S+"]
+  return nil, "no_text" if #words == 0
+  measure, line_height = Core.fit_guide_measure line
+  rows = if axis == "y"
+    wanted = Core.clamp math.floor(length / line_height), 1, #words
+    Core.balance_words_to_rows words, wanted, measure
+  else
+    Core.wrap_words_to_width words, length, measure
+  return nil, "no_text" unless rows and #rows > 0
+  prefix .. table.concat(rows, "\\N"), nil, {
+    :axis
+    :length
+    rows: #rows
+    align: Core.align_for_line line
+    clip_kind: span.name
+  }
+
+Core.op_fit_text_to_clip_guide = (subs, sel, opts) ->
+  changed = 0
+  for i in *Core.dialogue_indices(subs, sel)
+    line = subs[i]
+    next_text = Core.fit_text_to_clip_guide_text line, opts
+    if next_text and next_text != line.text
+      line.text = next_text
+      subs[i] = line
+      changed += 1
+  if changed == 0
+    Core.show_message "No text could be fitted to a clip guide."
+    return false
+  aegisub.set_undo_point "Cliptomaniac - Fit text to clip guide"
+  true
 
 PerspectiveTools.normalize_perspective_tags = (tags, line) ->
   return nil unless type(tags) == "table"
@@ -4023,6 +4357,21 @@ Core.op_perspective_to_clip = (subs, sel, opts) ->
   aegisub.set_undo_point "Cliptomaniac - Perspective to clip"
   true
 
+Core.op_complete_quadrilateral = (subs, sel, opts) ->
+  changed = 0
+  for i in *Core.dialogue_indices(subs, sel)
+    line = subs[i]
+    next_text = Core.complete_quadrilateral_text line
+    if next_text and next_text != line.text
+      line.text = next_text
+      subs[i] = line
+      changed += 1
+  if changed == 0
+    Core.show_message "No 3-point vector clip could be completed."
+    return false
+  aegisub.set_undo_point "Cliptomaniac - Complete quadrilateral"
+  true
+
 ACTION_META = {
   {"Measure clip", "direct", "Shows the length and angle of the first two guide strokes inside a clip."}
   {"Measure & transform clip", "options", "Uses two guide strokes as a before and after ruler, then adds a size animation."}
@@ -4036,8 +4385,9 @@ ACTION_META = {
   {"Clip to move", "options", "Changes a fixed position into movement using the first guide stroke."}
   {"Position at clip midpoint", "direct", "Moves selected lines to the middle of their clip path, or to the first selected clip."}
   {"Align to clip", "direct", "Moves the line position onto the nearest point of the clip path."}
-  {"Autofit clip to text", "options", "Makes the clip fit around the visible text, with padding and section choices."}
-  {"Create clip around text", "options", "Creates a new clip around the visible text, including tilted or perspective text."}
+  {"Autofit clip to text", "options", "Makes the clip fit around the visible text, with padding, section choices, and optional full-duration transform bounds."}
+  {"Fit text to clip guide", "options", "Uses the first clip or inverse-clip guide to wrap text on X or balance rows on Y without changing alignment."}
+  {"Create clip around text", "options", "Creates a new clip around the visible text, including tilted, perspective, or transformed text."}
   {"Text to clip", "options", "Uses the actual text or drawing outline as the clip shape."}
   {"Expand clip margin", "options", "Grows or shrinks the selected clip by a pixel margin."}
   {"Shape to clip", "direct", "Uses the selected drawing as a clipping area."}
@@ -4055,7 +4405,8 @@ ACTION_META = {
   {"Remove clip points", "direct", "Removes alternating clip points while keeping each shape valid."}
   {"Clip to perspective", "options", "Uses a four-corner clip as the perspective plane for the line."}
   {"Perspective to clip", "direct", "Recreates a four-point clip from the stored perspective plane or current projected geometry."}
-  {"Create strip clips", "options", "Splits a clip or text area into thin clipped copies."}
+  {"Complete quadrilateral", "direct", "Adds D to a three-point A-B-C clip by closing opposite directions in the line's perspective plane."}
+  {"Create strip clips", "options", "Splits a clip or text area, optionally including full-duration transform bounds, into thin clipped copies."}
   {"Animated clip to FBF", "options", "Bakes a moving or transformed clipped line into frame-by-frame clipped lines."}
   {"Extract clip as mask line", "direct", "Creates a new drawing line from the first clip."}
   {"Clip boolean with text/shape", "options", "Combines the current clip with the selected text or drawing outline."}
@@ -4073,8 +4424,10 @@ ACTION_HELP_ES = {
   ["Add clip points"]: "Anade puntos entre los puntos del clip conservando la forma actual."
   ["Remove clip points"]: "Quita puntos alternos del clip conservando cada forma valida."
   ["Perspective to clip"]: "Recrea un clip de cuatro puntos desde el plano de perspectiva guardado o desde la geometria proyectada actual."
-  ["Autofit clip to text"]: "Ajusta el clip alrededor del texto visible, con margen y opciones por secciones."
-  ["Create clip around text"]: "Crea un clip nuevo alrededor del texto visible, incluyendo texto inclinado o en perspectiva."
+  ["Complete quadrilateral"]: "Anade D a un clip A-B-C de tres puntos cerrando las direcciones opuestas en el plano de perspectiva de la linea."
+  ["Autofit clip to text"]: "Ajusta el clip alrededor del texto visible, con margen, opciones por secciones y límites de transformación opcionales para toda la duración."
+  ["Fit text to clip guide"]: "Usa la primera guia clip o iclip para insertar saltos en X o equilibrar filas en Y sin cambiar la alineacion."
+  ["Create clip around text"]: "Crea un clip nuevo alrededor del texto visible, incluyendo texto inclinado, en perspectiva o transformado."
   ["Text to clip"]: "Usa el texto real o el contorno del dibujo como forma del clip."
   ["Expand clip margin"]: "Crece o reduce el clip seleccionado por un margen en píxeles."
   ["Copy clip/iclip"]: "Copia el primer clip a líneas compatibles, o desde la primera línea al resto."
@@ -4096,7 +4449,7 @@ ACTION_HELP_ES = {
   ["Adjust by clip scale"]: "Usa dos trazos guía como regla y escala los valores de texto seleccionados."
   ["Rescale by rectangle clip"]: "Escala tags de texto para ajustarlos a un clip rectangular. Los clips vectoriales se rechazan."
   ["Clip to perspective"]: "Usa un clip de cuatro esquinas como plano de perspectiva para la línea."
-  ["Create strip clips"]: "Divide un clip o área de texto en copias con franjas finas."
+  ["Create strip clips"]: "Divide un clip o área de texto, con límites transformados opcionales para toda la duración, en copias con franjas finas."
   ["Animated clip to FBF"]: "Hornea una línea con clip movido o transformado en líneas frame a frame."
   ["Calibrate clip X"]: "Endereza horizontalmente el primer trazo guía."
   ["Calibrate clip Y"]: "Endereza verticalmente el primer trazo guía."
@@ -4110,6 +4463,12 @@ ACTION_HELP_ES = {
 READ_ONLY_ACTIONS = {
   ["Measure clip"]: true
   ["Clip diagnostics"]: true
+}
+
+TRANSFORM_BOUNDS_ACTIONS = {
+  ["Autofit clip to text"]: true
+  ["Create clip around text"]: true
+  ["Create strip clips"]: true
 }
 
 SECTION_AXES = {"Horizontal", "Vertical"}
@@ -4142,6 +4501,7 @@ Core.normalize_options = (res = {}) ->
   opts.no_shrink = Core.bool_option res, "no_shrink"
   opts.recenter = Core.bool_option res, "recenter"
   opts.style_pad = if res.style_pad == nil then default_style_pad else Core.bool_option res, "style_pad"
+  opts.transform_max_bounds = if TRANSFORM_BOUNDS_ACTIONS[opts.operation] then Core.bool_option(res, "transform_max_bounds") else false
   opts.replace_clip = Core.bool_option res, "replace_clip"
   opts.remove_clip = Core.bool_option res, "remove_clip"
   opts.create_new_lines = Core.bool_option res, "create_new_lines"
@@ -4228,12 +4588,22 @@ CONTROL_HELP_ES = {
     "Solape: solapa partes vecinas para evitar huecos pequeños."
     "No reducir: nunca hace el clip nuevo menor que el anterior."
     "Incluir estilo: incluye borde, sombra y blur en el área."
+    "Máximos de \\t: une los límites renderizados de todos los frames, respeta \\an e ignora clip/iclip solo durante la medición."
+    "Con máximos de \\t se necesita un vídeo cargado; el render ya incluye el estilo visible y no se suma dos veces."
+    "El resultado temporal consolida todos los clip/iclip en un único clip estático y conserva su tipo."
+  }
+  ["Fit text to clip guide"]: {
+    "Eje X: usa la distancia horizontal de la guia como ancho maximo."
+    "Eje Y: usa la distancia vertical para calcular y equilibrar la cantidad de filas."
+    "Conserva an y conserva clip o iclip sin convertirlo ni borrarlo."
   }
   ["Create clip around text"]: {
     "Margen: suma o resta píxeles alrededor del texto."
     "Tolerancia: valores altos simplifican clips de texto."
     "Incluir estilo: incluye borde, sombra y blur en el área."
-    "Reemplazar clip: sobrescribe el primer clip existente."
+    "Reemplazar clip: sobrescribe el primero; con máximos de \\t consolida todos en un único clip estático."
+    "Máximos de \\t: une los límites renderizados de todos los frames, respeta \\an e ignora clip/iclip solo durante la medición."
+    "Con máximos de \\t se necesita un vídeo cargado; el render ya incluye el estilo visible y conserva clip o iclip al reemplazar."
   }
   ["Text to clip"]: {
     "Tipo: elige clip normal, inverse clip o conservar el actual."
@@ -4252,6 +4622,7 @@ CONTROL_HELP_ES = {
     "Tamaño: tamaño aproximado de cada franja en píxeles."
     "Crear líneas: crea una línea duplicada por franja."
     "Comentar original: conserva la original apagada al crear duplicados."
+    "Máximos de \\t: si no hay clip guía, une los límites renderizados de todos los frames; requiere vídeo cargado."
   }
   ["Animated clip to FBF"]: {
     "Hornear: elige si conserva toda la línea o solo copia el clip."
@@ -4323,13 +4694,24 @@ Core.operation_control_help = (operation) ->
         "Bleed: overlap between neighboring sections so tiny gaps do not appear."
         "No shrink: never make the new clip smaller than the old one."
         "Style pad: include outline, shadow, and blur in the fitted area."
+        "Transform maxima: union rendered bounds from every frame, honor \\an, and ignore clip/iclip only while measuring."
+        "Transform maxima requires a loaded video; rendered bounds already include visible style and are not padded twice."
+        "The temporal result consolidates every clip/iclip into one static clip and preserves its kind."
+      }
+    when "Fit text to clip guide"
+      {
+        "X axis: use the guide's horizontal distance as the maximum line width."
+        "Y axis: use the guide's vertical distance to choose and balance the row count."
+        "Keep the effective alignment and preserve clip or iclip without converting or removing it."
       }
     when "Create clip around text"
       {
         "Margin: add or remove extra pixels around the text."
         "Tolerance: higher values make regular text clips simpler."
         "Style pad: include outline, shadow, and blur in the clipped area."
-        "Replace existing clip: overwrite the first clip already on the line."
+        "Replace existing clip: overwrite the first clip; with transform maxima, consolidate all clips into one static clip."
+        "Transform maxima: union rendered bounds from every frame, honor \\an, and ignore clip/iclip only while measuring."
+        "Transform maxima requires a loaded video; rendered bounds include visible style and preserve clip or iclip when replacing."
       }
     when "Text to clip"
       {
@@ -4357,6 +4739,7 @@ Core.operation_control_help = (operation) ->
         "Strip size: approximate pixel size of each strip."
         "Create new lines: make one duplicate line per strip."
         "Comment source: when creating duplicates, keep the original line but turn it off."
+        "Transform maxima: when there is no guide clip, union rendered bounds from every frame; a loaded video is required."
       }
     when "Animated clip to FBF"
       {
@@ -4627,6 +5010,9 @@ Core.options_gui = (operation, detailed_help = false) ->
       gui[#gui + 1] = {class: "label", label: Core.L("origin"), x: 0, y: 5, width: 4}
       gui[#gui + 1] = {class: "dropdown", name: "perspective_org_mode", items: Core.localized_items(PERSPECTIVE_DATA.org_modes), value: Core.choice_label(DEFAULTS.perspective_org_mode), x: 4, y: 5, width: 9}
       Core.add_remove_clip gui, 6
+    when "Fit text to clip guide"
+      gui[#gui + 1] = {class: "label", label: Core.L("axis"), x: 0, y: 4, width: 3}
+      gui[#gui + 1] = {class: "dropdown", name: "axis", items: Core.localized_items({"x", "y"}), value: Core.choice_label(DEFAULTS.axis), x: 3, y: 4, width: 5}
     when "Autofit clip to text"
       gui[#gui + 1] = {class: "label", label: Core.L("mode"), x: 0, y: 4, width: 3}
       gui[#gui + 1] = {class: "dropdown", name: "autofit_mode", items: Core.localized_items(AUTOFIT_MODES), value: Core.choice_label(AUTOFIT_MODES[1]), x: 3, y: 4, width: 10}
@@ -4644,6 +5030,7 @@ Core.options_gui = (operation, detailed_help = false) ->
       gui[#gui + 1] = {class: "floatedit", name: "bleed", value: DEFAULTS.bleed, min: 0, max: 200, x: 15, y: 7, width: 3}
       gui[#gui + 1] = {class: "checkbox", name: "no_shrink", label: Core.L("no_shrink"), value: DEFAULTS.no_shrink, x: 0, y: 8, width: 4}
       gui[#gui + 1] = {class: "checkbox", name: "style_pad", label: Core.L("style_pad"), value: DEFAULTS.style_pad, x: 4, y: 8, width: 4}
+      gui[#gui + 1] = {class: "checkbox", name: "transform_max_bounds", label: Core.L("transform_max_bounds"), value: DEFAULTS.transform_max_bounds, x: 8, y: 8, width: 10}
     when "Create clip around text"
       gui[#gui + 1] = {class: "label", label: Core.L("margin"), x: 0, y: 4, width: 3}
       gui[#gui + 1] = {class: "floatedit", name: "margin", value: DEFAULTS.margin, min: -500, max: 500, x: 3, y: 4, width: 3}
@@ -4651,6 +5038,7 @@ Core.options_gui = (operation, detailed_help = false) ->
       gui[#gui + 1] = {class: "floatedit", name: "tolerance", value: DEFAULTS.tolerance, min: 1, max: 80, x: 10, y: 4, width: 3}
       gui[#gui + 1] = {class: "checkbox", name: "style_pad", label: Core.L("style_pad"), value: DEFAULTS.style_pad, x: 0, y: 5, width: 4}
       gui[#gui + 1] = {class: "checkbox", name: "replace_clip", label: Core.L("replace_existing_clip"), value: DEFAULTS.replace_clip, x: 4, y: 5, width: 7}
+      gui[#gui + 1] = {class: "checkbox", name: "transform_max_bounds", label: Core.L("transform_max_bounds"), value: DEFAULTS.transform_max_bounds, x: 0, y: 6, width: 10}
     when "Text to clip"
       gui[#gui + 1] = {class: "label", label: Core.L("clip_type"), x: 0, y: 4, width: 3}
       gui[#gui + 1] = {class: "dropdown", name: "clip_type", items: Core.localized_items(CLIP_TYPES), value: Core.choice_label(DEFAULTS.clip_type), x: 3, y: 4, width: 5}
@@ -4680,6 +5068,7 @@ Core.options_gui = (operation, detailed_help = false) ->
       gui[#gui + 1] = {class: "floatedit", name: "strip", value: DEFAULTS.strip, min: 1, max: 1000, x: 4, y: 5, width: 3}
       gui[#gui + 1] = {class: "checkbox", name: "create_new_lines", label: Core.L("create_new_lines"), value: DEFAULTS.create_new_lines, x: 0, y: 6, width: 6}
       gui[#gui + 1] = {class: "checkbox", name: "comment_source", label: Core.L("comment_source"), value: DEFAULTS.comment_source, x: 6, y: 6, width: 6}
+      gui[#gui + 1] = {class: "checkbox", name: "transform_max_bounds", label: Core.L("transform_max_bounds"), value: DEFAULTS.transform_max_bounds, x: 0, y: 7, width: 10}
     when "Animated clip to FBF"
       gui[#gui + 1] = {class: "label", label: Core.L("bake_source"), x: 0, y: 4, width: 4}
       gui[#gui + 1] = {class: "dropdown", name: "fbf_source", items: Core.localized_items(FBF_SOURCES), value: Core.choice_label(DEFAULTS.fbf_source), x: 4, y: 4, width: 6}
@@ -4709,7 +5098,31 @@ Core.show_action_options = (operation) ->
     else
       return nil
 
+Core.line_needs_transform_bounds = (line, operation) ->
+  return false unless Core.has_transform_tag(line and line.text or "")
+  switch operation
+    when "Create clip around text"
+      true
+    when "Autofit clip to text"
+      span = Core.first_clip_span line.text
+      span and Core.clip_bounds_from_span(span) != nil
+    when "Create strip clips"
+      Core.first_clip_span(line.text) == nil
+    else
+      false
+
+Core.validate_transform_bounds_context = (subs, sel, opts = {}) ->
+  return true unless opts.transform_max_bounds and TRANSFORM_BOUNDS_ACTIONS[opts.operation]
+  for i in *Core.dialogue_indices subs, sel
+    if Core.line_needs_transform_bounds subs[i], opts.operation
+      unless Core.video_loaded!
+        Core.show_message "Load a video to include transform maxima over the full line duration.", opts.operation
+        return false
+      break
+  true
+
 Core.dispatch = (subs, sel, active, opts) ->
+  return false unless Core.validate_transform_bounds_context subs, sel, opts
   switch opts.operation
     when "Measure clip" then Core.op_measure subs, sel, opts
     when "Measure & transform clip" then Core.op_measure_transform subs, sel, opts
@@ -4724,6 +5137,7 @@ Core.dispatch = (subs, sel, active, opts) ->
     when "Position at clip midpoint" then Core.op_position_at_clip_midpoint subs, sel, opts
     when "Align to clip" then Core.op_align_to_clip subs, sel, opts
     when "Autofit clip to text" then Core.op_autofit_clip subs, sel, active, opts
+    when "Fit text to clip guide" then Core.op_fit_text_to_clip_guide subs, sel, opts
     when "Create clip around text" then Core.op_create_text_clip subs, sel, active, opts
     when "Text to clip" then Core.op_text_to_clip subs, sel, active, opts
     when "Expand clip margin" then Core.op_expand_clip_margin subs, sel, opts
@@ -4742,6 +5156,7 @@ Core.dispatch = (subs, sel, active, opts) ->
     when "Remove clip points" then Core.op_hotkey subs, sel, "Remove clip points", opts
     when "Clip to perspective" then Core.op_clip_to_perspective subs, sel, opts
     when "Perspective to clip" then Core.op_perspective_to_clip subs, sel, opts
+    when "Complete quadrilateral" then Core.op_complete_quadrilateral subs, sel, opts
     when "Create strip clips" then Core.op_create_strip_clips subs, sel, active, opts
     when "Animated clip to FBF" then Core.op_animated_clip_to_fbf subs, sel, active, opts
     when "Extract clip as mask line" then Core.op_extract_clip_as_mask subs, sel, opts

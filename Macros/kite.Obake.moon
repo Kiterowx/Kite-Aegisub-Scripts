@@ -2,24 +2,26 @@ export script_name = "Obake"
 export script_description = "Build and maintain ASS transform/tag effects."
 export script_author = "Kiterow"
 export script_namespace = "kite.Obake"
-export script_version = "0.2.3"
+export script_version = "0.3.0"
 
 Core = {}
-local ASS, AMLine
+local ASS, AMLine, LineOps
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
   {
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
     {"a-mo.Line", version: "1.5.3", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
-    {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-      feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-ASS, AMLine, Core.UI = depctrl\requireModules!
+ASS, AMLine, Core.UI, LineOps = depctrl\requireModules!
 
 Core.ConfigHandler = (interface, file_name, _has_sections, version) ->
   storage = switch file_name
@@ -860,8 +862,7 @@ retime_transform_text = (text, source_duration, target_duration) ->
 
 NUM_PATTERN = "[%+%-]?%d*%.?%d+"
 
-strip_tags = (text) ->
-  tostring(text or "")\gsub "{[^}]*}", ""
+strip_tags = (text) -> LineOps.analyzeText(text).plain
 
 split_leading_tag_blocks = (text) ->
   text = tostring text or ""
@@ -2190,18 +2191,114 @@ reset_markers = ->
 line_layer = (line) ->
   tonumber(line and line.layer) or 0
 
-ensure_tag_block = (line) ->
-  line.text = "{}" .. tostring(line.text or "") unless tostring(line.text or "")\sub(1, 1) == "{"
-  line
+Core.OUTLINE_TAGS = {"outline", "outline_x", "outline_y"}
+Core.SHADOW_TAGS = {"shadow", "shadow_x", "shadow_y"}
 
-strip_bord = (text) ->
-  remove_ass_tags text, "outline"
+Core.layer_override_block = (content) ->
+  raw = trim tostring(content or "")
+  first = raw\sub 1, 1
+  first == "\\" or ((first == "*" or first == ">") and raw\sub(2, 2) == "\\")
 
-strip_blur = (text) ->
-  remove_ass_tags text, "blur"
+Core.remove_layer_tags_from_block = (block, remove_set) ->
+  out = {}
+  pos = 1
+  for tag in *gun_parse_tag_block block
+    out[#out + 1] = block\sub pos, tag.start_pos - 1
+    canonical = TAG_NAME_ALIASES[tag.name] or tag.name
+    unless remove_set[canonical]
+      raw = tag.raw
+      if canonical == "transform"
+        open_pos = raw\find "(", 1, true
+        if open_pos and raw\sub(-1) == ")"
+          inner = raw\sub open_pos + 1, -2
+          tag_pos = inner\find "\\", 1, true
+          if tag_pos
+            prefix = inner\sub 1, tag_pos - 1
+            cleaned = Core.remove_layer_tags_from_block inner\sub(tag_pos), remove_set
+            raw = if cleaned\find("\\", 1, true)
+              raw\sub(1, open_pos) .. prefix .. cleaned .. ")"
+            else
+              nil
+      out[#out + 1] = raw if raw
+    pos = tag.end_pos + 1
+  out[#out + 1] = block\sub pos
+  table.concat out
 
-strip_color3 = (text) ->
-  remove_ass_tags text, "color3"
+Core.remove_layer_tags = (text, names) ->
+  remove_set = {}
+  remove_set[name] = true for name in *normalize_tag_names names
+  text = tostring text or ""
+  out = {}
+  pos = 1
+  for block in *gun_iter_tag_blocks text
+    out[#out + 1] = text\sub pos, block.open_pos - 1
+    if Core.layer_override_block block.content
+      cleaned = Core.remove_layer_tags_from_block block.content, remove_set
+      out[#out + 1] = "{" .. cleaned .. "}" if trim(cleaned) != ""
+    else
+      out[#out + 1] = text\sub block.open_pos, block.close_pos
+    pos = block.close_pos + 1
+  out[#out + 1] = text\sub pos
+  table.concat out
+
+Core.append_layer_tags = (text, payload) ->
+  return tostring(text or "") unless payload and payload != ""
+  text = tostring text or ""
+  out = {}
+  pos = 1
+  has_initial_override = false
+  for block in *gun_iter_tag_blocks text
+    out[#out + 1] = text\sub pos, block.open_pos - 1
+    if Core.layer_override_block block.content
+      out[#out + 1] = "{" .. block.content .. payload .. "}"
+      has_initial_override = true if block.open_pos == 1
+    else
+      out[#out + 1] = text\sub block.open_pos, block.close_pos
+    pos = block.close_pos + 1
+  out[#out + 1] = text\sub pos
+  result = table.concat out
+  result = "{" .. payload .. "}" .. result unless has_initial_override
+  result
+
+Core.rewrite_layer_tags = (text, names, payload) ->
+  Core.append_layer_tags Core.remove_layer_tags(text, names), payload
+
+Core.fill_only_text = (text) ->
+  names = {}
+  names[#names + 1] = name for name in *Core.OUTLINE_TAGS
+  names[#names + 1] = name for name in *Core.SHADOW_TAGS
+  Core.rewrite_layer_tags text, names, tag_text("outline", 0) .. tag_text("shadow", 0)
+
+Core.border_only_text = (text, outline = nil, color = nil, clear_shadow = true) ->
+  names = {"color1", "alpha1"}
+  payload = tag_text "alpha1", 255
+  if outline != nil
+    names[#names + 1] = name for name in *Core.OUTLINE_TAGS
+    payload ..= tag_text "outline", outline
+  if color != nil
+    names[#names + 1] = "color3"
+    payload ..= color_tag_text "color3", color
+  if clear_shadow
+    names[#names + 1] = name for name in *Core.SHADOW_TAGS
+    payload ..= tag_text "shadow", 0
+  Core.rewrite_layer_tags text, names, payload
+
+Core.without_shadow_text = (text) ->
+  Core.rewrite_layer_tags text, Core.SHADOW_TAGS, tag_text("shadow", 0)
+
+Core.exact_blur_text = (text, value) ->
+  Core.rewrite_layer_tags text, "blur", tag_text("blur", value)
+
+Core.explicit_outline_size = (text) ->
+  largest = nil
+  for block in *gun_iter_tag_blocks text
+    continue unless Core.layer_override_block block.content
+    for tag in *gun_parse_tag_block block.content
+      if tag.name == "bord" or tag.name == "xbord" or tag.name == "ybord"
+        value = tonumber trim tag.value
+        if value and value >= 0
+          largest = math.max largest or 0, value
+  if largest != nil then largest else 2
 
 make_border_layers = (line, cfg) ->
   base_layer = line_layer line
@@ -2216,22 +2313,16 @@ make_border_layers = (line, cfg) ->
   mid = next_marker!
   out = {}
   fill = clone_line line
-  ensure_tag_block fill
-  fill.text = strip_bord fill.text
-  fill.text = inject_first fill.text, tag_text("outline", 0)
-  fill.layer = base_layer + #used + 1
+  fill.text = Core.fill_only_text fill.text
+  fill.layer = base_layer + #used
   stamp_marker fill, "CAL", mid
   out[#out + 1] = fill
   accumulated = 0
-  depth = #used
+  depth = #used - 1
   for layer in *used
     accumulated += tonumber(layer.size) or 0
     border = clone_line line
-    ensure_tag_block border
-    border.text = strip_bord border.text
-    border.text = inject_first border.text, tag_text("outline", accumulated)
-    border.text = strip_color3 border.text
-    border.text = inject_first border.text, tag_text("alpha1", 255) .. color_tag_text("color3", layer.color)
+    border.text = Core.border_only_text border.text, accumulated, layer.color
     border.layer = base_layer + depth
     depth -= 1
     stamp_marker border, "CAL", mid
@@ -2262,62 +2353,54 @@ preset_layers = (line, preset) ->
     when "Decompose (Fill + Border)"
       border = clone_line line
       fill = clone_line line
-      ensure_tag_block border
-      ensure_tag_block fill
-      border.text = inject_first border.text, tag_text("alpha1", 255)
+      border.text = Core.border_only_text border.text, nil, nil, false
       border.layer = base
       stamp_marker border, "CAL", mid
-      fill.text = strip_bord fill.text
-      fill.text = inject_first fill.text, "\\bord0"
+      fill.text = Core.fill_only_text fill.text
       fill.layer = base + 1
       stamp_marker fill, "CAL", mid
       {border, fill}
     when "Blur + Glow"
       glow = clone_line line
       fill = clone_line line
-      ensure_tag_block glow
-      ensure_tag_block fill
-      glow.text = strip_blur glow.text
-      glow.text = inject_first glow.text, tag_text("blur", 3) .. tag_text("alpha", 128)
+      glow.text = Core.rewrite_layer_tags glow.text, {"blur", "alpha"}, tag_text("blur", 3) .. tag_text("alpha", 128)
       glow.layer = base
       stamp_marker glow, "CAL", mid
-      fill.text = inject_first fill.text, tag_text("blur", 0.6) unless fill.text\match "\\blur"
+      fill.text = Core.append_layer_tags fill.text, tag_text("blur", 0.6) unless fill.text\match "\\blur"
       fill.layer = base + 1
       stamp_marker fill, "CAL", mid
       {glow, fill}
     when "Shadtrick (Shadow Layer)"
       shad = clone_line line
-      ensure_tag_block shad
-      shad.text = remove_alpha_tags shad.text
-      shad.text = remove_ass_tags shad.text, {"shadow", "shadow_x", "shadow_y"}
-      shad.text = inject_first shad.text, tag_text("alpha", 255) .. tag_text("alpha4", 0) .. tag_text("shadow_x", 0.001)
+      front = clone_line line
+      shad.text = Core.rewrite_layer_tags shad.text,
+        {"color1", "color2", "color3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "shadow", "shadow_x", "shadow_y"},
+        tag_text("alpha", 255) .. tag_text("alpha4", 0) .. tag_text("shadow_x", 0.001) .. tag_text("shadow_y", 0)
       shad.layer = base
       stamp_marker shad, "CAL", mid
-      {shad}
+      front.text = Core.without_shadow_text front.text
+      front.layer = base + 1
+      stamp_marker front, "CAL", mid
+      {shad, front}
     when "Double Border Blur"
       top = clone_line line
       middle = clone_line line
       bottom = clone_line line
-      ensure_tag_block top
-      ensure_tag_block middle
-      ensure_tag_block bottom
-      bord = tonumber(tostring(line.text or "")\match("\\bord([%d%.]+)")) or 2
-      top.text = strip_bord top.text
-      top.text = inject_first top.text, tag_text("outline", 0)
+      bord = Core.explicit_outline_size line.text
+      top.text = Core.fill_only_text top.text
       top.layer = base + 2
       stamp_marker top, "CAL", mid
-      middle.text = inject_first middle.text, tag_text("alpha1", 255)
-      middle.text = inject_first middle.text, tag_text("blur", 0.4) unless middle.text\match "\\blur"
+      middle.text = Core.exact_blur_text Core.border_only_text(middle.text), 0.4
       middle.layer = base + 1
       stamp_marker middle, "CAL", mid
-      bottom.text = strip_bord bottom.text
-      bottom.text = inject_first bottom.text, tag_text("outline", bord * 2) .. tag_text("alpha1", 255) .. tag_text("blur", 2)
+      bottom.text = Core.exact_blur_text Core.border_only_text(bottom.text, bord * 2), 2
       bottom.layer = base
       stamp_marker bottom, "CAL", mid
       {bottom, middle, top}
     when "Clean Layers (Flatten)"
       clean = clone_line line
       clean.text = remove_alpha_tags clean.text
+      clean.effect = trim tostring(clean.effect or "")\gsub("%[CAL%-%d+%]", "")\gsub("%s+", " ")
       clean.layer = 0
       {clean}
     else
@@ -2697,7 +2780,7 @@ Core.action_macro = (operation) ->
     Core.run_operation subs, sel, active, operation
 
 Core.hotkey_menu_path = (operation) ->
-  HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. operation
+  HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. (OPERATION_LABELS.en[operation] or operation)
 
 Core.help_macro = ->
   Core.action_help_picker!

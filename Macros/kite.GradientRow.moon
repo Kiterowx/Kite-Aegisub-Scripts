@@ -2,13 +2,11 @@ export script_name = "Gradient Row"
 export script_description = "Create adaptive color gradients across selected lines and visible text from palettes or inline color states."
 export script_author = "Kiterow"
 export script_namespace = "kite.GradientRow"
-export script_version = "1.6.4"
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "Gradient Row"
+export script_version = "1.8.1"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
     {"a-mo.LineCollection", version: "1.3.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"},
@@ -18,15 +16,17 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"},
     {"arch.Perspective", version: "1.2.1", url: "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"},
-    {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-      feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
     {"SubInspector.Inspector", version: "0.6.0", url: "https://github.com/TypesettingTools/SubInspector",
       feed: "https://raw.githubusercontent.com/TypesettingTools/SubInspector/master/DependencyControl.json",
       optional: true},
   }
 }
 
-LineCollection, Line, ASS, ArchPerspective, KiteUI, SubInspector = depctrl\requireModules!
+LineCollection, Line, ASS, ArchPerspective, KiteUI, LineOps, SubInspector = depctrl\requireModules!
 logger = depctrl\getLogger!
 have_SubInspector = depctrl\checkOptionalModules "SubInspector.Inspector"
 
@@ -167,12 +167,9 @@ ensure_tag_block = (text) ->
   return text if text\find "^{"
   "{}#{text}"
 
-strip_tags = (text) ->
-  (text or "")\gsub "{[^}]*}", ""
+strip_tags = (text) -> LineOps.visibleText text
 
-is_vector_line = (text) ->
-  text = tostring(text or "")
-  text\find("\\p[1-9]") != nil
+is_vector_line = (text) -> LineOps.hasDrawing text
 
 tag_value = (tag, fallback = 0) ->
   return tonumber(tag) or fallback unless type(tag) == "table"
@@ -188,23 +185,30 @@ layout_scale_for_line = (line) ->
   1
 
 position_from_text = (text) ->
-  x, y = text\match "\\pos%(%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*%)"
-  return tonumber(x), tonumber(y) if x
-  x, y = text\match "\\move%(%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)"
-  return tonumber(x), tonumber(y) if x
+  x, y, call = LineOps.tagPair text, "pos", nil, nil, true
+  return x, y if call and x != nil and y != nil
+  args, move = LineOps.tagArguments text, "move", true
+  return tonumber(args[1]), tonumber(args[2]) if move and tonumber(args[1]) and tonumber(args[2])
   nil, nil
 
+implicit_position_tag = (line) ->
+  x, y = position_from_text line.text
+  return nil if x != nil and y != nil
+  return nil unless line.getDefaultPosition
+  ok, x, y = pcall -> line\getDefaultPosition!
+  return nil unless ok and tonumber(x) and tonumber(y)
+  "\\pos(#{format_num x},#{format_num y})"
+
 origin_from_text = (line) ->
-  x, y = line.text\match "\\org%(%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*%)"
-  return {x: tonumber(x), y: tonumber(y)} if x
+  x, y, call = LineOps.tagPair line.text, "org", nil, nil, true
+  return {x: x, y: y} if call and x != nil and y != nil
   x, y = position_from_text line.text
   return {x: x, y: y} if x and y
   nil
 
 rotation_from_text = (line) ->
-  rotation = nil
-  for value in line.text\gmatch "\\frz?([%d%.%-]+)"
-    rotation = tonumber(value) or rotation
+  rotation, call = LineOps.tagNumber line.text, "frz", nil, true
+  rotation, call = LineOps.tagNumber(line.text, "fr", nil, true) unless call
   style = line.styleRef or line.styleref or {}
   rotation or tonumber(style.angle) or 0
 
@@ -218,8 +222,7 @@ rotate_point = (point, origin, angle) ->
   }
 
 number_tag = (text, tag, fallback) ->
-  value = text\match "\\#{tag}([%d%.%-]+)"
-  tonumber(value) or tonumber(fallback)
+  LineOps.tagNumber text, tag, tonumber(fallback), true
 
 text_pad = (line) ->
   style = line.styleRef or line.styleref or {}
@@ -847,6 +850,7 @@ clip_tags_for_line = (sub, line, state) ->
 apply_gradient_line = (source, clip_tag, slots, color, collection) ->
   line = Line source, collection
   line.comment = false
+  position_tag = implicit_position_tag line
   data, parse_err = try_parse_line line
   if data
     data\removeTags {"clip_rect", "iclip_rect", "clip_vect", "iclip_vect"}
@@ -861,14 +865,14 @@ apply_gradient_line = (source, clip_tag, slots, color, collection) ->
       data\commit!
     unless ok
       logger\warn "ASSFoundation could not replace color tags; using text fallback: #{color_err}"
-      line.text = line.text\gsub "\\i?clip%b()", ""
+      line.text = LineOps.stripClips line.text
       line.text = apply_color_tags_text line.text, slots, color
   else
     logger\warn "ASSFoundation could not parse line for color replacement; using text fallback: #{parse_err}"
-    line.text = line.text\gsub "\\i?clip%b()", ""
+    line.text = LineOps.stripClips line.text
     line.text = apply_color_tags_text line.text, slots, color
   line.text = ensure_tag_block line.text
-  line.text = line.text\gsub "^{", "{#{clip_tag}"
+  line.text = line.text\gsub "^{", "{#{clip_tag}#{position_tag or ""}"
   line
 
 first_tag_block = (text) ->
@@ -1203,44 +1207,43 @@ main = (sub, sel) ->
   state = create_dialog!
   return unless state
   state = normalize_state state
-  if is_char_mode state.mode
-    active_slots = if state.use_between then {} else collect_active_slots state.slots
+  LineOps.transaction sub, script_name, ->
+    if is_char_mode state.mode
+      active_slots = if state.use_between then {} else collect_active_slots state.slots
+      palette = [parse_color color for color in *state.colors]
+      return apply_char_gradient sub, sel, active_slots, palette, state
+    active_slots = collect_active_slots state.slots
     palette = [parse_color color for color in *state.colors]
-    return apply_char_gradient sub, sel, active_slots, palette, state
-  active_slots = collect_active_slots state.slots
-  palette = [parse_color color for color in *state.colors]
-  sources, collection = collect_sources sub, sel
-  generated_selection = {}
-  inserted_before = 0
+    sources, collection = collect_sources sub, sel
+    generated_selection = {}
+    inserted_before = 0
 
-  for line_no, source_info in ipairs sources
-    aegisub.cancel! if aegisub.progress.is_cancelled!
-    source_index = source_info.index + inserted_before
-    source = source_info.line
-    clips = clip_tags_for_line sub, source, state
-    window_error "No gradient clips were generated." if #clips == 0
-
-    commented = Line source, collection
-    commented.comment = true
-    sub[source_index] = commented
-    insert_at = source_index + 1
-
-    for i, clip_tag in ipairs clips
+    for line_no, source_info in ipairs sources
       aegisub.cancel! if aegisub.progress.is_cancelled!
-      factor = interpolation_factor i, #clips, state.accel
-      color = palette_color palette, factor
-      line = apply_gradient_line source, clip_tag, state.slots, color, collection
-      sub.insert insert_at, line
-      generated_selection[#generated_selection + 1] = insert_at
-      insert_at += 1
+      source_index = source_info.index + inserted_before
+      source = source_info.line
+      clips = clip_tags_for_line sub, source, state
+      window_error "No gradient clips were generated." if #clips == 0
 
-    inserted_before += #clips
-    aegisub.progress.set math.floor(100 * line_no / #sel)
+      commented = Line source, collection
+      commented.comment = true
+      sub[source_index] = commented
+      insert_at = source_index + 1
 
-  generated_selection
+      for i, clip_tag in ipairs clips
+        aegisub.cancel! if aegisub.progress.is_cancelled!
+        factor = interpolation_factor i, #clips, state.accel
+        color = palette_color palette, factor
+        line = apply_gradient_line source, clip_tag, state.slots, color, collection
+        sub.insert insert_at, line
+        generated_selection[#generated_selection + 1] = insert_at
+        insert_at += 1
+
+      inserted_before += #clips
+      aegisub.progress.set math.floor(100 * line_no / math.max(#sources, 1))
+
+    generated_selection
 
 validate = (sub, sel) -> #sel >= 1
 
-hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/Execute"
 depctrl\registerMacro main, validate
-depctrl\registerMacro hotkey_path, "Hotkey action. " .. script_description, main, validate, nil, false

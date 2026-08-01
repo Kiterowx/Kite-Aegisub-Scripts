@@ -1,7 +1,7 @@
 script_name        = "Zheus Colormanager"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.4.4"
+script_version     = "4.5.0"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -11,8 +11,14 @@ local depRec = DependencyControl{
     author = script_author,
     version = script_version,
     namespace = script_namespace,
-    feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+    {
+        { "kite.PyBridge", version = "1.4.0",
+          url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+    },
 }
+local PyBridge = depRec:requireModules()
 
 local MENU_PATH = "Zheus Colormanager"
 local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
@@ -275,16 +281,6 @@ local function injectFirstTags(text, payload)
     return "{" .. payload .. "}" .. text
 end
 
-local function stripColorsFromFirstBlock(text)
-    text = tostring(text or "")
-    local head = text:match("^({[^}]*})")
-    if not head then return text end
-    local body = stripColorsFromBody(head:sub(2, -2))
-    if body:match("^%s*$") then
-        return text:sub(#head + 1)
-    end
-    return "{" .. body .. "}" .. text:sub(#head + 1)
-end
 
 local function stripSolidSlotsFromFirstBlock(text)
     text = tostring(text or "")
@@ -1649,41 +1645,42 @@ function ActorColorFile.io(data, actors, mode)
     if mode == "Export" then
         local fp = aegisub.dialog.save("Exportar paleta de colores - Zheus Colormanager", "", "", "*.txt", false)
         if not fp then return nil end
-        local f = io.open(fp, "w")
-        if not f then return "Error al escribir" end
         local hasAnyVSF = false
         for _, a in ipairs(actors) do
             if data[a].has_vsf then hasAnyVSF = true; break end
         end
-        f:write("# Zheus Colormanager\n")
-        f:write("# Exportación de paleta de color por actor\n")
-        f:write("# Versión de formato: 2\n")
-        f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n")
-        f:write("# Esquema: Actor|c,3c,4c[|1vc:c1,c2,c3,c4|2vc:c1,c2,c3,c4|...]\n\n")
-        for _, a in ipairs(actors) do
-            local info = data[a]
-            local line = a .. "|" .. info.colors.c .. "," .. info.colors["3c"] .. "," .. info.colors["4c"]
-            if info.has_vsf then
-                for _, tag in ipairs(VSF_TAGS) do
-                    local vc = info.vsf_corners[tag]
-                    if vc then
-                        line = line .. "|" .. tag .. ":" .. vc[1] .. "," .. vc[2] .. "," .. vc[3] .. "," .. vc[4]
+        local ok, err = PyBridge.withAtomicFile(fp, function(f)
+            f:write("# Zheus Colormanager\n")
+            f:write("# Exportación de paleta de color por actor\n")
+            f:write("# Versión de formato: 2\n")
+            f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n")
+            f:write("# Esquema: Actor|c,3c,4c[|1vc:c1,c2,c3,c4|2vc:c1,c2,c3,c4|...]\n\n")
+            for _, a in ipairs(actors) do
+                local info = data[a]
+                local line = a .. "|" .. info.colors.c .. "," .. info.colors["3c"] .. "," .. info.colors["4c"]
+                if info.has_vsf then
+                    for _, tag in ipairs(VSF_TAGS) do
+                        local vc = info.vsf_corners[tag]
+                        if vc then
+                            line = line .. "|" .. tag .. ":" .. vc[1] .. "," .. vc[2] .. "," .. vc[3] .. "," .. vc[4]
+                        end
                     end
                 end
+                f:write(line .. "\n")
             end
-            f:write(line .. "\n")
-        end
-        f:close()
+            return true
+        end, "wb")
+        if not ok then return "Error al escribir: " .. tostring(err) end
         return "Exportados " .. #actors .. " actores"
     end
 
     local fn = aegisub.dialog.open("Importar paleta de colores - Zheus Colormanager", "", "", "*.txt", false, true)
     if not fn then return nil end
-    local f = io.open(fn, "r")
-    if not f then return "Error al leer" end
+    local content, readError = PyBridge.readFile(fn)
+    if not content then return "Error al leer: " .. tostring(readError) end
     local imported, missing, invalid, has_vsf_data = 0, {}, {}, false
     local updated = {}
-    for l in f:lines() do
+    for l in content:gmatch("[^\r\n]+") do
         if not l:match("^#") and l ~= "" then
             local parts = {}
             for p in l:gmatch("[^|]+") do table.insert(parts, p) end
@@ -1730,7 +1727,6 @@ function ActorColorFile.io(data, actors, mode)
             end
         end
     end
-    f:close()
     local noData = {}
     for _, a in ipairs(actors) do
         if not updated[a] then table.insert(noData, a) end
@@ -3281,9 +3277,8 @@ end
 function AccessibilityConfig.load()
     local merged = {}
     for k, v in pairs(ACCESS_CONFIG_DEFAULTS) do merged[k] = v end
-    local f = io.open(_accessConfigPath(), "r")
-    if not f then return merged end
-    local content = f:read("*a"); f:close()
+    local content = PyBridge.readFile(_accessConfigPath())
+    if not content then return merged end
     local stored = _safeLoadLuaTable(content)
     if not stored then return merged end
 
@@ -3335,11 +3330,7 @@ function AccessibilityConfig.save(t)
             end
         end
     end
-    local f, err = io.open(_accessConfigPath(), "w")
-    if not f then return false, err or "cannot open" end
-    f:write("return " .. _serializeLua(current))
-    f:close()
-    return true
+    return PyBridge.writeFile(_accessConfigPath(), "return " .. _serializeLua(current))
 end
 
 local function _registerCustomProfilesFromDisk()
@@ -3405,19 +3396,16 @@ function AccessibilityExportFile.export(data, actors, profile)
         out.actors[a] = row
     end
 
-    local f, err = io.open(fp, "w")
-    if not f then return "Error al escribir: " .. tostring(err) end
-    f:write("return " .. _serializeLua(out))
-    f:close()
+    local ok, err = PyBridge.writeFile(fp, "return " .. _serializeLua(out))
+    if not ok then return "Error al escribir: " .. tostring(err) end
     return "Exportados " .. #actors .. " actores -> " .. fp
 end
 
 function AccessibilityExportFile.import(data, actors)
     local fp = aegisub.dialog.open("Importar paleta accesible - Zheus Colormanager", "", "", "*.txt;*.lua", false, true)
     if not fp then return nil end
-    local f = io.open(fp, "r")
-    if not f then return "Error al leer el archivo" end
-    local content = f:read("*a"); f:close()
+    local content, readError = PyBridge.readFile(fp)
+    if not content then return "Error al leer el archivo: " .. tostring(readError) end
 
     local imported, missing, updated = 0, {}, {}
 
@@ -3616,27 +3604,25 @@ local function configPath()
 end
 
 local function readConfigFile()
-    local f = io.open(configPath(), "r")
-    if not f then return {} end
-    local content = f:read("*a")
-    f:close()
-    return _safeLoadLuaTable(content) or {}
+    local content = PyBridge.readFile(configPath())
+    return content and (_safeLoadLuaTable(content) or {}) or {}
 end
 
 local function writeConfigFile(t)
-    local f, err = io.open(configPath(), "w")
-    if not f then return false, (err or "Error al abrir el archivo") end
-    f:write("return {\n")
-    for k, v in pairs(t) do
+    local parts = {"return {\n"}
+    local keys = {}
+    for key in pairs(t) do keys[#keys + 1] = key end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    for _, k in ipairs(keys) do
+        local v = t[k]
         if type(v) == "string" then
-            f:write(string.format("  [%q] = %q,\n", k, v))
+            parts[#parts + 1] = string.format("  [%q] = %q,\n", k, v)
         elseif type(v) == "boolean" or type(v) == "number" then
-            f:write(string.format("  [%q] = %s,\n", k, tostring(v)))
+            parts[#parts + 1] = string.format("  [%q] = %s,\n", k, tostring(v))
         end
     end
-    f:write("}\n")
-    f:close()
-    return true
+    parts[#parts + 1] = "}\n"
+    return PyBridge.writeFile(configPath(), table.concat(parts))
 end
 
 function Config.load()
@@ -3662,7 +3648,7 @@ function Config.save(t)
 end
 
 local HELP_TEXT = [[
-ZHEUS COLORMANAGER 4.4.1
+ZHEUS COLORMANAGER 4.5.0
 
 Panel principal
 Gestores:

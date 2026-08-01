@@ -1,4 +1,4 @@
-# Zheus Colormanager 4.4.4
+# Zheus Colormanager 4.5.0
 
 Zheus manages actor colors, solid ASS colors, VSFilterMod corner colors, replacement workflows, persistent color changes, and accessibility-oriented palettes.
 
@@ -22,7 +22,7 @@ Zheus is a standalone top-level macro.
 
 - `ColorRelay` applies persistent color changes over frame events and transform windows.
 - The main panel uses compact manager/change selectors and stays as a top-level macro.
-- Zheus declares no additional modules; DependencyControl is used for update registration.
+- Zheus uses `kite.PyBridge` for file and process operations; DependencyControl remains the update registrar.
 
 ## Local data
 

@@ -1,10 +1,10 @@
-# Snapshoter 1.5.9
+# Snapshoter 1.6.0
 
 Snapshoter captures subtitle frames, frame lists, frame sequences, and clip crops from the loaded video.
 
 Menu root: `Snapshoter`
 
-Hotkey path: `: Kite Hotkeys :/Snapshoter/Execute`
+The `Snapshoter` entry itself can be assigned as a hotkey in Aegisub.
 
 Namespace: `kite.Snapshoter`
 

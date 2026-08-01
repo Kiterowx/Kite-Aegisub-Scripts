@@ -1,24 +1,22 @@
 export script_name        = "AddTexture"
 export script_description = "Apply pasted ASS drawing textures clipped to selected text outlines"
 export script_author      = "Kiterow"
-export script_version     = "2.0.6"
+export script_version     = "2.0.8"
 export script_namespace   = "kite.AddTexture"
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "AddTexture"
 
 CONFIG_FILE = "kite-addtexture.json"
 
 local ZF, ASS, KiteUI, depctrl
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
     {"ZF.main", version: "2.3.0", url: "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"}
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
-    {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-      feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
 ZF, ASS, KiteUI = depctrl\requireModules!
@@ -753,10 +751,7 @@ main = (subs, sel, active) ->
   dlg\getSelection!
 
 validate = (subs, sel) -> sel and #sel >= 1
-hotkey_menu_path = (action) -> HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. action
 if depctrl and depctrl.registerMacro
   depctrl\registerMacro script_name, script_description, main, validate, nil, false
-  depctrl\registerMacro hotkey_menu_path("Execute"), "Hotkey action. " .. script_description, main, validate, nil, false
 else
   aegisub.register_macro script_name, script_description, main, validate
-  aegisub.register_macro hotkey_menu_path("Execute"), "Hotkey action. " .. script_description, main, validate

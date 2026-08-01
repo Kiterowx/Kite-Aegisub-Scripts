@@ -1,7 +1,7 @@
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "1.0.10"
+script_version     = "1.7.0"
 script_namespace   = "kite.RheaSigns"
 
 local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
@@ -12,7 +12,7 @@ include("karaskel.lua")
 
 local DependencyControl = require("l0.DependencyControl")
 local depRec = DependencyControl{
-    feed        = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+    feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
         { "l0.ASSFoundation", version = "0.5.0",
           url  = "https://github.com/TypesettingTools/ASSFoundation",
@@ -20,24 +20,36 @@ local depRec = DependencyControl{
         { "l0.Functional",   version = "0.6.0",
           url  = "https://github.com/TypesettingTools/Functional",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json" },
-        { "arch.Perspective", version = "1.0.0",
-          url  = "https://github.com/arch1t3cht/Aegisub-Scripts",
-          feed = "https://raw.githubusercontent.com/arch1t3cht/Aegisub-Scripts/main/DependencyControl.json" },
+        { "arch.Perspective", version = "1.2.1",
+          url  = "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json" },
         { "arch.Util", version = "0.1.0",
-          url  = "https://github.com/arch1t3cht/Aegisub-Scripts",
-          feed = "https://raw.githubusercontent.com/arch1t3cht/Aegisub-Scripts/main/DependencyControl.json" },
+          url  = "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json" },
         { "a-mo.LineCollection", version = "1.3.0",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
         { "a-mo.Line", version = "1.5.3",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
-        { "kite.UI", version = "1.0.0",
-          url  = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-          feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.UI", version = "1.1.0",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.LineOps", version = "1.5.0",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.PyBridge", version = "1.4.0",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.EventOps", version = "1.0.0",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.ShapeOptimizer", version = "1.0.0",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
     },
 }
-local ASS, Functional, ArchPersp, ArchUtil, LineCollection, AMLine, KiteUI = depRec:requireModules()
+local ASS, Functional, ArchPersp, ArchUtil, LineCollection, AMLine, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
 
 local function ConfigHandler(interface, file_name, _, version)
     return KiteUI.dialogHandler(interface, script_namespace, version, {
@@ -61,6 +73,7 @@ local LANG = {
         title_signlayout = "SIGN",
         title_masks = "MASKS",
         title_colorbar = "COLORS",
+        title_toolbox = "TOOLBOX",
         lbl_color = "Color:",
         lbl_language = "Language:",
         lbl_action = "Action:",
@@ -89,6 +102,7 @@ local LANG = {
         btn_mass_signs = "Signs Editor",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
+        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Help",
         btn_save = "Execute",
@@ -96,7 +110,15 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "No selection.",
-        hint_picker = "Empty dropdown = skip.",
+        err_tool_load = "Could not load %s:\n\n%s",
+        tool_shape_optimizer = "Shape color optimizer",
+        tool_font_manager = "Font and style manager",
+        tool_continuous_fades = "Continuous fade cleanup",
+        tool_shuffle_line_text = "Shuffle line text",
+        tool_err_fade_groups = "Select at least two timing groups.",
+        tool_err_shuffle_lines = "Select at least two dialogue lines.",
+        tool_undo_continuous_fades = "Rhea Signs: continuous fade cleanup",
+        tool_undo_shuffle_line_text = "Rhea Signs: shuffle line text",
         lbl_initial = "Initial",
         lbl_final = "Final",
         lbl_kf = "KF",
@@ -150,6 +172,7 @@ local LANG = {
         title_signlayout = "CARTEL",
         title_masks = "MASCARAS",
         title_colorbar = "COLORES",
+        title_toolbox = "HERRAMIENTAS",
         lbl_color = "Color:",
         lbl_language = "Idioma:",
         lbl_action = "Accion:",
@@ -178,6 +201,7 @@ local LANG = {
         btn_mass_signs = "Editor de carteles",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
+        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Ayuda",
         btn_save = "Execute",
@@ -185,7 +209,15 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "Sin seleccion.",
-        hint_picker = "Dropdown vacio = omitir.",
+        err_tool_load = "No se pudo cargar %s:\n\n%s",
+        tool_shape_optimizer = "Optimizar color de shapes",
+        tool_font_manager = "Gestor de fuentes y estilos",
+        tool_continuous_fades = "Limpiar fades continuos",
+        tool_shuffle_line_text = "Mezclar texto de líneas",
+        tool_err_fade_groups = "Selecciona al menos dos grupos de tiempos.",
+        tool_err_shuffle_lines = "Selecciona al menos dos líneas de diálogo.",
+        tool_undo_continuous_fades = "Rhea Signs: limpiar fades continuos",
+        tool_undo_shuffle_line_text = "Rhea Signs: mezclar texto de líneas",
         lbl_initial = "Inicial",
         lbl_final = "Final",
         lbl_kf = "KF",
@@ -239,6 +271,7 @@ local LANG = {
         title_signlayout = "PLACA",
         title_masks = "MASCARAS",
         title_colorbar = "CORES",
+        title_toolbox = "FERRAMENTAS",
         lbl_color = "Cor:",
         lbl_language = "Idioma:",
         lbl_action = "Acao:",
@@ -267,6 +300,7 @@ local LANG = {
         btn_mass_signs = "Editor de placas",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
+        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Ajuda",
         btn_save = "Execute",
@@ -274,7 +308,15 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "Sem selecao.",
-        hint_picker = "Dropdown vazio = ignorar.",
+        err_tool_load = "Nao foi possivel carregar %s:\n\n%s",
+        tool_shape_optimizer = "Otimizar cores de formas",
+        tool_font_manager = "Gerenciador de fontes e estilos",
+        tool_continuous_fades = "Limpar fades contínuos",
+        tool_shuffle_line_text = "Embaralhar texto das linhas",
+        tool_err_fade_groups = "Selecione ao menos dois grupos de tempos.",
+        tool_err_shuffle_lines = "Selecione ao menos duas falas.",
+        tool_undo_continuous_fades = "Rhea Signs: limpar fades contínuos",
+        tool_undo_shuffle_line_text = "Rhea Signs: embaralhar texto das linhas",
         lbl_initial = "Inicial",
         lbl_final = "Final",
         lbl_kf = "KF",
@@ -659,14 +701,11 @@ function Rhea.cloneLine(l)
     setmetatable(d, getmetatable(l)); return d
 end
 
-function Rhea.stripTags(t) return tostring(t or ""):gsub("{[^}]*}", "") end
-function Rhea.visibleText(t) return Rhea.stripTags(t):gsub("\\[Nnh]", " ") end
+function Rhea.stripTags(t) return LineOps.analyzeText(t).plain end
+function Rhea.visibleText(t) return LineOps.visibleText(t) end
 function Rhea.visibleLines(t)
-    local clean = Rhea.stripTags(t):gsub("\\[Nn]", "\n"):gsub("\\h", " ")
-    local lines = {}
-    for line in (clean .. "\n"):gmatch("(.-)\n") do
-        lines[#lines + 1] = line ~= "" and line or " "
-    end
+    local lines = LineOps.visibleLines(t)
+    for i, line in ipairs(lines) do lines[i] = line ~= "" and line or " " end
     return #lines > 0 and lines or {" "}
 end
 
@@ -687,18 +726,6 @@ function Rhea.htmlToAss(html)
     return "&H000000&"
 end
 
-function Rhea.assToHtml(ass)
-    if not ass or ass == "" then return "#FFFFFF" end
-    local hex = ass:match("&[Hh]([%xA-Fa-f]+)&?")
-    if hex then
-        if #hex > 6 then hex = hex:sub(-6) end
-        while #hex < 6 do hex = "0" .. hex end
-        local b, g, r = hex:sub(1, 2), hex:sub(3, 4), hex:sub(5, 6)
-        return "#" .. r:upper() .. g:upper() .. b:upper()
-    end
-    if ass:match("^#") then return ass end
-    return "#FFFFFF"
-end
 
 function Rhea.styleMap(subs)
     local s = {}
@@ -718,32 +745,6 @@ function Rhea.formatNum(n, decimals)
     return s
 end
 
-function Rhea.colorNorm(c)
-    if not c or c == "" then return "&HFFFFFF&" end
-    if type(c) == "number" then
-        if c < 0 then c = c + 4294967296 end
-        return string.format("&H%06X&", c % 16777216)
-    end
-    local h = tostring(c):match("&[Hh]([%xA-Fa-f]+)&?")
-    if h then
-        if #h > 6 then h = h:sub(-6) end
-        while #h < 6 do h = "0" .. h end
-        local b, g, r = h:sub(1, 2), h:sub(3, 4), h:sub(5, 6)
-        return tostring(ASS:createTag("color1", tonumber(b, 16), tonumber(g, 16), tonumber(r, 16))):match("&H%x%x%x%x%x%x&")
-    end
-    local r, g, b = tostring(c):match("#?(%x%x)(%x%x)(%x%x)")
-    if r then
-        return tostring(ASS:createTag("color1", tonumber(b, 16), tonumber(g, 16), tonumber(r, 16))):match("&H%x%x%x%x%x%x&")
-    end
-    return "&HFFFFFF&"
-end
-function Rhea.colorFromStyle(n)
-    if type(n) == "string" then return Rhea.colorNorm(n) end
-    if type(n) ~= "number" then return "&HFFFFFF&" end
-    if n < 0 then n = n + 4294967296 end
-    return string.format("&H%06X&", n % 16777216)
-end
-
 function Rhea.firstBlock(text)
     return tostring(text or ""):match("^({[^}]*})") or ""
 end
@@ -756,7 +757,7 @@ function Rhea.injectFirst(text, payload)
     return "{" .. payload .. "}" .. text
 end
 function Rhea.isVectorLine(text)
-    return tostring(text or ""):find("\\p[1-9]") ~= nil
+    return LineOps.hasDrawing(text)
 end
 
 function Rhea.tokenize(text)
@@ -938,13 +939,6 @@ function RheaFoundation.parseTagBlock(block)
     return tags
 end
 
-function RheaFoundation.tagNumbers(value)
-    local nums = {}
-    for n in tostring(value or ""):gmatch("[%+%-]?%d+%.?%d*") do
-        nums[#nums + 1] = tonumber(n)
-    end
-    return nums
-end
 
 function RheaFoundation.namesToASS(rawNames)
     local list, seen = {}, {}
@@ -1100,9 +1094,10 @@ end
 
 function RheaFoundation.setPositionTag(text, x, y, opts)
     text = tostring(text or "")
-    if opts and opts.keepMove and text:match("\\move%(") then return text end
+    if opts and opts.keepMove and LineOps.hasTag(text, "move", true) then return text end
     local pos = string.format("\\pos(%.3f,%.3f)", tonumber(x) or 0, tonumber(y) or 0)
-    if text:match("\\pos%(") then return (text:gsub("\\pos%([^%)]*%)", pos, 1)) end
+    local replaced, changed = LineOps.replaceTagCall(text, "pos", pos, true)
+    if changed then return replaced end
     return Rhea.injectFirst(text, pos)
 end
 
@@ -1312,18 +1307,6 @@ function RheaConfig.key(prefix, key)
     return tostring(prefix or "rhea") .. "_" .. tostring(key)
 end
 
-function RheaConfig.isKnownKey(key)
-    if DEFAULT_CONFIG[key] ~= nil then return true end
-    local rawKey = tostring(key or "")
-    for prefix, defaults in pairs(RheaConfig.defaults) do
-        local prefixText = tostring(prefix or "rhea") .. "_"
-        if rawKey:sub(1, #prefixText) == prefixText then
-            local localKey = rawKey:sub(#prefixText + 1)
-            return defaults and defaults[localKey] ~= nil
-        end
-    end
-    return false
-end
 
 function RheaConfig.read(prefix, defaults)
     local cfg = {}
@@ -1525,24 +1508,7 @@ function RheaFoundation.configNumber(value, defaultValue, minValue, maxValue)
     return n
 end
 
-function RheaFoundation.mapNumbers(text, fn)
-    return tostring(text or ""):gsub("([%+%-]?%d+%.?%d*[eE]?[%+%-]?%d*)", function(n)
-        local v = tonumber(n)
-        return v and tostring(fn(v)) or n
-    end)
-end
 
-function RheaFoundation.transformTag(t1, t2, tags, accel)
-    tags = tostring(tags or "")
-    if tags == "" then return "" end
-    t1 = math.floor((tonumber(t1) or 0) + 0.5)
-    t2 = math.floor((tonumber(t2) or 0) + 0.5)
-    if t2 < t1 then t1, t2 = t2, t1 end
-    if accel and accel > 0 and accel ~= 1 then
-        return string.format("\\t(%d,%d,%.3f,%s)", t1, t2, accel, tags)
-    end
-    return string.format("\\t(%d,%d,%s)", t1, t2, tags)
-end
 
 function RheaFoundation.sanitizeAlpha(a, defaultAlpha)
     local fallback = tostring(defaultAlpha or "80"):upper():match("^%x%x$") or "80"
@@ -1550,9 +1516,6 @@ function RheaFoundation.sanitizeAlpha(a, defaultAlpha)
     return value:match("^%x%x$") or value:match("^&H(%x%x)&$") or value:match("(%x%x)") or fallback
 end
 
-function RheaFoundation.layerOf(line)
-    return tonumber(line and line.layer) or 0
-end
 
 function RheaFoundation.atan2(dy, dx)
     dy, dx = tonumber(dy) or 0, tonumber(dx) or 0
@@ -1565,19 +1528,6 @@ function RheaFoundation.atan2(dy, dx)
     return 0
 end
 
-function RheaFoundation.distanceToSegment(px, py, x1, y1, x2, y2)
-    local dx, dy = x2 - x1, y2 - y1
-    local len2 = dx * dx + dy * dy
-    if len2 == 0 then
-        local ddx, ddy = px - x1, py - y1
-        return math.sqrt(ddx * ddx + ddy * ddy), x1, y1
-    end
-    local t = ((px - x1) * dx + (py - y1) * dy) / len2
-    t = math.max(0, math.min(1, t))
-    local bx, by = x1 + t * dx, y1 + t * dy
-    local ddx, ddy = px - bx, py - by
-    return math.sqrt(ddx * ddx + ddy * ddy), bx, by
-end
 
 function RheaFoundation.bezierPoint(t, p0, p1, p2, p3)
     local u = 1 - t
@@ -1655,21 +1605,6 @@ function RheaFoundation.samplePath(cmds, segments, atan2fn)
     return pts, totalDist
 end
 
-function RheaFoundation.pathSegments(cmds, segments)
-    local sampled, totalLen = RheaFoundation.samplePath(cmds, segments or 30)
-    local segs = {}
-    if not sampled or totalLen <= 0 then return segs end
-    for i = 2, #sampled do
-        local a, b = sampled[i - 1], sampled[i]
-        if a and b and a.p and b.p and (b.dist or 0) > 0 then
-            local dx, dy = b.p.x - a.p.x, b.p.y - a.p.y
-            if dx * dx + dy * dy > 0 then
-                segs[#segs + 1] = {x1 = a.p.x, y1 = a.p.y, x2 = b.p.x, y2 = b.p.y}
-            end
-        end
-    end
-    return segs
-end
 
 function RheaFoundation.pointOnPath(sampled, targetDist)
     if #sampled == 0 then return nil end
@@ -2157,7 +2092,7 @@ end
 
 local function shape_extents_for_perspective(text)
     if not Rhea.isVectorLine(text) then return nil end
-    local body = tostring(text or ""):gsub("{[^}]*}", " ")
+    local body = LineOps.analyzeText(text).drawing
     local minx, maxx, miny, maxy = math.huge, -math.huge, math.huge, -math.huge
     local found = false
     for sx, sy in body:gmatch("([%+%-]?[%d%.]+[eE%+%-]*)%s+([%+%-]?[%d%.]+[eE%+%-]*)") do
@@ -2366,65 +2301,6 @@ local function apply_copied_plane(line, tags, w, h, removeClip)
     set_plane_extra(line, q)
     if removeClip then line.text = remove_clip_tag(line.text) end
     return true
-end
-
-local function quad_edge_len(a, b)
-    local dx, dy = (b[1] or 0) - (a[1] or 0), (b[2] or 0) - (a[2] or 0)
-    return math.sqrt(dx * dx + dy * dy)
-end
-
-local function rotate_quad(q, startIndex, reversed)
-    local out = {}
-    for i = 1, 4 do
-        local idx
-        if reversed then
-            idx = ((startIndex - i) % 4) + 1
-        else
-            idx = ((startIndex + i - 2) % 4) + 1
-        end
-        out[i] = { q[idx][1], q[idx][2] }
-    end
-    return out
-end
-
-local function quad_area(q)
-    local area = 0
-    for i = 1, 4 do
-        local j = (i % 4) + 1
-        area = area + q[i][1] * q[j][2] - q[j][1] * q[i][2]
-    end
-    return area / 2
-end
-
-local function orient_quad_for_extents(q, w, h)
-    if not valid_quad(q) then return q end
-    local target_aspect = valid_dim(w) and valid_dim(h) and (w / h) or 1
-    local best, bestScore
-    for _, reversed in ipairs({false, true}) do
-        for startIndex = 1, 4 do
-            local c = rotate_quad(q, startIndex, reversed)
-            local width_len = (quad_edge_len(c[1], c[2]) + quad_edge_len(c[4], c[3])) / 2
-            local height_len = (quad_edge_len(c[2], c[3]) + quad_edge_len(c[1], c[4])) / 2
-            if width_len > 0 and height_len > 0 then
-                local score = math.abs(math.log((width_len / height_len) / target_aspect))
-                local top_y = (c[1][2] + c[2][2]) / 2
-                local bottom_y = (c[3][2] + c[4][2]) / 2
-                if top_y > bottom_y then score = score + 2 end
-                if c[1][1] > c[2][1] then score = score + 0.5 end
-                if quad_area(c) < 0 then score = score + 0.25 end
-                if not bestScore or score < bestScore then
-                    best, bestScore = c, score
-                end
-            end
-        end
-    end
-    return best or q
-end
-
-local function apply_quad_mapping(q, mapName)
-    local mapping = find_mapping(mapName)
-    if type(mapping) ~= "table" then return q end
-    return { q[mapping[1]], q[mapping[2]], q[mapping[3]], q[mapping[4]] }
 end
 
 local function apply_quad(line, tags, quad, w, h, orgMode, removeClip)
@@ -2819,9 +2695,7 @@ local DR_DEFAULTS = {
 local DR_CONFIG = RheaConfig.section("dr", DR_DEFAULTS)
 
 local function loadMaskLibrary()
-    local f = io.open(MASK_FILE)
-    local content = f and f:read("*all") or ""
-    if f then f:close() end
+    local content = PyBridge.readFile(MASK_FILE) or ""
     local masks, names = {}, {"from clip"}
     local source = BUILTIN_MASKS .. content
     if source:sub(-1) ~= "\n" then source = source .. "\n" end
@@ -2833,22 +2707,29 @@ local function loadMaskLibrary()
 end
 
 local function saveMask(name, shapeText)
-    name = Rhea.trim(name); if name == "" or name:match("[:\r\n]") then return end
+    name = Rhea.trim(name)
+    if name == "" or name:match("[:\r\n]") then return false, "El nombre de la máscara no es válido." end
     local shape = tostring(shapeText or ""):gsub("{[^}]-}", ""):match("m%s+[^{}:\r\n]+")
-    if not shape then return end
+    if not shape then return false, "La línea seleccionada no contiene un dibujo ASS válido." end
     shape = Rhea.trim(shape)
-    local f = io.open(MASK_FILE, "a")
-    if f then f:write("mask:" .. name .. ":" .. shape .. ":\n\n"); f:close() end
+    local content, readError = PyBridge.readFile(MASK_FILE)
+    if not content and PyBridge.fileExists(MASK_FILE) then return false, readError end
+    content = content or ""
+    if content ~= "" and content:sub(-1) ~= "\n" then content = content .. "\n" end
+    return PyBridge.writeFile(MASK_FILE, content .. "mask:" .. name .. ":" .. shape .. ":\n\n")
 end
 
 local function deleteMask(name)
-    name = Rhea.trim(name); if name == "" or name:match("[:\r\n]") then return end
-    local f = io.open(MASK_FILE, "r")
-    local content = f and f:read("*all") or ""
-    if f then f:close() end
-    content = content:gsub("mask:" .. Rhea.escapePattern(name) .. ":.-:\n\n?", "")
-    f = io.open(MASK_FILE, "w")
-    if f then f:write(content); f:close() end
+    name = Rhea.trim(name)
+    if name == "" or name:match("[:\r\n]") then return false, "El nombre de la máscara no es válido." end
+    local content, readError = PyBridge.readFile(MASK_FILE)
+    if not content then
+        if PyBridge.fileExists(MASK_FILE) then return false, readError end
+        return true
+    end
+    local updated = content:gsub("mask:" .. Rhea.escapePattern(name) .. ":.-:\n\n?", "")
+    if updated == content then return true end
+    return PyBridge.writeFile(MASK_FILE, updated)
 end
 
 local function findMaskShape(masks, name)
@@ -2947,11 +2828,12 @@ local function applyMask(subs, sel, opts)
             for _, pat in ipairs({"\\org%b()", "\\frz[%d%.%-]+", "\\frx[%d%.%-]+", "\\fry[%d%.%-]+"}) do
                 local m = text:match(pat); if m then rotTags = rotTags .. m end
             end
-            local posTag = text:match("(\\pos%([%d%,%.%-]+%))") or ""
+            local posCall = LineOps.lastTagCall(text, "pos", true)
+            local posTag = posCall and posCall.raw or ""
             target.text = string.format(
                 "{\\%s\\bord0\\shad0\\blur1%s%s%s%s\\p1}%s",
                 opts.alignment, rotTags, posTag, colorTag, alphaTag, libraryShape)
-            if not target.text:match("\\pos") then
+            if not LineOps.hasTag(target.text, "pos", true) then
                 target.text = target.text:gsub("\\p1", "\\pos(640,360)\\p1")
             end
             stampSeqMarker(target, seq)
@@ -3112,9 +2994,7 @@ local function applyVertical(subs, sel, cfg)
     lines:runCallback(function(_, line)
         local markerID = generateMarkerID(usedMarkers)
         if not prepareSignLine(subs, meta, styles, line) then return end
-        local px, py = line.text:match("\\pos%(([%d%.%-]+),([%d%.%-]+)%)")
-        px = tonumber(px) or line.x
-        py = tonumber(py) or line.y
+        local px, py = LineOps.tagPair(line.text, "pos", line.x, line.y, true)
         local chars = FunctionalUnicode.toCharTable(line.text_stripped)
         if #chars == 0 then return end
         local head = RheaFoundation.removeTags(Rhea.firstBlock(line.text), {"pos","an"}):gsub("[{}]", "")
@@ -3152,11 +3032,10 @@ local function applyCircle(subs, sel, cfg)
         local markerID = generateMarkerID(usedMarkers)
         if not prepareSignLine(subs, meta, styles, line) then return end
 
-        local px, py = line.text:match("\\pos%(([%d%.%-eE%+]+),([%d%.%-eE%+]+)%)")
-        local ox, oy = line.text:match("\\org%(([%d%.%-eE%+]+),([%d%.%-eE%+]+)%)")
-        if not (px and py and ox and oy) then
+        local px, py, posCall = LineOps.tagPair(line.text, "pos", nil, nil, true)
+        local ox, oy, orgCall = LineOps.tagPair(line.text, "org", nil, nil, true)
+        if not (posCall and orgCall and px and py and ox and oy) then
         else
-            px, py, ox, oy = tonumber(px), tonumber(py), tonumber(ox), tonumber(oy)
 
             local rad = math.sqrt((px - ox)^2 + (py - oy)^2) + (cfg.circ_radio or 0)
             local ang = RheaFoundation.atan2(py - oy, px - ox)
@@ -3168,7 +3047,7 @@ local function applyCircle(subs, sel, cfg)
                 local letters = {}
                 local aw = 0
                 local ht = ""
-                local bord_val = tonumber(line.text:match("\\bord([%d%.]+)")) or line.styleref.outline or 0
+                local bord_val = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
                 local ro = rad + (cur_style.fontsize / 2.2)
 
                 for _, p in ipairs(parts) do
@@ -3272,7 +3151,7 @@ local function applyCurve(subs, sel, cfg)
             local letters = {}
             local total_w = 0
             local ht = ""
-            local bord_val = tonumber(line.text:match("\\bord([%d%.]+)")) or line.styleref.outline or 0
+            local bord_val = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
 
             for _, p in ipairs(parts) do
                 if p.type == "tag" then
@@ -4351,7 +4230,17 @@ lines along a vector clip. Clean SiO removes Sign output.
 Auxiliary buttons:
 Signs Editor edits repeated sign text in bulk. FastSigns creates box, glow, and
 front text layers. TagOps handles tag copy, keep-only, numeric adjustment, and
-position alignment. Config stores language, mask color, and FastSigns settings.
+position alignment. Makeup opens the reusable style and layer memory. Config
+stores language, mask color, and FastSigns settings.
+
+Toolbox:
+Shape Color Optimizer merges nearby colors or reduces reliable gradients in
+selected ASS vector shapes. Font and Style Manager replaces fonts in styles and
+optional \fn tags, batch-edits style fields and colors, clones styles, and
+refreshes the detected font and style lists. Continuous Fade Cleanup removes the
+fade-out and fade-in at exact shared timing boundaries between selected groups.
+Shuffle Line Text redistributes text among selected dialogue rows without moving
+their timing or metadata. Leave the dropdown empty to skip it.
 
 Generated markers:
 DR = Masks, SiO = Sign, FS = FastSigns.
@@ -4381,8 +4270,17 @@ caracter sobre un clip vectorial. Clean SiO elimina la salida de Sign.
 Botones auxiliares:
 Editor de carteles edita texto repetido en lote. FastSigns crea capas de caja,
 glow y texto frontal. TagOps maneja copiar tags, Keep Only, ajuste numerico y
-alineacion de posicion. Config guarda idioma, color de mascara y ajustes de
-FastSigns.
+alineacion de posicion. Makeup abre la memoria reutilizable de estilos y capas.
+Config guarda idioma, color de mascara y ajustes de FastSigns.
+
+Herramientas:
+Optimizar color de shapes fusiona colores cercanos o reduce gradientes fiables
+en shapes vectoriales ASS seleccionados. El gestor de fuentes y estilos cambia
+fuentes en estilos y tags \fn opcionales, edita campos y colores en lote, clona
+estilos y actualiza las listas detectadas. Limpiar fades continuos elimina el
+fade-out y fade-in del limite temporal exacto entre grupos seleccionados. Mezclar
+texto de lineas redistribuye el texto sin mover tiempos ni metadatos. Deja el
+dropdown vacio para omitirlo.
 
 Marcadores generados:
 DR = Mascaras, SiO = Sign, FS = FastSigns.
@@ -4412,8 +4310,17 @@ caractere sobre um clip vetorial. Clean SiO remove a saida de Sign.
 Botoes auxiliares:
 Editor de placas edita texto repetido em lote. FastSigns cria camadas de caixa,
 glow e texto frontal. TagOps cuida de copiar tags, Keep Only, ajuste numerico e
-alinhamento de posicao. Config guarda idioma, cor da mascara e ajustes de
-FastSigns.
+alinhamento de posicao. Makeup abre a memoria reutilizavel de estilos e camadas.
+Config guarda idioma, cor da mascara e ajustes de FastSigns.
+
+Ferramentas:
+O otimizador de cores combina cores proximas ou reduz gradientes confiaveis nas
+formas vetoriais ASS selecionadas. O gerenciador de fontes e estilos troca fontes
+em estilos e etiquetas \fn opcionais, edita campos e cores em lote, clona estilos
+e atualiza as listas detectadas. Limpar fades continuos remove o fade-out e
+fade-in do limite de tempo exato entre grupos selecionados. Embaralhar texto das
+linhas redistribui o texto sem mover tempos nem metadados. Deixe o dropdown vazio
+para ignora-lo.
 
 Marcadores gerados:
 DR = Mascaras, SiO = Sign, FS = FastSigns.
@@ -4442,6 +4349,10 @@ local CHOICE_KEYS = {
     ["Adjust tags"] = "tagops_adjust",
     ["Pos Align"] = "tagops_pos_align",
     ["Add"] = "tagops_add", ["Percent"] = "tagops_percent", ["Keep org"] = "tagops_keep_org", ["Move org"] = "tagops_move_org",
+    ["Shape Color Optimizer"] = "tool_shape_optimizer",
+    ["Font and Style Manager"] = "tool_font_manager",
+    ["Continuous Fade Cleanup"] = "tool_continuous_fades",
+    ["Shuffle Line Text"] = "tool_shuffle_line_text",
 }
 
 local function choiceLabel(raw)
@@ -4477,6 +4388,2375 @@ local function rawChoice(toRaw, shown)
     return (toRaw and toRaw[shown]) or shown or ""
 end
 
+local INTEGRATED_TOOL_SOURCES = {
+    ["Shape Color Optimizer"] = [====[
+local SharedShapeOptimizer = require("kite.ShapeOptimizer")
+return {
+    main = function(subs, sel, active, context)
+        context = context or {}
+        context.settings_namespace = context.settings_namespace or "kite.RheaSigns.ShapeColorOptimizer"
+        context.settings_version = context.settings_version or "1.1.0"
+        context.title = context.title or "Shape Color Optimizer"
+        context.undo_name = context.undo_name or "Rhea Signs: shape color optimizer"
+        return SharedShapeOptimizer.main(subs, sel, active, context)
+    end,
+    validate = SharedShapeOptimizer.validate,
+}
+]====],
+    ["Makeup"] = [====[
+local Makeup = { version = "0.1.2" }
+
+local MEMORY_FILE_NAME = "Memory Styles.txt"
+local MEMORY_HEADER = "MAKEUP_MEMORY_STYLES\t1"
+local PATH_SEP = package.config:sub(1, 1)
+
+local STYLE_FIELDS = {
+    "fontname", "fontsize",
+    "color1", "color2", "color3", "color4",
+    "bold", "italic", "underline", "strikeout",
+    "scale_x", "scale_y", "spacing", "angle",
+    "borderstyle", "outline", "shadow", "align",
+    "margin_l", "margin_r", "margin_t", "encoding", "relative_to",
+}
+
+local NUMERIC_STYLE_FIELDS = {
+    fontsize = true, scale_x = true, scale_y = true, spacing = true, angle = true,
+    borderstyle = true, outline = true, shadow = true, align = true,
+    margin_l = true, margin_r = true, margin_t = true, encoding = true,
+    relative_to = true,
+}
+
+local BOOLEAN_STYLE_FIELDS = {
+    bold = true, italic = true, underline = true, strikeout = true,
+}
+
+local KNOWN_TAG_NAMES = {
+    "_persp",
+    "alpha", "xbord", "ybord", "xshad", "yshad",
+    "iclip", "clip", "move", "fade",
+    "fscx", "fscy", "fsp", "fax", "fay",
+    "frx", "fry", "frz", "bord", "shad", "blur",
+    "pos", "org", "fad", "be", "fn", "fs", "fe",
+    "an", "q", "pbo", "p",
+    "karaoke", "kf", "ko", "kt", "K", "k",
+    "1c", "2c", "3c", "4c", "c",
+    "1a", "2a", "3a", "4a",
+    "b", "i", "u", "s", "r", "t", "a", "fr",
+}
+
+table.sort(KNOWN_TAG_NAMES, function(left, right)
+    return #left > #right
+end)
+
+local PROTECTED_GEOMETRY = {
+    pos = true, move = true, org = true,
+    clip = true, iclip = true,
+    an = true, _persp = true,
+}
+
+local NUM_PATTERN = "([%+%-]?%d*%.?%d+)"
+
+local function trim(value)
+    value = tostring(value or "")
+    return (value:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function is_dialogue(line)
+    return type(line) == "table" and (line.class == nil or line.class == "dialogue")
+end
+
+local function clone_table(source)
+    local result = {}
+    for key, value in pairs(source or {}) do
+        if type(value) == "table" then
+            result[key] = clone_table(value)
+        else
+            result[key] = value
+        end
+    end
+    return result
+end
+
+local function clone_line(line)
+    if type(line) == "table" and type(line.copy) == "function" then
+        return line:copy()
+    end
+    local result = clone_table(line)
+    setmetatable(result, getmetatable(line))
+    return result
+end
+
+local function format_number(value)
+    local number = tonumber(value) or 0
+    if math.abs(number) < 0.0000001 then number = 0 end
+    if number == math.floor(number) then return string.format("%d", number) end
+    return string.format("%.3f", number):gsub("0+$", ""):gsub("%.$", "")
+end
+
+local function value_type(value)
+    local kind = type(value)
+    if kind == "boolean" then return "b", value and "1" or "0" end
+    if kind == "number" then return "n", tostring(value) end
+    return "s", tostring(value or "")
+end
+
+local function typed_value(kind, value)
+    if kind == "b" then return value == "1" or value == "true" end
+    if kind == "n" then return tonumber(value) or 0 end
+    return tostring(value or "")
+end
+
+local function encode_field(value)
+    return tostring(value or "")
+        :gsub("%%", "%%25")
+        :gsub("\t", "%%09")
+        :gsub("\r", "%%0D")
+        :gsub("\n", "%%0A")
+end
+
+local function decode_field(value)
+    return (tostring(value or ""):gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end))
+end
+
+local function split_tabs(line)
+    local fields = {}
+    for field in (tostring(line or "") .. "\t"):gmatch("(.-)\t") do
+        fields[#fields + 1] = field
+    end
+    return fields
+end
+
+local function memory_path()
+    local folder = LineOps.subtitleFolder(true)
+    if not folder then return nil, "Guarda primero el archivo de subtítulos para ubicar su memoria." end
+    return PyBridge.joinPath(folder, MEMORY_FILE_NAME)
+end
+
+local function utf8_char_size(byte)
+    if not byte or byte < 0x80 then return 1 end
+    if byte < 0xE0 then return 2 end
+    if byte < 0xF0 then return 3 end
+    return 4
+end
+
+local function visible_units(text)
+    text = tostring(text or "")
+    local units, position = {}, 1
+    while position <= #text do
+        if text:sub(position, position) == "\\" then
+            local next_char = text:sub(position + 1, position + 1)
+            if next_char == "N" or next_char == "n" or next_char == "h" then
+                units[#units + 1] = text:sub(position, position + 1)
+                position = position + 2
+            else
+                units[#units + 1] = "\\"
+                position = position + 1
+            end
+        else
+            local size = utf8_char_size(text:byte(position))
+            units[#units + 1] = text:sub(position, position + size - 1)
+            position = position + size
+        end
+    end
+    return units
+end
+
+local function split_tag_program(text)
+    text = tostring(text or "")
+    local program, plain = {}, {}
+    local position, visible_count = 1, 0
+
+    while position <= #text do
+        local open_pos = text:find("{", position, true)
+        if not open_pos then
+            local tail = text:sub(position)
+            plain[#plain + 1] = tail
+            visible_count = visible_count + #visible_units(tail)
+            break
+        end
+
+        local before = text:sub(position, open_pos - 1)
+        plain[#plain + 1] = before
+        visible_count = visible_count + #visible_units(before)
+
+        local close_pos = text:find("}", open_pos + 1, true)
+        if not close_pos then
+            local tail = text:sub(open_pos)
+            plain[#plain + 1] = tail
+            visible_count = visible_count + #visible_units(tail)
+            break
+        end
+
+        local content = text:sub(open_pos + 1, close_pos - 1)
+        if content:find("\\", 1, true) then
+            program[#program + 1] = { offset = visible_count, content = content }
+        end
+        position = close_pos + 1
+    end
+
+    return program, visible_count, table.concat(plain)
+end
+
+local function balanced_parenthesis_end(text, start_position)
+    local depth = 0
+    for position = start_position, #text do
+        local char = text:sub(position, position)
+        if char == "(" then
+            depth = depth + 1
+        elseif char == ")" then
+            depth = depth - 1
+            if depth == 0 then return position end
+        end
+    end
+    return #text
+end
+
+local function parse_tag_tokens(content)
+    content = tostring(content or "")
+    local tokens, position = {}, 1
+    while position <= #content do
+        local start_position = content:find("\\", position, true)
+        if not start_position then break end
+
+        local name_start = start_position + 1
+        local name
+        for _, known in ipairs(KNOWN_TAG_NAMES) do
+            if content:sub(name_start, name_start + #known - 1) == known then
+                name = known
+                break
+            end
+        end
+        if not name then
+            name = content:sub(name_start):match("^[_%a][_%w]*") or ""
+        end
+
+        if name == "" then
+            position = start_position + 1
+        else
+            local value_start = name_start + #name
+            local end_position = value_start - 1
+            if content:sub(value_start, value_start) == "(" then
+                end_position = balanced_parenthesis_end(content, value_start)
+            else
+                while end_position + 1 <= #content
+                    and content:sub(end_position + 1, end_position + 1) ~= "\\" do
+                    end_position = end_position + 1
+                end
+            end
+            tokens[#tokens + 1] = {
+                name = name,
+                raw = content:sub(start_position, end_position),
+                value = content:sub(value_start, end_position),
+                start_position = start_position,
+                end_position = end_position,
+            }
+            position = end_position + 1
+        end
+    end
+    return tokens
+end
+
+local function remove_program_names(program, names)
+    local result = {}
+    for _, block in ipairs(program or {}) do
+        local pieces, cursor = {}, 1
+        for _, token in ipairs(parse_tag_tokens(block.content)) do
+            if names[token.name] then
+                pieces[#pieces + 1] = block.content:sub(cursor, token.start_position - 1)
+                cursor = token.end_position + 1
+            end
+        end
+        pieces[#pieces + 1] = block.content:sub(cursor)
+        local content = table.concat(pieces)
+        if content:find("\\", 1, true) then
+            result[#result + 1] = { offset = block.offset, content = content }
+        end
+    end
+    return result
+end
+
+local function collect_protected(program)
+    local result = { present = {}, tokens = {} }
+    for _, block in ipairs(program or {}) do
+        for _, token in ipairs(parse_tag_tokens(block.content)) do
+            if PROTECTED_GEOMETRY[token.name] then
+                result.present[token.name] = true
+                result.tokens[#result.tokens + 1] = token.raw
+            end
+        end
+    end
+    return result
+end
+
+local function program_has_name(program, name)
+    for _, block in ipairs(program or {}) do
+        for _, token in ipairs(parse_tag_tokens(block.content)) do
+            if token.name == name then return true end
+        end
+    end
+    return false
+end
+
+local function inject_program_prefix(program, payload)
+    if not payload or payload == "" then return program end
+    local result = clone_table(program or {})
+    for _, block in ipairs(result) do
+        if tonumber(block.offset) == 0 then
+            block.content = payload .. block.content
+            return result
+        end
+    end
+    table.insert(result, 1, { offset = 0, content = payload })
+    return result
+end
+
+local function overlay_target_geometry(source_program, target_program)
+    local target = collect_protected(target_program)
+    if #target.tokens == 0 then return source_program end
+
+    local remove = {}
+    for name in pairs(target.present) do remove[name] = true end
+    if target.present.pos or target.present.move then
+        remove.pos, remove.move = true, true
+    end
+    local result = remove_program_names(source_program, remove)
+    return inject_program_prefix(result, table.concat(target.tokens))
+end
+
+local function inherit_missing_geometry(source_program, target_program, inherit_alignment)
+    local target = collect_protected(target_program)
+    local payload = {}
+    if inherit_alignment and target.present.an then
+        source_program = remove_program_names(source_program, { an = true })
+    end
+    local source_has_position = program_has_name(source_program, "pos")
+        or program_has_name(source_program, "move")
+
+    for _, raw in ipairs(target.tokens) do
+        local token = parse_tag_tokens(raw)[1]
+        if token then
+            local missing
+            if token.name == "pos" or token.name == "move" then
+                missing = not source_has_position
+            else
+                missing = not program_has_name(source_program, token.name)
+            end
+            if missing then payload[#payload + 1] = raw end
+        end
+    end
+    return inject_program_prefix(source_program, table.concat(payload))
+end
+
+local function shift_pair(x, y, dx, dy, scale)
+    scale = scale or 1
+    return format_number((tonumber(x) or 0) + dx * scale),
+        format_number((tonumber(y) or 0) + dy * scale)
+end
+
+local function shift_path(path, dx, dy, scale)
+    return tostring(path or ""):gsub(NUM_PATTERN .. "%s+" .. NUM_PATTERN, function(x, y)
+        local next_x, next_y = shift_pair(x, y, dx, dy, scale)
+        return next_x .. " " .. next_y
+    end)
+end
+
+local function translate_geometry(content, dx, dy)
+    content = tostring(content or "")
+    if dx == 0 and dy == 0 then return content end
+
+    content = content:gsub("\\pos%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)", function(x, y)
+        local next_x, next_y = shift_pair(x, y, dx, dy)
+        return "\\pos(" .. next_x .. "," .. next_y .. ")"
+    end)
+    content = content:gsub("\\move%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
+        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "(.-)%)",
+        function(x1, y1, x2, y2, rest)
+            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
+            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
+            return "\\move(" .. next_x1 .. "," .. next_y1 .. ","
+                .. next_x2 .. "," .. next_y2 .. rest .. ")"
+        end)
+    content = content:gsub("\\org%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)", function(x, y)
+        local next_x, next_y = shift_pair(x, y, dx, dy)
+        return "\\org(" .. next_x .. "," .. next_y .. ")"
+    end)
+    content = content:gsub("(\\i?clip)%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
+        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)",
+        function(tag, x1, y1, x2, y2)
+            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
+            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
+            return tag .. "(" .. next_x1 .. "," .. next_y1 .. ","
+                .. next_x2 .. "," .. next_y2 .. ")"
+        end)
+    content = content:gsub("(\\i?clip)%(%s*(%d+)%s*,%s*m%s+([^%)]+)%)", function(tag, scale_text, path)
+        local factor = 2 ^ ((tonumber(scale_text) or 1) - 1)
+        return tag .. "(" .. scale_text .. ",m " .. shift_path(path, dx, dy, factor) .. ")"
+    end)
+    content = content:gsub("(\\i?clip)%(%s*m%s+([^%)]+)%)", function(tag, path)
+        return tag .. "(m " .. shift_path(path, dx, dy) .. ")"
+    end)
+    content = content:gsub("\\_persp%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
+        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
+        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
+        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)",
+        function(x1, y1, x2, y2, x3, y3, x4, y4)
+            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
+            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
+            local next_x3, next_y3 = shift_pair(x3, y3, dx, dy)
+            local next_x4, next_y4 = shift_pair(x4, y4, dx, dy)
+            return "\\_persp(" .. table.concat({
+                next_x1, next_y1, next_x2, next_y2,
+                next_x3, next_y3, next_x4, next_y4,
+            }, ",") .. ")"
+        end)
+    return content
+end
+
+local function translate_program(program, dx, dy)
+    local result = {}
+    for _, block in ipairs(program or {}) do
+        result[#result + 1] = {
+            offset = block.offset,
+            content = translate_geometry(block.content, dx, dy),
+        }
+    end
+    return result
+end
+
+local function first_program_point(program)
+    for _, block in ipairs(program or {}) do
+        local x, y = block.content:match("\\pos%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)")
+        if x and y then return tonumber(x), tonumber(y) end
+    end
+    for _, block in ipairs(program or {}) do
+        local x, y = block.content:match("\\move%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN)
+        if x and y then return tonumber(x), tonumber(y) end
+    end
+    return nil, nil
+end
+
+local function first_program_tag_value(program, name)
+    for _, block in ipairs(program or {}) do
+        for _, token in ipairs(parse_tag_tokens(block.content)) do
+            if token.name == name then return trim(token.value) end
+        end
+    end
+    return nil
+end
+
+local function rewrite_style_resets(program, resolved_styles)
+    local result = {}
+    for _, block in ipairs(program or {}) do
+        local content = block.content
+        local pieces, cursor = {}, 1
+        for _, token in ipairs(parse_tag_tokens(content)) do
+            if token.name == "r" then
+                local source_name = trim(token.value)
+                local target_name = resolved_styles[source_name]
+                if source_name ~= "" and target_name and target_name ~= source_name then
+                    pieces[#pieces + 1] = content:sub(cursor, token.start_position - 1)
+                    pieces[#pieces + 1] = "\\r" .. target_name
+                    cursor = token.end_position + 1
+                end
+            end
+        end
+        pieces[#pieces + 1] = content:sub(cursor)
+        result[#result + 1] = { offset = block.offset, content = table.concat(pieces) }
+    end
+    return result
+end
+
+local function render_program(program, source_length, target_plain)
+    local units = visible_units(target_plain)
+    local insertions = {}
+    source_length = tonumber(source_length) or 0
+
+    for _, block in ipairs(program or {}) do
+        if block.content and block.content:find("\\", 1, true) then
+            local offset = tonumber(block.offset) or 0
+            local mapped = 0
+            if source_length > 0 then
+                mapped = math.floor((offset / source_length) * #units + 0.5)
+            end
+            if mapped < 0 then mapped = 0 end
+            if mapped > #units then mapped = #units end
+            insertions[mapped] = insertions[mapped] or {}
+            insertions[mapped][#insertions[mapped] + 1] = "{" .. block.content .. "}"
+        end
+    end
+
+    local result = {}
+    for position = 0, #units do
+        if insertions[position] then
+            for _, block in ipairs(insertions[position]) do result[#result + 1] = block end
+        end
+        if position < #units then result[#result + 1] = units[position + 1] end
+    end
+    return table.concat(result)
+end
+
+local function is_drawing_program(program)
+    for _, block in ipairs(program or {}) do
+        for _, token in ipairs(parse_tag_tokens(block.content)) do
+            if token.name == "p" and (tonumber(token.value) or 0) > 0 then return true end
+        end
+    end
+    return false
+end
+
+local function visible_key(plain)
+    return trim(tostring(plain or ""):gsub("\\[Nnh]", " "):gsub("%s+", " "))
+end
+
+local function collect_styles(subs)
+    local styles, indices = {}, {}
+    for index = 1, #subs do
+        local line = subs[index]
+        if type(line) == "table" and line.class == "style" then
+            styles[line.name] = line
+            indices[line.name] = index
+        end
+    end
+    return styles, indices
+end
+
+local function snapshot_style(style)
+    local snapshot = { name = tostring(style and style.name or ""), fields = {} }
+    for _, field in ipairs(STYLE_FIELDS) do
+        if style and style[field] ~= nil then snapshot.fields[field] = style[field] end
+    end
+    return snapshot
+end
+
+local function capture_safe_extra(line)
+    local extra = {}
+    if type(line.extra) == "table" then
+        local value = line.extra["_aegi_perspective_ambient_plane"]
+        if type(value) == "string" or type(value) == "number" or type(value) == "boolean" then
+            extra["_aegi_perspective_ambient_plane"] = value
+        end
+    end
+    return extra
+end
+
+local function capture_preset(subs, selection, active, name)
+    local indices = {}
+    for _, index in ipairs(selection or {}) do
+        if is_dialogue(subs[index]) then indices[#indices + 1] = index end
+    end
+    table.sort(indices)
+    if #indices == 0 then return nil, "Selecciona al menos una línea de diálogo estilizada." end
+
+    local anchor = 1
+    for ordinal, index in ipairs(indices) do
+        if index == active then anchor = ordinal break end
+    end
+
+    local styles = collect_styles(subs)
+    local preset = {
+        name = trim(name),
+        anchor = anchor,
+        slot_count = 0,
+        styles = {},
+        styles_by_name = {},
+        lines = {},
+    }
+    local slot_by_text = {}
+    local anchor_line = subs[indices[anchor]]
+    local anchor_layer = tonumber(anchor_line.layer) or 0
+    local anchor_start = tonumber(anchor_line.start_time) or 0
+    local anchor_end = tonumber(anchor_line.end_time) or 0
+
+    for ordinal, index in ipairs(indices) do
+        local line = subs[index]
+        local program, source_length, plain = split_tag_program(line.text)
+        local drawing = is_drawing_program(program)
+        local slot = 0
+        if not drawing then
+            local key = visible_key(plain)
+            if key ~= "" then
+                if not slot_by_text[key] then
+                    preset.slot_count = preset.slot_count + 1
+                    slot_by_text[key] = preset.slot_count
+                end
+                slot = slot_by_text[key]
+            end
+        end
+
+        local style_name = tostring(line.style or "Default")
+        if not preset.styles_by_name[style_name] then
+            local snapshot = snapshot_style(styles[style_name])
+            snapshot.name = style_name
+            preset.styles[#preset.styles + 1] = snapshot
+            preset.styles_by_name[style_name] = snapshot
+        end
+
+        preset.lines[#preset.lines + 1] = {
+            ordinal = ordinal,
+            source_line = index,
+            style = style_name,
+            layer = tonumber(line.layer) or 0,
+            layer_delta = (tonumber(line.layer) or 0) - anchor_layer,
+            start_delta = (tonumber(line.start_time) or 0) - anchor_start,
+            end_delta = (tonumber(line.end_time) or 0) - anchor_end,
+            margin_l = tonumber(line.margin_l) or 0,
+            margin_r = tonumber(line.margin_r) or 0,
+            margin_t = tonumber(line.margin_t) or 0,
+            slot = slot,
+            source_length = source_length,
+            drawing = drawing,
+            drawing_text = drawing and plain or "",
+            program = program,
+            extra = capture_safe_extra(line),
+        }
+    end
+
+    if preset.slot_count == 0 then
+        return nil, "La selección no contiene ninguna capa de texto reutilizable."
+    end
+    return preset
+end
+
+local function serialize_memory(presets)
+    local output = {
+        "# Makeup Memory Styles - UTF-8",
+        MEMORY_HEADER,
+    }
+
+    for _, preset in ipairs(presets or {}) do
+        output[#output + 1] = table.concat({
+            "PRESET", encode_field(preset.name), tostring(preset.anchor or 1),
+            tostring(preset.slot_count or 1),
+        }, "\t")
+
+        for _, style in ipairs(preset.styles or {}) do
+            output[#output + 1] = "STYLE\t" .. encode_field(style.name)
+            for _, field in ipairs(STYLE_FIELDS) do
+                local value = style.fields and style.fields[field]
+                if value ~= nil then
+                    local kind, raw = value_type(value)
+                    output[#output + 1] = table.concat({
+                        "STYLE_FIELD", field, kind, encode_field(raw),
+                    }, "\t")
+                end
+            end
+            output[#output + 1] = "ENDSTYLE"
+        end
+
+        for _, line in ipairs(preset.lines or {}) do
+            output[#output + 1] = table.concat({
+                "LINE",
+                tostring(line.ordinal or 0),
+                tostring(line.source_line or 0),
+                encode_field(line.style),
+                tostring(line.layer or 0),
+                tostring(line.layer_delta or 0),
+                tostring(line.start_delta or 0),
+                tostring(line.end_delta or 0),
+                tostring(line.margin_l or 0),
+                tostring(line.margin_r or 0),
+                tostring(line.margin_t or 0),
+                tostring(line.slot or 0),
+                tostring(line.source_length or 0),
+                line.drawing and "1" or "0",
+            }, "\t")
+            for _, block in ipairs(line.program or {}) do
+                output[#output + 1] = table.concat({
+                    "TAG", tostring(block.offset or 0), encode_field(block.content),
+                }, "\t")
+            end
+            if line.drawing then
+                output[#output + 1] = "DRAW\t" .. encode_field(line.drawing_text)
+            end
+            for key, value in pairs(line.extra or {}) do
+                local kind, raw = value_type(value)
+                output[#output + 1] = table.concat({
+                    "EXTRA", encode_field(key), kind, encode_field(raw),
+                }, "\t")
+            end
+            output[#output + 1] = "ENDLINE"
+        end
+        output[#output + 1] = "ENDPRESET"
+    end
+    return table.concat(output, "\r\n") .. "\r\n"
+end
+
+local function parse_memory(content)
+    content = tostring(content or ""):gsub("^\239\187\191", "")
+    local presets = {}
+    local current_preset, current_style, current_line
+    local saw_header = false
+
+    for raw_line in (content .. "\n"):gmatch("(.-)\r?\n") do
+        if raw_line ~= "" and raw_line:sub(1, 1) ~= "#" then
+            local fields = split_tabs(raw_line)
+            local record = fields[1]
+            if record == "MAKEUP_MEMORY_STYLES" then
+                if tonumber(fields[2]) ~= 1 then return nil, "Versión de memoria no compatible." end
+                saw_header = true
+            elseif record == "PRESET" then
+                if not saw_header then return nil, "Cabecera de memoria inválida." end
+                current_preset = {
+                    name = decode_field(fields[2]),
+                    anchor = tonumber(fields[3]) or 1,
+                    slot_count = tonumber(fields[4]) or 1,
+                    styles = {},
+                    styles_by_name = {},
+                    lines = {},
+                }
+                presets[#presets + 1] = current_preset
+                current_style, current_line = nil, nil
+            elseif record == "STYLE" and current_preset then
+                current_style = { name = decode_field(fields[2]), fields = {} }
+                current_preset.styles[#current_preset.styles + 1] = current_style
+                current_preset.styles_by_name[current_style.name] = current_style
+            elseif record == "STYLE_FIELD" and current_style then
+                current_style.fields[fields[2]] = typed_value(fields[3], decode_field(fields[4]))
+            elseif record == "ENDSTYLE" then
+                current_style = nil
+            elseif record == "LINE" and current_preset then
+                current_line = {
+                    ordinal = tonumber(fields[2]) or (#current_preset.lines + 1),
+                    source_line = tonumber(fields[3]) or 0,
+                    style = decode_field(fields[4]),
+                    layer = tonumber(fields[5]) or 0,
+                    layer_delta = tonumber(fields[6]) or 0,
+                    start_delta = tonumber(fields[7]) or 0,
+                    end_delta = tonumber(fields[8]) or 0,
+                    margin_l = tonumber(fields[9]) or 0,
+                    margin_r = tonumber(fields[10]) or 0,
+                    margin_t = tonumber(fields[11]) or 0,
+                    slot = tonumber(fields[12]) or 0,
+                    source_length = tonumber(fields[13]) or 0,
+                    drawing = fields[14] == "1",
+                    drawing_text = "",
+                    program = {},
+                    extra = {},
+                }
+                current_preset.lines[#current_preset.lines + 1] = current_line
+            elseif record == "TAG" and current_line then
+                current_line.program[#current_line.program + 1] = {
+                    offset = tonumber(fields[2]) or 0,
+                    content = decode_field(fields[3]),
+                }
+            elseif record == "DRAW" and current_line then
+                current_line.drawing_text = decode_field(fields[2])
+            elseif record == "EXTRA" and current_line then
+                current_line.extra[decode_field(fields[2])] =
+                    typed_value(fields[3], decode_field(fields[4]))
+            elseif record == "ENDLINE" then
+                current_line = nil
+            elseif record == "ENDPRESET" then
+                current_preset, current_style, current_line = nil, nil, nil
+            end
+        end
+    end
+
+    if not saw_header then return nil, "El TXT no es una memoria de Makeup válida." end
+    for _, preset in ipairs(presets) do
+        if preset.name == "" or #preset.lines == 0 then
+            return nil, "La memoria contiene un preset incompleto."
+        end
+        if preset.anchor < 1 or preset.anchor > #preset.lines then preset.anchor = 1 end
+    end
+    return presets
+end
+
+local function load_memory(path)
+    if not PyBridge.fileExists(path) then return {} end
+    local content, err = PyBridge.readFile(path)
+    if not content then return nil, err end
+    return parse_memory(content)
+end
+
+local function style_values_equal(field, left, right)
+    if BOOLEAN_STYLE_FIELDS[field] then
+        local function boolean_value(value)
+            if type(value) == "boolean" then return value end
+            local number = tonumber(value)
+            if number ~= nil then return number ~= 0 end
+            return tostring(value or ""):lower() == "true"
+        end
+        return boolean_value(left) == boolean_value(right)
+    end
+    if NUMERIC_STYLE_FIELDS[field] then
+        local left_number, right_number = tonumber(left), tonumber(right)
+        return left_number and right_number and math.abs(left_number - right_number) < 0.000001
+    end
+    return tostring(left or "") == tostring(right or "")
+end
+
+local function styles_equal(existing, snapshot)
+    if not existing or not snapshot then return false end
+    for field, value in pairs(snapshot.fields or {}) do
+        if not style_values_equal(field, existing[field], value) then return false end
+    end
+    return next(snapshot.fields or {}) ~= nil
+end
+
+local function style_from_snapshot(snapshot, name)
+    local style = { class = "style", name = name }
+    for field, value in pairs(snapshot.fields or {}) do style[field] = value end
+    return style
+end
+
+local function safe_suffix(value)
+    value = trim(value):gsub("[%c,]", " "):gsub("%s+", " ")
+    if value == "" then return "Preset" end
+    if #value > 40 then value = value:sub(1, 40) end
+    return value
+end
+
+local function ensure_preset_styles(subs, preset)
+    local styles = collect_styles(subs)
+    local resolved, additions = {}, {}
+    local reserved = {}
+    for name in pairs(styles) do reserved[name] = true end
+
+    for _, snapshot in ipairs(preset.styles or {}) do
+        local original = snapshot.name
+        if styles_equal(styles[original], snapshot) then
+            resolved[original] = original
+        elseif next(snapshot.fields or {}) == nil then
+            resolved[original] = styles[original] and original or nil
+        elseif not styles[original] then
+            resolved[original] = original
+            additions[#additions + 1] = style_from_snapshot(snapshot, original)
+            styles[original] = additions[#additions]
+            reserved[original] = true
+        else
+            local stem = original .. " [Makeup - " .. safe_suffix(preset.name) .. "]"
+            local candidate, number = stem, 2
+            while reserved[candidate] and not styles_equal(styles[candidate], snapshot) do
+                candidate = stem .. " " .. tostring(number)
+                number = number + 1
+            end
+            resolved[original] = candidate
+            if not reserved[candidate] then
+                additions[#additions + 1] = style_from_snapshot(snapshot, candidate)
+                styles[candidate] = additions[#additions]
+                reserved[candidate] = true
+            end
+        end
+    end
+
+    if #additions == 0 then return resolved, nil, 0 end
+
+    local insert_position, last_non_dialogue = 1, 0
+    for index = 1, #subs do
+        local class = subs[index] and subs[index].class
+        if class == "style" then
+            insert_position = index + 1
+        elseif class ~= "dialogue" then
+            last_non_dialogue = index
+        end
+    end
+    if insert_position == 1 and last_non_dialogue > 0 then
+        insert_position = last_non_dialogue + 1
+    end
+    for offset, style in ipairs(additions) do
+        subs.insert(insert_position + offset - 1, style)
+    end
+    return resolved, insert_position, #additions
+end
+
+local function shift_plane_extra(value, dx, dy)
+    local count = 0
+    local shifted = tostring(value or ""):gsub(NUM_PATTERN .. "%s*;%s*" .. NUM_PATTERN, function(x, y)
+        count = count + 1
+        local next_x, next_y = shift_pair(x, y, dx, dy)
+        return next_x .. ";" .. next_y
+    end)
+    if count >= 4 then return shifted end
+    return value
+end
+
+local function line_plain(line)
+    local program, length, plain = split_tag_program(line and line.text or "")
+    return program, length, plain
+end
+
+local function slot_anchor_ordinals(preset)
+    local result = {}
+    local anchor_line = preset.lines[preset.anchor]
+    if anchor_line and anchor_line.slot and anchor_line.slot > 0 then
+        result[anchor_line.slot] = preset.anchor
+    end
+    for ordinal, line in ipairs(preset.lines) do
+        if line.slot and line.slot > 0 and not result[line.slot] then result[line.slot] = ordinal end
+    end
+    return result
+end
+
+local function source_reference_line(preset, slot, slot_anchors)
+    local ordinal = slot and slot > 0 and slot_anchors[slot] or preset.anchor
+    return preset.lines[ordinal] or preset.lines[preset.anchor] or preset.lines[1]
+end
+
+local function source_geometry_reference(preset, slot, slot_anchors)
+    local preferred = source_reference_line(preset, slot, slot_anchors)
+    local x = preferred and first_program_point(preferred.program)
+    if x then return preferred end
+    if slot and slot > 0 then
+        for _, line in ipairs(preset.lines) do
+            if line.slot == slot and first_program_point(line.program) then return line end
+        end
+    end
+    for _, line in ipairs(preset.lines) do
+        if first_program_point(line.program) then return line end
+    end
+    return preferred
+end
+
+local function relative_margin(template_value, source_reference_value, target_value)
+    return (tonumber(target_value) or 0)
+        + (tonumber(template_value) or 0)
+        - (tonumber(source_reference_value) or 0)
+end
+
+local function apply_template_to_line(template, target, options)
+    local out = clone_line(target)
+    local _, _, target_plain = line_plain(target)
+    local program = translate_program(template.program, options.dx or 0, options.dy or 0)
+    program = rewrite_style_resets(program, options.resolved_styles or {})
+
+    local target_program = line_plain(target)
+    if options.overlay_geometry then
+        program = overlay_target_geometry(program, target_program)
+    else
+        program = inherit_missing_geometry(
+            program,
+            options.inherit_geometry_program or target_program,
+            options.inherit_alignment)
+    end
+
+    out.style = options.resolved_styles[template.style] or template.style or target.style
+    if options.generated then
+        out.layer = options.layer
+        out.start_time = options.start_time
+        out.end_time = options.end_time
+        out.margin_l = options.margin_l
+        out.margin_r = options.margin_r
+        out.margin_t = options.margin_t
+    end
+
+    local plain = template.drawing and template.drawing_text or target_plain
+    out.text = render_program(program, template.source_length, plain)
+
+    out.extra = clone_table(target.extra or {})
+    local target_plane = out.extra["_aegi_perspective_ambient_plane"]
+    local source_plane = template.extra and template.extra["_aegi_perspective_ambient_plane"]
+    if not (options.overlay_geometry and target_plane ~= nil) and source_plane ~= nil then
+        out.extra["_aegi_perspective_ambient_plane"] =
+            shift_plane_extra(source_plane, options.dx or 0, options.dy or 0)
+    end
+    return out
+end
+
+local function build_generated_outputs(preset, targets, resolved_styles)
+    local outputs = {}
+    local slot_anchors = slot_anchor_ordinals(preset)
+    local preset_anchor = preset.lines[preset.anchor] or preset.lines[1]
+    local overall_target = targets[preset_anchor.slot] or targets[1]
+    local overall_target_program = line_plain(overall_target)
+    local overall_source_reference = source_reference_line(preset, preset_anchor.slot, slot_anchors)
+    local overall_geometry_reference =
+        source_geometry_reference(preset, preset_anchor.slot, slot_anchors)
+    local overall_source_x, overall_source_y =
+        first_program_point(overall_geometry_reference.program)
+    local overall_target_x, overall_target_y = first_program_point(overall_target_program)
+    local overall_dx, overall_dy = 0, 0
+    if overall_source_x and overall_target_x then
+        overall_dx, overall_dy = overall_target_x - overall_source_x, overall_target_y - overall_source_y
+    end
+
+    for ordinal, template in ipairs(preset.lines) do
+        local target = targets[template.slot] or overall_target
+        local target_program = line_plain(target)
+        local source_reference = source_reference_line(preset, template.slot, slot_anchors)
+        local geometry_reference = source_geometry_reference(preset, template.slot, slot_anchors)
+        local source_x, source_y = first_program_point(geometry_reference.program)
+        local target_x, target_y = first_program_point(target_program)
+        local dx, dy = overall_dx, overall_dy
+        if source_x and target_x then dx, dy = target_x - source_x, target_y - source_y end
+
+        local overlay = template.slot > 0 and slot_anchors[template.slot] == ordinal
+        local template_alignment = first_program_tag_value(template.program, "an")
+        local reference_alignment = first_program_tag_value(source_reference.program, "an")
+        outputs[#outputs + 1] = apply_template_to_line(template, target, {
+            resolved_styles = resolved_styles,
+            dx = dx, dy = dy,
+            overlay_geometry = overlay,
+            inherit_geometry_program = template.slot > 0 and target_program or overall_target_program,
+            inherit_alignment = template.slot > 0
+                and template_alignment == reference_alignment,
+            generated = true,
+            layer = (tonumber(overall_target.layer) or 0) + (tonumber(template.layer_delta) or 0),
+            start_time = math.max(0, (tonumber(overall_target.start_time) or 0)
+                + (tonumber(template.start_delta) or 0)),
+            end_time = math.max(0, (tonumber(overall_target.end_time) or 0)
+                + (tonumber(template.end_delta) or 0)),
+            margin_l = relative_margin(template.margin_l, source_reference.margin_l, target.margin_l),
+            margin_r = relative_margin(template.margin_r, source_reference.margin_r, target.margin_r),
+            margin_t = relative_margin(template.margin_t, source_reference.margin_t, target.margin_t),
+        })
+    end
+    return outputs
+end
+
+local function build_existing_outputs(preset, targets, resolved_styles)
+    local outputs = {}
+    local preset_anchor = preset.lines[preset.anchor] or preset.lines[1]
+    local target_anchor = targets[preset.anchor] or targets[1]
+    local source_anchor_x, source_anchor_y = first_program_point(preset_anchor.program)
+    local target_anchor_program = line_plain(target_anchor)
+    local target_anchor_x, target_anchor_y = first_program_point(target_anchor_program)
+    local fallback_dx, fallback_dy = 0, 0
+    if source_anchor_x and target_anchor_x then
+        fallback_dx = target_anchor_x - source_anchor_x
+        fallback_dy = target_anchor_y - source_anchor_y
+    end
+
+    for ordinal, template in ipairs(preset.lines) do
+        local target = targets[ordinal]
+        local target_program = line_plain(target)
+        local source_x, source_y = first_program_point(template.program)
+        local target_x, target_y = first_program_point(target_program)
+        local dx, dy = fallback_dx, fallback_dy
+        if source_x and target_x then dx, dy = target_x - source_x, target_y - source_y end
+        outputs[#outputs + 1] = apply_template_to_line(template, target, {
+            resolved_styles = resolved_styles,
+            dx = dx, dy = dy,
+            overlay_geometry = true,
+            generated = false,
+        })
+    end
+    return outputs
+end
+
+local function contiguous(indices)
+    for position = 2, #indices do
+        if indices[position] ~= indices[position - 1] + 1 then return false end
+    end
+    return true
+end
+
+local function looks_like_existing_group(subs, indices, preset)
+    if #indices ~= #preset.lines or not contiguous(indices) then return false end
+    local first = subs[indices[1]]
+    if not first then return false end
+    local start_time, end_time = first.start_time, first.end_time
+    local keys = {}
+    for _, index in ipairs(indices) do
+        local line = subs[index]
+        if not is_dialogue(line) or line.start_time ~= start_time or line.end_time ~= end_time then
+            return false
+        end
+        local program, _, plain = line_plain(line)
+        if not is_drawing_program(program) then
+            local key = visible_key(plain)
+            if key ~= "" then keys[key] = true end
+        end
+    end
+    local key_count = 0
+    for _ in pairs(keys) do key_count = key_count + 1 end
+    return key_count <= math.max(1, preset.slot_count or 1)
+end
+
+local function chunk_indices(indices, size)
+    local chunks = {}
+    for start = 1, #indices, size do
+        local chunk = {}
+        for position = start, math.min(start + size - 1, #indices) do
+            chunk[#chunk + 1] = indices[position]
+        end
+        chunks[#chunks + 1] = chunk
+    end
+    return chunks
+end
+
+local function classify_units(subs, selection, preset, mode)
+    local indices = {}
+    for _, index in ipairs(selection or {}) do
+        if is_dialogue(subs[index]) then indices[#indices + 1] = index end
+    end
+    table.sort(indices)
+    if #indices == 0 then return nil, "Selecciona al menos una línea de diálogo de destino." end
+
+    local line_count = #preset.lines
+    local slot_count = math.max(1, tonumber(preset.slot_count) or 1)
+    local units = {}
+
+    if mode == "each" then
+        if slot_count ~= 1 then
+            return nil, "Este preset contiene varios textos; usa Automático o Selección = un cartel."
+        end
+        for _, index in ipairs(indices) do
+            units[#units + 1] = { kind = "generated", indices = {index} }
+        end
+        return units
+    end
+
+    if mode == "selection" then
+        if #indices == line_count and looks_like_existing_group(subs, indices, preset) then
+            return {{ kind = "existing", indices = indices }}
+        end
+        if #indices == slot_count and contiguous(indices) then
+            return {{ kind = "generated", indices = indices }}
+        end
+        return nil, string.format(
+            "Para un cartel selecciona %d línea(s) virgen(es) o sus %d capas ya existentes.",
+            slot_count, line_count)
+    end
+
+    if line_count > 0 and #indices % line_count == 0 then
+        local chunks = chunk_indices(indices, line_count)
+        local all_existing = true
+        for _, chunk in ipairs(chunks) do
+            if not looks_like_existing_group(subs, chunk, preset) then
+                all_existing = false
+                break
+            end
+        end
+        if all_existing then
+            for _, chunk in ipairs(chunks) do
+                units[#units + 1] = { kind = "existing", indices = chunk }
+            end
+            return units
+        end
+    end
+
+    if slot_count == 1 then
+        for _, index in ipairs(indices) do
+            units[#units + 1] = { kind = "generated", indices = {index} }
+        end
+        return units
+    end
+
+    if #indices % slot_count ~= 0 then
+        return nil, string.format("Este preset necesita %d textos de destino por cartel.", slot_count)
+    end
+    for _, chunk in ipairs(chunk_indices(indices, slot_count)) do
+        if not contiguous(chunk) then
+            return nil, "Las líneas de cada cartel deben ser contiguas."
+        end
+        units[#units + 1] = { kind = "generated", indices = chunk }
+    end
+    return units
+end
+
+local function apply_preset(subs, selection, active, preset, mode)
+    if not preset or #preset.lines == 0 then return nil, "El preset está vacío." end
+    local units, classify_err = classify_units(subs, selection, preset, mode or "auto")
+    if not units then return nil, classify_err end
+
+    local resolved_styles, insert_position, added_styles = ensure_preset_styles(subs, preset)
+    if added_styles > 0 then
+        for _, unit in ipairs(units) do
+            for position, index in ipairs(unit.indices) do
+                if index >= insert_position then unit.indices[position] = index + added_styles end
+            end
+        end
+        if active and active >= insert_position then active = active + added_styles end
+    end
+
+    local new_selection, cumulative_shift = {}, 0
+    for _, unit in ipairs(units) do
+        local current_indices, targets = {}, {}
+        for position, index in ipairs(unit.indices) do
+            current_indices[position] = index + cumulative_shift
+            targets[position] = subs[current_indices[position]]
+        end
+
+        local outputs
+        if unit.kind == "existing" then
+            outputs = build_existing_outputs(preset, targets, resolved_styles)
+            for position, index in ipairs(current_indices) do
+                subs[index] = outputs[position]
+                new_selection[#new_selection + 1] = index
+            end
+        else
+            local slot_targets = {}
+            for slot, target in ipairs(targets) do slot_targets[slot] = target end
+            outputs = build_generated_outputs(preset, slot_targets, resolved_styles)
+            local first_index = current_indices[1]
+            for position = #current_indices, 1, -1 do subs.delete(current_indices[position]) end
+            for position, output in ipairs(outputs) do
+                subs.insert(first_index + position - 1, output)
+                new_selection[#new_selection + 1] = first_index + position - 1
+            end
+            cumulative_shift = cumulative_shift + #outputs - #current_indices
+        end
+    end
+
+    return new_selection, nil, {
+        styles_added = added_styles,
+        lines_selected = #new_selection,
+        groups = #units,
+    }
+end
+
+local function find_preset(presets, name)
+    for index, preset in ipairs(presets or {}) do
+        if preset.name == name then return preset, index end
+    end
+    return nil, nil
+end
+
+local function show_message(message, buttons)
+    if not (aegisub and aegisub.dialog and aegisub.dialog.display) then return nil end
+    return aegisub.dialog.display({
+        { class = "label", label = tostring(message or ""), x = 0, y = 0, width = 40, height = 4 },
+    }, buttons or {"Aceptar"})
+end
+
+local function confirm(message)
+    local button = show_message(message, {"Sí", "No"})
+    return button == "Sí"
+end
+
+local MODE_ITEMS = {
+    "Automático",
+    "Cada línea = un cartel",
+    "Selección = un cartel",
+}
+
+local MODE_VALUES = {
+    ["Automático"] = "auto",
+    ["Cada línea = un cartel"] = "each",
+    ["Selección = un cartel"] = "selection",
+}
+
+local function main(subs, selection, active)
+    local path, path_err = memory_path()
+    if not path then show_message(path_err); return selection end
+
+    local presets, load_err = load_memory(path)
+    if not presets then
+        show_message("No se pudo leer " .. MEMORY_FILE_NAME .. ":\n\n" .. tostring(load_err))
+        return selection
+    end
+
+    local preset_items, preset_by_label = {}, {}
+    for index, preset in ipairs(presets) do
+        local label = string.format("%d. %s  —  %d capa(s), %d texto(s)",
+            index, preset.name, #preset.lines, preset.slot_count or 1)
+        preset_items[#preset_items + 1] = label
+        preset_by_label[label] = preset
+    end
+    if #preset_items == 0 then preset_items[1] = "(sin presets guardados)" end
+
+    local dialog = {
+        { class = "label", label = "MAKEUP — MEMORY STYLES", x = 0, y = 0, width = 12, height = 1 },
+        { class = "label", label = "Preset:", x = 0, y = 1, width = 2, height = 1 },
+        { class = "dropdown", name = "preset", items = preset_items, value = preset_items[1],
+            x = 2, y = 1, width = 10, height = 1 },
+        { class = "label", label = "Nombre al guardar:", x = 0, y = 2, width = 3, height = 1 },
+        { class = "edit", name = "name", value = "", x = 3, y = 2, width = 9, height = 1 },
+        { class = "label", label = "Destino:", x = 0, y = 3, width = 2, height = 1 },
+        { class = "dropdown", name = "mode", items = MODE_ITEMS, value = MODE_ITEMS[1],
+            x = 2, y = 3, width = 5, height = 1 },
+        { class = "label",
+            label = "La línea activa se guarda como ancla. Makeup conserva la geometría existente del destino.",
+            x = 0, y = 4, width = 12, height = 2 },
+        { class = "label", label = path, x = 0, y = 6, width = 12, height = 2 },
+    }
+    local button, result = aegisub.dialog.display(dialog,
+        {"Aplicar", "Guardar selección", "Eliminar preset", "Cancelar"})
+    if not button or button == "Cancelar" then return selection end
+
+    if button == "Guardar selección" then
+        local name = trim(result.name)
+        if name == "" then
+            show_message("Escribe un nombre para el preset.")
+            return selection
+        end
+        local preset, capture_err = capture_preset(subs, selection, active, name)
+        if not preset then show_message(capture_err); return selection end
+
+        local _, existing_index = find_preset(presets, name)
+        if existing_index and not confirm("Ya existe el preset \"" .. name .. "\".\n\n¿Reemplazarlo?") then
+            return selection
+        end
+        if existing_index then presets[existing_index] = preset else presets[#presets + 1] = preset end
+
+        local ok, save_err = PyBridge.writeFile(path, serialize_memory(presets))
+        if not ok then
+            show_message("No se pudo guardar la memoria:\n\n" .. tostring(save_err))
+            return selection
+        end
+        show_message(string.format("Preset \"%s\" guardado con %d capa(s).", name, #preset.lines))
+        return selection
+    end
+
+    local preset = preset_by_label[result.preset]
+    if not preset then
+        show_message("No hay ningún preset disponible.")
+        return selection
+    end
+
+    if button == "Eliminar preset" then
+        if not confirm("¿Eliminar el preset \"" .. preset.name .. "\"?") then return selection end
+        local _, index = find_preset(presets, preset.name)
+        if index then table.remove(presets, index) end
+        local ok, save_err = PyBridge.writeFile(path, serialize_memory(presets))
+        if not ok then show_message("No se pudo actualizar la memoria:\n\n" .. tostring(save_err)) end
+        return selection
+    end
+
+    local new_selection, apply_err = apply_preset(
+        subs, selection, active, preset, MODE_VALUES[result.mode] or "auto")
+    if not new_selection then
+        show_message(apply_err)
+        return selection
+    end
+    aegisub.set_undo_point("Makeup - " .. preset.name)
+    return new_selection
+end
+
+Makeup.main = main
+
+return Makeup
+]====],
+    ["Font and Style Manager"] = [====[
+local FontSwap = { version = "1.3.0" }
+
+local LANG = {
+    en = {
+        title = "Font and Style Manager",
+        button_swap = "Swap",
+        button_refresh = "Refresh",
+        button_edit = "Edit",
+        button_colors = "Colors",
+        button_clone = "Clone",
+        button_close = "Close",
+        button_next = "Next",
+        button_all = "All",
+        button_apply = "Apply",
+        button_cancel = "Cancel",
+        button_ok = "OK",
+        no_change = "No change",
+        bool_on = "Enable",
+        bool_off = "Disable",
+        clone_exact = "Exact copy",
+        clone_colors = "Change colors only",
+        err_source_font = "Select a source font.",
+        err_target_font = "Enter the target font.",
+        err_unknown_styles = "These styles do not exist:\n\n%s",
+        err_select_style = "Select at least one style.",
+        err_no_styles = "The file contains no ASS styles.",
+        err_empty_font = "The font cannot be empty.",
+        err_select_field = "Mark at least one field to apply.",
+        err_select_color = "Mark at least one color to apply.",
+        err_clone_source = "The source style no longer exists.",
+        err_clone_name = "Enter a name for the cloned style.",
+        err_clone_chars = "The style name cannot contain commas or line breaks.",
+        err_clone_exists = "A style with that name already exists.",
+        err_base_style = "Select a valid base style.",
+        one_style_per_line = "One style per line. Remove any style you do not want to edit.",
+        mixed = "mixed",
+        field_font = "Font",
+        field_size = "Size",
+        field_scale_x = "Scale X",
+        field_scale_y = "Scale Y",
+        field_spacing = "Spacing",
+        field_angle = "Angle",
+        field_outline = "Outline",
+        field_shadow = "Shadow",
+        field_margin_l = "Left margin",
+        field_margin_r = "Right margin",
+        field_margin_v = "Vertical margin",
+        field_encoding = "Encoding",
+        field_bold = "Bold",
+        field_italic = "Italic",
+        field_underline = "Underline",
+        field_strikeout = "Strikeout",
+        field_primary = "Primary",
+        field_secondary = "Secondary",
+        field_border = "Border",
+        field_alignment = "Alignment",
+        apply = "Apply",
+        border_outline = "1 - Outline",
+        border_opaque = "3 - Opaque box",
+        edit_title = "Edit %d style(s)",
+        edit_hint = "Only marked fields are applied.",
+        choose_edit = "Styles to edit",
+        choose_colors = "Styles whose colors will change",
+        colors_title = "Change colors in %d style(s)",
+        alpha_hint = "The picker includes the alpha channel.",
+        copy_suffix = " - copy",
+        clone_title = "Clone style",
+        origin = "Source",
+        name = "Name",
+        mode = "Mode",
+        font_summary = "%d style(s) · %d \\fn tag(s)",
+        header = "%s · %d styles · %d fonts",
+        detected_font = "Detected font",
+        new_font = "New font",
+        exact_font_hint = "Enter the exact font name.",
+        replace_inline = "Also replace \\fn tags in dialogue lines",
+        using_styles = "Styles using the selected font",
+        base_style = "Base style to clone",
+        no_matches = "No matching font references were found.",
+        swap_done = "Font updated.\n\nStyles: %d\n\\fn tags: %d in %d line(s)",
+        edit_done = "%d style(s) updated.\n%d value(s) changed.",
+        colors_done = "%d style(s) updated.\n%d color(s) changed.",
+        clone_created = "Style created: %s",
+        undo_swap = "Font and Style Manager: swap font",
+        undo_edit = "Font and Style Manager: edit styles",
+        undo_colors = "Font and Style Manager: change colors",
+        undo_clone = "Font and Style Manager: clone style",
+    },
+    es = {
+        title = "Gestor de fuentes y estilos",
+        button_swap = "Cambiar",
+        button_refresh = "Actualizar",
+        button_edit = "Editar",
+        button_colors = "Colores",
+        button_clone = "Clonar",
+        button_close = "Cerrar",
+        button_next = "Siguiente",
+        button_all = "Todos",
+        button_apply = "Aplicar",
+        button_cancel = "Cancelar",
+        button_ok = "Aceptar",
+        no_change = "No cambiar",
+        bool_on = "Activar",
+        bool_off = "Desactivar",
+        clone_exact = "Copia exacta",
+        clone_colors = "Cambiar sólo colores",
+        err_source_font = "Selecciona una fuente de origen.",
+        err_target_font = "Escribe la fuente de destino.",
+        err_unknown_styles = "Estos estilos no existen:\n\n%s",
+        err_select_style = "Selecciona al menos un estilo.",
+        err_no_styles = "El archivo no contiene estilos ASS.",
+        err_empty_font = "La fuente no puede quedar vacía.",
+        err_select_field = "Marca al menos un campo para aplicar.",
+        err_select_color = "Marca al menos un color para aplicar.",
+        err_clone_source = "El estilo de origen ya no existe.",
+        err_clone_name = "Escribe un nombre para el clon.",
+        err_clone_chars = "El nombre del estilo no puede contener comas ni saltos de línea.",
+        err_clone_exists = "Ya existe un estilo con ese nombre.",
+        err_base_style = "Selecciona un estilo base válido.",
+        one_style_per_line = "Un estilo por línea. Borra los que no quieras modificar.",
+        mixed = "mixto",
+        field_font = "Fuente",
+        field_size = "Tamaño",
+        field_scale_x = "Escala X",
+        field_scale_y = "Escala Y",
+        field_spacing = "Espaciado",
+        field_angle = "Ángulo",
+        field_outline = "Contorno",
+        field_shadow = "Sombra",
+        field_margin_l = "Margen izquierdo",
+        field_margin_r = "Margen derecho",
+        field_margin_v = "Margen vertical",
+        field_encoding = "Codificación",
+        field_bold = "Negrita",
+        field_italic = "Cursiva",
+        field_underline = "Subrayado",
+        field_strikeout = "Tachado",
+        field_primary = "Primario",
+        field_secondary = "Secundario",
+        field_border = "Borde",
+        field_alignment = "Alineación",
+        apply = "Aplicar",
+        border_outline = "1 - Contorno",
+        border_opaque = "3 - Caja opaca",
+        edit_title = "Editar %d estilo(s)",
+        edit_hint = "Sólo se aplican los campos marcados.",
+        choose_edit = "Estilos para editar",
+        choose_colors = "Estilos cuyos colores cambiarán",
+        colors_title = "Cambiar colores en %d estilo(s)",
+        alpha_hint = "El selector incluye el canal alfa.",
+        copy_suffix = " - copia",
+        clone_title = "Clonar estilo",
+        origin = "Origen",
+        name = "Nombre",
+        mode = "Modo",
+        font_summary = "%d estilo(s) · %d etiqueta(s) \\fn",
+        header = "%s · %d estilos · %d fuentes",
+        detected_font = "Fuente detectada",
+        new_font = "Nueva fuente",
+        exact_font_hint = "Escribe el nombre exacto de la fuente.",
+        replace_inline = "También reemplazar etiquetas \\fn en diálogos",
+        using_styles = "Estilos que usan la fuente seleccionada",
+        base_style = "Estilo base para clonar",
+        no_matches = "No había coincidencias que cambiar.",
+        swap_done = "Fuente actualizada.\n\nEstilos: %d\nEtiquetas \\fn: %d en %d línea(s)",
+        edit_done = "%d estilo(s) actualizado(s).\n%d valor(es) cambiado(s).",
+        colors_done = "%d estilo(s) actualizado(s).\n%d color(es) cambiado(s).",
+        clone_created = "Estilo creado: %s",
+        undo_swap = "Gestor de fuentes y estilos: cambiar fuente",
+        undo_edit = "Gestor de fuentes y estilos: editar estilos",
+        undo_colors = "Gestor de fuentes y estilos: cambiar colores",
+        undo_clone = "Gestor de fuentes y estilos: clonar estilo",
+    },
+    pt = {
+        title = "Gerenciador de fontes e estilos",
+        button_swap = "Trocar",
+        button_refresh = "Atualizar",
+        button_edit = "Editar",
+        button_colors = "Cores",
+        button_clone = "Clonar",
+        button_close = "Fechar",
+        button_next = "Avançar",
+        button_all = "Todos",
+        button_apply = "Aplicar",
+        button_cancel = "Cancelar",
+        button_ok = "OK",
+        no_change = "Não alterar",
+        bool_on = "Ativar",
+        bool_off = "Desativar",
+        clone_exact = "Cópia exata",
+        clone_colors = "Alterar somente as cores",
+        err_source_font = "Selecione uma fonte de origem.",
+        err_target_font = "Digite a fonte de destino.",
+        err_unknown_styles = "Estes estilos não existem:\n\n%s",
+        err_select_style = "Selecione ao menos um estilo.",
+        err_no_styles = "O arquivo não contém estilos ASS.",
+        err_empty_font = "A fonte não pode ficar vazia.",
+        err_select_field = "Marque ao menos um campo para aplicar.",
+        err_select_color = "Marque ao menos uma cor para aplicar.",
+        err_clone_source = "O estilo de origem não existe mais.",
+        err_clone_name = "Digite um nome para o clone.",
+        err_clone_chars = "O nome do estilo não pode conter vírgulas nem quebras de linha.",
+        err_clone_exists = "Já existe um estilo com esse nome.",
+        err_base_style = "Selecione um estilo base válido.",
+        one_style_per_line = "Um estilo por linha. Remova os que não deseja editar.",
+        mixed = "misto",
+        field_font = "Fonte",
+        field_size = "Tamanho",
+        field_scale_x = "Escala X",
+        field_scale_y = "Escala Y",
+        field_spacing = "Espaçamento",
+        field_angle = "Ângulo",
+        field_outline = "Contorno",
+        field_shadow = "Sombra",
+        field_margin_l = "Margem esquerda",
+        field_margin_r = "Margem direita",
+        field_margin_v = "Margem vertical",
+        field_encoding = "Codificação",
+        field_bold = "Negrito",
+        field_italic = "Itálico",
+        field_underline = "Sublinhado",
+        field_strikeout = "Tachado",
+        field_primary = "Primária",
+        field_secondary = "Secundária",
+        field_border = "Borda",
+        field_alignment = "Alinhamento",
+        apply = "Aplicar",
+        border_outline = "1 - Contorno",
+        border_opaque = "3 - Caixa opaca",
+        edit_title = "Editar %d estilo(s)",
+        edit_hint = "Somente os campos marcados serão aplicados.",
+        choose_edit = "Estilos para editar",
+        choose_colors = "Estilos cujas cores serão alteradas",
+        colors_title = "Alterar cores em %d estilo(s)",
+        alpha_hint = "O seletor inclui o canal alfa.",
+        copy_suffix = " - cópia",
+        clone_title = "Clonar estilo",
+        origin = "Origem",
+        name = "Nome",
+        mode = "Modo",
+        font_summary = "%d estilo(s) · %d etiqueta(s) \\fn",
+        header = "%s · %d estilos · %d fontes",
+        detected_font = "Fonte detectada",
+        new_font = "Nova fonte",
+        exact_font_hint = "Digite o nome exato da fonte.",
+        replace_inline = "Também substituir etiquetas \\fn nas falas",
+        using_styles = "Estilos que usam a fonte selecionada",
+        base_style = "Estilo base para clonar",
+        no_matches = "Nenhuma referência de fonte correspondente foi encontrada.",
+        swap_done = "Fonte atualizada.\n\nEstilos: %d\nEtiquetas \\fn: %d em %d linha(s)",
+        edit_done = "%d estilo(s) atualizado(s).\n%d valor(es) alterado(s).",
+        colors_done = "%d estilo(s) atualizado(s).\n%d cor(es) alterada(s).",
+        clone_created = "Estilo criado: %s",
+        undo_swap = "Gerenciador de fontes e estilos: trocar fonte",
+        undo_edit = "Gerenciador de fontes e estilos: editar estilos",
+        undo_colors = "Gerenciador de fontes e estilos: alterar cores",
+        undo_clone = "Gerenciador de fontes e estilos: clonar estilo",
+    },
+}
+
+local current_language = "en"
+
+local function T(key, ...)
+    local value = (LANG[current_language] and LANG[current_language][key]) or LANG.en[key] or key
+    if select("#", ...) == 0 then return value end
+    return string.format(value, ...)
+end
+
+local STYLE_DEFAULTS = {
+    fontname = "Arial",
+    fontsize = 20,
+    color1 = "&H00FFFFFF&",
+    color2 = "&H000000FF&",
+    color3 = "&H00000000&",
+    color4 = "&H00000000&",
+    bold = false,
+    italic = false,
+    underline = false,
+    strikeout = false,
+    scale_x = 100,
+    scale_y = 100,
+    spacing = 0,
+    angle = 0,
+    borderstyle = 1,
+    outline = 2,
+    shadow = 0,
+    align = 2,
+    margin_l = 10,
+    margin_r = 10,
+    margin_t = 10,
+    encoding = 1,
+}
+
+local function trim(value)
+    value = tostring(value or "")
+    value = value:gsub("^%s+", "")
+    value = value:gsub("%s+$", "")
+    return value
+end
+
+local function text_key(value)
+    return trim(value):lower()
+end
+
+local function copy_table(source)
+    local copy = {}
+    for key, value in pairs(source or {}) do
+        if key ~= "raw" then
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
+local function show_message(message)
+    aegisub.dialog.display({
+        { class = "textbox", text = tostring(message or ""), x = 0, y = 0, width = 52, height = 8 },
+    }, { T("button_ok") }, { close = T("button_ok") })
+end
+
+local function style_value(style, key)
+    local value = style[key]
+    if key == "margin_t" and value == nil then
+        value = style.margin_v
+        if value == nil then value = style.margin_b end
+    end
+    if value == nil then value = STYLE_DEFAULTS[key] end
+    return value
+end
+
+local function set_style_value(style, key, value)
+    style[key] = value
+    if key == "margin_t" then
+        style.margin_b = value
+    end
+end
+
+local function collect_styles(subs)
+    local list, by_name, by_key = {}, {}, {}
+    for index = 1, #subs do
+        local line = subs[index]
+        if type(line) == "table" and line.class == "style" and trim(line.name) ~= "" then
+            local record = { index = index, name = line.name, style = line }
+            list[#list + 1] = record
+            by_name[line.name] = record
+            by_key[text_key(line.name)] = record
+        end
+    end
+    table.sort(list, function(left, right)
+        local left_key, right_key = text_key(left.name), text_key(right.name)
+        if left_key == right_key then return left.name < right.name end
+        return left_key < right_key
+    end)
+    return list, by_name, by_key
+end
+
+local function scan_inline_fonts(subs)
+    local fonts = {}
+    for index = 1, #subs do
+        local line = subs[index]
+        if type(line) == "table" and line.class == "dialogue" then
+            for block in tostring(line.text or ""):gmatch("{([^}]*)}") do
+                for fontname in block:gmatch("\\fn([^\\}]*)") do
+                    fontname = trim(fontname)
+                    if fontname ~= "" then
+                        local key = text_key(fontname)
+                        local entry = fonts[key]
+                        if not entry then
+                            entry = { name = fontname, count = 0 }
+                            fonts[key] = entry
+                        end
+                        entry.count = entry.count + 1
+                    end
+                end
+            end
+        end
+    end
+    return fonts
+end
+
+local function collect_fonts(subs, styles)
+    local fonts = {}
+    for _, record in ipairs(styles) do
+        local fontname = trim(style_value(record.style, "fontname"))
+        if fontname ~= "" then
+            local key = text_key(fontname)
+            local entry = fonts[key]
+            if not entry then
+                entry = { name = fontname, style_count = 0, inline_count = 0 }
+                fonts[key] = entry
+            end
+            entry.style_count = entry.style_count + 1
+        end
+    end
+    for key, inline in pairs(scan_inline_fonts(subs)) do
+        local entry = fonts[key]
+        if not entry then
+            entry = { name = inline.name, style_count = 0, inline_count = 0 }
+            fonts[key] = entry
+        end
+        entry.inline_count = inline.count
+    end
+
+    local list = {}
+    for _, entry in pairs(fonts) do list[#list + 1] = entry end
+    table.sort(list, function(left, right)
+        return text_key(left.name) < text_key(right.name)
+    end)
+    return list, fonts
+end
+
+local function style_names(styles)
+    local names = {}
+    for _, record in ipairs(styles) do names[#names + 1] = record.name end
+    return names
+end
+
+local function matching_style_names(styles, fontname)
+    local names, wanted = {}, text_key(fontname)
+    for _, record in ipairs(styles) do
+        if text_key(style_value(record.style, "fontname")) == wanted then
+            names[#names + 1] = record.name
+        end
+    end
+    return names
+end
+
+local function replace_inline_text(text, source_font, target_font)
+    local source_key = text_key(source_font)
+    local replacements = 0
+    local updated = tostring(text or ""):gsub("{([^}]*)}", function(block)
+        local replaced = block:gsub("(\\fn)([^\\}]*)", function(tag, value)
+            if text_key(value) == source_key and value ~= target_font then
+                replacements = replacements + 1
+                return tag .. target_font
+            end
+            return tag .. value
+        end)
+        return "{" .. replaced .. "}"
+    end)
+    return updated, replacements
+end
+
+local function apply_font_swap(subs, source_font, target_font, replace_inline)
+    source_font, target_font = trim(source_font), trim(target_font)
+    if source_font == "" then return nil, T("err_source_font") end
+    if target_font == "" then return nil, T("err_target_font") end
+
+    local changed_styles, changed_tags, changed_lines = 0, 0, 0
+    for index = 1, #subs do
+        local line = subs[index]
+        if type(line) == "table" and line.class == "style"
+            and text_key(style_value(line, "fontname")) == text_key(source_font)
+            and tostring(style_value(line, "fontname")) ~= target_font then
+            line.fontname = target_font
+            subs[index] = line
+            changed_styles = changed_styles + 1
+        elseif replace_inline and type(line) == "table" and line.class == "dialogue" then
+            local updated, count = replace_inline_text(line.text, source_font, target_font)
+            if count > 0 then
+                line.text = updated
+                subs[index] = line
+                changed_tags = changed_tags + count
+                changed_lines = changed_lines + 1
+            end
+        end
+    end
+    return {
+        styles = changed_styles,
+        tags = changed_tags,
+        lines = changed_lines,
+    }
+end
+
+local function parse_target_names(text, by_key)
+    local names, seen, unknown = {}, {}, {}
+    text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+    for row in (text .. "\n"):gmatch("(.-)\n") do
+        local name = trim(row)
+        if name ~= "" then
+            local key = text_key(name)
+            local record = by_key[key]
+            if record and not seen[key] then
+                names[#names + 1] = record.name
+                seen[key] = true
+            elseif not record then
+                unknown[#unknown + 1] = name
+            end
+        end
+    end
+    return names, unknown
+end
+
+local function populated_line_count(text)
+    local count = 0
+    text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+    for row in (text .. "\n"):gmatch("(.-)\n") do
+        if trim(row) ~= "" then count = count + 1 end
+    end
+    return count
+end
+
+local function choose_styles(subs, initial_names, title)
+    local styles, _, by_key = collect_styles(subs)
+    local all_names = style_names(styles)
+    local current = table.concat(initial_names or {}, "\n")
+    local button_next, button_all, button_cancel = T("button_next"), T("button_all"), T("button_cancel")
+    while true do
+        local list_height = math.min(12, math.max(4, populated_line_count(current)))
+        local button, result = aegisub.dialog.display({
+            { class = "label", label = title, x = 0, y = 0, width = 10, height = 1 },
+            { class = "label", label = T("one_style_per_line"), x = 0, y = 1, width = 10, height = 1 },
+            { class = "textbox", name = "targets", text = current, x = 0, y = 2, width = 10, height = list_height },
+        }, { button_next, button_all, button_cancel }, { ok = button_next, close = button_cancel })
+
+        if button == button_cancel or not button then return nil end
+        if button == button_all then
+            current = table.concat(all_names, "\n")
+        else
+            local names, unknown = parse_target_names(result.targets, by_key)
+            if #unknown > 0 then
+                show_message(T("err_unknown_styles", table.concat(unknown, "\n")))
+                current = result.targets
+            elseif #names == 0 then
+                show_message(T("err_select_style"))
+                current = result.targets
+            else
+                return names
+            end
+        end
+    end
+end
+
+local function records_for_names(subs, names)
+    local _, _, by_key = collect_styles(subs)
+    local records = {}
+    for _, name in ipairs(names or {}) do
+        local record = by_key[text_key(name)]
+        if record then records[#records + 1] = record end
+    end
+    return records
+end
+
+local function common_value(records, key)
+    local first = style_value(records[1].style, key)
+    for index = 2, #records do
+        if style_value(records[index].style, key) ~= first then
+            return first, true
+        end
+    end
+    return first, false
+end
+
+local function mixed_label(label, mixed)
+    return mixed and (label .. "  [" .. T("mixed") .. "]") or label
+end
+
+local PROPERTY_FIELDS = {
+    { key = "fontname", label_key = "field_font", class = "edit", width = 7 },
+    { key = "fontsize", label_key = "field_size", class = "floatedit", min = 0.1, max = 10000, step = 0.1 },
+    { key = "scale_x", label_key = "field_scale_x", class = "floatedit", min = 0, max = 10000, step = 0.1 },
+    { key = "scale_y", label_key = "field_scale_y", class = "floatedit", min = 0, max = 10000, step = 0.1 },
+    { key = "spacing", label_key = "field_spacing", class = "floatedit", min = -10000, max = 10000, step = 0.1 },
+    { key = "angle", label_key = "field_angle", class = "floatedit", min = -36000, max = 36000, step = 0.1 },
+    { key = "outline", label_key = "field_outline", class = "floatedit", min = 0, max = 1000, step = 0.1 },
+    { key = "shadow", label_key = "field_shadow", class = "floatedit", min = -1000, max = 1000, step = 0.1 },
+    { key = "margin_l", label_key = "field_margin_l", class = "intedit", min = 0, max = 100000 },
+    { key = "margin_r", label_key = "field_margin_r", class = "intedit", min = 0, max = 100000 },
+    { key = "margin_t", label_key = "field_margin_v", class = "intedit", min = 0, max = 100000 },
+    { key = "encoding", label_key = "field_encoding", class = "intedit", min = 0, max = 255 },
+}
+
+local BOOLEAN_FIELDS = {
+    { key = "bold", label_key = "field_bold" },
+    { key = "italic", label_key = "field_italic" },
+    { key = "underline", label_key = "field_underline" },
+    { key = "strikeout", label_key = "field_strikeout" },
+}
+
+local COLOR_FIELDS = {
+    { key = "color1", label_key = "field_primary" },
+    { key = "color2", label_key = "field_secondary" },
+    { key = "color3", label_key = "field_outline" },
+    { key = "color4", label_key = "field_shadow" },
+}
+
+local function apply_style_values(subs, names, values)
+    local records = records_for_names(subs, names)
+    local changed_styles, changed_fields = 0, 0
+    for _, record in ipairs(records) do
+        local style, changed = record.style, false
+        for key, value in pairs(values or {}) do
+            if style_value(style, key) ~= value then
+                set_style_value(style, key, value)
+                changed = true
+                changed_fields = changed_fields + 1
+            end
+        end
+        if changed then
+            subs[record.index] = style
+            changed_styles = changed_styles + 1
+        end
+    end
+    return changed_styles, changed_fields
+end
+
+local function edit_properties(subs, names)
+    local records = records_for_names(subs, names)
+    if #records == 0 then return false end
+
+    local dialog = {
+        { class = "label", label = T("edit_title", #records), x = 0, y = 0, width = 11, height = 1 },
+        { class = "label", label = T("edit_hint"), x = 0, y = 1, width = 11, height = 1 },
+        { class = "textbox", text = table.concat(names, "\n"), x = 0, y = 2, width = 11, height = math.min(5, math.max(2, #names)) },
+    }
+    local row = 3 + math.min(5, math.max(2, #names))
+    for _, field in ipairs(PROPERTY_FIELDS) do
+        local value, mixed = common_value(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+        dialog[#dialog + 1] = { class = "checkbox", name = "apply_" .. field.key, label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
+        local control = {
+            class = field.class,
+            name = field.key,
+            x = 5,
+            y = row,
+            width = field.width or 6,
+            height = 1,
+        }
+        if field.class == "edit" or field.class == "textbox" then
+            control.text = value
+        else
+            control.value = value
+        end
+        if field.min ~= nil then control.min = field.min end
+        if field.max ~= nil then control.max = field.max end
+        if field.step ~= nil then control.step = field.step end
+        dialog[#dialog + 1] = control
+        row = row + 1
+    end
+
+    for _, field in ipairs(BOOLEAN_FIELDS) do
+        local _, mixed = common_value(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+        dialog[#dialog + 1] = { class = "dropdown", name = field.key, items = { T("no_change"), T("bool_on"), T("bool_off") }, value = T("no_change"), x = 3, y = row, width = 8, height = 1 }
+        row = row + 1
+    end
+
+    local border, border_mixed = common_value(records, "borderstyle")
+    dialog[#dialog + 1] = { class = "label", label = mixed_label(T("field_border"), border_mixed), x = 0, y = row, width = 3, height = 1 }
+    dialog[#dialog + 1] = { class = "checkbox", name = "apply_borderstyle", label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
+    dialog[#dialog + 1] = { class = "dropdown", name = "borderstyle", items = { T("border_outline"), T("border_opaque") }, value = tonumber(border) == 3 and T("border_opaque") or T("border_outline"), x = 5, y = row, width = 6, height = 1 }
+    row = row + 1
+
+    local align, align_mixed = common_value(records, "align")
+    local align_items = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
+    dialog[#dialog + 1] = { class = "label", label = mixed_label(T("field_alignment"), align_mixed), x = 0, y = row, width = 3, height = 1 }
+    dialog[#dialog + 1] = { class = "checkbox", name = "apply_align", label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
+    dialog[#dialog + 1] = { class = "dropdown", name = "align", items = align_items, value = tostring(tonumber(align) or 2), x = 5, y = row, width = 6, height = 1 }
+
+    local button_apply, button_cancel = T("button_apply"), T("button_cancel")
+    while true do
+        local button, result = aegisub.dialog.display(dialog, { button_apply, button_cancel }, { ok = button_apply, close = button_cancel })
+        if button ~= button_apply then return false end
+
+        local values = {}
+        for _, field in ipairs(PROPERTY_FIELDS) do
+            if result["apply_" .. field.key] then
+                if field.key == "fontname" then
+                    local fontname = trim(result.fontname)
+                    if fontname == "" then
+                        show_message(T("err_empty_font"))
+                        values = nil
+                        break
+                    end
+                    values.fontname = fontname
+                else
+                    values[field.key] = tonumber(result[field.key])
+                end
+            end
+        end
+        if values then
+            for _, field in ipairs(BOOLEAN_FIELDS) do
+                if result[field.key] == T("bool_on") then values[field.key] = true end
+                if result[field.key] == T("bool_off") then values[field.key] = false end
+            end
+            if result.apply_borderstyle then values.borderstyle = tonumber(tostring(result.borderstyle):match("^%d+")) end
+            if result.apply_align then values.align = tonumber(result.align) end
+
+            if next(values) == nil then
+                show_message(T("err_select_field"))
+            else
+                local changed_styles, changed_fields = apply_style_values(subs, names, values)
+                return true, changed_styles, changed_fields
+            end
+        end
+    end
+end
+
+local function edit_colors(subs, names)
+    local records = records_for_names(subs, names)
+    if #records == 0 then return false end
+    local dialog = {
+        { class = "label", label = T("colors_title", #records), x = 0, y = 0, width = 9, height = 1 },
+        { class = "label", label = T("alpha_hint"), x = 0, y = 1, width = 9, height = 1 },
+    }
+    local row = 2
+    for _, field in ipairs(COLOR_FIELDS) do
+        local value, mixed = common_value(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+        dialog[#dialog + 1] = { class = "checkbox", name = "apply_" .. field.key, label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
+        dialog[#dialog + 1] = { class = "coloralpha", name = field.key, value = value, x = 5, y = row, width = 4, height = 1 }
+        row = row + 1
+    end
+
+    local button_apply, button_cancel = T("button_apply"), T("button_cancel")
+    while true do
+        local button, result = aegisub.dialog.display(dialog, { button_apply, button_cancel }, { ok = button_apply, close = button_cancel })
+        if button ~= button_apply then return false end
+        local values = {}
+        for _, field in ipairs(COLOR_FIELDS) do
+            if result["apply_" .. field.key] then values[field.key] = result[field.key] end
+        end
+        if next(values) == nil then
+            show_message(T("err_select_color"))
+        else
+            local changed_styles, changed_fields = apply_style_values(subs, names, values)
+            return true, changed_styles, changed_fields
+        end
+    end
+end
+
+local function next_clone_name(source_name, by_key)
+    local base = trim(source_name) .. T("copy_suffix")
+    local candidate, suffix = base, 2
+    while by_key[text_key(candidate)] do
+        candidate = base .. " " .. suffix
+        suffix = suffix + 1
+    end
+    return candidate
+end
+
+local function style_insert_position(subs)
+    local last_style, first_dialogue
+    for index = 1, #subs do
+        local class = subs[index] and subs[index].class
+        if class == "style" then last_style = index end
+        if class == "dialogue" and not first_dialogue then first_dialogue = index end
+    end
+    if last_style then return last_style + 1 end
+    if first_dialogue then return first_dialogue end
+    return #subs + 1
+end
+
+local function clone_style(subs, source_name, new_name, colors)
+    local _, _, by_key = collect_styles(subs)
+    local source = by_key[text_key(source_name)]
+    if not source then return nil, T("err_clone_source") end
+    new_name = trim(new_name)
+    if new_name == "" then return nil, T("err_clone_name") end
+    if new_name:find("[,\r\n]") then return nil, T("err_clone_chars") end
+    if by_key[text_key(new_name)] then return nil, T("err_clone_exists") end
+
+    local clone = copy_table(source.style)
+    clone.class = "style"
+    clone.name = new_name
+    for key, value in pairs(colors or {}) do set_style_value(clone, key, value) end
+    local insert_at = style_insert_position(subs)
+    subs.insert(insert_at, clone)
+    return insert_at, clone
+end
+
+local function clone_dialog(subs, source_name)
+    local _, _, by_key = collect_styles(subs)
+    local source = by_key[text_key(source_name)]
+    if not source then
+        show_message(T("err_base_style"))
+        return nil
+    end
+    local default_name = next_clone_name(source.name, by_key)
+    local style = source.style
+    local button_clone, button_cancel = T("button_clone"), T("button_cancel")
+    while true do
+        local button, result = aegisub.dialog.display({
+            { class = "label", label = T("clone_title"), x = 0, y = 0, width = 8, height = 1 },
+            { class = "label", label = T("origin"), x = 0, y = 1, width = 2, height = 1 },
+            { class = "label", label = source.name, x = 2, y = 1, width = 6, height = 1 },
+            { class = "label", label = T("name"), x = 0, y = 2, width = 2, height = 1 },
+            { class = "edit", name = "new_name", text = default_name, x = 2, y = 2, width = 6, height = 1 },
+            { class = "label", label = T("mode"), x = 0, y = 3, width = 2, height = 1 },
+            { class = "dropdown", name = "mode", items = { T("clone_exact"), T("clone_colors") }, value = T("clone_colors"), x = 2, y = 3, width = 6, height = 1 },
+            { class = "label", label = T("field_primary"), x = 0, y = 4, width = 2, height = 1 },
+            { class = "coloralpha", name = "color1", value = style_value(style, "color1"), x = 2, y = 4, width = 6, height = 1 },
+            { class = "label", label = T("field_secondary"), x = 0, y = 5, width = 2, height = 1 },
+            { class = "coloralpha", name = "color2", value = style_value(style, "color2"), x = 2, y = 5, width = 6, height = 1 },
+            { class = "label", label = T("field_outline"), x = 0, y = 6, width = 2, height = 1 },
+            { class = "coloralpha", name = "color3", value = style_value(style, "color3"), x = 2, y = 6, width = 6, height = 1 },
+            { class = "label", label = T("field_shadow"), x = 0, y = 7, width = 2, height = 1 },
+            { class = "coloralpha", name = "color4", value = style_value(style, "color4"), x = 2, y = 7, width = 6, height = 1 },
+        }, { button_clone, button_cancel }, { ok = button_clone, close = button_cancel })
+
+        if button ~= button_clone then return nil end
+        local colors
+        if result.mode == T("clone_colors") then
+            colors = {
+                color1 = result.color1,
+                color2 = result.color2,
+                color3 = result.color3,
+                color4 = result.color4,
+            }
+        end
+        local insert_at, clone_or_error = clone_style(subs, source.name, result.new_name, colors)
+        if insert_at then return insert_at, clone_or_error end
+        show_message(clone_or_error)
+        default_name = result.new_name
+    end
+end
+
+local function shift_selection(selection, insert_at)
+    local shifted = {}
+    for _, index in ipairs(selection or {}) do
+        shifted[#shifted + 1] = index >= insert_at and (index + 1) or index
+    end
+    return shifted
+end
+
+local function font_summary(entry)
+    if not entry then return "" end
+    return T("font_summary", entry.style_count, entry.inline_count)
+end
+
+local function choose_existing(value, items, fallback)
+    local wanted = text_key(value)
+    for _, item in ipairs(items) do
+        if text_key(item) == wanted then return item end
+    end
+    return fallback or items[1]
+end
+
+local function main(subs, selection, _, context)
+    context = context or {}
+    current_language = LANG[context.language] and context.language or "en"
+    local state = { selected_font = nil, target_font = "", base_style = nil, replace_inline = false }
+    local active_selection = selection or {}
+
+    while true do
+        local styles = collect_styles(subs)
+        if #styles == 0 then
+            show_message(T("err_no_styles"))
+            return active_selection
+        end
+        local fonts, font_map = collect_fonts(subs, styles)
+        local font_items = {}
+        for _, entry in ipairs(fonts) do font_items[#font_items + 1] = entry.name end
+        local all_style_names = style_names(styles)
+        state.selected_font = choose_existing(state.selected_font, font_items, font_items[1])
+        state.base_style = choose_existing(state.base_style, all_style_names, all_style_names[1])
+
+        local matching = matching_style_names(styles, state.selected_font)
+        local entry = font_map[text_key(state.selected_font)]
+        local style_list_height = math.min(8, math.max(3, #matching))
+        local base_style_row = 6 + style_list_height
+        local button_swap = T("button_swap")
+        local button_refresh = T("button_refresh")
+        local button_edit = T("button_edit")
+        local button_colors = T("button_colors")
+        local button_clone = T("button_clone")
+        local button_close = T("button_close")
+        local button, result = aegisub.dialog.display({
+            { class = "label", label = T("header", T("title"), #styles, #fonts), x = 0, y = 0, width = 10, height = 1 },
+            { class = "label", label = T("detected_font"), x = 0, y = 1, width = 3, height = 1 },
+            { class = "dropdown", name = "source_font", items = font_items, value = state.selected_font, x = 3, y = 1, width = 7, height = 1 },
+            { class = "label", label = font_summary(entry), x = 0, y = 2, width = 10, height = 1 },
+            { class = "label", label = T("new_font"), x = 0, y = 3, width = 3, height = 1 },
+            { class = "edit", name = "target_font", text = state.target_font, hint = T("exact_font_hint"), x = 3, y = 3, width = 7, height = 1 },
+            { class = "checkbox", name = "replace_inline", label = T("replace_inline"), value = state.replace_inline, x = 0, y = 4, width = 10, height = 1 },
+            { class = "label", label = T("using_styles"), x = 0, y = 5, width = 10, height = 1 },
+            { class = "textbox", text = table.concat(matching, "\n"), x = 0, y = 6, width = 10, height = style_list_height },
+            { class = "label", label = T("base_style"), x = 0, y = base_style_row, width = 3, height = 1 },
+            { class = "dropdown", name = "base_style", items = all_style_names, value = state.base_style, x = 3, y = base_style_row, width = 7, height = 1 },
+        }, { button_swap, button_refresh, button_edit, button_colors, button_clone, button_close }, { ok = button_swap, close = button_close })
+
+        if button == button_close or not button then return active_selection end
+        state.selected_font = result.source_font
+        state.target_font = result.target_font
+        state.base_style = result.base_style
+        state.replace_inline = result.replace_inline == true
+
+        if button == button_swap then
+            local counts, error_message = apply_font_swap(subs, state.selected_font, state.target_font, state.replace_inline)
+            if not counts then
+                show_message(error_message)
+            elseif counts.styles + counts.tags == 0 then
+                show_message(T("no_matches"))
+            else
+                aegisub.set_undo_point(T("undo_swap"))
+                show_message(T("swap_done", counts.styles, counts.tags, counts.lines))
+                state.selected_font = trim(state.target_font)
+                state.target_font = ""
+            end
+        elseif button == button_edit then
+            local targets = choose_styles(subs, matching_style_names(collect_styles(subs), state.selected_font), T("choose_edit"))
+            if targets then
+                local applied, changed_styles, changed_fields = edit_properties(subs, targets)
+                if applied then
+                    if changed_styles > 0 then aegisub.set_undo_point(T("undo_edit")) end
+                    show_message(T("edit_done", changed_styles, changed_fields))
+                end
+            end
+        elseif button == button_colors then
+            local targets = choose_styles(subs, matching_style_names(collect_styles(subs), state.selected_font), T("choose_colors"))
+            if targets then
+                local applied, changed_styles, changed_fields = edit_colors(subs, targets)
+                if applied then
+                    if changed_styles > 0 then aegisub.set_undo_point(T("undo_colors")) end
+                    show_message(T("colors_done", changed_styles, changed_fields))
+                end
+            end
+        elseif button == button_clone then
+            local insert_at, clone = clone_dialog(subs, state.base_style)
+            if insert_at then
+                active_selection = shift_selection(active_selection, insert_at)
+                aegisub.set_undo_point(T("undo_clone"))
+                state.base_style = clone.name
+                show_message(T("clone_created", clone.name))
+            end
+        end
+    end
+end
+
+FontSwap.main = main
+
+return FontSwap
+]====],
+    ["Continuous Fade Cleanup"] = [====[
+local SharedEventOps = require("kite.EventOps")
+local SharedLineOps = require("kite.LineOps")
+local function main(subs, sel, active, context)
+    context = context or {}
+    local indices = SharedEventOps.dialogueIndices(subs, sel)
+    local groups = {}
+    for _, index in ipairs(indices) do
+        local line = subs[index]
+        groups[tostring(line.start_time) .. "\31" .. tostring(line.end_time)] = true
+    end
+    local count = 0
+    for _ in pairs(groups) do count = count + 1 end
+    if count < 2 then
+        if type(context.notify) == "function" then
+            context.notify("tool_err_fade_groups", "Select at least two timing groups.")
+        end
+        return sel
+    end
+    local result, changed = SharedLineOps.transaction(subs, "", function()
+        return SharedEventOps.continuousFadeCleanup(subs, indices)
+    end)
+    if changed > 0 and type(context.undo) == "function" then
+        context.undo("tool_undo_continuous_fades", "Rhea Signs: continuous fade cleanup")
+    end
+    return result
+end
+return { main = main }
+]====],
+    ["Shuffle Line Text"] = [====[
+local SharedEventOps = require("kite.EventOps")
+local SharedLineOps = require("kite.LineOps")
+local function main(subs, sel, active, context)
+    context = context or {}
+    local indices = SharedEventOps.dialogueIndices(subs, sel)
+    if #indices < 2 then
+        if type(context.notify) == "function" then
+            context.notify("tool_err_shuffle_lines", "Select at least two dialogue lines.")
+        end
+        return sel
+    end
+    local result, changed = SharedLineOps.transaction(subs, "", function()
+        return SharedEventOps.shuffleLineText(subs, indices)
+    end)
+    if changed > 0 and type(context.undo) == "function" then
+        context.undo("tool_undo_shuffle_line_text", "Rhea Signs: shuffle line text")
+    end
+    return result
+end
+return { main = main }
+]====],
+}
+local TOOLBOX_ACTIONS = {
+    "Shape Color Optimizer",
+    "Font and Style Manager",
+    "Continuous Fade Cleanup",
+    "Shuffle Line Text",
+}
+local integratedToolCache = {}
+
+local function loadIntegratedTool(name)
+    if integratedToolCache[name] then return integratedToolCache[name] end
+    local source = INTEGRATED_TOOL_SOURCES[name]
+    if not source then return nil, name end
+
+    local chunk, err = loadstring(source, "@Rhea Signs/" .. name)
+    if not chunk then return nil, err end
+
+    local environment = setmetatable({}, {__index = _G})
+    setfenv(chunk, environment)
+    local ok, tool = pcall(chunk)
+    if not ok then return nil, tool end
+    if type(tool) ~= "table" or type(tool.main) ~= "function" then
+        return nil, "missing main entrypoint"
+    end
+    integratedToolCache[name] = tool
+    INTEGRATED_TOOL_SOURCES[name] = nil
+    return tool
+end
+
+local function integratedTool(name)
+    local tool, err = loadIntegratedTool(name)
+    if tool then return tool end
+    showMsg(string.format(L("err_tool_load"), choiceLabel(name), tostring(err)), nil, {width=60, height=6})
+end
+
+local function integratedToolContext()
+    return {
+        language = current_lang,
+        translate = L,
+        notify = function(key, fallback)
+            local message = L(key)
+            if message == key then message = fallback end
+            if aegisub and aegisub.log then pcall(aegisub.log, tostring(message or "") .. "\n") end
+        end,
+        undo = function(key, fallback)
+            local label = L(key)
+            if label == key then label = fallback end
+            if aegisub and aegisub.set_undo_point then aegisub.set_undo_point(label) end
+        end,
+    }
+end
+
 local tagops_gui, config_gui
 local function row_master_gui(subs, sel)
     resolveConfig()
@@ -4503,6 +6783,7 @@ local function row_master_gui(subs, sel)
         so_circ_track = soc.circ_track or 0, so_circ_invert = soc.circ_invert or false,
         so_circ_delete = soc.circ_delete or false,
 
+        tool_action = "",
     }
     local function syncMainGlobalColors()
         if current_config.mask_color ~= nil then state.dr_mask_color = current_config.mask_color end
@@ -4520,10 +6801,12 @@ local function row_master_gui(subs, sel)
         local drMaskItems, drMaskMap, drMaskShown = dropdownData(RheaOps.Masks.maskNames())
         local drAlignItems, drAlignMap, drAlignShown = dropdownData({"an1", "an2", "an3", "an4", "an5", "an6", "an7", "an8", "an9"})
         local drAlphaItems, drAlphaMap, drAlphaShown = dropdownData({"00", "20", "40", "60", "80", "A0", "C0", "E0", "FF"})
+        local toolItems, toolMap, toolShown = dropdownData(TOOLBOX_ACTIONS)
         local dropdownMaps = {
             pk_action = pkMap, pk_map = pkMapMap, pk_orgm = pkOrgMap,
             so_action = soActionMap, so_type_mode = soTypeMap, so_circ_rot = soRotMap,
             dr_action = drActionMap, dr_mask_source = drMaskMap, dr_alignment = drAlignMap, dr_alpha_value = drAlphaMap,
+            tool_action = toolMap,
         }
         local maskX, perspX, signX = 0, 4, 7
         local d = {
@@ -4572,9 +6855,10 @@ local function row_master_gui(subs, sel)
             { class="label", label=L("lbl_track"), x=signX, y=5, width=1, height=1 },
             { class="floatedit", name="so_circ_track", value=state.so_circ_track, x=signX + 1, y=5, width=1, height=1 },
             { class="checkbox", name="so_circ_delete", label=L("lbl_del"), value=state.so_circ_delete, x=signX + 2, y=5, width=1, height=1 },
-            { class="label", label=L("hint_picker"), x=0, y=7, width=4, height=1 },
+            { class="label", label=sectionTitle("title_toolbox"), x=0, y=7, width=3, height=1 },
+            { class="dropdown", name="tool_action", items=toolItems, value=shownChoice(toolShown, state.tool_action), x=3, y=7, width=7, height=1 },
         }
-        local buttons = { L("btn_execute"), L("btn_mass_signs"), L("btn_fastsigns"), L("btn_tagops"), L("btn_config"), L("btn_help"), L("btn_cancel") }
+        local buttons = { L("btn_execute"), L("btn_mass_signs"), L("btn_fastsigns"), L("btn_tagops"), L("btn_makeup"), L("btn_config"), L("btn_help"), L("btn_cancel") }
         local b, r = aegisub.dialog.display(d, buttons)
         if not b or b == L("btn_cancel") then return end
 
@@ -4599,12 +6883,16 @@ local function row_master_gui(subs, sel)
         elseif b == L("btn_tagops") then
             if tagops_gui(subs, sel) then return end
 
+        elseif b == L("btn_makeup") then
+            local tool = integratedTool("Makeup")
+            if tool then return tool.main(subs, sel, nil, integratedToolContext()) end
+
         elseif b == L("btn_config") then
             if config_gui() then syncMainGlobalColors() end
 
         elseif b == L("btn_execute") then
             local tsel = sel
-            local any_run = (r.pk_action ~= "" or r.dr_action ~= "" or r.so_action ~= "")
+            local any_run = (r.pk_action ~= "" or r.dr_action ~= "" or r.so_action ~= "" or r.tool_action ~= "")
             if not any_run then return end
             local function updateChainSelection(result, changed)
                 if changed ~= false and type(result) == "table" then tsel = result end
@@ -4634,11 +6922,17 @@ local function row_master_gui(subs, sel)
                 end
                 if r.dr_action == "Save Shape" then
                     local name = Rhea.trim(r.dr_save_name or "")
-                    if name ~= "" and tsel[1] then RheaOps.Masks.saveMask(name, subs[tsel[1]].text) end
+                    if name ~= "" and tsel[1] then
+                        local ok, err = RheaOps.Masks.saveMask(name, subs[tsel[1]].text)
+                        if not ok then showMsg(tostring(err or "No se pudo guardar la máscara.")) end
+                    end
                     RheaOps.Masks.saveConfig(drcfg)
                 elseif r.dr_action == "Delete Shape" then
                     local name = Rhea.trim(r.dr_save_name or "")
-                    if name ~= "" then RheaOps.Masks.deleteMask(name) end
+                    if name ~= "" then
+                        local ok, err = RheaOps.Masks.deleteMask(name)
+                        if not ok then showMsg(tostring(err or "No se pudo eliminar la máscara.")) end
+                    end
                     RheaOps.Masks.saveConfig(drcfg)
                 else
                     if r.dr_action == "Clean DR" then drcfg.op = "clean"
@@ -4664,6 +6958,11 @@ local function row_master_gui(subs, sel)
                     circ_delete = r.so_circ_delete,
                 })
                 updateChainSelection(result, changed)
+            end
+
+            if r.tool_action ~= "" then
+                local tool = integratedTool(r.tool_action)
+                if tool then return tool.main(subs, tsel, nil, integratedToolContext()) end
             end
 
             return
@@ -4837,9 +7136,23 @@ local function signs_editor_macro(subs, sel)
     return RheaOps.Tools.massSigns(subs, sel)
 end
 
+local function integrated_tool_macro(name)
+    return function(subs, sel)
+        resolveConfig()
+        if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
+        local tool = integratedTool(name)
+        if tool then return tool.main(subs, sel, nil, integratedToolContext()) end
+    end
+end
+
 depRec:registerMacros({
     { macroPath(""), script_description, row_master_gui },
     { hotkeyPath("TagOps"), "Tag operations", tagops_gui },
     { hotkeyPath("Fast Signs"), "Generate fast signs", fastsigns_macro },
     { hotkeyPath("Signs Editor"), "Edit repeated sign text", signs_editor_macro },
+    { hotkeyPath("Makeup"), "Open Makeup", integrated_tool_macro("Makeup") },
+    { hotkeyPath("Shape Color Optimizer"), "Optimize drawing colors", integrated_tool_macro("Shape Color Optimizer") },
+    { hotkeyPath("Font and Style Manager"), "Manage fonts and styles", integrated_tool_macro("Font and Style Manager") },
+    { hotkeyPath("Continuous Fade Cleanup"), "Clean continuous fades", integrated_tool_macro("Continuous Fade Cleanup") },
+    { hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", integrated_tool_macro("Shuffle Line Text") },
 }, false)

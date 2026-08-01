@@ -1,72 +1,80 @@
 local function tryRequire(m) local ok, r = pcall(require, m); if ok then return r end end
 local DependencyControl = tryRequire("l0.DependencyControl")
+local LineOps = tryRequire("kite.LineOps")
+local lfs = tryRequire("lfs")
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "Timing",
-        version = "1.0.2",
+        version = "1.2.0",
         description = "Voice-timing engines: multi-signal/waveform onset detection and legacy silence timing",
         author = "Kiterow",
-        url = "https://github.com/Kitherow/Kite-Aegisub-Scripts",
+        url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.Timing",
-        feed = "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        {
+            {"kite.LineOps", version = "1.5.0"},
+        },
     })
 end
 
 local TUNE = {
-    vote_fraction = 0.5,     
-    w_vad = 1.0,             
-    w_sil30 = 0.9,           
+    vote_fraction = 0.5,
+    w_vad = 1.0,
+    w_sil30 = 0.9,
     w_sil40 = 0.85,
-    w_sil50 = 0.6,           
-    w_flux = 0.7,            
-    min_voice_run_ms = 50,   
-    bridge_gap_ms = 320,     
-    max_pause_ms = 900,      
-    tiny_span_ms = 120,      
-    flux_start_ms = 160,     
-    flux_end_ms = 200,       
-    spread_search_ms = 450,  
-    spread_flag_ms = 350,    
-    min_voice_ms = 80,       
-    stack_eps_ms = 40,       
-    keep_min_out_ms = 200,   
-    flash_gap_ms = 250,      
-    cap_grace_ms = 120,      
-    frame_grace_ms = 45,     
-    orig_end_cut_ms = 150,   
-                             
-    
-    max_sane_cps = 40,       
-    relax_vote = 0.38,       
-    relax_bridge_ms = 480,   
-    relax_tiny_ms = 60,      
-    relax_pause_ms = 1200,   
-    relax_run_ms = 30,       
-    
-    onset_soft_ms = 140,     
-    loud_tail_ms = 300,      
-    tail_keep_ms = 80,       
-    
+    w_sil50 = 0.6,
+    w_flux = 0.7,
+    min_voice_run_ms = 50,
+    bridge_gap_ms = 320,
+    max_pause_ms = 900,
+    tiny_span_ms = 120,
+    flux_start_ms = 160,
+    flux_end_ms = 200,
+    spread_search_ms = 450,
+    spread_flag_ms = 350,
+    min_voice_ms = 80,
+    stack_eps_ms = 40,
+    keep_min_out_ms = 200,
+    flash_gap_ms = 250,
+    cap_grace_ms = 120,
+    frame_grace_ms = 45,
+    orig_end_cut_ms = 150,
+
+
+    max_sane_cps = 40,
+    relax_vote = 0.38,
+    relax_bridge_ms = 480,
+    relax_tiny_ms = 60,
+    relax_pause_ms = 1200,
+    relax_run_ms = 30,
+
+    onset_soft_ms = 140,
+    loud_tail_ms = 300,
+    tail_keep_ms = 80,
+
     w_env = 1.0,
-    env_refine_ms = 220,     
-    env_min_range_db = 6,    
-    env_thr_frac = 0.35,     
+    env_refine_ms = 220,
+    env_min_range_db = 6,
+    env_thr_frac = 0.35,
 }
-local function trim(s)
-    return (tostring(s or ""):match("^%s*(.-)%s*$")) or ""
+local function trim(value)
+    if LineOps then return LineOps.trim(value) end
+    return (tostring(value or ""):match("^%s*(.-)%s*$")) or ""
 end
 
-local function round(x)
-    x = tonumber(x) or 0
-    if x >= 0 then return math.floor(x + 0.5) end
-    return math.ceil(x - 0.5)
+local function round(value)
+    if LineOps then return LineOps.round(value) end
+    value = tonumber(value) or 0
+    if value >= 0 then return math.floor(value + 0.5) end
+    return math.ceil(value - 0.5)
 end
 
-local function clamp(x, lo, hi)
-    if x < lo then return lo end
-    if x > hi then return hi end
-    return x
+local function clamp(value, minimum, maximum)
+    if LineOps then return LineOps.clamp(value, minimum, maximum) end
+    if value < minimum then return minimum end
+    if value > maximum then return maximum end
+    return value
 end
 
 local function lower_bound(list, value)
@@ -82,10 +90,11 @@ local function overlap_len(a0, a1, b0, b1)
     return math.min(a1, b1) - math.max(a0, b0)
 end
 
-local function progress(task, pct)
+local function progress(task, percent)
+    if LineOps then return LineOps.progress(task, percent) end
     if aegisub and aegisub.progress then
         if task and aegisub.progress.task then pcall(aegisub.progress.task, task) end
-        if pct and aegisub.progress.set then pcall(aegisub.progress.set, pct) end
+        if percent and aegisub.progress.set then pcall(aegisub.progress.set, percent) end
     end
 end
 
@@ -108,17 +117,17 @@ end
 
 local function list_dir(dir)
     if not dir then return {} end
-    local cmd
-    if IS_WINDOWS then cmd = 'dir /b "' .. dir .. '"'
-    else cmd = 'ls -1 "' .. dir .. '"' end
-    local ok, p = pcall(io.popen, cmd)
-    if not ok or not p then return {} end
     local out = {}
-    for line in p:lines() do
-        line = trim(line)
-        if line ~= "" then out[#out + 1] = line end
+    if lfs then
+        local ok, iterator, state = pcall(lfs.dir, dir)
+        if ok and iterator then
+            for name in iterator, state do
+                if name ~= "." and name ~= ".." then out[#out + 1] = name end
+            end
+            table.sort(out)
+            return out
+        end
     end
-    p:close()
     return out
 end
 
@@ -169,11 +178,17 @@ local function discover_paths(paths)
     return paths
 end
 local function visible_text(text)
+    if LineOps then return LineOps.visibleText(text) end
     local s = tostring(text or "")
     s = s:gsub("{[^}]*}", "")
     s = s:gsub("\\[Nn]", " ")
     s = s:gsub("\\h", " ")
     return trim(s)
+end
+
+local function has_drawing(text)
+    if LineOps then return LineOps.hasDrawing(text) end
+    return tostring(text or ""):find("\\p[1-9]", 1) ~= nil
 end
 
 local function utf8_len(s)
@@ -204,7 +219,7 @@ end
 local function is_spoken(line, cfg)
     if not line or line.comment then return false end
     local raw = tostring(line.text or "")
-    if raw:find("\\p%d") then return false end 
+    if has_drawing(raw) then return false end
     if visible_text(raw) == "" then return false end
     local effect = tostring(line.effect or ""):lower()
     if effect:find("template", 1, true) or effect:find("karaoke", 1, true) or effect:find("code", 1, true) then return false end
@@ -304,7 +319,7 @@ local function parse_silence_file(path)
     end
     f:close()
     if #out == 0 then
-        
+
         return parse_interval_rows(path)
     end
     return merge_intervals(out)
@@ -447,7 +462,7 @@ local function parse_keyframe_file(path, cfg)
     f:close()
     local frames = {}
     if has_frame_tokens then
-        
+
         local frame = 0
         for _, raw in ipairs(raw_lines) do
             local kind = tostring(raw:match("^(%S+)") or ""):lower()
@@ -676,8 +691,8 @@ local function detect_voice(it, sig, cfg, kfs, relax)
     local pause = relax and TUNE.relax_pause_ms or TUNE.max_pause_ms
     local min_run = relax and TUNE.relax_run_ms or TUNE.min_voice_run_ms
 
-    
-    
+
+
     local w0 = math.max(it.os, 0)
     local w1 = it.oe
     if w1 <= w0 then return nil end
@@ -711,7 +726,7 @@ local function detect_voice(it, sig, cfg, kfs, relax)
     if #runs == 0 then runs = voted end
     if #runs == 0 then return nil end
 
-    
+
     local spans = {}
     for _, r in ipairs(runs) do
         local last = spans[#spans]
@@ -722,15 +737,15 @@ local function detect_voice(it, sig, cfg, kfs, relax)
         end
     end
 
-    
+
     local cands = {}
     for _, sp in ipairs(spans) do
         if sp.e > it.os and sp.b < it.oe then cands[#cands + 1] = sp end
     end
     if #cands == 0 then return nil end
 
-    
-    
+
+
     local anchor, best = 1, nil
     for i, sp in ipairs(cands) do
         local score = overlap_len(sp.b, sp.e, it.os, it.oe) + 0.2 * (sp.e - sp.b)
@@ -751,16 +766,16 @@ local function detect_voice(it, sig, cfg, kfs, relax)
     end
     local vs, ve = cands[lo].b, cands[hi].e
 
-    
-    
+
+
     for _, src in ipairs(sig.sources) do
         if src.label == "sil40" or src.label == "sil50" then
             local v = nearest_in(src.starts, vs, TUNE.onset_soft_ms)
             if v and v < vs then vs = v end
         end
     end
-    
-    
+
+
     for _, src in ipairs(sig.sources) do
         if src.label == "sil30" then
             local loud_end = nearest_in(src.ends, ve, TUNE.loud_tail_ms)
@@ -769,7 +784,7 @@ local function detect_voice(it, sig, cfg, kfs, relax)
             end
         end
     end
-    
+
     if sig.env then
         local r = env_refine_edge(sig.env, vs, "start", w0, w1)
         if r and r < ve then vs = r end
@@ -781,17 +796,17 @@ local function detect_voice(it, sig, cfg, kfs, relax)
     local off = nearest_in(sig.flux_off, ve, TUNE.flux_end_ms)
     if off and off > vs then ve = off end
 
-    
-    
-    
-    
-    
+
+
+
+
+
     local hit_lo = vs <= w0 + 1
     local hit_hi = ve >= w1 - 1
     vs = clamp(vs, it.os, it.oe)
     ve = clamp(ve, it.os, it.oe)
-    
-    
+
+
     if hit_hi and kfs then
         local k = kf_in(kfs, it.oe - TUNE.orig_end_cut_ms, it.oe, it.oe)
         if k and k > vs then ve = k end
@@ -1209,9 +1224,8 @@ function LZ.runLazyFusionAnalysis(subs, sel, files, opts, flux_data)
     local enable_tagging, tag_mode, tag_scope = opts.enable_tagging, opts.tag_mode, opts.tag_scope
     local modified = 0
     local seq = LZ.orderedByStart(subs, sel)
-    aegisub.progress.task("Analyzing (LazyFusion v2 EFS)...")
     for idx, ii in ipairs(seq) do
-        aegisub.progress.set(idx / #seq * 100)
+        progress("Analyzing (LazyFusion v2 EFS)...", idx / math.max(#seq, 1) * 100)
         local l = subs[ii]
         if l.class == "dialogue" then
             local os_ms, oe_ms = l.start_time, l.end_time
@@ -1396,9 +1410,8 @@ function LZ.runTableAnalysis(subs, sel, lim, files, opts)
     local enable_tag, tag_mode, tag_scope = opts.enable_tagging, opts.tag_mode, opts.tag_scope
     local modified = 0
     local seq = LZ.orderedByStart(subs, sel)
-    aegisub.progress.task("Analyzing (Table, intra ±" .. tostring(lim) .. " ms)...")
     for idx, ii in ipairs(seq) do
-        aegisub.progress.set(idx / #seq * 100)
+        progress("Analyzing (Table, intra ±" .. tostring(lim) .. " ms)...", idx / math.max(#seq, 1) * 100)
         local l = subs[ii]
         if l.class == "dialogue" then
             local os, oe = l.start_time, l.end_time
@@ -1525,9 +1538,10 @@ function LZ.run(subs, sel, paths, opts)
 end
 
 local Timing = {
-    version = "1.0.2",
-    round = round, clamp = clamp, lowerBound = lower_bound, overlapLen = overlap_len,
-    visibleText = visible_text, utf8Len = utf8_len, readableChars = readable_chars,
+    version = "1.2.0",
+    trim = trim, round = round, clamp = clamp, lowerBound = lower_bound, overlapLen = overlap_len,
+    progress = progress, visibleText = visible_text, hasDrawing = has_drawing,
+    utf8Len = utf8_len, readableChars = readable_chars,
     styleOk = style_ok, isSpoken = is_spoken, frameToMs = frame_to_ms,
     mergeIntervals = merge_intervals,
     parseSilenceFile = parse_silence_file, parseVadFile = parse_vad_file,

@@ -1,20 +1,20 @@
 export script_name        = "Field Group Manager"
 export script_description = "Group unique dialogue field values and write mapped values into another field"
 export script_author      = "Kiterow"
-export script_version     = "1.0.5"
+export script_version     = "1.1.0"
 export script_namespace   = "kite.FieldGroupManager"
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "Field Group Manager"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
-  feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json",
+  feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
-    {"kite.UI", version: "1.0.0", url: "https://github.com/Kitherow/Kite-Aegisub-Scripts",
-      feed: "https://raw.githubusercontent.com/Kitherow/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-KiteUI = depctrl\requireModules!
+KiteUI, LineOps = depctrl\requireModules!
 
 MIXED_MARK = "<mixed>"
 EMPTY_MARK = "<empty>"
@@ -182,7 +182,7 @@ collect_indexes = (subs, sel, state) ->
     for idx = 1, #subs
       add_index idx
   else
-    for idx in *(sel or {})
+    for idx in *LineOps.normalizeIndices(subs, sel)
       add_index idx
   indexes
 
@@ -429,10 +429,7 @@ field_group_manager = (subs, sel) ->
 can_run = (subs, sel) ->
   true
 
-hotkey_path = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/Execute"
 if depctrl and depctrl.registerMacro
   depctrl\registerMacro script_name, script_description, field_group_manager, can_run, nil, false
-  depctrl\registerMacro hotkey_path, "Hotkey action. " .. script_description, field_group_manager, can_run, nil, false
 else
   aegisub.register_macro script_name, script_description, field_group_manager, can_run
-  aegisub.register_macro hotkey_path, "Hotkey action. " .. script_description, field_group_manager, can_run
