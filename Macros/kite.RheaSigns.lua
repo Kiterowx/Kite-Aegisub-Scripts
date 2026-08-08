@@ -1,8 +1,12 @@
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "1.7.0"
+script_version     = "1.7.3"
 script_namespace   = "kite.RheaSigns"
+
+local MAX_MARKER_ID = 9999
+local RHEA_ZERO_EPSILON = 1e-9
+local RHEA_DIMENSION_EPSILON = 0.0001
 
 local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
 local HOTKEY_MENU_SCRIPT = script_name
@@ -23,33 +27,30 @@ local depRec = DependencyControl{
         { "arch.Perspective", version = "1.2.1",
           url  = "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json" },
-        { "arch.Util", version = "0.1.0",
-          url  = "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-          feed = "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json" },
         { "a-mo.LineCollection", version = "1.3.0",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
         { "a-mo.Line", version = "1.5.3",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
-        { "kite.UI", version = "1.1.0",
+        { "kite.UI", version = "1.1.3",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.LineOps", version = "1.5.0",
+        { "kite.LineOps", version = "1.5.2",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.PyBridge", version = "1.4.0",
+        { "kite.PyBridge", version = "1.4.4",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.EventOps", version = "1.0.0",
+        { "kite.EventOps", version = "1.0.2",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.ShapeOptimizer", version = "1.0.0",
+        { "kite.ShapeOptimizer", version = "1.0.2",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
     },
 }
-local ASS, Functional, ArchPersp, ArchUtil, LineCollection, AMLine, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
+local ASS, Functional, ArchPersp, LineCollection, AMLine, KiteUI, LineOps, PyBridge = depRec:requireModules()
 
 local function ConfigHandler(interface, file_name, _, version)
     return KiteUI.dialogHandler(interface, script_namespace, version, {
@@ -61,7 +62,6 @@ local FunctionalString  = Functional.string
 local FunctionalMath    = Functional.math
 local FunctionalList    = Functional.list
 local FunctionalTable   = Functional.table
-local FunctionalUnicode = Functional.unicode
 local FunctionalUtil    = Functional.util
 
 local unicode = require("aegisub.unicode")
@@ -1345,14 +1345,15 @@ end
 
 function RheaFoundation.nextMarkerSeq(current, used)
     used = used or {}
-    local id = (tonumber(current) or 0) + 1
-    if id > 9999 then id = 1 end
-    while used[id] do
-        id = id + 1
-        if id > 9999 then id = 1 end
+    local id = ((tonumber(current) or 0) % MAX_MARKER_ID) + 1
+    for _ = 1, MAX_MARKER_ID do
+        if not used[id] then
+            used[id] = true
+            return id, id
+        end
+        id = (id % MAX_MARKER_ID) + 1
     end
-    used[id] = true
-    return id, id
+    error("Rhea Signs exhausted all available marker IDs.", 0)
 end
 
 function RheaFoundation.stampMarker(line, prefix, seq)
@@ -1800,7 +1801,7 @@ end
 local function confirm_layout_scale()
     local info = LAYOUT_SCALE_INFO or {}
     local scale = tonumber(info.scale) or 1
-    if math.abs(scale - 1) < 0.0001 then return true end
+    if math.abs(scale - 1) < RHEA_DIMENSION_EPSILON then return true end
     local key = layout_warning_key()
     if PK_LAYOUT_WARNED[key] then return true end
 
@@ -1841,8 +1842,17 @@ local function perspective_meta(meta)
     meta = meta or {}
     local out = {}
     for k, v in pairs(meta) do out[k] = v end
-    out.PlayResX = tonumber(out.PlayResX or out.playresx or out.res_x) or 1920
-    out.PlayResY = tonumber(out.PlayResY or out.playresy or out.res_y) or 1080
+    local playX = tonumber(out.PlayResX or out.playresx or out.res_x)
+    local playY = tonumber(out.PlayResY or out.playresy or out.res_y)
+    if (not playX or playX <= 0 or not playY or playY <= 0) and aegisub.video_size then
+        local ok, videoX, videoY = pcall(aegisub.video_size)
+        if ok then
+            playX = playX and playX > 0 and playX or tonumber(videoX)
+            playY = playY and playY > 0 and playY or tonumber(videoY)
+        end
+    end
+    out.PlayResX = playX and playX > 0 and playX or 0
+    out.PlayResY = playY and playY > 0 and playY or 0
     if out.LayoutResY == nil then out.LayoutResY = out.layoutresy end
     return out
 end
@@ -1914,9 +1924,13 @@ local function line_for_perspective(line, style, meta, styles)
 end
 
 local function build_tags(line, style, meta, styles)
-    local data = RheaFoundation.parseLine(line_for_perspective(line, style, meta, styles))
+    local pmeta = perspective_meta(meta)
+    local data = RheaFoundation.parseLine(line_for_perspective(line, style, pmeta, styles))
     local eff  = data:getEffectiveTags(-1, true, true, true).tags
-    local pos  = eff.position or { x = 640, y = 360 }
+    local pos  = eff.position or {
+        x = (tonumber(pmeta.PlayResX) or 0) / 2,
+        y = (tonumber(pmeta.PlayResY) or 0) / 2,
+    }
     local org  = eff.origin or pos
     return {
         align     = eff.align    or dim_tag(style and style.align or 5),
@@ -2046,7 +2060,7 @@ local function finite(n)
 end
 
 local function valid_dim(n)
-    return finite(n) and n > 0.0001
+    return finite(n) and n > RHEA_DIMENSION_EPSILON
 end
 
 local function valid_quad(q)
@@ -2430,7 +2444,6 @@ local function run_copy_mode(subs, sel, styles, res, orgMode, meta)
                     if style then
                         local dst_q, dst_t, dst_w, dst_h = safe_build_quad_for(line, style, meta, styles)
                         if dst_q then
-                            local out_q, applyOrgMode = nil, orgMode
                             if is_exact then
                                 copy_perspective_state(dst_t, src_t)
                                 dst_t.position = { x = src_t.position.x, y = src_t.position.y }
@@ -2463,8 +2476,8 @@ local function run_copy_mode(subs, sel, styles, res, orgMode, meta)
                                     skipped = skipped + 1
                                 end
                             else
-                                out_q = remap_quad(src_q, dst_q, mapping)
-                                if apply_quad(line, dst_t, out_q, dst_w, dst_h, applyOrgMode, removeCopyClip) then
+                                local out_q = remap_quad(src_q, dst_q, mapping)
+                                if apply_quad(line, dst_t, out_q, dst_w, dst_h, orgMode, removeCopyClip) then
                                     subs[i] = line
                                     pairs_done = pairs_done + 1
                                 else
@@ -2506,6 +2519,14 @@ local function pk_dispatch(subs, sel, opts)
     PK_CONFIG.write(C)
     local res = C
     local orgMode = tonumber(res.orgm:sub(1,1)) or 3
+    if res.mode ~= "Bake Extradata" and res.mode ~= "Restore Extradata" then
+        local resolvedMeta = perspective_meta(meta)
+        if resolvedMeta.PlayResX <= 0 or resolvedMeta.PlayResY <= 0 then
+            showMsg("Perspective tools need a valid script resolution or loaded video dimensions.")
+            return false
+        end
+        meta = resolvedMeta
+    end
     if perspective_mode_uses_layout_scale(res.mode) and not confirm_layout_scale() then
         return
     end
@@ -2760,6 +2781,9 @@ end
 local function applyMask(subs, sel, opts)
     local masks, _ = loadMaskLibrary()
     local lines = LineCollection(subs, sel, function() return true end)
+    local lineMeta = lines.meta or {}
+    local playResX = tonumber(lineMeta.PlayResX or lineMeta.playresx or lineMeta.res_x)
+    local playResY = tonumber(lineMeta.PlayResY or lineMeta.playresy or lineMeta.res_y)
     local additions = {}
     local changed = false
     lines:runCallback(function(_, line, seq)
@@ -2833,8 +2857,9 @@ local function applyMask(subs, sel, opts)
             target.text = string.format(
                 "{\\%s\\bord0\\shad0\\blur1%s%s%s%s\\p1}%s",
                 opts.alignment, rotTags, posTag, colorTag, alphaTag, libraryShape)
-            if not LineOps.hasTag(target.text, "pos", true) then
-                target.text = target.text:gsub("\\p1", "\\pos(640,360)\\p1")
+            if not LineOps.hasTag(target.text, "pos", true) and playResX and playResY then
+                local centerTag = string.format("\\pos(%.3f,%.3f)\\p1", playResX / 2, playResY / 2)
+                target.text = target.text:gsub("\\p1", centerTag, 1)
             end
             stampSeqMarker(target, seq)
             changed = true
@@ -2871,8 +2896,11 @@ local function dr_dispatch(subs, sel, opts)
     local cfg = DR_CONFIG.read()
     cfg = FunctionalTable.union(opts or {}, cfg, DR_DEFAULTS)
     if cfg.op == "clean" then return cleanAllDLines(subs, sel) end
+    local saved, saveErr = pcall(DR_CONFIG.write, cfg)
+    if not saved and aegisub and aegisub.log then
+        aegisub.log(1, "Rhea Signs: could not save mask settings: %s\n", tostring(saveErr))
+    end
     local newSel, changed = applyMask(subs, sel, cfg)
-    DR_CONFIG.write(cfg)
     if changed then aegisub.set_undo_point("Rhea Signs - Masks Apply") end
     return newSel, changed == true
 end
@@ -2894,15 +2922,29 @@ local generateMarkerID = sioMarkers.next
 local _so_reset = sioMarkers.reset
 local stampEffect = sioMarkers.stamp
 
+local function usedSignMarkerIDs(subs)
+    local used = {}
+    for i = 1, #subs do
+        local id = tonumber(Rhea.readMarker(subs[i], "SiO"))
+        if id then used[id] = true end
+    end
+    return used
+end
+
 local SIGN_GEOM_TAGS = {"clip","iclip","pos","move","org","an","frx","fry","frz","fr","fax","fay"}
 local function stripGeneratedGeometry(tags)
     return RheaFoundation.removeTags(tostring(tags or ""), SIGN_GEOM_TAGS)
 end
 
 local function tagsWithGeometry(tags, geom)
-    local tgStr = stripGeneratedGeometry(tags):gsub("}$", "")
-    if tgStr ~= "" and not tgStr:match("^{") then tgStr = "{" .. tgStr end
-    return (tgStr ~= "" and tgStr or "{") .. geom .. "}"
+    local cleaned = stripGeneratedGeometry(tags)
+    if cleaned == "" then return "{" .. geom .. "}" end
+    if not cleaned:find("{", 1, true) then return "{" .. cleaned .. geom .. "}" end
+    local prefix, finalOverride = cleaned:match("^(.*){(\\[^}]*)}$")
+    if finalOverride then return prefix .. "{" .. finalOverride .. geom .. "}" end
+    -- A trailing comment block is not an override block; keep it intact and
+    -- append geometry in a new override block.
+    return cleaned .. "{" .. geom .. "}"
 end
 
 
@@ -2946,66 +2988,101 @@ local function prepareSignLine(subs, meta, styles, line)
     return line.styleref ~= nil
 end
 
-local function applyTypewriter(subs, sel, cfg)
-    local usedMarkers = {}
-    local cnt = 0
-    for _, i in ipairs(sel) do
-        local line = subs[i]
-        local markerID = generateMarkerID(usedMarkers)
-        local head = Rhea.firstBlock(line.text)
-        if head ~= "" then
-            head = RheaFoundation.removeTags(head, {"alpha","1a","2a","3a","4a","t"})
-        end
-
-        local tokens = Rhea.tokenizeVisible(Rhea.stripTags(line.text))
-        local nchars = 0
-        for _, tk in ipairs(tokens) do if tk.type == "char" then nchars = nchars + 1 end end
-        if nchars > 0 then
-            local dur = line.end_time - line.start_time
-            local mpc = cfg.type_mode == "Frame" and 42 or (dur / nchars)
-            local out, idx = {}, 0
-            for _, tk in ipairs(tokens) do
-                if tk.type == "break" then
-                    out[#out + 1] = tk.content
-                else
-                    local ts = math.floor(idx * mpc)
-                    out[#out + 1] = string.format("{\\alpha&HFF&\\t(%d,%d,\\alpha&H00&)}%s", ts, ts + 1, tk.content)
-                    idx = idx + 1
-                end
+local function typewriterOffset(line, index, count, mode)
+    local startMs = tonumber(line and line.start_time) or 0
+    local endMs = tonumber(line and line.end_time) or startMs
+    local duration = math.max(0, endMs - startMs)
+    if mode == "Frame" and aegisub.frame_from_ms and aegisub.ms_from_frame then
+        local okFrame, startFrame = pcall(aegisub.frame_from_ms, startMs)
+        if okFrame and startFrame then
+            local okLast, lastFrame = pcall(aegisub.frame_from_ms, math.max(startMs, endMs - 1))
+            local targetFrame = okLast and lastFrame and math.min(startFrame + index, lastFrame) or startFrame + index
+            local okTime, frameMs = pcall(aegisub.ms_from_frame, targetFrame)
+            if okTime and frameMs then
+                return math.max(0, math.min(math.max(0, duration - 1), math.floor(frameMs - startMs + 0.5)))
             end
+        end
+    end
+    return math.max(0, math.min(math.max(0, duration - 1),
+        math.floor(index * duration / math.max(1, count))))
+end
 
-            line.text = head .. table.concat(out)
-            stampEffect(line, markerID)
-            subs[i] = line
-            cnt = cnt + 1
+local function applyTypewriter(subs, sel, cfg)
+    local usedMarkers = usedSignMarkerIDs(subs)
+    local cnt = 0
+    local changedSelection = {}
+    for _, i in ipairs(RheaFoundation.selectionDialogueIndices(subs, sel)) do
+        local line = subs[i]
+        local startMs = tonumber(line.start_time)
+        local endMs = tonumber(line.end_time)
+        if not line.comment and startMs and endMs and endMs > startMs then
+            local tokens = Rhea.tokenize(line.text or "")
+            local nchars = 0
+            for _, tk in ipairs(tokens) do if tk.type == "char" then nchars = nchars + 1 end end
+            if nchars > 0 then
+                local out, idx = {}, 0
+                for _, tk in ipairs(tokens) do
+                    if tk.type == "tag" then
+                        local cleaned = RheaFoundation.removeTags(tk.content, {"alpha","1a","2a","3a","4a"})
+                        if cleaned ~= "{}" then out[#out + 1] = cleaned end
+                    elseif tk.type == "break" then
+                        out[#out + 1] = tk.content
+                    else
+                        local ts = typewriterOffset(line, idx, nchars, cfg.type_mode)
+                        out[#out + 1] = string.format("{\\alpha&HFF&\\t(%d,%d,\\alpha&H00&)}%s", ts, ts + 1, tk.content)
+                        idx = idx + 1
+                    end
+                end
+
+                line.text = table.concat(out)
+                stampEffect(line, generateMarkerID(usedMarkers))
+                subs[i] = line
+                cnt = cnt + 1
+                changedSelection[#changedSelection + 1] = i
+            end
         end
     end
     if cnt > 0 then aegisub.set_undo_point("SignOps: Typewriter") end
-    return cnt, cnt > 0 and sel or nil
+    return cnt, cnt > 0 and changedSelection or nil
 end
 
 
 local function applyVertical(subs, sel, cfg)
-    local usedMarkers = {}
+    local usedMarkers = usedSignMarkerIDs(subs)
     local meta, styles = karaskel.collect_head(subs, false)
-    local lines = LineCollection(subs, sel)
+    local lines = LineCollection(subs, sel, function(line)
+        return Rhea.isDialogue(line) and not line.comment
+    end)
     local replacements = {}
     local cnt = 0
     lines:runCallback(function(_, line)
         local markerID = generateMarkerID(usedMarkers)
         if not prepareSignLine(subs, meta, styles, line) then return end
         local px, py = LineOps.tagPair(line.text, "pos", line.x, line.y, true)
-        local chars = FunctionalUnicode.toCharTable(line.text_stripped)
+        local chars = {}
+        local currentTags = ""
+        local currentStyle = {}
+        for key, value in pairs(line.styleref) do currentStyle[key] = value end
+        for _, token in ipairs(Rhea.tokenize(line.text or "")) do
+            if token.type == "tag" then
+                currentTags = currentTags .. token.content
+                RheaFoundation.applyInlineStyleTags(currentStyle, token.content)
+            elseif token.type == "char" then
+                local charStyle = {}
+                for key, value in pairs(currentStyle) do charStyle[key] = value end
+                chars[#chars + 1] = {content = token.content, tags = currentTags, style = charStyle}
+            end
+        end
         if #chars == 0 then return end
-        local head = RheaFoundation.removeTags(Rhea.firstBlock(line.text), {"pos","an"}):gsub("[{}]", "")
         local cy = 0
-        local scaleY = tonumber(line.styleref and line.styleref.scale_y) or 100
         local new_lines = {}
-        for _, ch in ipairs(chars) do
+        for _, char in ipairs(chars) do
             local nline = Rhea.cloneLine(line)
-            local _, chH = RheaFoundation.textExtents(line.styleref, ch)
+            local _, chH = RheaFoundation.textExtents(char.style, char.content)
+            local scaleY = tonumber(char.style and char.style.scale_y) or 100
             local chh = (tonumber(chH) or 0) * (scaleY / 100)
-            nline.text = string.format("{\\an5\\pos(%.1f,%.1f)%s}%s", px, py + cy, head, ch)
+            local geom = string.format("\\an5\\pos(%.1f,%.1f)", px, py + cy)
+            nline.text = tagsWithGeometry(char.tags, geom) .. char.content
             stampEffect(nline, markerID)
             cy = cy + chh
             new_lines[#new_lines + 1] = nline
@@ -3022,9 +3099,11 @@ local function applyVertical(subs, sel, cfg)
 end
 
 local function applyCircle(subs, sel, cfg)
-    local usedMarkers = {}
+    local usedMarkers = usedSignMarkerIDs(subs)
     local meta, styles = karaskel.collect_head(subs, false)
-    local lines = LineCollection(subs, sel)
+    local lines = LineCollection(subs, sel, function(line)
+        return Rhea.isDialogue(line) and not line.comment
+    end)
     local replacements, additions = {}, {}
     local cnt = 0
 
@@ -3083,7 +3162,7 @@ local function applyCircle(subs, sel, cfg)
                         local nline = Rhea.cloneLine(line)
                         local geom = string.format("\\an5\\pos(%.2f,%.2f)\\frz%.2f", fx, fy, rot)
                         nline.text = tagsWithGeometry(let.tags, geom) .. let.char
-                        nline.layer = line.layer + 1
+                        nline.layer = (tonumber(line.layer) or 0) + 1
                         stampEffect(nline, markerID)
                         table.insert(new_lines, nline)
                     end
@@ -3121,9 +3200,11 @@ local function parseVectorClip(text)
 end
 
 local function applyCurve(subs, sel, cfg)
-    local usedMarkers = {}
+    local usedMarkers = usedSignMarkerIDs(subs)
     local meta, styles = karaskel.collect_head(subs, false)
-    local lines = LineCollection(subs, sel)
+    local lines = LineCollection(subs, sel, function(line)
+        return Rhea.isDialogue(line) and not line.comment
+    end)
     local replacements = {}
 
     local globalClipCmds = nil
@@ -3181,7 +3262,7 @@ local function applyCurve(subs, sel, cfg)
                         local nline = Rhea.cloneLine(line)
                         local geom = string.format("\\an5\\pos(%.2f,%.2f)\\frz%.2f", px, py, rot)
                         nline.text = tagsWithGeometry(let.tags, geom) .. let.char
-                        nline.layer = line.layer + 1
+                        nline.layer = (tonumber(line.layer) or 0) + 1
                         stampEffect(nline, markerID)
                         table.insert(new_lines, nline)
                     end
@@ -3399,10 +3480,16 @@ local function fastSignsCleanText(text)
 end
 
 local function fastSignsRes(meta)
-    local xres = tonumber(meta and meta.res_x) or 1920
-    local yres = tonumber(meta and meta.res_y) or 1080
-    if xres == 0 then xres = 1920 end
-    if yres == 0 then yres = 1080 end
+    local xres = tonumber(meta and (meta.res_x or meta.PlayResX))
+    local yres = tonumber(meta and (meta.res_y or meta.PlayResY))
+    if (not xres or xres <= 0 or not yres or yres <= 0) and aegisub.video_size then
+        local ok, videoX, videoY = pcall(aegisub.video_size)
+        if ok then
+            xres = xres and xres > 0 and xres or tonumber(videoX)
+            yres = yres and yres > 0 and yres or tonumber(videoY)
+        end
+    end
+    if not xres or xres <= 0 or not yres or yres <= 0 then return nil, nil end
     return xres, yres
 end
 
@@ -3412,8 +3499,8 @@ local function fastSignsMeasure(line, style, text)
 end
 
 local function fastSignsRect(w, h)
-    local wi = math.floor((tonumber(w) or 0) + 0.5)
-    local hi = math.floor((tonumber(h) or 0) + 0.5)
+    local wi = math.max(1, math.floor((tonumber(w) or 0) + 0.5))
+    local hi = math.max(1, math.floor((tonumber(h) or 0) + 0.5))
     return string.format("m 0 0 l %d 0 l %d %d l 0 %d", wi, wi, hi, hi)
 end
 
@@ -3449,11 +3536,15 @@ local function runFastSigns(subs, sel)
     local cfg = fastSignsConfig()
     local meta, styles = karaskel.collect_head(subs, false)
     local vid_w = fastSignsRes(meta)
+    if not vid_w then showMsg("FastSigns could not determine the script or video resolution."); return end
     local clusters = {}
     local rawCandidates = {}
-    local lines = LineCollection(subs, sel, function() return true end)
+    local lines = LineCollection(subs, sel, function(line)
+        return Rhea.isDialogue(line) and not line.comment and not Rhea.readMarker(line, "FS")
+    end)
     lines:runCallback(function(_, line)
-        if line.text and line.text ~= "" then
+        if line.text and line.text ~= "" and tonumber(line.end_time) and tonumber(line.start_time)
+            and line.end_time > line.start_time then
             local clean = fastSignsCleanText(line.text)
             rawCandidates[#rawCandidates + 1] = { idx = line.number, line = line, clean = clean }
         end
@@ -3461,6 +3552,10 @@ local function runFastSigns(subs, sel)
     local candidates = FunctionalList.filter(rawCandidates, function(item)
         return item.clean ~= "" and not item.clean:match("^%s*$")
     end)
+    if #candidates == 0 then
+        showMsg("FastSigns found no eligible non-comment dialogue lines.")
+        return false
+    end
     table.sort(candidates, function(a, b)
         local as, bs = a.line.start_time or 0, b.line.start_time or 0
         local ae, be = a.line.end_time or 0, b.line.end_time or 0
@@ -3515,11 +3610,13 @@ local function runFastSigns(subs, sel)
     local additions = {}
     for _, item in ipairs(outputItems) do
         local line = item.line
+        local lineDuration = math.max(0, (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0))
+        local fadeMs = math.min(cfg.fastsign_fade_ms, math.floor(lineDuration / 2))
         local marked_effect = fastSignsEffect(line.effect, item.marker)
         local shape_x = item.center_x - item.box_w / 2
         local shape_y = item.center_y - item.box_h / 2
         local box_shape = fastSignsRect(item.box_w, item.box_h)
-        local base_layer = line.layer or 0
+        local base_layer = tonumber(line.layer) or 0
         local box = Rhea.cloneLine(line)
         local glow = Rhea.cloneLine(line)
         local text = Rhea.cloneLine(line)
@@ -3527,18 +3624,18 @@ local function runFastSigns(subs, sel)
         box.effect = marked_effect
         box.comment = false
         box.text = string.format("{\\an7\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\fscx100\\fscy100\\1c%s\\1a&H%s&\\p1}%s",
-            shape_x, shape_y, cfg.fastsign_fade_ms, cfg.fastsign_fade_ms, cfg.fastsign_box_blur, Rhea.htmlToAss(cfg.fastsign_box_color), cfg.fastsign_box_alpha, box_shape)
+            shape_x, shape_y, fadeMs, fadeMs, cfg.fastsign_box_blur, Rhea.htmlToAss(cfg.fastsign_box_color), cfg.fastsign_box_alpha, box_shape)
         glow.layer = base_layer + 1
         glow.effect = marked_effect
         glow.comment = false
         glow.text = string.format("{\\an5\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord%.2f\\shad0\\blur%.2f\\1c%s\\3c%s\\1a&HFF&\\3a&H%s&}%s",
-            item.center_x, item.center_y, cfg.fastsign_fade_ms, cfg.fastsign_fade_ms, cfg.fastsign_glow_border, cfg.fastsign_glow_blur,
+            item.center_x, item.center_y, fadeMs, fadeMs, cfg.fastsign_glow_border, cfg.fastsign_glow_blur,
             Rhea.htmlToAss(cfg.fastsign_text_color), Rhea.htmlToAss(cfg.fastsign_glow_color), cfg.fastsign_glow_alpha, item.clean)
         text.layer = base_layer + 2
         text.effect = marked_effect
         text.comment = false
         text.text = string.format("{\\an5\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\1c%s}%s",
-            item.center_x, item.center_y, cfg.fastsign_fade_ms, cfg.fastsign_fade_ms, cfg.fastsign_text_blur, Rhea.htmlToAss(cfg.fastsign_text_color), item.clean)
+            item.center_x, item.center_y, fadeMs, fadeMs, cfg.fastsign_text_blur, Rhea.htmlToAss(cfg.fastsign_text_color), item.clean)
         line.comment = true
         line.effect = marked_effect
         additions[line] = {box, glow, text}
@@ -3844,14 +3941,19 @@ local function tagopsTransformInner(token)
 end
 
 local function tagopsCollectAdjustKeysFromBlock(block, selected)
-    for _, tag in ipairs(RheaFoundation.parseTagBlock(block)) do
-        if tag.name == "t" then
-            local inner = tagopsTransformInner(tag.raw)
-            if inner then tagopsCollectAdjustKeysFromBlock(inner, selected) end
-        else
-            local key = tagopsAdjustKeyForName(tag.name)
-            if key and tostring(tag.value or ""):match(TAGOPS_NUM_VALUE_PATTERN) then
-                selected[key] = true
+    local pending, cursor = { block }, 1
+    while cursor <= #pending do
+        local current = pending[cursor]
+        cursor = cursor + 1
+        for _, tag in ipairs(RheaFoundation.parseTagBlock(current)) do
+            if tag.name == "t" then
+                local inner = tagopsTransformInner(tag.raw)
+                if inner then pending[#pending + 1] = inner end
+            else
+                local key = tagopsAdjustKeyForName(tag.name)
+                if key and tostring(tag.value or ""):match(TAGOPS_NUM_VALUE_PATTERN) then
+                    selected[key] = true
+                end
             end
         end
     end
@@ -3880,7 +3982,7 @@ local function tagopsCollectStyleAdjustKeys(line, styles, selected)
     if not style then return end
     for _, key in ipairs(TAGOPS_STYLE_ADJUST_ORDER) do
         local value = tagopsStyleDefaultValue(style, TAGOPS_STYLE_ADJUST[key])
-        if value and math.abs(value) > 1e-9 then selected[key] = true end
+        if value and math.abs(value) > RHEA_ZERO_EPSILON then selected[key] = true end
     end
 end
 
@@ -3951,37 +4053,58 @@ local function tagopsAdjustToken(token, amount, mode)
 end
 
 local function tagopsAdjustBlock(block, selected, amount, mode)
-    local function adjustTransformTags(token)
-        local tagStart = token:find("\\", 4, true)
-        if not tagStart then return token, 0 end
-        local tagEnd = token:sub(-1) == ")" and #token - 1 or #token
-        local prefix = token:sub(1, tagStart - 1)
-        local inner = token:sub(tagStart, tagEnd)
-        local suffix = token:sub(tagEnd + 1)
-        local nextInner, changed = tagopsAdjustBlock(inner, selected, amount, mode)
-        return prefix .. nextInner .. suffix, changed
+    local function frameFor(content, prefix, suffix)
+        return {
+            block = content,
+            tags = RheaFoundation.parseTagBlock(content),
+            index = 1,
+            pos = 1,
+            out = {},
+            changed = 0,
+            prefix = prefix or "",
+            suffix = suffix or "",
+        }
     end
 
-    local tags = RheaFoundation.parseTagBlock(block)
-    if #tags == 0 then return block, 0 end
-    local out, pos, changed = {}, 1, 0
-    for _, tag in ipairs(tags) do
-        out[#out + 1] = block:sub(pos, tag.startPos - 1)
-        if tagopsTagSelected(tag.name, selected) then
-            local adjusted = tagopsAdjustToken(tag.raw, amount, mode)
-            out[#out + 1] = adjusted
-            if adjusted ~= tag.raw then changed = changed + 1 end
-        elseif tag.name == "t" then
-            local adjusted, nc = adjustTransformTags(tag.raw)
-            out[#out + 1] = adjusted
-            changed = changed + nc
+    local stack = { frameFor(block) }
+    while #stack > 0 do
+        local frame = stack[#stack]
+        local tag = frame.tags[frame.index]
+        if not tag then
+            frame.out[#frame.out + 1] = frame.block:sub(frame.pos)
+            local adjusted = table.concat(frame.out)
+            local changed = frame.changed
+            table.remove(stack)
+            if #stack == 0 then return adjusted, changed end
+            local parent = stack[#stack]
+            parent.out[#parent.out + 1] = frame.prefix .. adjusted .. frame.suffix
+            parent.changed = parent.changed + changed
         else
-            out[#out + 1] = tag.raw
+            frame.out[#frame.out + 1] = frame.block:sub(frame.pos, tag.startPos - 1)
+            frame.pos = tag.endPos + 1
+            frame.index = frame.index + 1
+            if tagopsTagSelected(tag.name, selected) then
+                local adjusted = tagopsAdjustToken(tag.raw, amount, mode)
+                frame.out[#frame.out + 1] = adjusted
+                if adjusted ~= tag.raw then frame.changed = frame.changed + 1 end
+            elseif tag.name == "t" then
+                local tagStart = tag.raw:find("\\", 4, true)
+                if not tagStart then
+                    frame.out[#frame.out + 1] = tag.raw
+                else
+                    local tagEnd = tag.raw:sub(-1) == ")" and #tag.raw - 1 or #tag.raw
+                    stack[#stack + 1] = frameFor(
+                        tag.raw:sub(tagStart, tagEnd),
+                        tag.raw:sub(1, tagStart - 1),
+                        tag.raw:sub(tagEnd + 1)
+                    )
+                end
+            else
+                frame.out[#frame.out + 1] = tag.raw
+            end
         end
-        pos = tag.endPos + 1
     end
-    out[#out + 1] = block:sub(pos)
-    return table.concat(out), changed
+    return block, 0
 end
 
 local function tagopsAdjustText(text, selected, amount, mode)
@@ -4007,7 +4130,7 @@ local function tagopsInjectStyleAdjustments(text, selected, amount, mode, style)
             if base and not tagopsTextHasLeadingName(text, names) then
                 local adjusted = tagopsAdjustNumber(tostring(base), amount, mode)
                 local adjustedNumber = tonumber(adjusted)
-                if adjustedNumber and math.abs(adjustedNumber - base) > 1e-9 then
+                if adjustedNumber and math.abs(adjustedNumber - base) > RHEA_ZERO_EPSILON then
                     payload[#payload + 1] = "\\" .. spec.tag .. adjusted
                 end
             end
@@ -4405,6 +4528,10 @@ return {
 ]====],
     ["Makeup"] = [====[
 local Makeup = { version = "0.1.2" }
+local LineOps = require("kite.LineOps")
+local PyBridge = require("kite.PyBridge")
+local RHEA_NUMERIC_EPSILON = 0.0000001
+local RHEA_COMPARISON_EPSILON = 0.000001
 
 local MEMORY_FILE_NAME = "Memory Styles.txt"
 local MEMORY_HEADER = "MAKEUP_MEMORY_STYLES\t1"
@@ -4488,7 +4615,7 @@ end
 
 local function format_number(value)
     local number = tonumber(value) or 0
-    if math.abs(number) < 0.0000001 then number = 0 end
+    if math.abs(number) < RHEA_NUMERIC_EPSILON then number = 0 end
     if number == math.floor(number) then return string.format("%d", number) end
     return string.format("%.3f", number):gsub("0+$", ""):gsub("%.$", "")
 end
@@ -5183,7 +5310,7 @@ local function style_values_equal(field, left, right)
     end
     if NUMERIC_STYLE_FIELDS[field] then
         local left_number, right_number = tonumber(left), tonumber(right)
-        return left_number and right_number and math.abs(left_number - right_number) < 0.000001
+        return left_number and right_number and math.abs(left_number - right_number) < RHEA_COMPARISON_EPSILON
     end
     return tostring(left or "") == tostring(right or "")
 end

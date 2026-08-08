@@ -1,4 +1,5 @@
-local UI = { version = "1.1.1" }
+local MODULE_VERSION = "1.1.3"
+local UI = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safe_require(name)
     local ok, value = pcall(require, name)
@@ -14,7 +15,7 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.UI",
-        version = UI.version,
+        version = MODULE_VERSION,
         description = "Shared Kite dialog and settings utilities",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
@@ -47,43 +48,66 @@ local function path(value)
 end
 
 local function read_file(file_name)
-    local file = io.open(path(file_name), "rb")
+    file_name = path(file_name)
+    if type(file_name) ~= "string" or file_name == "" then return nil end
+    local file = io.open(file_name, "rb")
     if not file then return nil end
-    local data = file:read("*a")
-    file:close()
-    return data
+    local called, data = pcall(file.read, file, "*a")
+    pcall(file.close, file)
+    return called and data or nil
 end
 
 local write_counter = 0
 
+local function flush_and_close(file, flush)
+    local flush_ok, flush_result, flush_message = true, true, nil
+    if flush then
+        flush_ok, flush_result, flush_message = pcall(file.flush, file)
+        flush_ok = flush_ok and flush_result ~= nil and flush_result ~= false
+    end
+    local close_ok, close_result, close_message = pcall(file.close, file)
+    close_ok = close_ok and close_result ~= nil and close_result ~= false
+    if not flush_ok or not close_ok then
+        return false, flush_message or close_message or flush_result or close_result or "file finalization failed"
+    end
+    return true
+end
+
 local function write_file(file_name, data)
     file_name = path(file_name)
+    if type(file_name) ~= "string" or file_name == "" then return false, "file path is empty" end
     write_counter = write_counter + 1
     local temporary = file_name .. ".temporary." .. tostring(os.time()) .. "." .. tostring(write_counter)
     local file, message = io.open(temporary, "wb")
     if not file then return false, message end
-    local ok, write_message = file:write(data or "")
-    if ok then file:flush() end
-    local close_ok, close_message = file:close()
-    if not ok or close_ok == false then
+    local called, ok, write_message = pcall(file.write, file, data or "")
+    local finalized, final_message = flush_and_close(file, called and ok ~= nil and ok ~= false)
+    if not called or ok == nil or ok == false or not finalized then
         os.remove(temporary)
-        return false, write_message or close_message
+        return false, (not called and ok) or write_message or final_message
     end
-    local backup = file_name .. ".replacement-backup"
+    local backup = file_name .. ".replacement-backup." .. tostring(os.time()) .. "." .. tostring(write_counter)
     local existing = io.open(file_name, "rb")
+    local had_existing = existing ~= nil
     if existing then
         existing:close()
-        os.remove(backup)
         local moved, move_message = os.rename(file_name, backup)
         if not moved then os.remove(temporary); return false, move_message end
     end
     local moved, move_message = os.rename(temporary, file_name)
     if not moved then
-        os.rename(backup, file_name)
+        if had_existing then
+            local restored, restore_message = os.rename(backup, file_name)
+            if not restored then
+                os.remove(temporary)
+                return false, tostring(move_message or "replacement failed") .. "; backup retained at " .. backup
+                    .. ": " .. tostring(restore_message or "restore failed")
+            end
+        end
         os.remove(temporary)
         return false, move_message
     end
-    os.remove(backup)
+    if had_existing then os.remove(backup) end
     return true
 end
 
@@ -140,16 +164,23 @@ local function parse_key_value(data)
     return out
 end
 
+local function finite_number(value)
+    local number = tonumber(value)
+    if not number or number ~= number or math.abs(number) == math.huge then return nil end
+    return number
+end
+
 local function compatible(value, default)
     if default == nil then return false end
-    if type(default) == "number" then return tonumber(value) ~= nil end
+    if type(default) == "number" then return finite_number(value) ~= nil end
     return type(value) == type(default)
 end
 
 local function sanitize(defaults, incoming)
-    local out = copy(defaults or {})
+    defaults = type(defaults) == "table" and defaults or {}
+    local out = copy(defaults)
     if type(incoming) ~= "table" then return out end
-    for key, default in pairs(defaults or {}) do
+    for key, default in pairs(defaults) do
         local value = incoming[key]
         if value ~= nil then
             if type(default) == "table" and type(value) == "table" then
@@ -163,17 +194,18 @@ local function sanitize(defaults, incoming)
                         if type(sample) == "table" and type(item) == "table" then
                             sequence[#sequence + 1] = sanitize(sample, item)
                         elseif compatible(item, sample) then
-                            sequence[#sequence + 1] = type(sample) == "number" and tonumber(item) or copy(item)
+                            sequence[#sequence + 1] = type(sample) == "number" and finite_number(item) or copy(item)
                         end
                     end
-                    out[key] = #sequence > 0 and sequence or copy(default)
+                    if next(value) == nil then out[key] = {}
+                    else out[key] = #sequence > 0 and sequence or copy(default) end
                 elseif open then
                     out[key] = copy(value)
                 else
                     out[key] = sanitize(default, value)
                 end
             elseif compatible(value, default) then
-                out[key] = type(default) == "number" and tonumber(value) or value
+                out[key] = type(default) == "number" and finite_number(value) or value
             end
         end
     end
@@ -181,6 +213,7 @@ local function sanitize(defaults, incoming)
 end
 
 local function read_legacy(source)
+    if type(source) ~= "table" then return nil end
     local data = read_file(source.path)
     if not data or data == "" then return nil end
     local format = source.format or "json"
@@ -231,6 +264,7 @@ end
 
 function Store:load()
     if self.loaded then return self, true end
+    if self.load_error then return self, false, self.load_error end
     if not self.handler then self.loaded = true; return self, true end
     local current = read_file(self.file_name)
     if current and not valid_json(current) then
@@ -238,7 +272,8 @@ function Store:load()
         if valid_json(previous) then write_file(self.file_name, previous) end
     end
     local ok, found = pcall(function() return self.handler:load() end)
-    if not ok then return self, false, found end
+    if not ok then self.load_error = tostring(found); return self, false, self.load_error end
+    if type(self.handler.c) ~= "table" then self.handler.c = {} end
     self:migrateNamespace()
     local migrated = false
     if not found then
@@ -262,8 +297,10 @@ function Store:load()
 end
 
 function Store:values(section)
-    self:load()
-    local values = self.handler and self.handler.c[section] or self.memory[section]
+    local _, loaded = self:load()
+    local values
+    if loaded and self.handler and type(self.handler.c) == "table" then values = self.handler.c[section]
+    else values = self.memory[section] end
     return sanitize(self.defaults[section] or {}, values or {})
 end
 
@@ -298,11 +335,12 @@ function Store:update(section, result, allowlist)
             if type(default) == "table" then
                 values[key] = sanitize({value = default}, {value = value}).value
             else
-                values[key] = type(default) == "number" and tonumber(value) or copy(value)
+                values[key] = type(default) == "number" and finite_number(value) or copy(value)
             end
         end
     end
-    if self.handler then self.handler.c[section] = values else self.memory[section] = copy(values) end
+    if not self.load_error and self.handler and type(self.handler.c) == "table" then self.handler.c[section] = values
+    else self.memory[section] = copy(values) end
     return copy(values)
 end
 
@@ -310,18 +348,23 @@ function Store:reset(section)
     self:load()
     if section ~= nil then
         local values = copy(self.defaults[section] or {})
-        if self.handler then self.handler.c[section] = values else self.memory[section] = values end
+        if not self.load_error and self.handler and type(self.handler.c) == "table" then self.handler.c[section] = values
+        else self.memory[section] = values end
         return values
     end
     for name, defaults in pairs(self.defaults) do
         local values = copy(defaults)
-        if self.handler then self.handler.c[name] = values else self.memory[name] = values end
+        if not self.load_error and self.handler and type(self.handler.c) == "table" then self.handler.c[name] = values
+        else self.memory[name] = values end
     end
     return copy(self.defaults)
 end
 
 function Store:write()
+    if self.handler_error then return false, self.handler_error end
+    if self.load_error then return false, self.load_error end
     if not self.handler then return true end
+    if type(self.handler.c) ~= "table" then return false, "configuration handler is not loaded" end
     self.handler.c.__version = self.version
     local previous = read_file(self.file_name)
     if valid_json(previous) then write_file(self.file_name .. ".last-good", previous) end
@@ -338,25 +381,29 @@ end
 
 function UI.settings(namespace, version, defaults, legacy_sources, legacy_namespaces)
     assert(type(namespace) == "string" and namespace ~= "", "namespace required")
-    defaults = copy(defaults or {})
+    defaults = type(defaults) == "table" and copy(defaults) or {}
     local handler
+    local handler_error
     local file_name = path("?user/config/kite.settings.json")
     if ConfigHandler then
         local payload = copy(defaults)
         payload.__version = version
-        if type(ConfigHandler.getView) == "function" then
-            handler = assert(ConfigHandler:getView(file_name, {namespace}, payload))
-        else
-            handler = ConfigHandler(file_name, payload, {namespace}, true)
-        end
+        local ok, result = pcall(function()
+            if type(ConfigHandler.getView) == "function" then
+                return assert(ConfigHandler:getView(file_name, {namespace}, payload))
+            end
+            return ConfigHandler(file_name, payload, {namespace}, true)
+        end)
+        if ok then handler = result else handler_error = tostring(result) end
     end
     return setmetatable({
         namespace = namespace,
         version = tostring(version or "0.0.0"),
         defaults = defaults,
-        legacy_sources = legacy_sources or {},
-        legacy_namespaces = legacy_namespaces or {},
+        legacy_sources = type(legacy_sources) == "table" and legacy_sources or {},
+        legacy_namespaces = type(legacy_namespaces) == "table" and legacy_namespaces or {},
         handler = handler,
+        handler_error = handler_error,
         file_name = file_name,
         loaded = false,
         memory = copy(defaults),
@@ -370,7 +417,7 @@ local function dialog_defaults(interface, aliases)
     local defaults = {}
     for section, controls in pairs(interface or {}) do
         local storage = aliases and aliases[section] or section
-        defaults[storage] = {}
+        defaults[storage] = defaults[storage] or {}
         for key, control in pairs(controls or {}) do
             if type(control) == "table" and control.config then
                 local name = control.name or key
@@ -490,5 +537,8 @@ UI.sanitize = sanitize
 UI.parseLuaTable = parse_lua_table
 UI.parseKeyValue = parse_key_value
 
-if depctrl then return depctrl:register(UI) end
+if depctrl then
+    UI.version = depctrl
+    return depctrl:register(UI)
+end
 return UI

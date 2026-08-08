@@ -6,24 +6,24 @@ A collection of Aegisub automation scripts for timing, quality control, typesett
 
 | Script | Version | Menu root | Interface languages |
 | --- | --- | --- | --- |
-| AddTexture | 2.0.8 | `AddTexture` | English |
-| Alecto KFX | 3.2.0 | `Alecto KFX` | Spanish |
-| AutoBlur | 2.0.7 | `AutoBlur` | English |
-| AutoMask | 2.4.3 | `AutoMask` | English |
-| Chrono Suite | 1.3.0 | `Chrono Suite` | English, Spanish, Portuguese |
-| Cliptomaniac | 0.3.0 | `Cliptomaniac` | English, Spanish |
-| Field Group Manager | 1.1.0 | `Field Group Manager` | English |
-| Gradient Row | 1.8.1 | `Gradient Row` | English |
-| Moka Motion | 3.4.0 | `Moka Motion` | English |
-| Obake | 0.3.0 | `Obake` | English, Spanish |
-| PNG2ASS | 1.4.1 | `PNG2ASS` | English |
-| Pointiac | 1.1.0 | `Pointiac` | English |
-| Rhea Signs | 1.7.0 | `Rhea Signs` | English, Spanish, Portuguese |
-| Selesub | 2.1.1 | `Selesub` | English |
-| Snapshoter | 1.6.0 | `Snapshoter` | English |
-| Wave2json | 1.3.0 | `Wave2json` | No GUI |
-| Zagreo Glyphs | 1.1.0 | `Zagreo Glyphs` | English |
-| Zheus Colormanager | 4.5.0 | `Zheus Colormanager` | Spanish |
+| AddTexture | 2.0.11 | `AddTexture` | English |
+| Alecto KFX | 3.2.3 | `Alecto KFX` | Spanish |
+| AutoBlur | 2.0.9 | `AutoBlur` | English |
+| AutoMask | 2.4.6 | `AutoMask` | English |
+| Chrono Suite | 1.3.2 | `Chrono Suite` | English, Spanish, Portuguese |
+| Cliptomaniac | 0.3.3 | `Cliptomaniac` | English, Spanish |
+| Field Group Manager | 1.1.3 | `Field Group Manager` | English |
+| Gradient Row | 1.8.3 | `Gradient Row` | English |
+| Moka Motion | 3.4.2 | `Moka Motion` | English |
+| Obake | 0.3.4 | `Obake` | English, Spanish |
+| PNG2ASS | 1.4.3 | `PNG2ASS` | English |
+| Pointiac | 1.1.2 | `Pointiac` | English |
+| Rhea Signs | 1.7.3 | `Rhea Signs` | English, Spanish, Portuguese |
+| Selesub | 2.1.3 | `Selesub` | English |
+| Snapshoter | 1.6.3 | `Snapshoter` | English |
+| Wave2json | 1.3.2 | `Wave2json` | No GUI |
+| Zagreo Glyphs | 1.1.2 | `Zagreo Glyphs` | English |
+| Zheus Colormanager | 4.5.2 | `Zheus Colormanager` | Spanish |
 
 ## DependencyControl
 

@@ -1,7 +1,7 @@
 script_name = "Alecto KFX"
 script_description = "Compila karaokes y textos desde guias intro/active/outro, con re-proyeccion espacial y temporal"
 script_author = "Kiterow"
-script_version = "3.2.0"
+script_version = "3.2.3"
 script_namespace = "kite.AlectoKFX"
 
 local karaskel_load_error
@@ -38,7 +38,7 @@ if ok_depctrl and DependencyControl then
         {
             {
                 "kite.LineOps",
-                version = "1.5.0",
+                version = "1.5.2",
                 url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
                 feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
             },
@@ -57,7 +57,7 @@ if not LineOps then
     if ok then LineOps = value end
 end
 
-local CONFIG = {
+local CONFIG_DEFAULT = {
     lead_ms = 300,
     stagger_ms = 40,
     fade_ms = 200,
@@ -70,7 +70,13 @@ local CONFIG = {
     fx_marker = "alecto-fx",
     base_len_ms = 3000,
     base_gap_ms = 100,
+    base_offset_ms = 500,
+    base_block_gap_ms = 400,
+    fallback_space_width = 6,
+    fallback_char_width = 8,
 }
+local CONFIG = {}
+for key, value in pairs(CONFIG_DEFAULT) do CONFIG[key] = value end
 
 local Core = {}
 local floor, max, min, abs = math.floor, math.max, math.min, math.abs
@@ -301,9 +307,27 @@ local function parse_nums(a)
 end
 Core.parse_nums = parse_nums
 
+local function parse_strict_numbers(a)
+    a = trim(a)
+    if a == "" then return nil end
+    local nums, cursor = {}, 1
+    while true do
+        local comma = a:find(",", cursor, true)
+        local piece = trim(a:sub(cursor, comma and comma - 1 or #a))
+        if not piece:match("^[+-]?%d*%.?%d+$") then return nil end
+        local value = tonumber(piece)
+        if not value or value ~= value or value == math.huge or value == -math.huge then return nil end
+        nums[#nums + 1] = value
+        if not comma then break end
+        cursor = comma + 1
+        if cursor > #a then return nil end
+    end
+    return nums
+end
+
 local function parse_pair(a)
-    local n = parse_nums(a)
-    if #n < 2 then return nil end
+    local n = parse_strict_numbers(a)
+    if not n or #n ~= 2 then return nil end
     return n[1], n[2]
 end
 Core.parse_pair = parse_pair
@@ -326,8 +350,8 @@ end
 Core.parse_t_args = parse_t_args
 
 local function parse_move_args(a)
-    local n = parse_nums(a)
-    if #n < 4 then return nil end
+    local n = parse_strict_numbers(a)
+    if not n or (#n ~= 4 and #n ~= 6) then return nil end
     return { x1 = n[1], y1 = n[2], x2 = n[3], y2 = n[4], t1 = n[5], t2 = n[6] }
 end
 Core.parse_move_args = parse_move_args
@@ -432,7 +456,7 @@ local VALID_INHERIT = { static = true, none = true }
 
 local function parse_nonneg(v)
     local n = tonumber(v)
-    if not n then return nil end
+    if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
     return max(0, n)
 end
 
@@ -567,7 +591,6 @@ function Core.parse_guide(effect, layer, text, geom, actor)
         org = nil,
         header = {},
         has_alpha_anim = false,
-        has_any_alpha = false,
         is_drawing = false,
         warnings = {},
     }
@@ -586,7 +609,6 @@ function Core.parse_guide(effect, layer, text, geom, actor)
                 end
             end
             if name == "p" and (tonumber(tag.val) or 0) > 0 then guide.is_drawing = true end
-            if tag_has_alpha(tag) then guide.has_any_alpha = true end
             if name == "fad" or name == "fade" or (name == "t" and tag_has_alpha(tag)) then
                 guide.has_alpha_anim = true
             end
@@ -843,22 +865,21 @@ function Core.render_event(guide, ctx)
     local inherit = tostring(ctx.inherit_tags or "")
     local head = "\\an5" .. anchor .. org .. inherit .. table.concat(transform_list(statics))
 
-    local fadein_init, fadetags = "", ""
-    if ctx.base_fade and not guide.has_any_alpha and not ctx.protect_alpha and not guide.nofade then
+    local base_fade = ""
+    if ctx.base_fade and not guide.has_alpha_anim and not guide.nofade then
         local bf = ctx.base_fade
         local t1 = clamp(round(bf.t1 or 0), 0, p_dur)
         local t2 = clamp(round(bf.t2 or p_dur), 0, p_dur)
         if t2 <= t1 then t2 = min(p_dur, t1 + 1) end
         if t2 <= t1 then t1 = max(0, t2 - 1) end
         if bf.dir == "in" then
-            fadein_init = "\\alpha&HFF&"
-            fadetags = "\\t(" .. t1 .. "," .. t2 .. ",\\alpha&H00&)"
+            base_fade = string.format("\\fade(255,0,0,%d,%d,%d,%d)", t1, t2, p_dur, p_dur)
         else
-            fadetags = "\\t(" .. t1 .. "," .. t2 .. ",\\alpha&HFF&)"
+            base_fade = string.format("\\fade(0,0,255,0,0,%d,%d)", t1, t2)
         end
     end
 
-    head = head .. fadein_init .. table.concat(transform_list(dynamics)) .. fadetags
+    head = head .. table.concat(transform_list(dynamics)) .. base_fade
 
     local body
     local tokens = ctx.tokens or Core.ass_tokens(ctx.text or "")
@@ -910,6 +931,35 @@ local function show_report(title, text)
     else
         show_message((title or "Informe") .. "\n" .. text)
     end
+end
+
+local HELP_TEXT = table.concat({
+    "COMANDOS DEL MENU",
+    "",
+    "Aplicar: compila las guias intro/active/outro sobre los targets seleccionados.",
+    "Generar lineas base: crea guias editables desde los targets.",
+    "Validar seleccion: diagnostica guias, targets, huecos y cantidad de eventos sin modificar.",
+    "Limpiar FX seleccionados: elimina el FX asociado y restaura los targets originales.",
+    "Configurar: cambia los valores predeterminados de la sesion.",
+    "Ayuda y comandos: muestra este resumen.",
+    "",
+    "OPCIONES DEL CAMPO ACTOR",
+    "",
+    "Unidades: char | grapheme | syl | syllable | word | line",
+    "Control: nobase | nofade | nostagger | base",
+    "Tiempos (ms): lead= | tail= | fade= | stagger= | gap= | respiro=",
+    "Orden: order=ltr|rtl|center|edges (tambien ltr, rtl, reverse, center o edges)",
+    "Agrupacion: group=nombre",
+    "Canal de huecos: channel=nombre (tambien akfx:channel=nombre)",
+    "Herencia: inherit=static|none (tambien akfx:inherit=static|none)",
+    "Alias de grupo: akfx:group=nombre",
+    "",
+    "Las opciones de la guia tienen prioridad sobre las del target; las del target, sobre Configurar.",
+    "Ejemplo: char fade=240 stagger=50 order=edges group=borde inherit=none",
+}, "\n")
+
+local function show_help()
+    show_report(script_name .. " - ayuda y comandos", HELP_TEXT)
 end
 
 local function copy_line(line)
@@ -1104,18 +1154,6 @@ local function allocate_source_uid(line, index, used)
     return uid
 end
 
-local function style_has_transparency(style)
-    if type(style) ~= "table" then return false end
-    for i = 1, 4 do
-        local hex = tostring(style["color" .. i] or ""):match("[Hh](%x+)")
-        if hex and #hex >= 8 then
-            local a = tonumber(hex:sub(-8, -7), 16) or 0
-            if a ~= 0 then return true end
-        end
-    end
-    return false
-end
-
 local INHERIT_EXCLUDE = {
     pos = true, move = true, org = true, an = true, a = true,
     k = true, K = true, kf = true, ko = true, kt = true,
@@ -1184,7 +1222,7 @@ local function char_boxes(styleref, text, total_width)
                 if ok and tonumber(ww) and ww >= 0 then w = tonumber(ww) end
             end
             if w <= 0 then
-                if tok.whitespace then w = 6 else w = max(6, #sample * 8) end
+                if tok.whitespace then w = CONFIG.fallback_space_width else w = CONFIG.fallback_char_width end
             end
         end
         widths[i] = w
@@ -1386,7 +1424,7 @@ local function build_units(line, syls, unit, styleref)
     return out
 end
 
-local function scan_gaps(subs, line)
+local function scan_gaps(subs, line, source_index)
     local gp, gn = math.huge, math.huge
     for i = 1, #subs do
         local s = subs[i]
@@ -1395,7 +1433,7 @@ local function scan_gaps(subs, line)
             and not line_phase(s)
             and same_channel(s, line)
             and ((not s.comment) or trim(s.effect or ""):lower() == "karaoke" or has_kara(s.text))
-            and not (s.start_time == line.start_time and s.end_time == line.end_time and s.text == line.text) then
+            and i ~= source_index then
             if s.end_time <= line.start_time then
                 gp = min(gp, line.start_time - s.end_time)
             elseif s.start_time >= line.end_time then
@@ -1440,15 +1478,6 @@ local function neutral_guide(phase, layer)
         left = 0, right = 1, top = 0, bottom = 1,
         width = 1, height = 1, cx = 0, cy = 0, dur = 1000,
     }, "")
-end
-
-local function target_has_inline_alpha(text)
-    for _, run in ipairs(split_runs(text)) do
-        for _, tag in ipairs(parse_tags(run.tags or "")) do
-            if tag_has_alpha(tag) then return true end
-        end
-    end
-    return false
 end
 
 local function resolve_ms(guide, target_flags, name, fallback)
@@ -1522,8 +1551,6 @@ local function generate_for_line(line, guides, gp, gn, control)
     end
 
     local key = line._alecto_source_key or source_key(line)
-    local protect_alpha = style_has_transparency(line.styleref) or target_has_inline_alpha(line.text)
-
     local function append_event(guide, phase, start_ms, end_ms, ctx)
         if end_ms <= start_ms then return end
         check_generation_cancel(control)
@@ -1578,7 +1605,6 @@ local function generate_for_line(line, guides, gp, gn, control)
                 tokens = Core.ass_tokens(u.text),
                 is_drawing = false,
                 inherit_tags = inherit_tags,
-                protect_alpha = protect_alpha,
             }
 
             if is_kara then
@@ -1972,6 +1998,10 @@ end
 
 local function apply(subs, sel)
     sel = sel or {}
+    if not LineOps or type(LineOps.transaction) ~= "function" then
+        show_message("Falta kite.LineOps 1.5.0 o superior; no se puede aplicar de forma transaccional.")
+        return
+    end
     if #sel == 0 then
         show_message("Selecciona las guias intro/active/outro y/o las lineas objetivo.")
         return
@@ -2013,7 +2043,7 @@ local function apply(subs, sel)
         if not src then
             errors[#errors + 1] = "Linea " .. idx .. ": fallo el preprocesado: " .. tostring(err)
         else
-            local gp, gn = scan_gaps(subs, src)
+            local gp, gn = scan_gaps(subs, src, idx)
             local control = {
                 max_events = CONFIG.max_generated_events - total_events,
                 is_cancelled = progress_is_cancelled,
@@ -2051,30 +2081,30 @@ local function apply(subs, sel)
     end
 
     local cleanup = collect_cleanup_indices(subs, plans)
-    for _, idx in ipairs(cleanup) do
-        subs.delete(idx)
-        shift_indices_after_delete(plans, guide_idx, idx)
-    end
-
-    for _, idx in ipairs(guide_idx) do
-        local g = subs[idx]
-        if g and g.class == "dialogue" and not g.comment then
-            g.comment = true
-            subs[idx] = g
+    LineOps.transaction(subs, script_name .. " (aplicar)", function()
+        for _, idx in ipairs(cleanup) do
+            subs.delete(idx)
+            shift_indices_after_delete(plans, guide_idx, idx)
         end
-    end
 
-    table.sort(plans, function(a, b) return a.index > b.index end)
-    for _, plan in ipairs(plans) do
-        local src = subs[plan.index]
-        src.comment = true
-        src.extra = clone_extra(src.extra)
-        src.extra[SOURCE_EXTRA_KEY] = encode_source_record(plan.uid, plan.original_comment)
-        subs[plan.index] = src
-        for i = #plan.lines, 1, -1 do subs.insert(plan.index + 1, plan.lines[i]) end
-    end
+        for _, idx in ipairs(guide_idx) do
+            local g = subs[idx]
+            if g and g.class == "dialogue" and not g.comment then
+                g.comment = true
+                subs[idx] = g
+            end
+        end
 
-    if aegisub and aegisub.set_undo_point then aegisub.set_undo_point(script_name .. " (aplicar)") end
+        table.sort(plans, function(a, b) return a.index > b.index end)
+        for _, plan in ipairs(plans) do
+            local src = subs[plan.index]
+            src.comment = true
+            src.extra = clone_extra(src.extra)
+            src.extra[SOURCE_EXTRA_KEY] = encode_source_record(plan.uid, plan.original_comment)
+            subs[plan.index] = src
+            for i = #plan.lines, 1, -1 do subs.insert(plan.index + 1, plan.lines[i]) end
+        end
+    end)
 
     local report = {
         "Targets compilados: " .. #plans,
@@ -2089,6 +2119,10 @@ end
 
 local function remove_generated(subs, sel)
     sel = sel or {}
+    if not LineOps or type(LineOps.transaction) ~= "function" then
+        show_message("Falta kite.LineOps 1.5.0 o superior; no se puede limpiar de forma transaccional.")
+        return
+    end
     if #sel == 0 then show_message("Selecciona targets originales o eventos Alecto generados."); return end
     local _, target_idx, selection_errors = resolve_selection(subs, sel)
     if #selection_errors > 0 then
@@ -2111,25 +2145,30 @@ local function remove_generated(subs, sel)
     end
     local cleanup = collect_cleanup_indices(subs, plans)
     if #cleanup == 0 then show_message("No hay eventos Alecto asociados a la seleccion."); return end
-    for _, idx in ipairs(cleanup) do
-        subs.delete(idx)
-        shift_indices_after_delete(plans, {}, idx)
-    end
-    for _, plan in ipairs(plans) do
-        local l = subs[plan.index]
-        if l and l.class == "dialogue" then
-            l.comment = plan.original_comment and true or false
-            l.extra = clone_extra(l.extra)
-            l.extra[SOURCE_EXTRA_KEY] = nil
-            subs[plan.index] = l
+    LineOps.transaction(subs, script_name .. " (limpiar seleccion)", function()
+        for _, idx in ipairs(cleanup) do
+            subs.delete(idx)
+            shift_indices_after_delete(plans, {}, idx)
         end
-    end
-    if aegisub and aegisub.set_undo_point then aegisub.set_undo_point(script_name .. " (limpiar seleccion)") end
+        for _, plan in ipairs(plans) do
+            local l = subs[plan.index]
+            if l and l.class == "dialogue" then
+                l.comment = plan.original_comment and true or false
+                l.extra = clone_extra(l.extra)
+                l.extra[SOURCE_EXTRA_KEY] = nil
+                subs[plan.index] = l
+            end
+        end
+    end)
     show_message("Eventos eliminados: " .. #cleanup .. ". Targets restaurados: " .. #plans .. ".")
 end
 
 local function generate_bases(subs, sel)
     sel = sel or {}
+    if not LineOps or type(LineOps.transaction) ~= "function" then
+        show_message("Falta kite.LineOps 1.5.0 o superior; no se pueden insertar bases de forma transaccional.")
+        return
+    end
     if #sel == 0 then show_message("Selecciona una o mas lineas target."); return end
     local meta, styles, head_err = collect_head_checked(subs)
     if not meta then show_message(head_err); return end
@@ -2143,13 +2182,19 @@ local function generate_bases(subs, sel)
     local last_end = 0
     for i = 1, #subs do
         local l = subs[i]
-        if l.class == "dialogue" and not l.comment and not is_fx_line(l) then
+        if l.class == "dialogue" and (not l.comment or line_phase(l)) and not is_fx_line(l) then
             last_end = max(last_end, tonumber(l.end_time) or 0)
         end
     end
 
-    table.sort(targets, function(a, b) return a > b end)
-    local t0, plans, errors = last_end + 500, {}, {}
+    table.sort(targets, function(a, b)
+        local left, right = subs[a], subs[b]
+        local left_start = tonumber(left and left.start_time) or 0
+        local right_start = tonumber(right and right.start_time) or 0
+        if left_start == right_start then return a < b end
+        return left_start < right_start
+    end)
+    local t0, plans, errors = last_end + CONFIG.base_offset_ms, {}, {}
     for ti, idx in ipairs(targets) do
         if progress_cancelled(ti - 1, #targets, "preparando bases") then
             show_message("Operacion cancelada sin cambios.")
@@ -2189,7 +2234,7 @@ local function generate_bases(subs, sel)
                     new_lines[#new_lines + 1] = g
                 end
                 plans[#plans + 1] = { index = idx, lines = new_lines }
-                t0 = t0 + #phases * (CONFIG.base_len_ms + CONFIG.base_gap_ms) + 400
+                t0 = t0 + #phases * (CONFIG.base_len_ms + CONFIG.base_gap_ms) + CONFIG.base_block_gap_ms
             else
                 errors[#errors + 1] = "Linea " .. idx .. ": texto vacio tras quitar tags."
             end
@@ -2203,10 +2248,14 @@ local function generate_bases(subs, sel)
         show_message("Operacion cancelada sin cambios.")
         return
     end
-    for _, plan in ipairs(plans) do
-        for i = #plan.lines, 1, -1 do subs.insert(plan.index + 1, plan.lines[i]) end
+    table.sort(plans, function(a, b) return a.index > b.index end)
+    if #plans > 0 then
+        LineOps.transaction(subs, script_name .. " (bases)", function()
+            for _, plan in ipairs(plans) do
+                for i = #plan.lines, 1, -1 do subs.insert(plan.index + 1, plan.lines[i]) end
+            end
+        end)
     end
-    if #plans > 0 and aegisub and aegisub.set_undo_point then aegisub.set_undo_point(script_name .. " (bases)") end
     show_message("Bloques de guias creados: " .. #plans .. ".")
 end
 
@@ -2325,7 +2374,7 @@ local function validate_selection(subs, sel)
             if tostring(src.text):lower():find("\\kt%s*%d") then
                 report[#report + 1] = "  AVISO: contiene \\kt; Alecto usa su parser alternativo porque karaskel no lo procesa de forma nativa."
             end
-            local gp, gn = scan_gaps(subs, src)
+            local gp, gn = scan_gaps(subs, src, idx)
             report[#report + 1] = "  Hueco previo=" .. (gp == math.huge and "libre" or (gp .. "ms"))
                 .. " | siguiente=" .. (gn == math.huge and "libre" or (gn .. "ms"))
             local control = {
@@ -2357,18 +2406,6 @@ local function validate_selection(subs, sel)
     show_report("Alecto KFX - diagnostico", table.concat(report, "\n"))
 end
 
-local CONFIG_DEFAULT = {
-    lead_ms = 300,
-    stagger_ms = 40,
-    fade_ms = 200,
-    tail_ms = 200,
-    respiro_ms = 20,
-    min_dur_ms = 10,
-    max_generated_events = 20000,
-    inherit_target_tags = true,
-    default_order = "ltr",
-}
-
 local function restore_default_config()
     for k, v in pairs(CONFIG_DEFAULT) do CONFIG[k] = v end
 end
@@ -2399,8 +2436,9 @@ local function configure()
         { class = "label", label = "Los valores del Actor (fade=, stagger=, etc.) tienen prioridad sobre esta configuracion.", x = 0, y = 9, width = 2 },
     }
     local button, result = aegisub.dialog.display(dialog,
-        { "Guardar", "Restaurar", "Cancelar" }, { ok = "Guardar", cancel = "Cancelar" })
+        { "Guardar", "Ayuda", "Restaurar", "Cancelar" }, { ok = "Guardar", cancel = "Cancelar" })
     if not button or button == "Cancelar" then return end
+    if button == "Ayuda" then show_help(); return end
     if button == "Restaurar" then
         restore_default_config()
         show_message("Configuracion restaurada para esta sesion.")
@@ -2425,6 +2463,7 @@ if aegisub and aegisub.register_macro then
         { script_name .. "/Validar seleccion", "Diagnostica guias, targets, tags, huecos y numero de eventos sin modificar", validate_selection },
         { script_name .. "/Limpiar FX seleccionados", "Elimina solo el FX asociado a los targets seleccionados y restaura los originales", remove_generated },
         { script_name .. "/Configurar", "Ajusta valores globales para la sesion actual", configure },
+        { script_name .. "/Ayuda y comandos", "Muestra los comandos del menu y todas las opciones disponibles en Actor", show_help },
     }
     for _, e in ipairs(entries) do
         if depctrl and depctrl.registerMacro then

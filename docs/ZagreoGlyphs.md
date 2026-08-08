@@ -1,4 +1,4 @@
-# Zagreo Glyphs 1.1.0
+# Zagreo Glyphs 1.1.2
 
 Zagreo Glyphs generates vector-path animation moments from ASS text or drawings.
 

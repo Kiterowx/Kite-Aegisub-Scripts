@@ -1,7 +1,7 @@
 script_name        = "Chrono Suite"
 script_description = "Suite for subtitle timing, QC, cleanup, and workflow toolkit"
 script_author      = "Kiterow"
-script_version     = "1.3.0"
+script_version     = "1.3.2"
 script_namespace   = "kite.ChronoSuite"
 
 include("karaskel.lua")
@@ -99,19 +99,19 @@ if DependencyControl then
               url  = "https://github.com/TypesettingTools/Functional",
               feed = "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json" },
             { "aegisub.re" },
-            { "kite.UI", version = "1.1.0",
+            { "kite.UI", version = "1.1.3",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Timing", version = "1.2.0",
+            { "kite.Timing", version = "1.2.2",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.PyBridge", version = "1.4.0",
+            { "kite.PyBridge", version = "1.4.4",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Media", version = "1.2.0",
+            { "kite.Media", version = "1.2.2",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.LineOps", version = "1.5.0",
+            { "kite.LineOps", version = "1.5.2",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
@@ -1042,7 +1042,7 @@ local UI = {
             ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Full italic", ["DOUBLE-SPACE"]="Double space", ["EDGE-SPACE"]="Edge space",
             ["Toggle \\an8"]="Toggle \\an8", ["Toggle Italics"]="Toggle italics", ["Uppercase"]="Uppercase", ["Lowercase"]="Lowercase",
             ["Title Case"]="Title case", ["Sentence Case"]="Sentence case", ["Capitalize First"]="Capitalize first", ["Lowercase First"]="Lowercase first",
-            ["Normalize Ellipsis"]="Normalize ellipsis", ["Add Ellipsis"]="Add ellipsis", ["Erase Leading Ellipsis"]="Erase leading ellipsis",
+            ["Normalize Ellipsis"]="Normalize ellipsis", ["Add Ellipsis"]="Add ellipsis", ["Erase Leading Ellipsis"]="Erase leading ellipsis", ["Erase Inner Ellipsis"]="Erase inner ellipsis",
             ["Ellipsis to Comma"]="Ellipsis to comma", ["Ellipsis to Period"]="Ellipsis to period",
             ["Unify Quotes"]="Unify quotes", ["Normalize Dashes"]="Normalize dashes", ["Trim Trailing Spaces"]="Trim trailing spaces",
             ["Remove Duplicate Letters"]="Remove duplicate letters", ["Stutter Manager"]="Stutter manager", ["Extract Tags"]="Extract tags",
@@ -1082,7 +1082,7 @@ local UI = {
             ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda en cursiva", ["DOUBLE-SPACE"]="Doble espacio", ["EDGE-SPACE"]="Espacio al borde",
             ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar cursiva", ["Uppercase"]="Mayúsculas", ["Lowercase"]="Minúsculas",
             ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo oración", ["Capitalize First"]="Primera mayúscula", ["Lowercase First"]="Primera minúscula",
-            ["Normalize Ellipsis"]="Normalizar elipsis", ["Add Ellipsis"]="Añadir elipsis", ["Erase Leading Ellipsis"]="Borrar elipsis inicial",
+            ["Normalize Ellipsis"]="Normalizar elipsis", ["Add Ellipsis"]="Añadir elipsis", ["Erase Leading Ellipsis"]="Borrar elipsis inicial", ["Erase Inner Ellipsis"]="Borrar elipsis interna",
             ["Ellipsis to Comma"]="Elipsis a coma", ["Ellipsis to Period"]="Elipsis a punto",
             ["Unify Quotes"]="Unificar comillas", ["Normalize Dashes"]="Normalizar guiones", ["Trim Trailing Spaces"]="Quitar espacios finales",
             ["Remove Duplicate Letters"]="Quitar letras repetidas", ["Stutter Manager"]="Gestor de tartamudeo", ["Extract Tags"]="Extraer tags",
@@ -1122,7 +1122,7 @@ local UI = {
             ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda em itálico", ["DOUBLE-SPACE"]="Espaço duplo", ["EDGE-SPACE"]="Espaço nas bordas",
             ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar itálico", ["Uppercase"]="Maiúsculas", ["Lowercase"]="Minúsculas",
             ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo frase", ["Capitalize First"]="Primeira maiúscula", ["Lowercase First"]="Primeira minúscula",
-            ["Normalize Ellipsis"]="Normalizar reticências", ["Add Ellipsis"]="Adicionar reticências", ["Erase Leading Ellipsis"]="Apagar reticências iniciais",
+            ["Normalize Ellipsis"]="Normalizar reticências", ["Add Ellipsis"]="Adicionar reticências", ["Erase Leading Ellipsis"]="Apagar reticências iniciais", ["Erase Inner Ellipsis"]="Apagar reticências internas",
             ["Ellipsis to Comma"]="Reticências para vírgula", ["Ellipsis to Period"]="Reticências para ponto",
             ["Unify Quotes"]="Unificar aspas", ["Normalize Dashes"]="Normalizar travessões", ["Trim Trailing Spaces"]="Remover espaços finais",
             ["Remove Duplicate Letters"]="Remover letras repetidas", ["Stutter Manager"]="Gestor de gaguejo", ["Extract Tags"]="Extrair tags",
@@ -1371,6 +1371,8 @@ section during execution.
     - Add Ellipsis: appends an ellipsis at the end of the line.
     - Erase Leading Ellipsis: removes an ellipsis at the start of the
       line.
+    - Erase Inner Ellipsis: removes ellipsis inside the sentence while
+      preserving a final ellipsis.
     - Ellipsis to Comma: replaces final ellipsis with a comma.
     - Ellipsis to Period: replaces final ellipsis with a period.
     - Unify Quotes: standardizes quotation marks.
@@ -1812,6 +1814,8 @@ la sección durante la ejecución.
     - Normalize Ellipsis: unifica los puntos suspensivos.
     - Add Ellipsis: añade puntos suspensivos al final de la línea.
     - Erase Leading Ellipsis: elimina puntos suspensivos iniciales.
+    - Erase Inner Ellipsis: elimina puntos suspensivos internos y
+      conserva los finales.
     - Ellipsis to Comma: sustituye puntos suspensivos finales por coma.
     - Ellipsis to Period: sustituye puntos suspensivos finales por
       punto.
@@ -2269,6 +2273,8 @@ seção durante a execução.
     - Normalize Ellipsis: unifica as reticências.
     - Add Ellipsis: adiciona reticências no final da linha.
     - Erase Leading Ellipsis: remove reticências iniciais.
+    - Erase Inner Ellipsis: remove reticências internas e conserva as
+      finais.
     - Ellipsis to Comma: substitui reticências finais por vírgula.
     - Ellipsis to Period: substitui reticências finais por ponto.
     - Unify Quotes: unifica as aspas.
@@ -2726,8 +2732,13 @@ local function cloneLine(l)
 end
 
 local function clockToMs(h, m, s, frac)
-    local base = (tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s)) * 1000
-    if frac and frac ~= "" then return base + tonumber((frac .. "000"):sub(1, 3)) end
+    h, m, s = tonumber(h), tonumber(m), tonumber(s)
+    if not h or not m or not s or h < 0 or m < 0 or m >= 60 or s < 0 or s >= 60 then return nil end
+    local base = (h * 3600 + m * 60 + s) * 1000
+    if frac and frac ~= "" then
+        if not tostring(frac):match("^%d+$") then return nil end
+        return base + tonumber((frac .. "000"):sub(1, 3))
+    end
     return base
 end
 
@@ -2949,7 +2960,7 @@ local function mutateTextSections(line, sectionMutator)
     return false
 end
 
-local function isDialogue(l) return type(l) == "table" and (l.class == nil or l.class == "dialogue") end
+local function isDialogue(l) return type(l) == "table" and l.class == "dialogue" end
 local function isEditableDialogue(l) return isDialogue(l) and not l.comment end
 local function isVectorDrawing(line)
     local text = normalizeString(line and line.text or "")
@@ -2958,26 +2969,54 @@ local function isVectorDrawing(line)
 end
 
 local function collectEditableSelection(subs, sel)
-    local out = {}
-    for _, i in ipairs(sel) do if isEditableDialogue(subs[i]) then out[#out+1] = i end end
+    if Kite.LineOps and Kite.LineOps.normalizeIndices then
+        return Kite.LineOps.normalizeIndices(subs, sel, isEditableDialogue)
+    end
+    local out, seen = {}, {}
+    for _, i in ipairs(sel or {}) do
+        i = tonumber(i)
+        if i and i == math.floor(i) and i >= 1 and i <= #subs and not seen[i] and isEditableDialogue(subs[i]) then
+            seen[i] = true; out[#out+1] = i
+        end
+    end
+    table.sort(out)
     return out
 end
 local function collectEditableTextSelection(subs, sel)
-    local out = {}
-    for _, i in ipairs(sel) do
-        local l = subs[i]
-        if isEditableDialogue(l) and not isVectorDrawing(l) then out[#out+1] = i end
+    if Kite.LineOps and Kite.LineOps.normalizeIndices then
+        return Kite.LineOps.normalizeIndices(subs, sel, function(line)
+            return isEditableDialogue(line) and not isVectorDrawing(line)
+        end)
     end
+    local out, seen = {}, {}
+    for _, i in ipairs(sel or {}) do
+        i = tonumber(i)
+        local l = i and i == math.floor(i) and i >= 1 and i <= #subs and subs[i] or nil
+        if l and not seen[i] and isEditableDialogue(l) and not isVectorDrawing(l) then seen[i] = true; out[#out+1] = i end
+    end
+    table.sort(out)
     return out
 end
 local function collectDialogueSelection(subs, sel)
-    local out = {}; for _, i in ipairs(sel) do if isDialogue(subs[i]) then out[#out+1] = i end end; return out
+    if Kite.LineOps and Kite.LineOps.normalizeIndices then
+        return Kite.LineOps.normalizeIndices(subs, sel, isDialogue)
+    end
+    local out, seen = {}, {}
+    for _, i in ipairs(sel or {}) do
+        i = tonumber(i)
+        if i and i == math.floor(i) and i >= 1 and i <= #subs and not seen[i] and isDialogue(subs[i]) then
+            seen[i] = true; out[#out+1] = i
+        end
+    end
+    table.sort(out)
+    return out
 end
 
 local function getTargetedSelection(subs, sel, c)
-    if not c or c.mode == "All Selected" then return sel end
+    local selected = collectDialogueSelection(subs, sel)
+    if not c or c.mode == "All Selected" then return selected end
     local f = {}
-    for _, i in ipairs(sel) do
+    for _, i in ipairs(selected) do
         local l = subs[i]; local m = false
         if isDialogue(l) then
             if     c.mode == "By Style"  and normalizeString(l.style) == normalizeString(c.value) then m = true
@@ -3144,9 +3183,16 @@ SmartOperations.completeSentences = function(subs, sel)
         return trimText(t)
     end
     local function markSuspect(first, second, extra)
-        addEffectMarker(subs[first.index], "[POSSIBLE-JOIN]")
-        addEffectMarker(subs[second.index], "[POSSIBLE-JOIN]")
-        for _, idx in ipairs(extra or {}) do addEffectMarker(subs[idx], "[POSSIBLE-JOIN]") end
+        local marked = {}
+        local function mark(index)
+            if marked[index] or not isDialogue(subs[index]) then return end
+            marked[index] = true
+            local line = cloneLine(subs[index])
+            addEffectMarker(line, "[POSSIBLE-JOIN]")
+            subs[index] = line
+        end
+        mark(first.index); mark(second.index)
+        for _, idx in ipairs(extra or {}) do mark(idx) end
     end
     local function applyJoin(action)
         local first, second = subs[action.first], subs[action.second]
@@ -4116,7 +4162,6 @@ function TextOperations.toggleItalics(subs, sel)
                 applied = true; return "{" .. inner .. "}"
             end)
             if not applied then text = insertOverrideAfterLeadingComments(text, "{\\i1}") end
-            if not text:match("{\\i0}%s*$") then text = text .. "{\\i0}" end
         end
         line.text = text; subs[i] = line
     end
@@ -4162,6 +4207,61 @@ function TextOperations.eraseLeadingEllipsis(subs, sel)
         local l = subs[i]
         local tags, body = splitLeadingTagBlocks(l.text)
         l.text = tags .. stripLeadingEllipsisText(body)
+        subs[i] = l
+    end
+end
+local function eraseInnerEllipsisText(value)
+    local text = normalizeString(value)
+    local suffix = ""
+    local peeling = true
+    while peeling and text ~= "" do
+        peeling = false
+        local trailingSpace = text:match("(%s+)$")
+        if trailingSpace then
+            text = text:sub(1, #text - #trailingSpace)
+            suffix = trailingSpace .. suffix
+            peeling = true
+        end
+        local s = text:find("%b{}$")
+        if s then
+            suffix = text:sub(s) .. suffix
+            text = text:sub(1, s - 1)
+            peeling = true
+        else
+            local chars = splitUtf8Chars(text)
+            local last = chars[#chars]
+            if last and CLOSING_PUNCTUATION[last] then
+                suffix = last .. suffix
+                text = joinRange(chars, 1, #chars - 1)
+                peeling = true
+            end
+        end
+    end
+    local ending = ""
+    local dots = text:match("(%.%.%.+)$")
+    if dots then
+        ending = dots
+        text = text:sub(1, #text - #dots)
+    elseif endsWith(text, HORIZONTAL_ELLIPSIS) or endsWith(text, TWO_DOT_LEADER) then
+        local chars = splitUtf8Chars(text)
+        ending = chars[#chars]
+        text = joinRange(chars, 1, #chars - 1)
+    end
+    text = mutateTextOutsideBlocks(text, function(part)
+        part = part:gsub("%.%.%.+([,;:%.%!%?])", "%1")
+        part = part:gsub(HORIZONTAL_ELLIPSIS .. "([,;:%.%!%?])", "%1")
+        part = part:gsub(TWO_DOT_LEADER .. "([,;:%.%!%?])", "%1")
+        part = part:gsub("([^%s])%.%.%.+([^%s])", "%1 %2")
+        part = part:gsub("([^%s])" .. HORIZONTAL_ELLIPSIS .. "([^%s])", "%1 %2")
+        part = part:gsub("([^%s])" .. TWO_DOT_LEADER .. "([^%s])", "%1 %2")
+        return part:gsub(HORIZONTAL_ELLIPSIS, ""):gsub(TWO_DOT_LEADER, ""):gsub("%.%.%.+", "")
+    end)
+    return text .. ending .. suffix
+end
+function TextOperations.eraseInnerEllipsis(subs, sel)
+    for _, i in ipairs(sel) do
+        local l = subs[i]
+        l.text = eraseInnerEllipsisText(l.text)
         subs[i] = l
     end
 end
@@ -4427,7 +4527,7 @@ local function mergeAdjacentTagBlocks(text)
             local close = text:find("}", i, true)
             if not close then out[#out+1] = text:sub(i); last = 0; break end
             local block = text:sub(i, close)
-            local isTag = block:find("\\", 1, true) ~= nil
+            local isTag = isOverrideBlock(block)
             if isTag and last > 0 then
                 out[last] = out[last]:sub(1, -2) .. block:sub(2)
             else
@@ -4459,22 +4559,25 @@ end
 
 function TagOperations.parseActor(subs, sel)
     local function allocDur(seg, T)
+        T = math.floor(tonumber(T) or 0)
+        if #seg == 0 or T < #seg then return nil end
         local c = 0
         for _, s in ipairs(seg) do
             local txt = visibleText(s.text):gsub("%s+", "")
             c = c + unicodeLenSafe(txt)
         end
-        local d, r = {}, T
+        local remaining = T - #seg
+        local d, r = {}, remaining
         if c == 0 then
-            local s = math.floor(T / #seg)
-            for i = 1, #seg do d[i] = s end
-            d[#seg] = T - s * (#seg - 1)
+            local share = math.floor(remaining / #seg)
+            for i = 1, #seg do d[i] = 1 + share end
+            d[#seg] = d[#seg] + remaining - share * #seg
         else
             for i, s in ipairs(seg) do
                 local txt = visibleText(s.text):gsub("%s+", "")
                 local len = unicodeLenSafe(txt)
-                if i == #seg then d[i] = r
-                else local v = math.floor(T * len / c); d[i] = v; r = r - v end
+                if i == #seg then d[i] = 1 + r
+                else local v = math.floor(remaining * len / c); d[i] = 1 + v; r = r - v end
             end
         end
         return d
@@ -4488,7 +4591,7 @@ function TagOperations.parseActor(subs, sel)
             local actor_match, match_len = nil, 0
             local patterns = {
                 "^%s*（(.-)）", "^%s*%((.-)%)", "^%s*%[(.-)%]",
-                "^%s*【(.-)】", "^%s*［(.-)］", "^%s*ï½›(.-)｝",
+                "^%s*【(.-)】", "^%s*［(.-)］", "^%s*｛(.-)｝",
                 "^%s*〈(.-)〉", "^%s*《(.-)》", "^%s*「(.-)」",
                 "^%s*『(.-)』", "^%s*〔(.-)〕",
             }
@@ -4525,7 +4628,7 @@ function TagOperations.parseActor(subs, sel)
         local simple_actor, simple_rest = text:match("^%s*%[([^%]]+)%]%s*:%s*(.+)$")
         if not simple_actor then
             simple_actor, simple_rest = text:match("^%s*([^:%[%(]+):%s*(.+)$")
-            if simple_actor and (simple_actor:find("\\") or #trimText(simple_actor) > 24) then
+            if simple_actor and (text:match("^%s*[%a][%w+%.%-]*://") or simple_actor:find("\\") or #trimText(simple_actor) > 24) then
                 simple_actor, simple_rest = nil, nil
             end
         end
@@ -4546,16 +4649,18 @@ function TagOperations.parseActor(subs, sel)
                 subs[i] = l
             else
                 local dur = allocDur(parts, l.end_time - l.start_time)
-                local t = l.start_time
-                for j, p in ipairs(parts) do
-                    local nl = cloneLine(l)
-                    nl.start_time = t; nl.end_time = t + dur[j]; t = nl.end_time
-                    if p.actor then nl.actor = p.actor; last_actor = p.actor
-                    elseif last_actor then nl.actor = last_actor end
-                    nl.text = p.text:gsub("^%s+", ""):gsub("%s+$", "")
-                    if j == 1 then subs[i] = nl else subs.insert(i + j - 1, nl); shifts = shifts + 1 end
+                if dur then
+                    local t = l.start_time
+                    for j, p in ipairs(parts) do
+                        local nl = cloneLine(l)
+                        nl.start_time = t; nl.end_time = t + dur[j]; t = nl.end_time
+                        if p.actor then nl.actor = p.actor; last_actor = p.actor
+                        elseif last_actor then nl.actor = last_actor end
+                        nl.text = p.text:gsub("^%s+", ""):gsub("%s+$", "")
+                        if j == 1 then subs[i] = nl else subs.insert(i + j - 1, nl); shifts = shifts + 1 end
+                    end
+                    inserted[ix] = #parts - 1
                 end
-                inserted[ix] = #parts - 1
             end
         end
     end
@@ -4697,9 +4802,8 @@ function SmartOperations.injectAhPrefix(subs, sel)
 end
 
 function SmartOperations.removeHonorifics(subs, sel)
-    for _, i in ipairs(sel) do
-        local l = subs[i]
-        l.text = normalizeString(l.text)
+    local function removeFromText(text)
+        return normalizeString(text)
             :gsub("%-san%f[%A]",      "{-san}")
             :gsub("%-tan%f[%A]",      "{-tan}")
             :gsub("%-chan%f[%A]",     "{-chan}")
@@ -4717,6 +4821,10 @@ function SmartOperations.removeHonorifics(subs, sel)
             :gsub("{{", "{")
             :gsub("}}", "}")
             :gsub("({[^{}]-){(%-%a-)}([^{}]-})", "%1%2%3")
+    end
+    for _, i in ipairs(sel) do
+        local l = subs[i]
+        l.text = mutateTextOutsideBlocks(l.text, removeFromText)
         subs[i] = l
     end
 end
@@ -4869,7 +4977,8 @@ local function directionalSnap(subs, sel, edge, direction)
     local kfs = getKeyframes()
     if not kfs or #kfs == 0 then showMsg(L("err_no_keyframes")); return end
     local limit = tonumber(currentConfig.edge_snap_protect_ms) or DEFAULT_CONFIG.edge_snap_protect_ms
-    if limit <= 0 then limit = DEFAULT_CONFIG.edge_snap_protect_ms end
+    limit = math.max(0, limit)
+    if limit == 0 then return end
     for _, i in ipairs(sel) do
         local line = subs[i]
         if isDialogue(line) and validateDuration(line) then
@@ -4919,7 +5028,10 @@ local function selectionByStart(all, sel)
     for _, r in ipairs(all) do byIdx[r.i] = r end
     local order = {}
     for _, i in ipairs(sel) do if byIdx[i] then order[#order+1] = byIdx[i] end end
-    table.sort(order, function(a, b) return a.s < b.s end)
+    table.sort(order, function(a, b)
+        if a.s == b.s then return a.i < b.i end
+        return a.s < b.s
+    end)
     return order
 end
 
@@ -5002,7 +5114,8 @@ end
 
 local function chainToNeighbor(subs, sel, side)
     local cap = normalizeNumber(currentConfig.chain_max_ms, DEFAULT_CONFIG.chain_max_ms)
-    if cap <= 0 then cap = DEFAULT_CONFIG.chain_max_ms end
+    cap = math.max(0, cap)
+    if cap == 0 then return end
     local all = timelineSnapshot(subs)
     for _, rec in ipairs(selectionByStart(all, sel)) do
         if side == "left" then
@@ -5162,9 +5275,13 @@ function TimingOperations.joinOverlaps(subs, sel)
     end
     if #deleted == 0 then return sel end
 
-    for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
-    table.sort(deleted, function(a, b) return a > b end)
-    for _, index in ipairs(deleted) do subs.delete(index) end
+    local function applyJoinPlan()
+        for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
+        table.sort(deleted, function(a, b) return a > b end)
+        for _, index in ipairs(deleted) do subs.delete(index) end
+    end
+    if Kite.LineOps and Kite.LineOps.transaction then Kite.LineOps.transaction(subs, applyJoinPlan)
+    else applyJoinPlan() end
     return remapSelectionAfterDeletion(sel, deleteSet)
 end
 
@@ -5206,13 +5323,13 @@ function TimingOperations.joinOverlapSentences(subs, sel)
     local groups, current = {}, nil
     for _, entry in ipairs(entries) do
         if not current then
-            current = { end_time = entry.end_time, lines = { entry } }
+            current = { start_time = entry.start_time, end_time = entry.end_time, lines = { entry } }
         elseif entry.start_time < current.end_time then
             current.lines[#current.lines+1] = entry
             if entry.end_time > current.end_time then current.end_time = entry.end_time end
         else
             groups[#groups+1] = current
-            current = { end_time = entry.end_time, lines = { entry } }
+            current = { start_time = entry.start_time, end_time = entry.end_time, lines = { entry } }
         end
     end
     if current then groups[#groups+1] = current end
@@ -5220,11 +5337,11 @@ function TimingOperations.joinOverlapSentences(subs, sel)
     local replacements, deleteSet, deleted = {}, {}, {}
     for _, group in ipairs(groups) do
         if #group.lines > 1 then
-            table.sort(group.lines, function(a, b) return a.index < b.index end)
             local base = group.lines[1]
             local joined = cloneLine(base.line)
             local text = joinOverlapSentenceParts(group.lines)
             if text ~= "" then
+                joined.start_time = group.start_time
                 joined.end_time = group.end_time
                 joined.text = extractLeadingTagBlocks(base.line.text) .. text
                 replacements[#replacements+1] = { index = base.index, line = joined }
@@ -5238,9 +5355,13 @@ function TimingOperations.joinOverlapSentences(subs, sel)
     end
     if #deleted == 0 then return sel end
 
-    for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
-    table.sort(deleted, function(a, b) return a > b end)
-    for _, index in ipairs(deleted) do subs.delete(index) end
+    local function applySentenceJoinPlan()
+        for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
+        table.sort(deleted, function(a, b) return a > b end)
+        for _, index in ipairs(deleted) do subs.delete(index) end
+    end
+    if Kite.LineOps and Kite.LineOps.transaction then Kite.LineOps.transaction(subs, applySentenceJoinPlan)
+    else applySentenceJoinPlan() end
     return remapSelectionAfterDeletion(sel, deleteSet)
 end
 
@@ -5364,11 +5485,14 @@ local function parseDialogueRaw(line)
     line = trimText(line)
     local prefix, fields = splitEventLine(line)
     if not prefix then return nil end
+    local start_time = assTimeToMs(fields[2])
+    local end_time = assTimeToMs(fields[3])
+    if not start_time or not end_time or end_time <= start_time then return nil end
     return {
         comment    = prefix == "Comment",
         layer      = tonumber(fields[1]) or 0,
-        start_time = assTimeToMs(fields[2]),
-        end_time   = assTimeToMs(fields[3]),
+        start_time = start_time,
+        end_time   = end_time,
         style      = trimText(fields[4]),
         actor      = trimText(fields[5]),
         margin_l   = tonumber(fields[6]) or 0,
@@ -5431,7 +5555,7 @@ function TimingOperations.importText(subs, sel)
         end
         return
     end
-    local source = subs[sel[1]]
+    local source = subs[sel[#sel]]
     for idx, entry in ipairs(entries) do
         local base = (idx <= #sel and subs[sel[idx]]) or source
         local l = applyEntry(base, entry)
@@ -5699,6 +5823,8 @@ function TimingOperations.smartLineBreak(subs, sel)
             elseif tonumber(w) then videoWidth = tonumber(w) end
         end
     end
+    local scriptWidth = meta and tonumber(meta.res_x) or nil
+    if not scriptWidth or scriptWidth <= 0 then scriptWidth = videoWidth end
     local function getExtents(text, style)
         local clean = stripComments(stripTags(text))
         if aegisub and type(aegisub.text_extents) == "function" then
@@ -5712,17 +5838,18 @@ function TimingOperations.smartLineBreak(subs, sel)
     for _, i in ipairs(sel) do
         local line = subs[i]
         if isEditableDialogue(line) then
+            local measured = cloneLine(line)
             if meta and styles and karaskel and karaskel.preproc_line then
-                pcall(function() karaskel.preproc_line(subs, meta, styles, line) end)
+                pcall(function() karaskel.preproc_line(subs, meta, styles, measured) end)
             end
             if not normalizeString(line.text):find("\\N", 1, true) then
                 local rawText = normalizeString(line.text)
                 if unicodeLenSafe(stripComments(stripTags(rawText))) >= cfg.minLength then
-                    local style = line.styleref or (styles and styles[line.style]) or {}
+                    local style = measured.styleref or (styles and styles[line.style]) or {}
                     local mL = normalizeNumber(line.margin_l, 0); local mR = normalizeNumber(line.margin_r, 0)
                     if mL <= 0 then mL = normalizeNumber(style.margin_l, 0) end
                     if mR <= 0 then mR = normalizeNumber(style.margin_r, 0) end
-                    local available = videoWidth - mL - mR
+                    local available = scriptWidth - mL - mR
                     local needs = available > 0 and getExtents(rawText, style) > available
                     if needs then
                         local bestSplit, bestCost = nil, math.huge
@@ -5780,9 +5907,9 @@ local trimWS = trimText
 
 local function parseTime(t)
     t = trimWS(t)
-    local h, m, s, frac = t:match("(%d+):(%d+):(%d+)%.(%d+)")
+    local h, m, s, frac = t:match("^(%d+):(%d+):(%d+)%.(%d+)$")
     if h then return clockToMs(h, m, s, frac) end
-    local h2, m2, s2 = t:match("(%d+):(%d+):(%d+)")
+    local h2, m2, s2 = t:match("^(%d+):(%d+):(%d+)$")
     if h2 then return clockToMs(h2, m2, s2, nil) end
     return nil
 end
@@ -6026,8 +6153,8 @@ local function antSongs(subs, sel, raw)
     if not sel or #sel == 0 then return 0 end
     if not raw or raw:gsub("%s", "") == "" then return 0 end
     local group, sync_point = {}, nil
-    for line in raw:gmatch("[^\r\n]+") do
-        line = trimWS(line)
+    for rawLine in raw:gmatch("[^\r\n]+") do
+        local line = trimWS(rawLine)
         if line ~= "" then
             local p = spParseDialogueLine(line)
             if p then
@@ -6072,6 +6199,7 @@ local function antSongs(subs, sel, raw)
     return lines_added
 end
 
+local FALLBACK_VIDEO_FPS = 24000 / 1001
 local fr_to, ms_from = aegisub.frame_from_ms, aegisub.ms_from_frame
 local function getFps()
     local m1, m0
@@ -6081,7 +6209,9 @@ local function getFps()
         if ok1 then m1 = v1 end
         if ok0 then m0 = v0 end
     end
-    return (m1 and m0 and m1 ~= m0) and 1000/(m1-m0) or 23.976
+    local delta = tonumber(m1) and tonumber(m0) and (tonumber(m1) - tonumber(m0)) or nil
+    if delta and delta == delta and delta > 0 and delta < math.huge then return 1000 / delta end
+    return FALLBACK_VIDEO_FPS
 end
 local function toFrame(t)
     local f = msToFrame(t)
@@ -6193,6 +6323,7 @@ local TUNE = {
     flash_gap_ms    = 250,
     cap_grace_ms    = 120,
     frame_grace_ms  = 45,
+    min_event_ms    = 10,
 }
 
 local GUI_BOUNDS = {
@@ -6300,9 +6431,10 @@ local function style_ok(style, flt, extra)
     if flt == "" or flt == "All" then return true end
     style = tostring(style or "")
     local extra_hit = extra ~= nil and extra ~= "" and style == extra
-    if flt == "All Default" then return style:find("Defa", 1, true) ~= nil or extra_hit end
+    local lower_style = style:lower()
+    if flt == "All Default" then return lower_style:find("defa", 1, true) ~= nil or extra_hit end
     if flt == "Default+Alt" then
-        return style:find("Defa", 1, true) ~= nil or style:find("Alt", 1, true) ~= nil or extra_hit
+        return lower_style:find("defa", 1, true) ~= nil or lower_style:find("alt", 1, true) ~= nil or extra_hit
     end
     return style == flt or extra_hit
 end
@@ -6325,15 +6457,20 @@ end
 local function read_all(path)
     local f, err = io.open(path, "rb")
     if not f then error("Could not open the waveform JSON: " .. tostring(err)) end
-    local s = f:read("*all")
-    f:close()
+    local s, read_error = f:read("*all")
+    local closed, close_error = f:close()
+    if not s then error("Could not read the waveform JSON: " .. tostring(read_error)) end
+    if closed == nil then error("Could not close the waveform JSON: " .. tostring(close_error)) end
     return s
 end
 
 local function parse_waveform_json(path)
     progress("Reading waveform JSON...")
     local content = read_all(path)
-    local point_ms = tonumber(content:match('"pointMs"%s*:%s*([%d%.]+)')) or 1
+    local point_ms = tonumber(content:match('"pointMs"%s*:%s*([%d%.]+)'))
+    if not point_ms or point_ms ~= point_ms or point_ms == math.huge or point_ms <= 0 then
+        error("The waveform has an invalid 'pointMs' value.")
+    end
     local key_start, key_end = content:find('"peaks"%s*:%s*%[')
     if not key_start then error("No 'peaks' array found in the JSON.") end
     local arr_start = content:find("[", key_end, true)
@@ -6369,6 +6506,7 @@ local function parse_waveform_json(path)
     end
     arr = nil
     collectgarbage("collect")
+    if pending ~= nil then error("The 'peaks' array contains an unmatched min/max value.") end
     if count == 0 then error("The 'peaks' array produced no envelope points.") end
     return { prefix = prefix, n = count, point_ms = point_ms }
 end
@@ -6587,6 +6725,7 @@ local function detect_voice_waveform(it, wave, cfg)
     local right_window = (smooth_points - 1) - left_window
 
     local values = {}
+    local max_value = 0
     for j = 1, len do
         local env = smooth_at(wave, L0 + j, left_window, right_window)
         if cfg.auto_otsu then
@@ -6594,7 +6733,10 @@ local function detect_voice_waveform(it, wave, cfg)
         else
             values[j] = env
         end
+        if values[j] > max_value then max_value = values[j] end
     end
+
+    if max_value <= 0 then return nil end
 
     local threshold = threshold_values(values, cfg)
     local mask = {}
@@ -6726,7 +6868,12 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
                     if cand - va_e >= TUNE.keep_min_out_ms then
                         boundary = cand
                     else
-                        boundary = va_e + (vb_s - va_e) * cfg.lead_out_ms / (cfg.lead_out_ms + cfg.lead_in_ms)
+                        local padding = cfg.lead_out_ms + cfg.lead_in_ms
+                        if padding > 0 then
+                            boundary = va_e + (vb_s - va_e) * cfg.lead_out_ms / padding
+                        else
+                            boundary = va_e + (vb_s - va_e) / 2
+                        end
                     end
                     boundary = clamp(boundary, va_e, vb_s)
                 end
@@ -6955,7 +7102,7 @@ local function apply_items(subs, items)
         local line = it.line
         if it.use and it.s and it.e then
             local ns = round(it.s)
-            local ne = math.max(round(it.e), ns + 10)
+            local ne = math.max(round(it.e), ns + TUNE.min_event_ms)
             line.start_time = ns
             line.end_time = ne
         end
@@ -7028,7 +7175,12 @@ local function run_pipeline(subs, sel, cfg, mode, detect, kfs, kfset)
 
     progress("Applying...", 85)
     local ordinals = dialogue_ordinals(subs)
-    local flagged = apply_items(subs, items)
+    local flagged
+    if Kite.LineOps and Kite.LineOps.transaction then
+        Kite.LineOps.transaction(subs, function() flagged = apply_items(subs, items) end)
+    else
+        flagged = apply_items(subs, items)
+    end
     progress(nil, 100)
     return { items = items, flagged = flagged, stats = stats, ordinals = ordinals }
 end
@@ -7912,25 +8064,77 @@ end
 
 local function romajiKara(subs, sel)
     aegisub.progress.task("Romaji Karaoker (Kana-Beat \\\\k)...")
+    local function tokenize(text)
+        local tokens, i, n = {}, 1, #text
+        while i <= n do
+            local first = text:sub(i, i)
+            if first == "{" then
+                local close = text:find("}", i + 1, true)
+                if close then
+                    tokens[#tokens+1] = { raw = text:sub(i, close) }
+                    i = close + 1
+                else
+                    tokens[#tokens+1] = { raw = text:sub(i), syllables = splitRomaji(text:sub(i)) }
+                    break
+                end
+            elseif first:match("%s") then
+                local j = i + 1
+                while j <= n and text:sub(j, j):match("%s") do j = j + 1 end
+                tokens[#tokens+1] = { raw = text:sub(i, j - 1) }
+                i = j
+            elseif first == "\\" and text:sub(i + 1, i + 1):match("[Nnh]") then
+                tokens[#tokens+1] = { raw = text:sub(i, i + 1) }
+                i = i + 2
+            else
+                local j = i
+                while j <= n do
+                    local char = text:sub(j, j)
+                    if char == "{" or char:match("%s") or (char == "\\" and text:sub(j + 1, j + 1):match("[Nnh]")) then break end
+                    j = j + 1
+                end
+                local raw = text:sub(i, j - 1)
+                tokens[#tokens+1] = { raw = raw, syllables = splitRomaji(raw) }
+                i = j
+            end
+        end
+        return tokens
+    end
+
+    local updates = {}
     for idx, i in ipairs(sel) do
         aegisub.progress.set(idx / #sel * 100)
+        if Kite.LineOps and Kite.LineOps.checkCancelled then Kite.LineOps.checkCancelled() end
         local ln = subs[i]
-        local groups = {}
-        for w in ln.text:gmatch("%S+") do groups[#groups+1] = splitRomaji(w) end
-        local tot = 0; for _, g in ipairs(groups) do tot = tot + #g end
-        if tot == 0 then tot = 1 end
-        local cs = math.floor((ln.end_time - ln.start_time) / 10 + 0.5)
-        local base, rem = math.floor(cs / tot), cs % tot
-        local out, kix = "", 1
-        for wi, g in ipairs(groups) do
-            for _, sy in ipairs(g) do
-                local d = base + (kix <= rem and 1 or 0)
-                out = out .. ("{\\k" .. d .. "}" .. sy)
-                kix = kix + 1
+        local tokens = tokenize(normalizeString(ln.text))
+        local total = 0
+        for _, token in ipairs(tokens) do total = total + (token.syllables and #token.syllables or 0) end
+        if total > 0 then
+            local cs = math.max(0, math.floor((ln.end_time - ln.start_time) / 10 + 0.5))
+            local base, rem = math.floor(cs / total), cs % total
+            local out, kix = {}, 1
+            for _, token in ipairs(tokens) do
+                if token.syllables then
+                    for _, syllable in ipairs(token.syllables) do
+                        local duration = base + (kix <= rem and 1 or 0)
+                        out[#out+1] = "{\\k" .. duration .. "}" .. syllable
+                        kix = kix + 1
+                    end
+                else
+                    out[#out+1] = token.raw
+                end
             end
-            if wi < #groups then out = out .. " " end
+            local updated = cloneLine(ln)
+            updated.text = table.concat(out)
+            updates[#updates+1] = { index = i, line = updated }
         end
-        ln.text = out; subs[i] = ln
+    end
+    local function applyUpdates()
+        for _, update in ipairs(updates) do subs[update.index] = update.line end
+    end
+    if #updates > 0 and Kite.LineOps and Kite.LineOps.transaction then
+        Kite.LineOps.transaction(subs, applyUpdates)
+    else
+        applyUpdates()
     end
 end
 
@@ -7993,9 +8197,21 @@ local function foldCopy(subs, sel)
 end
 
 local function aeKeyframeExport(subs, sel)
+    if not Kite.PyBridge then showMsg("AE Export requires kite.PyBridge."); return end
     local FPS = getFps()
-    local vw, vh = aegisub.video_size()
-    if not vw then vw, vh = 1920, 1080 end
+    local vw, vh = 1920, 1080
+    if aegisub and type(aegisub.video_size) == "function" then
+        local ok, first, second = pcall(aegisub.video_size)
+        if ok then
+            if type(first) == "table" then
+                vw = tonumber(first.width or first.x) or vw
+                vh = tonumber(first.height or first.y) or vh
+            else
+                vw = tonumber(first) or vw
+                vh = tonumber(second) or vh
+            end
+        end
+    end
     local frame_ms = 1000 / FPS
     local out_pos = { "Adobe After Effects 6.0 Keyframe Data\n", "\tUnits Per Second\t" .. FPS .. "\n",
                       "\tSource Width\t" .. vw .. "\n", "\tSource Height\t" .. vh .. "\n",
@@ -8011,8 +8227,19 @@ local function aeKeyframeExport(subs, sel)
             local nf = math.max(1, math.floor((line.end_time - line.start_time) / frame_ms + 0.5))
             local position = Kite.LineOps and Kite.LineOps.lastTagCall(text, "pos") or nil
             local positionArgs = position and Kite.LineOps.splitArguments(position.value) or {}
-            local x = tonumber(positionArgs[1]) or 960
-            local y = tonumber(positionArgs[2]) or 540
+            local x = tonumber(positionArgs[1]) or vw / 2
+            local y = tonumber(positionArgs[2]) or vh / 2
+            local move = Kite.LineOps and Kite.LineOps.lastTagCall(text, "move") or nil
+            local moveArgs = move and Kite.LineOps.splitArguments(move.value) or {}
+            local mx1, my1, mx2, my2 = tonumber(moveArgs[1]), tonumber(moveArgs[2]), tonumber(moveArgs[3]), tonumber(moveArgs[4])
+            local mt1 = tonumber(moveArgs[5]) or 0
+            local mt2 = tonumber(moveArgs[6]) or (line.end_time - line.start_time)
+            local function positionAt(elapsed)
+                if not (mx1 and my1 and mx2 and my2) then return x, y end
+                if mt2 <= mt1 then return elapsed < mt1 and mx1 or mx2, elapsed < mt1 and my1 or my2 end
+                local ratio = math.max(0, math.min(1, (elapsed - mt1) / (mt2 - mt1)))
+                return mx1 + (mx2 - mx1) * ratio, my1 + (my2 - my1) * ratio
+            end
             local function numericTag(name, fallback)
                 local call = Kite.LineOps and Kite.LineOps.lastTagCall(text, name) or nil
                 return call and tonumber(call.value) or fallback
@@ -8020,8 +8247,9 @@ local function aeKeyframeExport(subs, sel)
             local fscx = numericTag("fscx", 100)
             local fscy = numericTag("fscy", 100)
             local frz = numericTag("frz", 0)
-            for _ = 1, nf do
-                table.insert(out_pos,   string.format("\t%d\t%s\t%s\t0\n", gframe, x, y))
+            for localFrame = 0, nf - 1 do
+                local px, py = positionAt(localFrame * frame_ms)
+                table.insert(out_pos,   string.format("\t%d\t%s\t%s\t0\n", gframe, px, py))
                 table.insert(out_scale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
                 table.insert(out_rot,   string.format("\t%d\t%s\n", gframe, frz))
                 gframe = gframe + 1
@@ -8030,13 +8258,15 @@ local function aeKeyframeExport(subs, sel)
     end
     table.insert(out_rot, "\nEnd of Keyframe Data")
     local payload = table.concat(out_pos) .. table.concat(out_scale) .. table.concat(out_rot)
-    local save_path = aegisub.dialog.save and aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false) or nil
-    if save_path and save_path ~= "" then
+    if aegisub.dialog and type(aegisub.dialog.save) == "function" then
+        local save_path = aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false)
+        if not save_path or save_path == "" then return end
         local ok, message = Kite.PyBridge.writeFile(save_path, payload)
         if ok then showMsg(string.format(L("msg_ae_saved"), save_path)); return end
         showMsg(string.format(L("err_cannot_write_file"), save_path) .. "\n" .. tostring(message or ""))
+        return
     end
-    aegisub.log(payload)
+    if aegisub.log then aegisub.log(payload) end
 end
 
 local function stutterManager(subs, sel)
@@ -8103,7 +8333,7 @@ local function remplacer(subs, sel)
             local vis = visibleText(text)
             local repl = map[vis]
             if repl then
-                local tags = text:match("^({[^}]-})") or ""
+                local tags = splitLeadingBraceBlocks(text)
                 line.text = tags .. repl
                 addEffectMarker(line, "[REPLACED]")
                 subs[i] = line; mod = mod + 1
@@ -8170,6 +8400,7 @@ local UTILITY_SECTIONS = {
             { name="Normalize Ellipsis",                func = TextOperations.formatEllipsis },
             { name="Add Ellipsis",                      func = TextOperations.addEndingEllipsis },
             { name="Erase Leading Ellipsis",            func = TextOperations.eraseLeadingEllipsis },
+            { name="Erase Inner Ellipsis",              func = TextOperations.eraseInnerEllipsis },
             { name="Ellipsis to Comma",                 func = TextOperations.ellipsisToComma },
             { name="Ellipsis to Period",                func = TextOperations.ellipsisToPeriod },
             { name="Unify Quotes",                      func = TextOperations.normalizeQuotes },
@@ -8212,7 +8443,7 @@ local UTILITY_SECTIONS = {
             { name="Complete Sentences",                func = SmartOperations.completeSentences, returnsSelection = true },
             { name="Erase Blank Lines",                 func = SmartOperations.eraseBlankLines,     returnsSelection = true },
             { name="Frame Effect",     func = frameToEffect,                     includeVector = true },
-            { name="Copy Fold",    func = foldCopy,                           includeComments = true, includeVector = true, returnsSelection = true },
+            { name="Copy Fold",    func = foldCopy,                           includeComments = true, includeVector = true, returnsSelection = true, mutates = false },
         },
     },
     {
@@ -8238,11 +8469,11 @@ local UTILITY_SECTIONS = {
         items = {
             { name="" },
             { name="Copy Times",                        func = TimingOperations.copyTimes,          includeVector = true },
-            { name="Time Picker",                       func = TimingOperations.timePicker,         returnsSelection = true, includeVector = true },
+            { name="Time Picker",                       func = TimingOperations.timePicker,         returnsSelection = true, includeVector = true, mutates = false },
             { name="Sort by Length",                    func = TimingOperations.sortByLength },
             { name="Sort by CPS",                       func = TimingOperations.sortByCPS },
             { name="Sort Odd Even",                     func = TimingOperations.sortByEvenOdd,      includeComments = true, includeVector = true },
-            { name="Count CPS",                         func = TimingOperations.showCPS },
+            { name="Count CPS",                         func = TimingOperations.showCPS, mutates = false },
             { name="Import Text",               func = TimingOperations.importText,         returnsSelection = true },
             { name="Kite Timing", func = kiteTiming,                       includeVector = true },
             { name="Shift First",  func = shiftToFirst,                      includeComments = true },
@@ -8301,8 +8532,8 @@ end
 function MarkerOperations.parseMpvQc(raw, tolerance)
     local out = {}
     tolerance = tolerance or 1000
-    for line in normalizeString(raw):gmatch("[^\r\n]+") do
-        line = trimText(line)
+    for rawLine in normalizeString(raw):gmatch("[^\r\n]+") do
+        local line = trimText(rawLine)
         local timeStr, kind, comment = line:match("(%[%d+:%d+:%d+%.?%d*%])%s*%[([^%]]+)%]%s*(.*)")
         if timeStr and comment and comment ~= "" then
             local time = MarkerOperations.parseMpvQcTime(timeStr)
@@ -8623,7 +8854,7 @@ end
 
 local SUITE_TOOLS = {
     { name = "" },
-    { name = "AE Export", func = aeKeyframeExport },
+    { name = "AE Export", func = aeKeyframeExport, mutates = false },
     { name = "Text Replacer",       func = remplacer },
     { name = "mpv QC", func = mpvQcTool },
     { name = "Remover Assistant", func = RemoverOps.gui },
@@ -8842,16 +9073,17 @@ local function rowMasterGui(subs, sel)
                                 if tool and tool.func then
                                     local result = tool.func(subs, tsel)
                                     if tool.returnsSelection and type(result) == "table" then
-                                        aegisub.set_undo_point("Chrono Suite - " .. r.ct)
+                                        if tool.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. r.ct) end
                                         return result
                                     end
                                 end
-                                aegisub.set_undo_point("Chrono Suite - " .. r.ct)
+                                if tool and tool.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. r.ct) end
                                 return
                             end
 
                             local current_sel = tsel
                             local returns_selection = false
+                            local mutated = import_active or audit_active
                             if section_active then
                                 local section_dd = {
                                     { id = "case",  pick = r.sec_case  },
@@ -8866,6 +9098,7 @@ local function rowMasterGui(subs, sel)
                                     if s.pick and s.pick ~= "" then
                                         local entry = findUtilityEntry(s.id, s.pick)
                                         if entry and entry.returnsSelection then returns_selection = true end
+                                        if entry and entry.mutates ~= false then mutated = true end
                                         current_sel = runUtilityEntry(entry, subs, current_sel)
                                     end
                                 end
@@ -8911,7 +9144,7 @@ local function rowMasterGui(subs, sel)
                                 auditLines(subs, current_sel, audit_cfg)
                             end
 
-                            aegisub.set_undo_point("Chrono Suite - Executed")
+                            if mutated then aegisub.set_undo_point("Chrono Suite - Executed") end
                             if returns_selection then return current_sel end
                             return
                         end
@@ -8951,79 +9184,17 @@ function HotkeyMenu.migrate()
     if not content then return end
     if not content or content == "" then return end
 
-    local lines = {}
-    for line in (content:gsub("\r\n", "\n"):gsub("\r", "\n") .. "\n"):gmatch("(.-)\n") do
-        lines[#lines+1] = line
-    end
-
-    local contexts, i = {}, 1
-    while i <= #lines do
-        local ctxName = lines[i]:match('^%s*"(.-)"%s*:%s*{%s*,?%s*$')
-        if ctxName then
-            local ctx = { name = ctxName, entries = {} }
-            i = i + 1
-            while i <= #lines and not lines[i]:match("^%s*}%s*,?%s*$") do
-                local key = lines[i]:match('^%s*"(.-)"%s*:%s*%[%s*$')
-                if key then
-                    local entry = { key = key, values = {} }
-                    i = i + 1
-                    while i <= #lines and not lines[i]:match("^%s*%]%s*,?%s*$") do
-                        local value = lines[i]:match('^%s*"(.-)"%s*,?%s*$')
-                        if value then entry.values[#entry.values+1] = value end
-                        i = i + 1
-                    end
-                    ctx.entries[#ctx.entries+1] = entry
-                end
-                i = i + 1
-            end
-            contexts[#contexts+1] = ctx
-        end
-        i = i + 1
-    end
-    if #contexts == 0 then return end
-
     local changed = false
-    for _, ctx in ipairs(contexts) do
-        local merged, out = {}, {}
-        for _, entry in ipairs(ctx.entries) do
-            local target = HotkeyMenu.migrations[entry.key] or entry.key
-            if target ~= entry.key then changed = true end
-            local existing = merged[target]
-            if existing then
-                local seen = {}
-                for _, value in ipairs(existing.values) do seen[value] = true end
-                for _, value in ipairs(entry.values) do
-                    if not seen[value] then
-                        existing.values[#existing.values+1] = value
-                        seen[value] = true
-                    end
-                end
-                changed = true
-            else
-                entry.key = target
-                merged[target] = entry
-                out[#out+1] = entry
-            end
+    for oldCommand, newCommand in pairs(HotkeyMenu.migrations) do
+        local oldKey = '"' .. oldCommand .. '"'
+        local newKey = '"' .. newCommand .. '"'
+        if content:find(oldKey, 1, true) and not content:find(newKey, 1, true) then
+            content = content:gsub(escapeLuaPattern(oldKey), function() return newKey end)
+            changed = true
         end
-        ctx.entries = out
     end
     if not changed then return end
-
-    local out = { "{" }
-    for c, ctx in ipairs(contexts) do
-        out[#out+1] = string.format('\t"%s" : {', ctx.name)
-        for e, entry in ipairs(ctx.entries) do
-            out[#out+1] = string.format('\t\t"%s" : [', entry.key)
-            for v, value in ipairs(entry.values) do
-                out[#out+1] = string.format('\t\t\t"%s"%s', value, v < #entry.values and "," or "")
-            end
-            out[#out+1] = string.format("\t\t]%s", e < #ctx.entries and "," or "")
-        end
-        out[#out+1] = string.format("\t}%s", c < #contexts and "," or "")
-    end
-    out[#out+1] = "}"
-
-    if Kite.PyBridge then Kite.PyBridge.writeFile(path, table.concat(out, "\n") .. "\n") end
+    if Kite.PyBridge then Kite.PyBridge.writeFile(path, content) end
 end
 
 local macros = {
@@ -9072,7 +9243,7 @@ local UTILITY_MACRO_GROUPS = {
 local function makeUtilityMacro(entry)
     return function(subs, sel)
         local result = runUtilityEntry(entry, subs, sel)
-        aegisub.set_undo_point("Chrono Suite - " .. entry.name)
+        if entry.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. entry.name) end
         return result
     end
 end
@@ -9093,7 +9264,7 @@ end
 local function makeSuiteToolMacro(tool)
     return function(subs, sel)
         tool.func(subs, sel)
-        aegisub.set_undo_point("Chrono Suite - " .. tool.name)
+        if tool.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. tool.name) end
     end
 end
 

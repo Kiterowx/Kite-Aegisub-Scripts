@@ -2,7 +2,7 @@ export script_name = "Obake"
 export script_description = "Build and maintain ASS transform/tag effects."
 export script_author = "Kiterow"
 export script_namespace = "kite.Obake"
-export script_version = "0.3.0"
+export script_version = "0.3.4"
 
 Core = {}
 local ASS, AMLine, LineOps
@@ -15,9 +15,9 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
     {"a-mo.Line", version: "1.5.3", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
@@ -32,11 +32,27 @@ Core.ConfigHandler = (interface, file_name, _has_sections, version) ->
     {path: "?user/" .. file_name, format: "json_sections", section: "main", target: storage}
   }, {main: storage}
 
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-HOTKEY_MENU_SCRIPT = "Obake"
-CONFIG_FILE = "kite-obake.json"
-DEFAULT_LANGUAGE = "en"
-current_language = DEFAULT_LANGUAGE
+CONSTANTS = {
+  HOTKEY_MENU_ROOT: ": Kite Hotkeys :"
+  HOTKEY_MENU_SCRIPT: "Obake"
+  CONFIG_FILE: "kite-obake.json"
+  DEFAULT_LANGUAGE: "en"
+  FORMAT_EPSILON: 0.0000005
+  MAX_FORMAT_DECIMALS: 8
+  MAX_RANDOM_SEED: 999999999
+  RNG_CLOCK_SCALE: 1000000
+  MIN_TRANSFORM_ACCEL: 0.01
+  MIN_PULSE_MS: 20
+  MAX_FBF_OUTPUT_LINES: 20000
+  MAX_PERIOD_FRAMES: 999
+  SHAKE_ORIGIN_DISTANCE: 1500
+  SPLIT_FADE_IN_MS: 250
+  DEFAULT_PLAYRES_X: 1920
+  DEFAULT_PLAYRES_Y: 1080
+  RNG_MODULUS: 2147483647
+  RNG_MULTIPLIER: 48271
+}
+current_language = CONSTANTS.DEFAULT_LANGUAGE
 language_config_handler = nil
 
 OPERATIONS = {
@@ -88,6 +104,8 @@ ACTION_HELP = {
     ["Apply chain"]: "Crea uno o varios tramos de transform y los inserta en el primer bloque de tags. Add+ y Rem- controlan la cantidad de keyframes. En modo manual, la primera fila es el estado inicial y las siguientes filas generan \\t() cronometrados."
     ["Retime transforms"]: "Escala directamente cada \\t(t1,t2,...) de las líneas seleccionadas. La duración origen sale del mayor tiempo existente y la duración destino sale de la línea actual."
     ["In-Out tags"]: "Con exactamente dos líneas de diálogo seleccionadas, crea una línea que cubre ambos tiempos, comenta los originales y convierte los tags iniciales distintos en transiciones \\t()."
+    ["Gunfight of Tags"]: "Randomiza valores numéricos y hexadecimales en tags ASS. Puede usar la selección como secuencia FBF o dividir cada línea por fotogramas sin alterar el generador aleatorio global."
+    ["ZigZag lines"]: "Usa las líneas seleccionadas como estados y crea segmentos FBF que alternan cada N fotogramas sobre el intervalo combinado."
     ["Animation FX"]: "Aplica presets de animación. Los presets de color y de frame usan las líneas seleccionadas, el frame activo cuando corresponde y la duración actual de cada línea."
     ["Border layers"]: "Crea copias en capas con borde a partir de las líneas seleccionadas. B1-B4 son bordes acumulados y el relleno queda encima."
     ["Color preset"]: "Crea presets por capas: relleno/borde, glow, shadtrick, doble borde con blur o limpieza por reemplazo de la línea."
@@ -541,7 +559,7 @@ finite = (value) ->
   if n and n == n and n != math.huge and n != -math.huge then n else nil
 
 clamp = (value, min_value, max_value) ->
-  n = tonumber(value) or 0
+  n = finite(value) or 0
   n = min_value if min_value != nil and n < min_value
   n = max_value if max_value != nil and n > max_value
   n
@@ -549,16 +567,18 @@ clamp = (value, min_value, max_value) ->
 format_num = (value, decimals = 3) ->
   n = finite value
   return "0" unless n
-  n = 0 if math.abs(n) < 0.0000005
-  if math.abs(n - math.floor(n + 0.5)) < 0.0000005
-    return tostring math.floor(n + 0.5)
+  decimals = math.floor(finite(decimals) or 3)
+  decimals = clamp decimals, 0, CONSTANTS.MAX_FORMAT_DECIMALS
+  n = 0 if math.abs(n) < CONSTANTS.FORMAT_EPSILON
+  if math.abs(n - math.floor(n + 0.5)) < CONSTANTS.FORMAT_EPSILON
+    return tostring(math.floor(n + 0.5))
   s = string.format "%." .. tostring(decimals) .. "f", n
   s = s\gsub "0+$", ""
   s = s\gsub "%.$", ""
   if s == "-0" or s == "" then "0" else s
 
 format_ms = (value) ->
-  tostring math.floor((tonumber(value) or 0) + 0.5)
+  tostring(math.floor((finite(value) or 0) + 0.5))
 
 TAG_NAME_ALIASES = {
   t: "transform"
@@ -618,17 +638,16 @@ remove_ass_tags = (text, names) ->
   data\getString!
 
 tag_text = (name, ...) ->
-  tostring ASS\createTag name, ...
+  tostring(ASS\createTag(name, ...))
 
 rgb_from_color = (value) ->
-  raw = tostring(value or "")
-  hex = raw\match "&[Hh]([%xA-Fa-f]+)&?"
-  if hex
+  raw = trim value
+  hex = raw\match "^&[Hh](%x+)&?$"
+  if hex and (#hex == 6 or #hex == 8)
     hex = hex\sub(-6) if #hex > 6
-    hex = string.rep("0", 6 - #hex) .. hex if #hex < 6
     b, g, r = hex\sub(1, 2), hex\sub(3, 4), hex\sub(5, 6)
     return tonumber(r, 16) or 0, tonumber(g, 16) or 0, tonumber(b, 16) or 0
-  r, g, b = raw\match "^#?(%x%x)(%x%x)(%x%x)"
+  r, g, b = raw\match "^#?(%x%x)(%x%x)(%x%x)$"
   return tonumber(r, 16) or 0, tonumber(g, 16) or 0, tonumber(b, 16) or 0 if r
   255, 255, 255
 
@@ -651,7 +670,7 @@ Core.choice_label = (value) ->
 
 Core.choice_raw = (value) ->
   shown = tostring(value or "")
-  return shown if current_language == DEFAULT_LANGUAGE
+  return shown if current_language == CONSTANTS.DEFAULT_LANGUAGE
   for raw, label in pairs LANG[current_language] or {}
     return raw if label == shown
   shown
@@ -671,7 +690,7 @@ Core.config_interface = ->
 
 Core.language_config = ->
   return nil unless Core.ConfigHandler
-  language_config_handler or= Core.ConfigHandler Core.config_interface!, CONFIG_FILE, true, script_version
+  language_config_handler or= Core.ConfigHandler Core.config_interface!, CONSTANTS.CONFIG_FILE, true, script_version
   language_config_handler
 
 Core.load_language = ->
@@ -747,7 +766,7 @@ first_block = (text) ->
 
 inject_first = (text, payload) ->
   return text unless payload and payload != ""
-  text = tostring text or ""
+  text = tostring(text or "")
   fb = first_block text
   if fb != ""
     return "{" .. payload .. fb\sub(2, -2) .. "}" .. text\sub(#fb + 1)
@@ -783,7 +802,7 @@ find_matching_paren = (text, open_pos) ->
 
 split_top_commas = (value) ->
   parts = {}
-  text = tostring value or ""
+  text = tostring(value or "")
   start, depth, i, n = 1, 0, 1, #text
   while i <= n
     ch = text\sub i, i
@@ -799,11 +818,11 @@ split_top_commas = (value) ->
   parts
 
 map_transforms = (text, fn) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   out, changed = {}, 0
   i, n = 1, #text
   while i <= n
-    s, e = first_transform_open text, i
+    s = first_transform_open text, i
     unless s
       out[#out + 1] = text\sub i
       break
@@ -824,14 +843,14 @@ strip_transforms = (text) ->
   out
 
 transform_tag = (t1, t2, tags, accel = nil) ->
-  tags = tostring tags or ""
+  tags = tostring(tags or "")
   return "" if tags == ""
   a = math.floor((tonumber(t1) or 0) + 0.5)
   b = math.floor((tonumber(t2) or 0) + 0.5)
   a, b = b, a if b < a
   if accel and accel > 0 and accel != 1
-    return tostring ASS\createTag "transform", tags, a, b, accel
-  tostring ASS\createTag "transform", tags, a, b
+    return tostring(ASS\createTag("transform", tags, a, b, accel))
+  tostring(ASS\createTag("transform", tags, a, b))
 
 max_transform_end = (text) ->
   max_end = 0
@@ -865,11 +884,13 @@ NUM_PATTERN = "[%+%-]?%d*%.?%d+"
 strip_tags = (text) -> LineOps.analyzeText(text).plain
 
 split_leading_tag_blocks = (text) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   blocks, i = {}, 1
   while i <= #text and text\sub(i, i) == "{"
     close_pos = text\find "}", i + 1, true
     break unless close_pos
+    content = text\sub i + 1, close_pos - 1
+    break unless content\match "^%s*\\"
     blocks[#blocks + 1] = text\sub i, close_pos
     i = close_pos + 1
   table.concat(blocks), text\sub(i)
@@ -885,7 +906,7 @@ parse_tag_block = (block) ->
       i = start_pos + 1
       continue
     value_pos = start_pos + 1 + #name
-    value_end = value_pos - 1
+    local value_end
     if text\sub(value_pos, value_pos) == "("
       value_end = find_matching_paren(text, value_pos) or n
     else
@@ -904,11 +925,11 @@ tag_numbers = (value) ->
   nums
 
 round_int = (value) ->
-  value = tonumber(value) or 0
+  value = finite(value) or 0
   if value >= 0
-    math.floor value + 0.5
+    math.floor(value + 0.5)
   else
-    math.ceil value - 0.5
+    math.ceil(value - 0.5)
 
 gun_choice_or_default = (value, items, default_value) ->
   for item in *(items or {})
@@ -924,11 +945,11 @@ gun_balanced_paren_end = (text, start_pos) ->
     elseif c == ")"
       depth -= 1
       return i if depth == 0
-  #text
+  nil
 
 gun_iter_tag_blocks = (text) ->
   blocks = {}
-  text = tostring text or ""
+  text = tostring(text or "")
   i = 1
   while true
     s = text\find "{", i, true
@@ -944,7 +965,7 @@ gun_iter_tag_blocks = (text) ->
   blocks
 
 gun_parse_tag_block = (block) ->
-  block = tostring block or ""
+  block = tostring(block or "")
   tags = {}
   i = 1
   while i <= #block
@@ -958,9 +979,10 @@ gun_parse_tag_block = (block) ->
       name or= block\sub(name_start)\match "^[1-4]?[A-Za-z]+"
       if name and name != ""
         j = name_start + #name
-        token_end = nil
+        local token_end
         if block\sub(j, j) == "("
           token_end = gun_balanced_paren_end block, j
+          break unless token_end
         else
           token_end = j - 1
           while token_end + 1 <= #block and block\sub(token_end + 1, token_end + 1) != "\\"
@@ -983,7 +1005,7 @@ gun_is_digit = (c) ->
   c and c\match("%d") != nil
 
 gun_scan_numbers = (text) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   tokens = {}
   i = 1
   while i <= #text
@@ -1099,11 +1121,13 @@ gun_delta_key = (ctx, key, category, token_index, cfg) ->
 gun_random_delta = (ctx, key, category, token_index, cfg) ->
   cache_key = gun_delta_key ctx, key, category, token_index, cfg
   return ctx.cache[cache_key] if ctx.cache[cache_key] != nil
-  min_delta, max_delta = tonumber(cfg.min_delta) or 0, tonumber(cfg.max_delta) or 0
+  min_delta, max_delta = finite(cfg.min_delta) or 0, finite(cfg.max_delta) or 0
   if min_delta > max_delta
     min_delta, max_delta = max_delta, min_delta
-  delta = min_delta + math.random! * (max_delta - min_delta)
-  step = tonumber(cfg.step) or 0
+  random = ctx.random
+  sample = if random then random! else 0.5
+  delta = min_delta + sample * (max_delta - min_delta)
+  step = finite(cfg.step) or 0
   if step > 0
     delta = round_int(delta / step) * step
     delta = clamp delta, min_delta, max_delta
@@ -1127,7 +1151,7 @@ gun_apply_number = (token, key, category, index, cfg, ctx) ->
   delta = gun_random_delta ctx, key, category, index, cfg
   spec = gun_spec_for key, category
   value = gun_apply_limits value + delta, spec, cfg
-  decimals = tonumber(cfg.decimals) or 3
+  decimals = clamp math.floor(finite(cfg.decimals) or 3), 0, CONSTANTS.MAX_FORMAT_DECIMALS
   decimals = 0 if cfg.protect_discrete and spec.integer
   format_num value, decimals
 
@@ -1249,7 +1273,7 @@ gun_process_tag = (tag, selected, cfg, ctx) ->
   gun_replace_number_tokens tag.raw, numbers, key, cfg, ctx, tag.value
 
 gun_process_block_content = (content, selected, cfg, ctx) ->
-  content = tostring content or ""
+  content = tostring(content or "")
   tags = gun_parse_tag_block content
   return content, 0 if #tags == 0
   out = {}
@@ -1265,12 +1289,12 @@ gun_process_block_content = (content, selected, cfg, ctx) ->
   out[#out + 1] = content\sub pos
   table.concat(out), changed
 
-gun_process_text = (text, selected, cfg, line_index = 1, shared_cache = nil) ->
-  text = tostring text or ""
+gun_process_text = (text, selected, cfg, line_index = 1, shared_cache = nil, random = nil) ->
+  text = tostring(text or "")
   out = {}
   pos = 1
   changed = 0
-  ctx = {line_index: line_index, cache: shared_cache or {}, value_counter: 0}
+  ctx = {line_index: line_index, cache: shared_cache or {}, value_counter: 0, random: random}
   blocks = gun_iter_tag_blocks text
   for block_index, block in ipairs blocks
     ctx.block_index = block_index
@@ -1325,13 +1349,20 @@ gun_has_any_selected = (selected) ->
     return true if value
   false
 
+make_random = (seed) ->
+  seed = finite(seed) or 0
+  if seed <= 0
+    clock_part = if os.clock then math.floor(os.clock! * CONSTANTS.RNG_CLOCK_SCALE) else 0
+    seed = os.time! * CONSTANTS.RNG_CLOCK_SCALE + clock_part
+  seed = (math.floor(math.abs(seed)) - 1) % CONSTANTS.MAX_RANDOM_SEED + 1
+  state = seed
+  random = ->
+    state = (state * CONSTANTS.RNG_MULTIPLIER) % CONSTANTS.RNG_MODULUS
+    state / CONSTANTS.RNG_MODULUS
+  random, seed
+
 gun_seed_random = (seed) ->
-  seed = tonumber(seed) or 0
-  seed = os.time! if seed <= 0
-  math.randomseed seed
-  math.random!
-  math.random!
-  seed
+  make_random seed
 
 TRANSITION_CANON = {fr: "frz", ["1c"]: "c"}
 
@@ -1346,23 +1377,23 @@ TRANSITION_ANIMATABLE = {
   alpha: true, ["1a"]: true, ["2a"]: true, ["3a"]: true, ["4a"]: true
 }
 
-TRANSITION_STATIC = {
-  an: true, a: true, q: true, fn: true, r: true
-  b: true, i: true, u: true, s: true
-  p: true, pbo: true, fe: true
-}
-
 transition_canonical = (name) ->
   TRANSITION_CANON[name] or name
 
 parse_transition_tags = (blocks) ->
   tags, order = {}, {}
   for t in *parse_tag_block blocks
-    continue if t.name == "t"
     key = transition_canonical t.name
     order[#order + 1] = key unless tags[key]
     tags[key] = {name: t.name, key: key, value: t.value, raw: t.raw}
   tags, order
+
+transition_clip_kind = (tag) ->
+  return nil unless tag
+  return "vector" if gun_clip_has_vector_commands tag.value
+  numbers = tag_numbers tag.value
+  return "rectangle" if #numbers == 4 and numbers[1] and numbers[2] and numbers[3] and numbers[4]
+  "invalid"
 
 transition_position = (tags, final) ->
   t = tags.pos
@@ -1386,8 +1417,30 @@ transition_fad_value = (tag, slot) ->
 transition_tag_text = (tag) ->
   "\\" .. tag.name .. tostring(tag.value or "")
 
+TRANSITION_SPECIAL = {pos: true, move: true, fad: true}
+
+transition_static_mismatches = (tags1, tags2, order1, order2) ->
+  mismatches, seen = {}, {}
+  inspect = (key) ->
+    return if seen[key]
+    seen[key] = true
+    return if TRANSITION_ANIMATABLE[key] or TRANSITION_SPECIAL[key]
+    first, second = tags1[key], tags2[key]
+    mismatches[#mismatches + 1] = "\\#{key}" unless first and second and first.raw == second.raw
+  inspect key for key in *order1
+  inspect key for key in *order2
+  mismatches
+
+transition_fad_valid = (tag) ->
+  return true unless tag
+  numbers = tag_numbers tag.value
+  #numbers == 2 and numbers[1] >= 0 and numbers[2] >= 0
+
 choose_transition_body = (body1, body2) ->
-  return body1 if strip_tags(body1) == strip_tags(body2)
+  return body1 if body1 == body2
+  if strip_tags(body1) == strip_tags(body2)
+    show_message "In-Out found different inline override tags around the same visible text. Split the runs or make both bodies identical before combining them."
+    return nil
   b1, b2, bc = Core.L("use_line1"), Core.L("use_line2"), Core.L("cancel")
   button = aegisub.dialog.display {
     {class: "textbox", text: Core.L("choose_text"), x: 0, y: 0, width: 34, height: 4}
@@ -1396,15 +1449,27 @@ choose_transition_body = (body1, body2) ->
 
 apply_in_out_tags = (subs, sel, cfg = {}) ->
   indices = [i for i in *(sel or {})]
-  table.sort indices
   unless #indices == 2
     show_message Core.L("in_out_need_two")
     return false
-  idx1, idx2 = indices[1], indices[2]
-  line1 = clone_line subs[idx1]
-  line2 = clone_line subs[idx2]
+  records = [{index: index, line: clone_line(subs[index])} for index in *indices]
+  table.sort records, (a, b) ->
+    if a.line.start_time == b.line.start_time then a.index < b.index else a.line.start_time < b.line.start_time
+  idx1, idx2 = records[1].index, records[2].index
+  line1, line2 = records[1].line, records[2].line
   unless is_dialogue(line1) and is_dialogue(line2)
     show_message Core.L("in_out_need_two")
+    return false
+  visual_fields = {"style", "effect", "layer", "margin_l", "margin_r", "margin_t", "margin_b", "margin_v"}
+  exact_visual_fields = {style: true, effect: true}
+  differing_fields = {}
+  for field in *visual_fields
+    first = line1[field]
+    second = line2[field]
+    same = if exact_visual_fields[field] then tostring(first or "") == tostring(second or "") else (tonumber(first) or 0) == (tonumber(second) or 0)
+    differing_fields[#differing_fields + 1] = field unless same
+  if #differing_fields > 0
+    show_message "In-Out requires matching visual line fields because ASS cannot animate them: #{table.concat differing_fields, ", "}."
     return false
   tags_text1, body1 = split_leading_tag_blocks line1.text
   tags_text2, body2 = split_leading_tag_blocks line2.text
@@ -1413,9 +1478,59 @@ apply_in_out_tags = (subs, sel, cfg = {}) ->
 
   tags1, order1 = parse_transition_tags tags_text1
   tags2, order2 = parse_transition_tags tags_text2
+  timed_tags = {}
+  for key in *{"t", "fade", "k", "kf", "ko", "kt"}
+    first_calls = LineOps.tagCalls line1.text, key
+    second_calls = LineOps.tagCalls line2.text, key
+    timed_tags[#timed_tags + 1] = "\\#{key}" if #first_calls > 0 or #second_calls > 0
+  if #timed_tags > 0
+    show_message "In-Out does not combine existing time-sensitive tags (#{table.concat timed_tags, ", "}) because their timing would change. Bake or remove them first."
+    return false
+  if #LineOps.tagCalls(body1, "fad") > 0 or #LineOps.tagCalls(body2, "fad") > 0
+    show_message "In-Out only supports \\fad in the leading override blocks; inline fades would change timing in the combined line."
+    return false
+  mismatches = transition_static_mismatches tags1, tags2, order1, order2
+  if #mismatches > 0
+    show_message "In-Out found non-animatable tags that differ between endpoints: #{table.concat mismatches, ", "}. Make them identical or split the operation."
+    return false
+  unless transition_fad_valid(tags1.fad) and transition_fad_valid(tags2.fad)
+    show_message "In-Out found an invalid \\fad tag; use exactly two non-negative durations."
+    return false
+  if (tags1.pos and tags1.move) or (tags2.pos and tags2.move)
+    show_message "In-Out needs one placement tag per endpoint; do not combine \\pos and \\move on the same line."
+    return false
+  if (tags1.clip and tags1.iclip) or (tags2.clip and tags2.iclip)
+    show_message "In-Out found both \\clip and \\iclip on one endpoint; keep exactly one clip type before combining the lines."
+    return false
+  first_clip_key = if tags1.clip then "clip" elseif tags1.iclip then "iclip" else nil
+  second_clip_key = if tags2.clip then "clip" elseif tags2.iclip then "iclip" else nil
+  if first_clip_key != second_clip_key
+    show_message "In-Out can only interpolate clips when both endpoints use the same rectangular \\clip or \\iclip tag."
+    return false
+  for key in *{"clip", "iclip"}
+    first_clip, second_clip = tags1[key], tags2[key]
+    if first_clip or second_clip
+      changed_clip = not first_clip or not second_clip or first_clip.raw != second_clip.raw
+      if changed_clip
+        first_kind = transition_clip_kind first_clip
+        second_kind = transition_clip_kind second_clip
+        if first_kind == "vector" or second_kind == "vector"
+          show_message "In-Out cannot animate vector \\#{key}; ASS only animates rectangular clips. Keep the vector clip identical or convert it to a rectangle first."
+          return false
+        if first_kind == "invalid" or second_kind == "invalid"
+          show_message "In-Out found an invalid \\#{key}; use exactly four numeric coordinates for an animated rectangular clip."
+          return false
   parts, used = {}, {}
   pos1 = transition_position tags1, false
   pos2 = transition_position tags2, true
+  has_pos1 = tags1.pos or tags1.move
+  has_pos2 = tags2.pos or tags2.move
+  if (has_pos1 and not pos1) or (has_pos2 and not pos2)
+    show_message "In-Out found an invalid \\pos or \\move tag."
+    return false
+  if (pos1 and not pos2) or (pos2 and not pos1)
+    show_message "In-Out needs explicit placement on both endpoints, or on neither endpoint."
+    return false
   if pos1 and pos2 and (pos1.x != pos2.x or pos1.y != pos2.y)
     parts[#parts + 1] = "\\move(" .. format_num(pos1.x, 3) .. "," .. format_num(pos1.y, 3) .. "," .. format_num(pos2.x, 3) .. "," .. format_num(pos2.y, 3) .. ")"
   elseif pos1
@@ -1427,7 +1542,7 @@ apply_in_out_tags = (subs, sel, cfg = {}) ->
       parts[#parts + 1] = transition_tag_text t1
       parts[#parts + 1] = "\\t(" .. transition_tag_text(t2) .. ")" if t2 and t1.raw != t2.raw
       used[key] = true
-    elseif TRANSITION_STATIC[key]
+    elseif not TRANSITION_SPECIAL[key]
       parts[#parts + 1] = transition_tag_text t1
       used[key] = true
 
@@ -1441,16 +1556,20 @@ apply_in_out_tags = (subs, sel, cfg = {}) ->
   parts[#parts + 1] = "\\fad(" .. fad_in .. "," .. fad_out .. ")" if fad_in > 0 or fad_out > 0
 
   new_line = clone_line line1
-  new_line.start_time = line1.start_time
-  new_line.end_time = line2.end_time
+  new_line.start_time = math.min line1.start_time, line2.start_time
+  new_line.end_time = math.max line1.end_time, line2.end_time
   new_line.comment = false
   new_line.text = (if #parts > 0 then "{" .. table.concat(parts) .. "}" else "") .. final_text
   line1.comment = true
   line2.comment = true
-  subs[idx1] = line1
-  subs[idx2] = line2
-  subs.insert idx2 + 1, new_line
-  aegisub.set_undo_point "Obake - In-Out tags"
+  ok_apply, apply_error = pcall ->
+    LineOps.transaction subs, "Obake - In-Out tags", ->
+      subs[idx1] = line1
+      subs[idx2] = line2
+      subs.insert math.max(idx1, idx2) + 1, new_line
+  unless ok_apply
+    show_message "In-Out could not apply output atomically: #{apply_error}"
+    return false
   show_message Core.L("in_out_created") unless cfg.quiet
   true
 
@@ -1482,11 +1601,15 @@ line_duration = (line) ->
 
 current_frame_ms = ->
   return nil, "No video frame API." unless aegisub and aegisub.project_properties
-  props = aegisub.project_properties!
+  ok_props, props = pcall aegisub.project_properties
+  return nil, "Could not read project properties." unless ok_props
   frame = props and props.video_position
   return nil, "No active video frame." unless frame
   if aegisub.ms_from_frame
-    return aegisub.ms_from_frame(frame), nil
+    ok_ms, ms = pcall aegisub.ms_from_frame, frame
+    ms = finite ms
+    return ms, nil if ok_ms and ms
+    return nil, "Could not convert the active frame to milliseconds."
   nil, "aegisub.ms_from_frame is unavailable."
 
 frame_slices = (start_ms, end_ms, period_frames = 1) ->
@@ -1496,15 +1619,22 @@ frame_slices = (start_ms, end_ms, period_frames = 1) ->
   end_ms = math.floor((tonumber(end_ms) or start_ms) + 0.5)
   return {}, nil unless end_ms > start_ms
   period = math.max 1, math.floor((tonumber(period_frames) or 1) + 0.5)
-  start_frame = tonumber aegisub.frame_from_ms start_ms
-  last_frame = tonumber aegisub.frame_from_ms math.max(start_ms, end_ms - 1)
+  ok_start_frame, start_frame = pcall aegisub.frame_from_ms, start_ms
+  ok_last_frame, last_frame = pcall aegisub.frame_from_ms, math.max(start_ms, end_ms - 1)
+  start_frame, last_frame = finite(start_frame), finite(last_frame)
+  start_frame = math.floor start_frame if ok_start_frame and start_frame
+  last_frame = math.floor last_frame if ok_last_frame and last_frame
   return nil, Core.L("frame_api_missing") unless start_frame and last_frame
+  estimated_slices = math.floor((math.max(start_frame, last_frame) - start_frame) / period) + 1
+  return nil, "FBF output would create #{estimated_slices} lines; shorten the range or increase the frame period (maximum #{CONSTANTS.MAX_FBF_OUTPUT_LINES})." if estimated_slices > CONSTANTS.MAX_FBF_OUTPUT_LINES
   slices = {}
   frame = start_frame
   while frame <= last_frame
     next_frame = math.min frame + period, last_frame + 1
-    slice_start = tonumber(aegisub.ms_from_frame frame) or start_ms
-    slice_end = tonumber(aegisub.ms_from_frame next_frame) or end_ms
+    ok_slice_start, slice_start = pcall aegisub.ms_from_frame, frame
+    ok_slice_end, slice_end = pcall aegisub.ms_from_frame, next_frame
+    slice_start, slice_end = finite(slice_start), finite(slice_end)
+    return nil, Core.L("frame_api_missing") unless ok_slice_start and ok_slice_end and slice_start and slice_end
     slice_start = math.max start_ms, math.floor(slice_start + 0.5)
     slice_end = math.min end_ms, math.floor(slice_end + 0.5)
     slice_end = math.min end_ms, slice_start + 1 if slice_end <= slice_start
@@ -1558,8 +1688,8 @@ normalize_chain_state = (state) ->
   state.chain_shape = enum_value state.chain_shape, CHAIN_SHAPES, DEFAULTS.chain_shape
   state.strip_existing = state.strip_existing != false
   state.use_accel = state.use_accel and true or false
-  state.accel = math.max 0.01, tonumber(state.accel) or DEFAULTS.accel
-  state.shape_val = tonumber(state.shape_val) or DEFAULTS.shape_val
+  state.accel = math.max CONSTANTS.MIN_TRANSFORM_ACCEL, finite(state.accel) or DEFAULTS.accel
+  state.shape_val = finite(state.shape_val) or DEFAULTS.shape_val
   state.delay_mode = enum_value state.delay_mode, DELAY_MODES, DEFAULTS.delay_mode
   state.delay_val = tonumber(state.delay_val) or 0
   rows = {}
@@ -1599,7 +1729,7 @@ build_shape_chain = (line, state) ->
         t2 = offset + seg * (i + 1)
         payload ..= transform_tag(t1, t2, if i % 2 == 0 then tags_fin else tags_ini, accel)
     when "Pulse (ms)"
-      half = math.max 20, math.floor(tonumber(state.shape_val) or 200)
+      half = math.max CONSTANTS.MIN_PULSE_MS, math.floor(finite(state.shape_val) or 200)
       t, forward = offset, true
       while t < t_end
         t2 = math.min t + half, t_end
@@ -1607,9 +1737,9 @@ build_shape_chain = (line, state) ->
         t = t2
         forward = not forward
     when "Steps (N)"
-      steps = math.max 2, math.floor(tonumber(state.shape_val) or 4)
+      steps = math.max 2, math.floor(finite(state.shape_val) or 4)
       for i = 1, steps
-        factor = (i - 1) / (steps - 1)
+        factor = i / steps
         t1 = offset + (eff_dur / steps) * (i - 1)
         t2 = offset + (eff_dur / steps) * i
         payload ..= transform_tag t1, t2, interpolate_simple(tags_ini, tags_fin, factor), accel
@@ -1619,14 +1749,21 @@ build_manual_chain = (line, state) ->
   dur = line_duration line
   return "" unless dur > 0
   rows = {}
-  for row in *(state.rows or {})
+  for order, row in ipairs(state.rows or {})
     tags = tostring(row.tags or "")
     continue if tags == ""
     raw_time = tonumber(row.time) or 0
     t = if state.time_unit == "Percent" then dur * raw_time / 100 else raw_time
     t = clamp t, 0, dur
-    rows[#rows + 1] = {time: t, tags: tags}
-  table.sort rows, (a, b) -> a.time < b.time
+    rows[#rows + 1] = {time: t, tags: tags, order: order}
+  table.sort rows, (a, b) -> if a.time == b.time then a.order < b.order else a.time < b.time
+  compact = {}
+  for row in *rows
+    if #compact > 0 and compact[#compact].time == row.time
+      compact[#compact] = row
+    else
+      compact[#compact + 1] = row
+  rows = compact
   return "" if #rows == 0
   accel = if state.use_accel then state.accel else nil
   payload = rows[1].tags
@@ -1852,9 +1989,9 @@ gun_build_interface = (found, state) ->
     dec_label: {class: "label", label: "Dec", x: 0, y: 2, width: 2, height: 1}
     decimals: {class: "intedit", name: "decimals", value: state.decimals, min: 0, max: 8, config: true, x: 2, y: 2, width: 2, height: 1}
     seed_label: {class: "label", label: "Seed", x: 4, y: 2, width: 2, height: 1}
-    seed: {class: "intedit", name: "seed", value: state.seed, min: 0, max: 999999999, config: true, x: 6, y: 2, width: 4, height: 1}
+    seed: {class: "intedit", name: "seed", value: state.seed, min: 0, max: CONSTANTS.MAX_RANDOM_SEED, config: true, x: 6, y: 2, width: 4, height: 1}
     fbf_label: {class: "label", label: Core.L("fbf_period"), x: 10, y: 2, width: 3, height: 1}
-    fbf_period: {class: "intedit", name: "fbf_period", value: state.fbf_period, min: 1, max: 999, config: true, x: 13, y: 2, width: 3, height: 1}
+    fbf_period: {class: "intedit", name: "fbf_period", value: state.fbf_period, min: 1, max: CONSTANTS.MAX_PERIOD_FRAMES, config: true, x: 13, y: 2, width: 3, height: 1}
     scope_label: {class: "label", label: "Link", x: 0, y: 3, width: 2, height: 1}
     random_scope: {class: "dropdown", name: "random_scope", items: GUN_RANDOM_SCOPES, value: gun_choice_or_default(state.random_scope, GUN_RANDOM_SCOPES, GUN_DEFAULTS.random_scope), config: true, x: 2, y: 3, width: 4, height: 1}
     show_report: {class: "checkbox", name: "show_report", label: "Report", value: state.show_report, config: true, x: 8, y: 3, width: 3, height: 1}
@@ -1900,7 +2037,7 @@ gun_read_state_from_result = (result, found) ->
   state.max_delta = tonumber(result.max_delta) or GUN_DEFAULTS.max_delta
   state.step = math.max 0, tonumber(result.step) or GUN_DEFAULTS.step
   state.decimals = clamp round_int(result.decimals), 0, 8
-  state.seed = clamp round_int(result.seed), 0, 999999999
+  state.seed = clamp round_int(result.seed), 0, CONSTANTS.MAX_RANDOM_SEED
   state.random_scope = gun_choice_or_default result.random_scope, GUN_RANDOM_SCOPES, GUN_DEFAULTS.random_scope
   state.use_x = result.use_x == true
   state.use_y = result.use_y == true
@@ -1912,7 +2049,7 @@ gun_read_state_from_result = (result, found) ->
   state.clamp_nonnegative = result.clamp_nonnegative == true
   state.protect_discrete = result.protect_discrete == true
   state.show_report = result.show_report == true
-  state.fbf_period = math.max 1, round_int(result.fbf_period)
+  state.fbf_period = clamp round_int(result.fbf_period), 1, CONSTANTS.MAX_PERIOD_FRAMES
   state.selection_as_fbf_unit = result.selection_as_fbf_unit == true
   for def in *GUN_TAG_DEFS
     state["tag_" .. def.key] = result["tag_" .. def.key] == true if found[def.key]
@@ -1958,14 +2095,14 @@ show_gunfight_options = (subs, sel) ->
 show_zigzag_options = ->
   gui = {
     period_label: {class: "label", label: Core.L("zigzag_period"), x: 0, y: 0, width: 2}
-    period_frames: {class: "intedit", name: "period_frames", value: ZIGZAG_DEFAULTS.period_frames, min: 1, max: 999, x: 2, y: 0, width: 2, config: true}
+    period_frames: {class: "intedit", name: "period_frames", value: ZIGZAG_DEFAULTS.period_frames, min: 1, max: CONSTANTS.MAX_PERIOD_FRAMES, x: 2, y: 0, width: 2, config: true}
   }
   options = Core.ConfigHandler {main: gui}, ZIGZAG_CONFIG_FILE, true, script_version
   options\read!
   options\updateInterface "main"
   button, res = aegisub.dialog.display gui, {Core.L("apply"), Core.L("cancel")}, {ok: Core.L("apply"), close: Core.L("cancel")}
   return nil unless button == Core.L("apply")
-  res.period_frames = math.max 1, round_int res.period_frames
+  res.period_frames = clamp round_int(res.period_frames), 1, CONSTANTS.MAX_PERIOD_FRAMES
   options\updateConfiguration res, "main"
   options\write!
   res
@@ -1993,7 +2130,7 @@ Core.action_picker = ->
   Core.UI.chooseAction {
     current: saved.operation
     build: (current) ->
-      gui, to_raw, _to_shown = Core.action_picker_gui current
+      gui, to_raw = Core.action_picker_gui current
       gui, {to_raw: to_raw}
     buttons: ->
       run, help, language, cancel = Core.L("run"), Core.L("help"), Core.L("language"), Core.L("cancel")
@@ -2010,7 +2147,7 @@ Core.action_picker = ->
 Core.action_help_picker = ->
   current = DEFAULTS.operation
   while true
-    gui, to_raw, to_shown = Core.action_picker_gui current
+    gui, to_raw = Core.action_picker_gui current
     btn_help, btn_language, btn_close = Core.L("help"), Core.L("language"), Core.L("close")
     button, res = aegisub.dialog.display gui, {btn_help, btn_language, btn_close}, {ok: btn_help, close: btn_close}
     if button == btn_help
@@ -2021,7 +2158,7 @@ Core.action_help_picker = ->
     else
       return
 
-Core.show_action_options = (operation, subs = nil, sel = nil, active = nil) ->
+Core.show_action_options = (operation, subs, sel) ->
   return {operation: operation} if DIRECT_ACTIONS[operation]
   switch operation
     when "Apply chain" then show_chain_options!
@@ -2061,13 +2198,13 @@ gun_dialogue_indices = (subs, sel) ->
     out[#out + 1] = i if is_dialogue subs[i]
   out
 
-gun_process_line = (line, selected, cfg, sequence_index, cache = nil) ->
-  next_text, count = gun_process_text line.text or "", selected, cfg, sequence_index, cache
+gun_process_line = (line, selected, cfg, sequence_index, cache = nil, random = nil) ->
+  next_text, count = gun_process_text line.text or "", selected, cfg, sequence_index, cache, random
   out = clone_line line
   out.text = next_text
   out, count, next_text != (line.text or "")
 
-gun_fbf_lines_for_line = (line, selected, cfg, sequence_start = 1) ->
+gun_fbf_lines_for_line = (line, selected, cfg, sequence_start = 1, random = nil) ->
   slices, err = frame_slices line.start_time, line.end_time, cfg.fbf_period
   return nil, err if err
   return nil, Core.L("no_fbf_slices") unless slices and #slices > 0
@@ -2075,7 +2212,7 @@ gun_fbf_lines_for_line = (line, selected, cfg, sequence_start = 1) ->
   changed_tags = 0
   changed_text = 0
   for n, slice in ipairs slices
-    next_line, count, changed = gun_process_line line, selected, cfg, sequence_start + n - 1
+    next_line, count, changed = gun_process_line line, selected, cfg, sequence_start + n - 1, nil, random
     next_line.start_time = slice.start_time
     next_line.end_time = slice.end_time
     out[#out + 1] = next_line
@@ -2093,41 +2230,66 @@ apply_gunfight_of_tags = (subs, sel, cfg) ->
   unless #indices > 0
     show_message Core.L("no_lines_changed")
     return false
-  seed_used = gun_seed_random cfg.seed
+  random, seed_used = gun_seed_random cfg.seed
   changed_lines, changed_tags, produced_lines, skipped = 0, 0, 0, 0
-  period = math.max 1, tonumber(cfg.fbf_period) or 1
+  period = math.max 1, round_int(cfg.fbf_period)
   recognized_fbf = cfg.selection_as_fbf_unit and #indices > 1 and selection_is_single_frame_fbf(subs, indices)
   if cfg.selection_as_fbf_unit and #indices > 1
-    group_caches = {}
+    group_caches, updates = {}, {}
     for n, index in ipairs indices
       line = subs[index]
       group = math.floor((n - 1) / period) + 1
       group_caches[group] or= {}
-      next_line, count, changed = gun_process_line line, selected, cfg, group, group_caches[group]
+      next_line, count, changed = gun_process_line line, selected, cfg, group, group_caches[group], random
       if changed
-        subs[index] = next_line
+        updates[#updates + 1] = {index: index, line: next_line}
         changed_lines += 1
       changed_tags += count
       aegisub.progress.set math.floor 100 * n / math.max(1, #indices)
+    if #updates > 0
+      ok_apply, apply_error = pcall ->
+        LineOps.transaction subs, "Obake - Gunfight of Tags", ->
+          subs[update.index] = update.line for update in *updates
+      unless ok_apply
+        show_message "Gunfight of Tags could not apply changes atomically: #{apply_error}"
+        return false
   else
-    for index in *selected_desc indices
+    plans = {}
+    planned_output = 0
+    for index in *indices
       line = subs[index]
       unless is_dialogue line
         skipped += 1
         continue
-      lines, err, count = gun_fbf_lines_for_line line, selected, cfg, 1
+      lines, err, count, changed_text = gun_fbf_lines_for_line line, selected, cfg, 1, random
       if err
         show_message "#{Core.L('line')} #{index}: #{err}"
         return false
-      if lines and replace_line_with_many subs, index, lines
-        produced_lines += #lines
-        changed_lines += 1
-        changed_tags += count or 0
-      aegisub.progress.set math.floor 100 * (#indices - skipped) / math.max(1, #indices)
+      if changed_text and changed_text > 0
+        planned_output += #lines
+        if planned_output > CONSTANTS.MAX_FBF_OUTPUT_LINES
+          show_message "Gunfight FBF output would create #{planned_output} lines; shorten the selection or increase the frame period (maximum #{CONSTANTS.MAX_FBF_OUTPUT_LINES})."
+          return false
+        plans[#plans + 1] = {index: index, lines: lines, count: count or 0}
+      else
+        skipped += 1
+    if #plans > 0
+      ok_apply, apply_error = pcall ->
+        LineOps.transaction subs, "Obake - Gunfight of Tags", ->
+          for plan_index = #plans, 1, -1
+            plan = plans[plan_index]
+            error "Invalid empty FBF plan for line #{plan.index}." unless plan.lines and replace_line_with_many(subs, plan.index, plan.lines)
+            produced_lines += #plan.lines
+            changed_lines += 1
+            changed_tags += plan.count
+            completed = #plans - plan_index + 1
+            aegisub.progress.set math.floor 100 * completed / math.max(1, #plans)
+      unless ok_apply
+        show_message "Gunfight of Tags could not apply FBF output atomically: #{apply_error}"
+        return false
   if changed_lines == 0 and produced_lines == 0
     show_message Core.L("gun_no_change")
     return false
-  aegisub.set_undo_point "Obake - Gunfight of Tags"
   if cfg.show_report
     detail = "Gunfight of Tags changed #{changed_tags} value(s) in #{changed_lines} source line(s).\nSeed: #{seed_used}"
     detail ..= "\nRecognized one-frame FBF selection." if recognized_fbf
@@ -2165,11 +2327,15 @@ apply_zigzag_lines = (subs, sel, cfg) ->
     line.comment = false
     out[#out + 1] = line
   insert_at = indices[1]
-  for index in *selected_desc indices
-    subs.delete index
-  for n, line in ipairs out
-    subs.insert insert_at + n - 1, line
-  aegisub.set_undo_point "Obake - ZigZag lines"
+  ok_apply, apply_error = pcall ->
+    LineOps.transaction subs, "Obake - ZigZag lines", ->
+      for index in *selected_desc indices
+        subs.delete index
+      for n, line in ipairs out
+        subs.insert insert_at + n - 1, line
+  unless ok_apply
+    show_message "ZigZag could not apply output atomically: #{apply_error}"
+    return false
   show_message "#{Core.L('zigzag_created')} #{#out} line(s)."
   true
 
@@ -2182,7 +2348,6 @@ stamp_marker = (line, prefix, seq) ->
 marker_counter = 0
 next_marker = ->
   marker_counter += 1
-  marker_counter = 1 if marker_counter > 9999
   marker_counter
 
 reset_markers = ->
@@ -2200,34 +2365,55 @@ Core.layer_override_block = (content) ->
   first == "\\" or ((first == "*" or first == ">") and raw\sub(2, 2) == "\\")
 
 Core.remove_layer_tags_from_block = (block, remove_set) ->
-  out = {}
-  pos = 1
-  for tag in *gun_parse_tag_block block
-    out[#out + 1] = block\sub pos, tag.start_pos - 1
+  frame_for = (content, prefix = "", suffix = "", require_tag = false) ->
+    {
+      block: content
+      tags: gun_parse_tag_block content
+      index: 1
+      pos: 1
+      out: {}
+      prefix: prefix
+      suffix: suffix
+      require_tag: require_tag
+    }
+
+  stack = {frame_for block}
+  while #stack > 0
+    frame = stack[#stack]
+    tag = frame.tags[frame.index]
+    unless tag
+      frame.out[#frame.out + 1] = frame.block\sub frame.pos
+      cleaned = table.concat frame.out
+      table.remove stack
+      return cleaned if #stack == 0
+      parent = stack[#stack]
+      if not frame.require_tag or cleaned\find("\\", 1, true)
+        parent.out[#parent.out + 1] = frame.prefix .. cleaned .. frame.suffix
+      continue
+
+    frame.out[#frame.out + 1] = frame.block\sub frame.pos, tag.start_pos - 1
+    frame.pos = tag.end_pos + 1
+    frame.index += 1
     canonical = TAG_NAME_ALIASES[tag.name] or tag.name
-    unless remove_set[canonical]
-      raw = tag.raw
-      if canonical == "transform"
-        open_pos = raw\find "(", 1, true
-        if open_pos and raw\sub(-1) == ")"
-          inner = raw\sub open_pos + 1, -2
-          tag_pos = inner\find "\\", 1, true
-          if tag_pos
-            prefix = inner\sub 1, tag_pos - 1
-            cleaned = Core.remove_layer_tags_from_block inner\sub(tag_pos), remove_set
-            raw = if cleaned\find("\\", 1, true)
-              raw\sub(1, open_pos) .. prefix .. cleaned .. ")"
-            else
-              nil
-      out[#out + 1] = raw if raw
-    pos = tag.end_pos + 1
-  out[#out + 1] = block\sub pos
-  table.concat out
+    continue if remove_set[canonical]
+
+    raw = tag.raw
+    if canonical == "transform"
+      open_pos = raw\find "(", 1, true
+      if open_pos and raw\sub(-1) == ")"
+        inner = raw\sub open_pos + 1, -2
+        tag_pos = inner\find "\\", 1, true
+        if tag_pos
+          prefix = raw\sub(1, open_pos) .. inner\sub(1, tag_pos - 1)
+          stack[#stack + 1] = frame_for inner\sub(tag_pos), prefix, ")", true
+          continue
+    frame.out[#frame.out + 1] = raw
+  ""
 
 Core.remove_layer_tags = (text, names) ->
   remove_set = {}
   remove_set[name] = true for name in *normalize_tag_names names
-  text = tostring text or ""
+  text = tostring(text or "")
   out = {}
   pos = 1
   for block in *gun_iter_tag_blocks text
@@ -2243,7 +2429,7 @@ Core.remove_layer_tags = (text, names) ->
 
 Core.append_layer_tags = (text, payload) ->
   return tostring(text or "") unless payload and payload != ""
-  text = tostring text or ""
+  text = tostring(text or "")
   out = {}
   pos = 1
   has_initial_override = false
@@ -2333,15 +2519,20 @@ make_border_layers = (line, cfg) ->
 apply_border_layers = (subs, sel, cfg) ->
   cfg or= DEFAULTS
   reset_markers!
-  changed = 0
+  plans = {}
   for index in *selected_desc sel
     line = subs[index]
     if is_dialogue line
       layers = make_border_layers line, cfg
-      if layers and replace_line_with_many subs, index, layers
-        changed += 1
-  if changed > 0
-    aegisub.set_undo_point "Obake - Border layers"
+      plans[#plans + 1] = {index: index, lines: layers} if layers and #layers > 0
+  if #plans > 0
+    ok_apply, apply_error = pcall ->
+      LineOps.transaction subs, "Obake - Border layers", ->
+        for plan in *plans
+          error "Could not replace line #{plan.index}." unless replace_line_with_many subs, plan.index, plan.lines
+    unless ok_apply
+      show_message "Border layers could not apply output atomically: #{apply_error}"
+      return false
     return true
   show_message Core.L("no_border_layers")
   false
@@ -2409,22 +2600,27 @@ preset_layers = (line, preset) ->
 apply_color_preset = (subs, sel, cfg) ->
   cfg or= DEFAULTS
   reset_markers!
-  changed = 0
+  plans = {}
   for index in *selected_desc sel
     line = subs[index]
     if is_dialogue line
       layers = preset_layers line, cfg.cal_preset
-      if layers and replace_line_with_many subs, index, layers
-        changed += 1
-  if changed > 0
-    aegisub.set_undo_point "Obake - Color preset"
+      plans[#plans + 1] = {index: index, lines: layers} if layers and #layers > 0
+  if #plans > 0
+    ok_apply, apply_error = pcall ->
+      LineOps.transaction subs, "Obake - Color preset", ->
+        for plan in *plans
+          error "Could not replace line #{plan.index}." unless replace_line_with_many subs, plan.index, plan.lines
+    unless ok_apply
+      show_message "Color preset could not apply output atomically: #{apply_error}"
+      return false
     return true
   show_message Core.L("no_color_preset")
   false
 
 karaoke_cue = (text) ->
   elapsed, seen = 0, 0
-  text = tostring text or ""
+  text = tostring(text or "")
   for s, block, e in text\gmatch("()(%b{})()")
     for value in block\gmatch "\\[kK][fo]?([%d%.]+)"
       seen += 1
@@ -2504,7 +2700,8 @@ apply_to_color_frame = (line, cfg) ->
   unless uses_karaoke
     fms, err = current_frame_ms!
     return nil, err unless fms
-    offset = clamp fms - line.start_time, 0, dur
+    return nil, "Frame is outside the line." if fms < line.start_time or fms >= line.end_time
+    offset = fms - line.start_time
   line.text = fx_text line, uses_karaoke
   color = color_norm cfg.fx_color or "&HFFCC00&"
   inject_fx line, transform_tag(offset, dur, "\\c" .. color .. "\\3c" .. color .. "\\4c" .. color), cfg.strip_existing
@@ -2516,7 +2713,7 @@ apply_to_style_frame = (line, cfg, styles) ->
   unless uses_karaoke
     fms, err = current_frame_ms!
     return nil, err unless fms
-    return nil, "Frame is outside the line." if fms < line.start_time or fms > line.end_time
+    return nil, "Frame is outside the line." if fms < line.start_time or fms >= line.end_time
     offset = fms - line.start_time
   style = styles[line.style] or styles.Default
   return nil, "Style not found." unless style
@@ -2528,15 +2725,28 @@ apply_to_style_frame = (line, cfg, styles) ->
   init = "\\c" .. color .. "\\3c" .. color .. "\\4c" .. color
   inject_fx line, init .. transform_tag(0, offset, "\\c" .. sc1 .. "\\3c" .. sc3 .. "\\4c" .. sc4), cfg.strip_existing
 
-apply_shake = (line, cfg, axis) ->
+effect_position = (line, subs) ->
+  px, py = line.text\match "\\pos%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)"
+  px, py = finite(px), finite(py)
+  return px, py if px and py
+  move = {line.text\match "\\move%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)"}
+  px, py = finite(move[1]), finite(move[2])
+  return px, py if px and py
+  if line.getDefaultPosition
+    ok, default_x, default_y = pcall -> line\getDefaultPosition!
+    default_x, default_y = finite(default_x), finite(default_y)
+    return default_x, default_y if ok and default_x and default_y
+  play_x, play_y = LineOps.scriptResolution subs, CONSTANTS.DEFAULT_PLAYRES_X, CONSTANTS.DEFAULT_PLAYRES_Y
+  play_x / 2, play_y / 2
+
+apply_shake = (line, cfg, axis, subs) ->
   dur = line_duration line
   return nil unless dur > 0
   offset, uses_karaoke = fx_offset line
   line.text = fx_text line, uses_karaoke
-  px, py = line.text\match "\\pos%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)"
-  px, py = tonumber(px) or 960, tonumber(py) or 540
+  px, py = effect_position line, subs
   line.text = remove_simple_tag line.text, "org"
-  distance = 1500
+  distance = CONSTANTS.SHAKE_ORIGIN_DISTANCE
   org_x, org_y = math.floor(px), math.floor(py)
   org_x -= distance if axis == "V" or axis == "XY"
   org_y -= distance if axis == "H" or axis == "XY"
@@ -2566,18 +2776,19 @@ apply_wobble = (line, cfg) ->
     dir = -dir
   inject_fx line, payload, cfg.strip_existing
 
-apply_glitch = (line, cfg) ->
+apply_glitch = (line, cfg, random) ->
   dur = line_duration line
   return nil unless dur > 0
   offset, uses_karaoke = fx_offset line
   line.text = fx_text line, uses_karaoke
   step = math.max 30, math.floor(tonumber(cfg.fx_step_ms) or 60)
   amount = tonumber(cfg.fx_amount) or 6.0
+  random or= make_random!
   payload, t = "", offset
   while t < dur
     t2 = math.min t + step, dur
-    fax = (math.random! - 0.5) * amount * 0.05
-    fsp = math.floor((math.random! - 0.5) * amount)
+    fax = (random! - 0.5) * amount * 0.05
+    fsp = math.floor((random! - 0.5) * amount)
     payload ..= transform_tag t, t2, string.format("\\fax%.3f\\fsp%d", fax, fsp)
     t = t2
   inject_fx line, payload, cfg.strip_existing
@@ -2624,7 +2835,7 @@ split_line_lines = (line, mode) ->
     l1.text = head .. before .. "{\\alpha&HFF&}" .. after
     l2.layer = line_layer(line) + 1
     l2.start_time = split_time
-    fad = "\\fad(250,0)\\alpha&HFF&"
+    fad = "\\fad(#{CONSTANTS.SPLIT_FADE_IN_MS},0)\\alpha&HFF&"
     if head != ""
       l2.text = head\gsub("^{", "{" .. fad, 1) .. before .. "{\\alpha&H00&}" .. after
     else
@@ -2652,10 +2863,11 @@ apply_fx = (subs, sel, cfg) ->
   unless preset and preset != ""
     show_message Core.L("no_fx_preset")
     return false
-  math.randomseed os.time!
+  random = make_random!
   styles = style_map subs
-  changed, errors = 0, {}
+  errors = {}
   if preset == "Dramatic Pulse" or preset == "Split Line" or preset == "Split Line Fad" or preset == "Split Title"
+    plans = {}
     for index in *selected_desc sel
       line = subs[index]
       continue unless is_dialogue line
@@ -2664,13 +2876,19 @@ apply_fx = (subs, sel, cfg) ->
         when "Split Line" then split_line_lines line, "Split Line"
         when "Split Line Fad" then split_line_lines line, "Split Line Fad"
         when "Split Title" then split_title_lines line
-      if lines and replace_line_with_many subs, index, lines
-        changed += 1
-    if changed > 0
-      aegisub.set_undo_point "Obake - Animation FX " .. preset
+      plans[#plans + 1] = {index: index, lines: lines} if lines and #lines > 0
+    if #plans > 0
+      ok_apply, apply_error = pcall ->
+        LineOps.transaction subs, "Obake - Animation FX " .. preset, ->
+          for plan in *plans
+            error "Could not replace line #{plan.index}." unless replace_line_with_many subs, plan.index, plan.lines
+      unless ok_apply
+        show_message "Animation FX could not apply output atomically: #{apply_error}"
+        return false
       return true
     show_message Core.L("no_lines_changed")
     return false
+  updates = {}
   for i in *(sel or {})
     line = clone_line subs[i]
     continue unless is_dialogue line
@@ -2683,23 +2901,30 @@ apply_fx = (subs, sel, cfg) ->
         when "Color Pulse" then out, err = apply_color_pulse_fx line, cfg
         when "To Color (frame)" then out, err = apply_to_color_frame line, cfg
         when "To Style (frame)" then out, err = apply_to_style_frame line, cfg, styles
-        when "Shake V" then out, err = apply_shake line, cfg, "V"
-        when "Shake H" then out, err = apply_shake line, cfg, "H"
-        when "Shake XY" then out, err = apply_shake line, cfg, "XY"
+        when "Shake V" then out, err = apply_shake line, cfg, "V", subs
+        when "Shake H" then out, err = apply_shake line, cfg, "H", subs
+        when "Shake XY" then out, err = apply_shake line, cfg, "XY", subs
         when "Wobble (frz)" then out, err = apply_wobble line, cfg
-        when "Glitch" then out, err = apply_glitch line, cfg
+        when "Glitch" then out, err = apply_glitch line, cfg, random
         when "Flashback (fad)"
           line.text = inject_first line.text, "\\fad(200,200)"
           out = line
     if out
-      subs[i] = out
-      changed += 1
+      updates[#updates + 1] = {index: i, line: out}
     elseif err
       errors[#errors + 1] = "#{Core.L('line')} #{i}: #{err}"
-  if changed > 0
-    aegisub.set_undo_point "Obake - Animation FX " .. preset
+  if #errors > 0
+    show_message table.concat errors, "\n"
+    return false
+  if #updates > 0
+    ok_apply, apply_error = pcall ->
+      LineOps.transaction subs, "Obake - Animation FX " .. preset, ->
+        subs[update.index] = update.line for update in *updates
+    unless ok_apply
+      show_message "Animation FX could not apply changes atomically: #{apply_error}"
+      return false
     return true
-  show_message if #errors > 0 then table.concat(errors, "\n") else Core.L("no_lines_changed")
+  show_message Core.L("no_lines_changed")
   false
 
 apply_retime = (subs, sel, cfg) ->
@@ -2756,16 +2981,19 @@ Core.main = (subs, sel, active) ->
     return result if result != nil
 
 Core.validate = (subs, sel) ->
-  sel and #sel > 0
+  return false unless sel and #sel > 0
+  for index in *sel
+    return false unless subs and is_dialogue subs[index]
+  true
 
 Core.validate_any = ->
   true
 
 Core.validate_in_out = (subs, sel) ->
-  sel and #sel == 2
+  Core.validate(subs, sel) and #sel == 2
 
 Core.validate_zigzag = (subs, sel) ->
-  sel and #sel >= 2
+  Core.validate(subs, sel) and #sel >= 2
 
 Core.validate_action = (operation) ->
   if operation == "In-Out tags"
@@ -2780,7 +3008,7 @@ Core.action_macro = (operation) ->
     Core.run_operation subs, sel, active, operation
 
 Core.hotkey_menu_path = (operation) ->
-  HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. (OPERATION_LABELS.en[operation] or operation)
+  CONSTANTS.HOTKEY_MENU_ROOT .. "/" .. CONSTANTS.HOTKEY_MENU_SCRIPT .. "/" .. (OPERATION_LABELS.en[operation] or operation)
 
 Core.help_macro = ->
   Core.action_help_picker!

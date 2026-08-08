@@ -1,4 +1,4 @@
-# Moka Motion 3.4.0
+# Moka Motion 3.4.2
 
 Moka Motion unifies Mocha transform, mask, clip, perspective, frame-by-frame track, PNG sequence, and video-trim workflows.
 

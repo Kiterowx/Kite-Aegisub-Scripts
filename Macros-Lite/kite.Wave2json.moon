@@ -1,7 +1,7 @@
 export script_name        = "Wave2json"
 export script_description = "Export the active audio waveform to JSON."
 export script_author      = "Kiterow"
-export script_version     = "1.3.0"
+export script_version     = "1.3.2"
 export script_namespace   = "kite.Wave2json"
 
 SAMPLE_RATE       = 48000
@@ -25,8 +25,8 @@ if haveDepCtrl and DependencyControl
     namespace: script_namespace
     feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
     {
-      {"kite.PyBridge", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-      {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     }
   }
 
@@ -42,6 +42,11 @@ file_exists = PyBridge.fileExists
 join_path = PyBridge.joinPath
 write_file = PyBridge.writeFile
 remove_file = PyBridge.removeFile
+
+write_checked = (file, ...) ->
+  written, message = file\write ...
+  error message or "Could not write output." unless written
+  written
 
 ffmpeg_time = (ms) ->
   string.format "%.3f", math.max(0, tonumber(ms) or 0) / 1000
@@ -229,7 +234,7 @@ new_pyramid = (temp_prefix) ->
 
   pyramid.emit_pair = (self, index, min_value, max_value) ->
     state = self\ensure_level index
-    state.file\write tostring(round_int(min_value)), ",", tostring(round_int(max_value)), "\n"
+    write_checked state.file, tostring(round_int(min_value)), ",", tostring(round_int(max_value)), "\n"
     state.points += 1
     if state.pending_count == 0
       state.pending_min = min_value
@@ -255,7 +260,9 @@ new_pyramid = (temp_prefix) ->
         self\emit_pair index + 1, min_value, max_value
       index += 1
     for state in *self.levels
-      state.file\close! if state.file
+      if state.file
+        closed, message = state.file\close!
+        error message or "Could not finish temporary waveform level." unless closed
       state.file = nil
 
   pyramid.cleanup = (self) ->
@@ -276,109 +283,109 @@ process_pcm = (pcm_path, temp_prefix, total_bytes = nil) ->
   bytes_read = 0
   leftover = ""
 
-  progress_task "Reading PCM and building waveform"
-  while true
-    if progress_cancelled!
-      input\close!
-      pyramid\cleanup!
-      return nil, "Cancelled."
-    data = input\read READ_BYTES
-    break unless data and #data > 0
-    if leftover != ""
-      data = leftover .. data
-      leftover = ""
-    if (#data % BYTES_PER_SAMPLE) == 1
-      leftover = data\sub #data
-      data = data\sub 1, #data - 1
-    bytes_read += #data
-    if total_bytes and total_bytes > 0
-      progress_set 20 + 70 * math.min(1, bytes_read / total_bytes)
+  ok, result, failure = pcall ->
+    progress_task "Reading PCM and building waveform"
+    while true
+      return nil, "Cancelled." if progress_cancelled!
+      data = input\read READ_BYTES
+      break unless data and #data > 0
+      if leftover != ""
+        data = leftover .. data
+        leftover = ""
+      if (#data % BYTES_PER_SAMPLE) == 1
+        leftover = data\sub #data
+        data = data\sub 1, #data - 1
+      bytes_read += #data
+      if total_bytes and total_bytes > 0
+        progress_set 20 + 70 * math.min(1, bytes_read / total_bytes)
 
-    pos = 1
-    limit = #data
-    while pos < limit
-      lo = data\byte(pos)
-      hi = data\byte(pos + 1)
-      sample = lo + hi * 256
-      sample -= 65536 if sample >= 32768
-      current_min = sample if sample < current_min
-      current_max = sample if sample > current_max
-      samples_in_point += 1
-      total_samples += 1
-      if samples_in_point >= SAMPLES_PER_POINT
-        pyramid\emit_pair 1, current_min, current_max
-        current_min, current_max = 32767, -32768
-        samples_in_point = 0
-      pos += 2
+      pos = 1
+      limit = #data
+      while pos < limit
+        lo = data\byte(pos)
+        hi = data\byte(pos + 1)
+        sample = lo + hi * 256
+        sample -= 65536 if sample >= 32768
+        current_min = sample if sample < current_min
+        current_max = sample if sample > current_max
+        samples_in_point += 1
+        total_samples += 1
+        if samples_in_point >= SAMPLES_PER_POINT
+          pyramid\emit_pair 1, current_min, current_max
+          current_min, current_max = 32767, -32768
+          samples_in_point = 0
+        pos += 2
 
-  input\close!
-  if samples_in_point > 0
-    pyramid\emit_pair 1, current_min, current_max
-  pyramid\flush!
+    error "Decoded PCM ended with an incomplete sample." if leftover != ""
+    if samples_in_point > 0
+      pyramid\emit_pair 1, current_min, current_max
+    pyramid\flush!
 
-  duration_ms = round_int(total_samples * 1000 / SAMPLE_RATE)
-  { :pyramid, :duration_ms, :total_samples }, nil
+    duration_ms = round_int(total_samples * 1000 / SAMPLE_RATE)
+    { :pyramid, :duration_ms, :total_samples }, nil
+
+  pcall -> input\close!
+  unless ok
+    pyramid\cleanup!
+    return nil, tostring result
+  unless result
+    pyramid\cleanup!
+    return nil, failure
+  result, nil
 
 copy_level_peaks = (out, level) ->
   file = io.open level.path, "rb"
-  return false unless file
+  return false, "Could not read temporary level file." unless file
   first = true
+  failure = nil
   while true
     line = file\read "*l"
     break unless line
-    if first
-      first = false
-    else
-      out\write ","
-    out\write line
+    unless first
+      written, failure = out\write ","
+      break unless written
+    first = false
+    written, failure = out\write line
+    break unless written
   file\close!
-  true
+  return false, failure or "Could not write waveform peaks." if failure
+  true, nil
 
 write_json = (output_path, result) ->
-  temporary = "#{output_path}.temporary.#{os.time!}.#{math.random 100000, 999999}"
-  out = io.open temporary, "wb"
-  return false, "Could not write JSON output." unless out
-  pyramid = result.pyramid
-  out\write "{\n"
-  out\write '  "type": "waveform",\n'
-  out\write '  "version": 1,\n'
-  out\write '  "sampleRate": ', tostring(SAMPLE_RATE), ",\n"
-  out\write '  "channels": ', tostring(CHANNELS), ",\n"
-  out\write '  "bits": ', tostring(BITS), ",\n"
-  out\write '  "amplitudeFormat": "s16",\n'
-  out\write '  "amplitudeMin": -32768,\n'
-  out\write '  "amplitudeMax": 32767,\n'
-  out\write '  "pointLayout": "interleavedMinMax",\n'
-  if result.range
-    out\write '  "sourceStartMs": ', tostring(result.range.start_ms), ",\n"
-    out\write '  "sourceEndMs": ', tostring(result.range.end_ms), ",\n"
-    out\write '  "sourceDurationMs": ', tostring(result.range.duration_ms), ",\n"
-    out\write '  "sourceLineCount": ', tostring(result.range.line_count), ",\n"
-  out\write '  "durationMs": ', tostring(result.duration_ms), ",\n"
-  out\write '  "totalSamples": ', tostring(result.total_samples), ",\n"
-  out\write '  "levels": [\n'
-  for i, level in ipairs pyramid.levels
-    out\write ",\n" if i > 1
-    out\write "    {\n"
-    out\write '      "scale": ', tostring(level.scale), ",\n"
-    out\write '      "pointMs": ', tostring(level.point_ms), ",\n"
-    out\write '      "samplesPerPoint": ', tostring(level.samples_per_point), ",\n"
-    out\write '      "points": ', tostring(level.points), ",\n"
-    out\write '      "peaks": ['
-    ok = copy_level_peaks out, level
-    unless ok
-      out\close!
-      remove_file temporary
-      return false, "Could not read temporary level file."
-    out\write "]\n"
-    out\write "    }"
-  out\write "\n  ]\n"
-  out\write "}\n"
-  out\flush!
-  out\close!
-  replaced, message = PyBridge.replaceFile temporary, output_path
-  remove_file temporary unless replaced
-  replaced, message or (replaced and nil or "Could not replace JSON output.")
+  PyBridge.withAtomicFile output_path, (out) ->
+    pyramid = result.pyramid
+    write_checked out, "{\n"
+    write_checked out, '  "type": "waveform",\n'
+    write_checked out, '  "version": 1,\n'
+    write_checked out, '  "sampleRate": ', tostring(SAMPLE_RATE), ",\n"
+    write_checked out, '  "channels": ', tostring(CHANNELS), ",\n"
+    write_checked out, '  "bits": ', tostring(BITS), ",\n"
+    write_checked out, '  "amplitudeFormat": "s16",\n'
+    write_checked out, '  "amplitudeMin": -32768,\n'
+    write_checked out, '  "amplitudeMax": 32767,\n'
+    write_checked out, '  "pointLayout": "interleavedMinMax",\n'
+    if result.range
+      write_checked out, '  "sourceStartMs": ', tostring(result.range.start_ms), ",\n"
+      write_checked out, '  "sourceEndMs": ', tostring(result.range.end_ms), ",\n"
+      write_checked out, '  "sourceDurationMs": ', tostring(result.range.duration_ms), ",\n"
+      write_checked out, '  "sourceLineCount": ', tostring(result.range.line_count), ",\n"
+    write_checked out, '  "durationMs": ', tostring(result.duration_ms), ",\n"
+    write_checked out, '  "totalSamples": ', tostring(result.total_samples), ",\n"
+    write_checked out, '  "levels": [\n'
+    for i, level in ipairs pyramid.levels
+      write_checked out, ",\n" if i > 1
+      write_checked out, "    {\n"
+      write_checked out, '      "scale": ', tostring(level.scale), ",\n"
+      write_checked out, '      "pointMs": ', tostring(level.point_ms), ",\n"
+      write_checked out, '      "samplesPerPoint": ', tostring(level.samples_per_point), ",\n"
+      write_checked out, '      "points": ', tostring(level.points), ",\n"
+      write_checked out, '      "peaks": ['
+      copied, copy_error = copy_level_peaks out, level
+      error copy_error unless copied
+      write_checked out, "]\n"
+      write_checked out, "    }"
+    write_checked out, "\n  ]\n"
+    write_checked out, "}\n"
 
 file_size = (path) ->
   file = io.open path, "rb"
@@ -393,10 +400,12 @@ export_waveform = (cfg) ->
   return false, "Choose a JSON output path." if trim(cfg.output) == ""
   root = output_root cfg.output, cfg.media
   return false, "Could not resolve an output folder." if trim(root) == ""
+  cfg.output = join_path root, cfg.output if dir_name(cfg.output) == ""
   made, make_error = PyBridge.ensureDir root
   return false, "Could not create output folder: #{make_error or root}" unless made
   paths, path_error = PyBridge.tempPaths "wave2json", {pcm: ".s16le", log: ".ffmpeg.log", prefix: ""}
   return false, path_error or "Could not create temporary paths." unless paths
+  pyramid = nil
   pcall_ok, success, message = pcall ->
     progress_title script_name
     progress_task "Decoding audio with FFmpeg"
@@ -410,16 +419,17 @@ export_waveform = (cfg) ->
     progress_set 20
     result, err = process_pcm paths.pcm, paths.prefix, size
     return false, err if err
+    pyramid = result.pyramid
     result.range = cfg.range
     progress_task "Writing JSON"
     progress_set 95
     ok_json, json_err = write_json cfg.output, result
-    result.pyramid\cleanup!
     return false, json_err unless ok_json
     progress_set 100
     range_text = if cfg.range then "\nRange: #{cfg.range.start_ms} ms - #{cfg.range.end_ms} ms" else ""
     true, "Waveform JSON written:\n#{cfg.output}#{range_text}\n\nDuration: #{result.duration_ms} ms\nLevels: #{#result.pyramid.levels}"
   PyBridge.cleanup paths
+  pyramid\cleanup! if pyramid
   if pcall_ok then success, message else false, tostring success
 
 export_line_ranges = (cfg, ranges) ->

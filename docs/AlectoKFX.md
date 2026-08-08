@@ -1,4 +1,4 @@
-# Alecto KFX 3.2.0
+# Alecto KFX 3.2.3
 
 Alecto KFX compiles karaoke and plain-text targets from editable `intro`, `active`, and `outro` guide lines. It reprojects guide timing, position, movement, clips, transforms, colors, and fades onto syllables, graphemes, words, or whole lines.
 
@@ -53,11 +53,14 @@ Version 3.1 markers without a UID remain supported when they are contiguous with
 
 Generation, cancellation, event-budget checks, and base-line planning finish before any subtitle mutation. The configured event limit is enforced before rendering the event that would exceed it.
 
+Apply, cleanup, and base insertion are transactional. Gap detection excludes only the actual source row, so byte-identical targets still block one another correctly. Base guide timestamps follow the targets' timeline order even though rows are inserted from bottom to top.
+
 ## Requirements
 
 - Aegisub Automation 4 with its bundled `karaskel.lua`
 - Lua 5.1 compatibility
-- `l0.DependencyControl` is optional
+- `kite.LineOps` 1.5.2
+- `l0.DependencyControl` is optional when the required modules are already installed
 
 Alecto prefers Aegisub's `include("karaskel.lua")` loader and falls back to `require("karaskel")` in external harnesses.
 

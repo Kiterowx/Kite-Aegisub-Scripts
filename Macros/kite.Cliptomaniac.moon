@@ -2,7 +2,7 @@ export script_name = "Cliptomaniac"
 export script_description = "Clip toolbox for measuring, transforming, reshaping, fitting, and projecting ASS clips."
 export script_author = "Kiterow"
 export script_namespace = "kite.Cliptomaniac"
-export script_version = "0.3.0"
+export script_version = "0.3.3"
 
 
 local ZF, ASS, ArchPerspective, LineCollection, Functional, Util, AMLine, LineOps, depctrl, logger
@@ -19,7 +19,7 @@ depctrl = DependencyControl{
         feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
       {"arch.Perspective", version: "1.2.1", url: "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
         feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"}
-      {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
       {"a-mo.LineCollection", version: "1.3.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
         feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
@@ -29,7 +29,7 @@ depctrl = DependencyControl{
         feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"}
       {"a-mo.Line", version: "1.5.3", url: "https://github.com/TypesettingTools/Aegisub-Motion",
         feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
-      {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     }
 }
@@ -55,6 +55,14 @@ HOTKEY_MENU_SCRIPT = "Cliptomaniac"
 DEFAULT_LANGUAGE = "en"
 current_language = DEFAULT_LANGUAGE
 language_config_handler = nil
+AVERAGE_GLYPH_WIDTH_EM = 0.4042
+BEZIER_ARCLENGTH_SEGMENTS = 80
+GEOMETRY_EPSILON = 0.0005
+NUMERIC_EPSILON = 0.0000005
+PARAMETRIC_EPSILON = 0.000001
+MIN_FBF_FRAME_BUDGET = 1
+DEFAULT_FBF_FRAME_BUDGET = 400
+MAX_FBF_FRAME_BUDGET = 5000
 
 OPERATIONS = {
   "Autofit clip to text"
@@ -426,7 +434,7 @@ DEFAULTS = {
   clip_type: "Auto"
   close_paths: true
   merge_identical: true
-  max_frames: 400
+  max_frames: DEFAULT_FBF_FRAME_BUDGET
   fbf_source: "Clip only"
   boolean_mode: "Keep overlap"
   perspective_map: "ABCD (exact copy)"
@@ -575,8 +583,8 @@ Core.raw_operation_choice = (to_raw, shown) ->
 Core.format_num = (value, decimals = 3) ->
   n = tonumber value
   return "0" unless n and n == n and n != math.huge and n != -math.huge
-  n = 0 if math.abs(n) < 0.0000005
-  if math.abs(n - math.floor(n + 0.5)) < 0.0000005
+  n = 0 if math.abs(n) < NUMERIC_EPSILON
+  if math.abs(n - math.floor(n + 0.5)) < NUMERIC_EPSILON
     return tostring math.floor(n + 0.5)
   s = string.format "%." .. tostring(decimals) .. "f", n
   s = s\gsub "0+$", ""
@@ -862,35 +870,42 @@ Core.tag_name_at = (inner, slash_pos) ->
   rest\match "^[1-4]?%a+"
 
 Core.clip_span_in_inner = (text, inner, base_offset, init = 1) ->
-  inner = inner or ""
-  i = 1
-  while i <= #inner
-    if inner\sub(i, i) == "\\"
-      name = Core.tag_name_at inner, i
+  frames = {{inner: inner or "", base_offset: base_offset, pos: 1}}
+  while #frames > 0
+    frame = frames[#frames]
+    if frame.pos > #frame.inner
+      table.remove frames
+    elseif frame.inner\sub(frame.pos, frame.pos) == "\\"
+      name = Core.tag_name_at frame.inner, frame.pos
       if name
-        value_pos = i + 1 + #name
-        if inner\sub(value_pos, value_pos) == "("
-          close = Core.balanced_paren_end inner, value_pos
+        value_pos = frame.pos + 1 + #name
+        if frame.inner\sub(value_pos, value_pos) == "("
+          close = Core.balanced_paren_end frame.inner, value_pos
           return nil unless close
-          absolute_start = base_offset + i
+          absolute_start = frame.base_offset + frame.pos
           if (name == "clip" or name == "iclip") and absolute_start >= init
-            absolute_open = base_offset + value_pos
-            absolute_stop = base_offset + close
+            absolute_open = frame.base_offset + value_pos
+            absolute_stop = frame.base_offset + close
             return {
               start: absolute_start
               stop: absolute_stop
               open_pos: absolute_open
               name: name
               raw: text\sub absolute_start, absolute_stop
-              inner: inner\sub value_pos + 1, close - 1
+              inner: frame.inner\sub value_pos + 1, close - 1
             }
-          nested = Core.clip_span_in_inner text, inner\sub(value_pos + 1, close - 1), base_offset + value_pos, init
-          return nested if nested
-          i = close + 1
+          frame.pos = close + 1
+          frames[#frames + 1] = {
+            inner: frame.inner\sub(value_pos + 1, close - 1)
+            base_offset: frame.base_offset + value_pos
+            pos: 1
+          }
           continue
-        i = value_pos
+        frame.pos = value_pos
         continue
-    i += 1
+      frame.pos += 1
+    else
+      frame.pos += 1
   nil
 
 Core.clip_span_in_block = (text, block, init = 1) ->
@@ -985,7 +1000,7 @@ Core.vector_clip_tag = (points, name = "clip") ->
 
 Core.scale_clip_path = (path, scale) ->
   factor = 2 ^ ((tonumber(scale) or 1) - 1)
-  return path if math.abs(factor - 1) < 0.0000005
+  return path if math.abs(factor - 1) < NUMERIC_EPSILON
   tostring(path or "")\gsub "(" .. NUM_PATTERN .. ")", (n) ->
     v = tonumber n
     if v then Core.format_num(v / factor) else n
@@ -1006,19 +1021,21 @@ Core.clip_inner_parts = (inner) ->
   inner = Core.trim inner
   scale, path = inner\match "^%s*(%d+)%s*,%s*([mMnN]%s+.*)$"
   if path
-    return "vector", scale, Core.scale_clip_path(path, scale)
+    numeric_scale = tonumber scale
+    return nil, nil, nil unless numeric_scale and numeric_scale >= 1
+    return "vector", scale, Core.scale_clip_path(path, numeric_scale)
   path = inner\match "^%s*([mMnN]%s+.*)$"
   if path
     return "vector", nil, path
-  nums = {}
-  for n in inner\gmatch NUM_PATTERN
-    nums[#nums + 1] = tonumber n
-  if #nums >= 4
-    return "rect", nil, {nums[1], nums[2], nums[3], nums[4]}
+  number = "(" .. NUM_PATTERN .. ")"
+  x1, y1, x2, y2 = inner\match "^%s*" .. number .. "%s*,%s*" .. number .. "%s*,%s*" .. number .. "%s*,%s*" .. number .. "%s*$"
+  x1, y1, x2, y2 = tonumber(x1), tonumber(y1), tonumber(x2), tonumber(y2)
+  if x1 and y1 and x2 and y2
+    return "rect", nil, {x1, y1, x2, y2}
   nil, nil, nil
 
 Core.clip_bounds_from_span = (span) ->
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     return Core.normalize_bounds payload
   if kind == "vector"
@@ -1063,7 +1080,10 @@ Core.parse_draw_commands = (path) ->
       i += 1
       continue
     return nil unless cmd
-    if cmd == "m" or cmd == "l" or cmd == "s" or cmd == "p"
+    -- ASS spline commands need B-spline evaluation; treating their control
+    -- points as straight `l` segments silently changes the geometry.
+    return nil if cmd == "s" or cmd == "p"
+    if cmd == "m" or cmd == "l"
       x, y = tonumber(tokens[i]), tonumber(tokens[i + 1])
       return nil unless x and y
       draw_type = if cmd == "m" then "m" else "l"
@@ -1104,7 +1124,7 @@ Core.point_insert_distances = (length, opts = {}) ->
     spacing = tonumber(opts.point_distance) or 0
     return out unless spacing > 0
     d = spacing
-    while d < length - 0.0005
+    while d < length - GEOMETRY_EPSILON
       out[#out + 1] = d
       d += spacing
   out
@@ -1121,8 +1141,8 @@ Core.add_line_insert_points = (parts, p1, p2, opts = {}, include_end = true) ->
   parts[#parts + 1] = Core.point_text "l", p2 if include_end
   added
 
-Core.bezier_arclength_samples = (p0, p1, p2, p3, segments = 80) ->
-  segments = math.max 1, math.floor(tonumber(segments) or 80)
+Core.bezier_arclength_samples = (p0, p1, p2, p3, segments = BEZIER_ARCLENGTH_SEGMENTS) ->
+  segments = math.max 1, math.floor(tonumber(segments) or BEZIER_ARCLENGTH_SEGMENTS)
   samples = {{t: 0, p: p0, acc: 0}}
   prev, total = p0, 0
   for i = 1, segments
@@ -1167,7 +1187,7 @@ Core.add_bezier_insert_points = (parts, p0, p1, p2, p3, opts = {}) ->
   current = {p0, p1, p2, p3}
   prev_t, added = 0, 0
   for t_abs in *targets
-    continue unless t_abs > prev_t + 0.000001 and t_abs < 1 - 0.000001
+    continue unless t_abs > prev_t + PARAMETRIC_EPSILON and t_abs < 1 - PARAMETRIC_EPSILON
     local_t = (t_abs - prev_t) / (1 - prev_t)
     left, right = Core.bezier_split current[1], current[2], current[3], current[4], local_t
     Core.add_bezier_part parts, left
@@ -1280,7 +1300,7 @@ Core.new_shape_split_path = (path) ->
   Core.trim table.concat output, " "
 
 Core.clip_commands_from_span = (span) ->
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     left, top, right, bottom = unpack Core.normalize_bounds payload
     return {
@@ -1294,7 +1314,7 @@ Core.clip_commands_from_span = (span) ->
     return Core.parse_draw_commands payload
   nil
 
-Core.same_point = (a, b, epsilon = 0.0005) ->
+Core.same_point = (a, b, epsilon = GEOMETRY_EPSILON) ->
   a and b and math.abs((a.x or 0) - (b.x or 0)) <= epsilon and math.abs((a.y or 0) - (b.y or 0)) <= epsilon
 
 Core.clean_anchor_points = (points) ->
@@ -1326,7 +1346,7 @@ Core.center_from_points = (points) ->
   {x: (minx + maxx) / 2, y: (miny + maxy) / 2}
 
 Core.quad_points_from_span = (span) ->
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     return Core.rect_points payload
   return nil unless kind == "vector"
@@ -1494,7 +1514,7 @@ Core.path_midpoint = (cmds) ->
 
 Core.clip_midpoint_from_span = (span) ->
   return nil unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     b = Core.normalize_bounds payload
     return {x: (b[1] + b[3]) / 2, y: (b[2] + b[4]) / 2}
@@ -1807,20 +1827,20 @@ Core.adjust_text_by_ratio = (line, ratio, opts) ->
 Core.rectangle_clip_bounds_from_line = (line) ->
   span = Core.first_clip_span line and line.text
   return nil, "no_clip" unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   return Core.normalize_bounds(payload), nil if kind == "rect"
   return nil, "vector_clip" if kind == "vector"
   nil, "bad_clip"
 
 Core.align_for_line = (line) ->
-  n = math.floor tonumber(Core.line_tag_value(line, "an", "align", 5)) or 5
+  n = math.floor(tonumber(Core.line_tag_value(line, "an", "align", 5)) or 5)
   if n >= 1 and n <= 9 then n else 5
 
 Core.zf_align_for_line = (line) ->
   for block in *Core.override_block_spans(line and line.text or "")
     if block.inner\find("\\an[1-9]") or block.inner\find("\\r", 1, true)
       return Core.align_for_line line
-  n = math.floor tonumber(line and line.styleref and line.styleref.align) or 0
+  n = math.floor(tonumber(line and line.styleref and line.styleref.align) or 0)
   return n if n >= 1 and n <= 9
   Core.align_for_line line
 
@@ -1861,7 +1881,7 @@ Core.prepare_zf_text_line = (dlg, source_line, drop_clip = true) ->
 
 Core.anchor_point_from_align = (align, bounds) ->
   left, top, right, bottom = unpack Core.normalize_bounds bounds
-  an = math.floor tonumber(align) or 5
+  an = math.floor(tonumber(align) or 5)
   an = 5 unless an >= 1 and an <= 9
   h = (an - 1) % 3
   v = math.floor (an - 1) / 3
@@ -2001,7 +2021,7 @@ Core.op_measure_transform = (subs, sel, opts) ->
     continue unless cmds
     segs = Core.first_path_segments cmds, 2, 8
     continue unless #segs >= 2
-    next_text, meta = Core.transform_clip_ruler_text line, segs[1], segs[2], opts
+    next_text = Core.transform_clip_ruler_text line, segs[1], segs[2], opts
     if next_text and next_text != line.text
       line.text = next_text
       subs[i] = line
@@ -2015,7 +2035,7 @@ Core.op_measure_transform = (subs, sel, opts) ->
   true
 
 Core.op_adjust_by_clip_scale = (subs, sel, opts) ->
-  seg1, seg2, meta, err = Core.clip_scale_reference subs, sel
+  seg1, seg2 = Core.clip_scale_reference subs, sel
   unless seg1 and seg2
     Core.show_message "Select two clipped lines, or one vector clip with two m-l strokes."
     return false
@@ -2115,7 +2135,7 @@ Core.position_text_at = (text, x, y) ->
   Core.replace_pos_or_insert text, x, y
 
 Core.op_position_at_clip_midpoint = (subs, sel, opts) ->
-  _cmds, guide_span = Core.first_clip_path_reference subs, sel
+  _, guide_span = Core.first_clip_path_reference subs, sel
   fallback = Core.clip_midpoint_from_span guide_span
   unless fallback
     Core.show_message "No usable clip midpoint found."
@@ -2676,7 +2696,7 @@ Core.shape_outline_path = (dlg, source_line, opts = {}) ->
   close_paths = opts.close_paths != false
   path = Core.trim ZF.shape(shape, close_paths)\setPosition(align)\expand(work, pers)\move(px, py)\build!
   margin = tonumber(opts.margin) or 0
-  path = Core.expand_vector_path path, margin, opts.tolerance if math.abs(margin) > 0.0005
+  path = Core.expand_vector_path path, margin, opts.tolerance if math.abs(margin) > GEOMETRY_EPSILON
   Core.simplify_vector_path path, opts.tolerance, close_paths
 
 Core.style_safe_pad = (line) ->
@@ -2708,11 +2728,11 @@ Core.section_from_mode = (mode, opts, old_bounds, text_bounds) ->
         span = tb[4] - tb[2]
         return sections, 1 if span <= 0
         center = (ob[2] + ob[4]) / 2
-        return sections, Core.clamp(math.floor(Core.clamp((center - tb[2]) / span, 0, 0.999999) * sections) + 1, 1, sections)
+        return sections, Core.clamp(math.floor(Core.clamp((center - tb[2]) / span, 0, 1 - PARAMETRIC_EPSILON) * sections) + 1, 1, sections)
       span = tb[3] - tb[1]
       return sections, 1 if span <= 0
       center = (ob[1] + ob[3]) / 2
-      return sections, Core.clamp(math.floor(Core.clamp((center - tb[1]) / span, 0, 0.999999) * sections) + 1, 1, sections)
+      return sections, Core.clamp(math.floor(Core.clamp((center - tb[1]) / span, 0, 1 - PARAMETRIC_EPSILON) * sections) + 1, 1, sections)
   1, 1
 
 Core.section_bounds = (bounds, sections, index, opts, margin) ->
@@ -2745,7 +2765,7 @@ Core.layout_scale_for_line = (line) ->
   layout_y = tonumber(meta.LayoutResY or meta.layoutresy)
   unless layout_y
     if aegisub and type(aegisub.video_size) == "function"
-      ok, _video_x, video_y = pcall aegisub.video_size
+      ok, _, video_y = pcall aegisub.video_size
       layout_y = tonumber(video_y) if ok
   return play_y / layout_y if play_y and layout_y and layout_y != 0
   1
@@ -2781,7 +2801,7 @@ Core.project_local_points = (tags, width, height, points, layout_scale) ->
 
 Core.normalize_vector = (x, y) ->
   length = math.sqrt x * x + y * y
-  return {x: 0, y: 0} if length < 0.0005
+  return {x: 0, y: 0} if length < GEOMETRY_EPSILON
   {x: x / length, y: y / length}
 
 Core.outward_edge_normal = (a, b) ->
@@ -2798,14 +2818,14 @@ Core.line_intersection = (a1, a2, b1, b2) ->
   dax, day = a2.x - a1.x, a2.y - a1.y
   dbx, dby = b2.x - b1.x, b2.y - b1.y
   denominator = dax * dby - day * dbx
-  return nil if math.abs(denominator) < 0.0005
+  return nil if math.abs(denominator) < GEOMETRY_EPSILON
   t = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / denominator
   {x: a1.x + dax * t, y: a1.y + day * t}
 
 Core.expand_quad_screen = (quad, margin) ->
   return quad unless quad and #quad >= 4
   margin = tonumber(margin) or 0
-  return quad if math.abs(margin) < 0.0005
+  return quad if math.abs(margin) < GEOMETRY_EPSILON
   edges = {}
   for i = 1, 4
     next_i = i == 4 and 1 or i + 1
@@ -2831,10 +2851,10 @@ Core.line_needs_projected_quad = (line) ->
   state = Core.effective_line_state line
   angle = Core.line_tag_value line, "frz", nil, nil, state
   angle = Core.line_tag_value(line, "fr", "angle", 0, state) if angle == nil
-  return true if math.abs(tonumber(angle) or 0) > 0.000001
+  return true if math.abs(tonumber(angle) or 0) > PARAMETRIC_EPSILON
   for tag in *{"frx", "fry", "fax", "fay"}
     value = Core.line_tag_value line, tag, nil, 0, state
-    return true if math.abs(tonumber(value) or 0) > 0.000001
+    return true if math.abs(tonumber(value) or 0) > PARAMETRIC_EPSILON
   false
 
 Core.baked_geometry_tags = ->
@@ -3032,7 +3052,7 @@ Core.op_text_to_clip = (subs, sel, active, opts) ->
 Core.shape_to_clip_line = (dlg, line) ->
   return nil unless ZF
   work = Core.copy_line line
-  call = ZF.line(work)\prepoc dlg
+  ZF.line(work)\prepoc dlg
   shape = ZF.util\isShape work.text
   return nil unless shape
   pers = dlg\getPerspectiveTags work
@@ -3049,7 +3069,7 @@ Core.shape_to_clip_line = (dlg, line) ->
 Core.clip_to_shape_text = (text) ->
   span = Core.first_clip_span text
   return nil unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   drawing = if kind == "rect"
     Core.vector_clip_inner Core.rect_points payload
   elseif kind == "vector"
@@ -3124,7 +3144,7 @@ Core.clip_boolean_text = (dlg, line, opts = {}) ->
   return nil unless ZF and ZF.clipper
   span = Core.first_clip_span line.text
   return nil unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   clip_path = if kind == "rect"
     Core.vector_clip_inner Core.rect_points payload
   elseif kind == "vector"
@@ -3166,7 +3186,7 @@ Core.op_clip_boolean = (subs, sel, active, opts) ->
 
 Core.clip_point_count = (span) ->
   return 0 unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   return 4 if kind == "rect"
   return 0 unless kind == "vector"
   points = Core.anchor_points_from_commands Core.parse_draw_commands payload
@@ -3177,7 +3197,7 @@ Core.clip_diagnostics_line = (line, index) ->
   return "Line #{index}: no clip" if #spans == 0
   parts = {}
   for n, span in ipairs spans
-    kind, scale, _payload = Core.clip_inner_parts span.inner
+    kind, scale = Core.clip_inner_parts span.inner
     bounds = Core.clip_bounds_from_span span
     bounds_text = if bounds
       "#{Core.format_num bounds[1], 2},#{Core.format_num bounds[2], 2} - #{Core.format_num bounds[3], 2},#{Core.format_num bounds[4], 2}"
@@ -3203,9 +3223,6 @@ Core.op_clip_diagnostics = (subs, sel, opts) ->
 Core.point_distance = (a, b) ->
   dx, dy = b.x - a.x, b.y - a.y
   math.sqrt dx * dx + dy * dy
-
-Core.lerp_point = (a, b, t) ->
-  {x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t}
 
 Core.shift_boundary_t = (boundary_at, t, direction, max_step, amount = 1) ->
   return t if amount <= 0 or max_step <= 0
@@ -3295,7 +3312,7 @@ Core.create_quad_mesh_clips = (points, mode, strip, name = "clip") ->
     (Core.point_distance(points[1], points[4]) + Core.point_distance(points[2], points[3])) / 2
   else
     (Core.point_distance(points[1], points[2]) + Core.point_distance(points[4], points[3])) / 2
-  return {} if span <= 0.0005
+  return {} if span <= GEOMETRY_EPSILON
   sections = math.max 1, math.ceil(span / strip)
   step_t = 1 / sections
   boundary_at = (t) ->
@@ -3324,7 +3341,7 @@ Core.strip_clips_from_quad = (points, mode, strip, name = "clip") ->
   Core.create_quad_mesh_clips(points, quad_mode, strip, name) or Core.create_quad_strip_clips(points, quad_mode, strip, name)
 
 Core.points_from_clip_span = (span) ->
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     return Core.rect_points payload
   if kind == "vector"
@@ -3399,7 +3416,9 @@ Core.parse_move_tag = (text) ->
   args = tostring(text or "")\match "\\move%(([^%)]*)%)"
   return nil unless args
   nums = [tonumber(n) for n in args\gmatch NUM_PATTERN]
-  return nil unless #nums >= 4
+  -- ASS accepts exactly four coordinates, optionally followed by t1/t2.
+  -- Accepting five or extra values silently changed malformed tags.
+  return nil unless #nums == 4 or #nums == 6
   {
     x1: nums[1], y1: nums[2], x2: nums[3], y2: nums[4]
     t1: nums[5], t2: nums[6]
@@ -3428,21 +3447,26 @@ Core.move_position_at = (move, line, ms) ->
 
 Core.frame_range_for_line = (line) ->
   return nil unless aegisub and aegisub.frame_from_ms and aegisub.ms_from_frame
-  start_frame = aegisub.frame_from_ms line.start_time
-  end_frame = aegisub.frame_from_ms line.end_time
-  return nil unless start_frame and end_frame
-  end_frame = start_frame + 1 if end_frame <= start_frame
-  start_frame, end_frame
+  start_ms = tonumber(line and line.start_time)
+  end_ms = tonumber(line and line.end_time)
+  return nil unless start_ms and end_ms and end_ms > start_ms
+  start_frame = aegisub.frame_from_ms start_ms
+  last_frame = aegisub.frame_from_ms math.max(start_ms, end_ms - 1)
+  return nil unless start_frame and last_frame
+  start_frame, math.max(start_frame, last_frame) + 1
 
-Core.manual_move_fbf_lines = (line, opts = {}) ->
+Core.manual_move_fbf_lines = (line) ->
   move = Core.parse_move_tag line.text
   return nil unless move and Core.first_clip_span(line.text)
   start_frame, end_frame = Core.frame_range_for_line line
   return nil unless start_frame and end_frame
   out = {}
   for frame = start_frame, end_frame - 1
-    start_ms = math.max tonumber(line.start_time) or 0, aegisub.ms_from_frame(frame)
-    end_ms = math.min tonumber(line.end_time) or 0, aegisub.ms_from_frame(frame + 1)
+    frame_start_ms = aegisub.ms_from_frame frame
+    frame_end_ms = aegisub.ms_from_frame frame + 1
+    return nil unless frame_start_ms and frame_end_ms
+    start_ms = math.max(tonumber(line.start_time) or 0, frame_start_ms)
+    end_ms = math.min(tonumber(line.end_time) or 0, frame_end_ms)
     continue if end_ms <= start_ms
     pos = Core.move_position_at move, line, (start_ms + end_ms) / 2
     next_line = Core.copy_line line
@@ -3466,7 +3490,7 @@ Core.copy_plain_fbf_line = (item, fallback) ->
   out.comment = false
   out
 
-Core.util_fbf_lines = (line, opts = {}) ->
+Core.util_fbf_lines = (line) ->
   return nil unless Util and Util.line2fbf and ASS and ASS.parse
   ok_parse, data = pcall -> Core.parse_ass_line line
   return nil unless ok_parse and data
@@ -3591,7 +3615,7 @@ Core.plane_points_to_quad = (points) ->
   return nil unless points and #points >= 4
   {{points[1].x, points[1].y}, {points[2].x, points[2].y}, {points[3].x, points[3].y}, {points[4].x, points[4].y}}
 
-Core.perspective_plane_points_for_line = (line, opts = {}) ->
+Core.perspective_plane_points_for_line = (line) ->
   if line and type(line.extra) == "table"
     points = Core.plane_points_from_string line.extra["_aegi_perspective_ambient_plane"]
     return points, "extra" if points
@@ -3680,7 +3704,7 @@ Core.complete_quadrilateral_points = (points, plane_points = nil) ->
     clean[i] = Core.matrix_point points[i]
     return nil unless clean[i]
   a, b, c = clean[1], clean[2], clean[3]
-  d = nil
+  local d
   if plane_points
     d = Core.projective_fourth_point clean, plane_points
     return nil unless d
@@ -3784,14 +3808,21 @@ PerspectiveTools.ensure_align_tag = (tags, fallback = 5) ->
 
 PerspectiveTools.default_position = (line, style = nil) ->
   meta = line and line.parentCollection and line.parentCollection.meta or {}
-  play_x = tonumber(meta.PlayResX or meta.playresx or meta.res_x) or 1920
-  play_y = tonumber(meta.PlayResY or meta.playresy or meta.res_y) or 1080
+  play_x = tonumber(meta.PlayResX or meta.playresx or meta.res_x)
+  play_y = tonumber(meta.PlayResY or meta.playresy or meta.res_y)
+  if (not play_x or not play_y) and aegisub.video_size
+    ok, video_x, video_y = pcall aegisub.video_size
+    if ok
+      play_x or= tonumber video_x
+      play_y or= tonumber video_y
+  play_x or= 0
+  play_y or= 0
   state = Core.effective_line_state line
   style = style or PerspectiveTools.style(state.style, line and line.style or "Default")
   align = PerspectiveTools.align_value(Core.line_tag_value(line, "an", "align", style.align or 5, state), style.align or 5)
-  ml = tonumber line and line.margin_l
-  mr = tonumber line and line.margin_r
-  mv = tonumber line and (line.margin_t or line.margin_v)
+  ml = tonumber(line and line.margin_l)
+  mr = tonumber(line and line.margin_r)
+  mv = tonumber(line and (line.margin_t or line.margin_v))
   ml = tonumber(style.margin_l) or 0 if not ml or ml == 0
   mr = tonumber(style.margin_r) or 0 if not mr or mr == 0
   mv = tonumber(style.margin_t or style.margin_v) or 0 if not mv or mv == 0
@@ -3900,8 +3931,12 @@ PerspectiveTools.measure_style = (line, style) ->
   out
 
 PerspectiveTools.point_value = (value) ->
+  seen = {}
+  while type(value) == "table" and value.startPos
+    return nil if seen[value]
+    seen[value] = true
+    value = value.startPos
   return nil unless type(value) == "table"
-  return PerspectiveTools.point_value value.startPos if value.startPos
   x = tonumber(value.x or value[1])
   y = tonumber(value.y or value[2])
   return {x: x, y: y} if x and y
@@ -3987,7 +4022,7 @@ PerspectiveTools.rough_text_extents = (line, style, state = nil) ->
   max_w, total_h = 0, 0
   for piece in *PerspectiveTools.visible_lines(line and line.text or "")
     count = PerspectiveTools.text_len piece
-    raw_width = count * fs * 0.4042 + math.max(count - 1, 0) * spacing
+    raw_width = count * fs * AVERAGE_GLYPH_WIDTH_EM + math.max(count - 1, 0) * spacing
     max_w = math.max max_w, raw_width * sx / 100
     total_h += fs * sy / 100
   math.max(max_w, 0.01), math.max(total_h, 0.01)
@@ -4027,7 +4062,7 @@ PerspectiveTools.text_extents = (line, tags = nil) ->
   math.max(w, 0.01), math.max(h, 0.01)
 
 Core.leading_blocks_and_body = (text) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   cursor = 1
   for block in *Core.override_block_spans text
     break unless block.start == cursor
@@ -4037,7 +4072,7 @@ Core.leading_blocks_and_body = (text) ->
 Core.clip_guide_axis_length = (line, axis) ->
   span = Core.first_clip_span(line and line.text or "")
   return nil, nil unless span
-  kind, _scale, payload = Core.clip_inner_parts span.inner
+  kind, _, payload = Core.clip_inner_parts span.inner
   if kind == "rect"
     left, top, right, bottom = unpack Core.normalize_bounds payload
     length = if axis == "y" then bottom - top else right - left
@@ -4065,10 +4100,10 @@ Core.fit_guide_measure = (line) ->
     sx = tonumber(style.scale_x) or 100
     sy = tonumber(style.scale_y) or 100
     spacing = tonumber(style.spacing) or 0
-    width = (count * fs * 0.4042 + math.max(count - 1, 0) * spacing) * sx / 100
+    width = (count * fs * AVERAGE_GLYPH_WIDTH_EM + math.max(count - 1, 0) * spacing) * sx / 100
     height = fs * sy / 100
     math.max(width, 0.01), math.max(height, 0.01)
-  _width, line_height = measure "Ag"
+  _, line_height = measure "Ag"
   measure, math.max(line_height, 0.01)
 
 Core.wrap_words_to_width = (words, max_width, measure) ->
@@ -4194,10 +4229,15 @@ PerspectiveTools.line = (line) ->
   copy.styleRef = style
   copy.styleref = style
   unless copy.parentCollection
+    video_x, video_y = 0, 0
+    if aegisub and aegisub.video_size
+      ok_video, raw_x, raw_y = pcall aegisub.video_size
+      if ok_video
+        video_x, video_y = tonumber(raw_x) or 0, tonumber(raw_y) or 0
     styles = {Default: style}
     styles[style_name] = style
     copy.parentCollection = {
-      meta: {PlayResX: 1920, PlayResY: 1080}
+      meta: {PlayResX: video_x, PlayResY: video_y}
       styles: styles
     }
   copy
@@ -4341,7 +4381,7 @@ Core.op_perspective_to_clip = (subs, sel, opts) ->
   changed = 0
   for i in *Core.dialogue_indices(subs, sel)
     line = subs[i]
-    next_text, points, source = Core.perspective_to_clip_text line, opts
+    next_text, points = Core.perspective_to_clip_text line, opts
     continue unless next_text
     if next_text != line.text
       line.text = next_text
@@ -4512,7 +4552,7 @@ Core.normalize_options = (res = {}) ->
   opts.clip_type = Core.enum_option res.clip_type, CLIP_TYPES, DEFAULTS.clip_type
   opts.close_paths = Core.bool_option res, "close_paths"
   opts.merge_identical = Core.bool_option res, "merge_identical"
-  opts.max_frames = Core.clamp math.floor(tonumber(res.max_frames) or DEFAULTS.max_frames), 1, 5000
+  opts.max_frames = Core.clamp math.floor(tonumber(res.max_frames) or DEFAULTS.max_frames), MIN_FBF_FRAME_BUDGET, MAX_FBF_FRAME_BUDGET
   opts.fbf_source = Core.enum_option res.fbf_source, FBF_SOURCES, DEFAULTS.fbf_source
   opts.boolean_mode = Core.enum_option res.boolean_mode, BOOLEAN_MODES, DEFAULTS.boolean_mode
   opts.perspective_map = Core.normalize_perspective_map res.perspective_map
@@ -4946,7 +4986,7 @@ Core.action_help_picker = ->
     else
       return
 
-Core.base_option_gui = (operation, detailed_help = false) ->
+Core.base_option_gui = (operation) ->
   help_value = Core.operation_help_text operation
   {
     {class: "label", label: Core.operation_label(operation), x: 0, y: 0, width: WINDOW_W}
@@ -4961,8 +5001,8 @@ Core.shift_option_controls = (gui, first_index, amount) ->
     gui[idx].y += amount if gui[idx] and gui[idx].y
   gui
 
-Core.options_gui = (operation, detailed_help = false) ->
-  gui = Core.base_option_gui operation, detailed_help
+Core.options_gui = (operation) ->
+  gui = Core.base_option_gui operation
   control_start = #gui + 1
   switch operation
     when "Measure & transform clip"
@@ -5073,7 +5113,7 @@ Core.options_gui = (operation, detailed_help = false) ->
       gui[#gui + 1] = {class: "label", label: Core.L("bake_source"), x: 0, y: 4, width: 4}
       gui[#gui + 1] = {class: "dropdown", name: "fbf_source", items: Core.localized_items(FBF_SOURCES), value: Core.choice_label(DEFAULTS.fbf_source), x: 4, y: 4, width: 6}
       gui[#gui + 1] = {class: "label", label: Core.L("max_frames"), x: 0, y: 5, width: 4}
-      gui[#gui + 1] = {class: "intedit", name: "max_frames", value: DEFAULTS.max_frames, min: 1, max: 5000, x: 4, y: 5, width: 4}
+      gui[#gui + 1] = {class: "intedit", name: "max_frames", value: DEFAULTS.max_frames, min: MIN_FBF_FRAME_BUDGET, max: MAX_FBF_FRAME_BUDGET, x: 4, y: 5, width: 4}
       gui[#gui + 1] = {class: "checkbox", name: "merge_identical", label: Core.L("merge_identical"), value: DEFAULTS.merge_identical, x: 0, y: 6, width: 6}
       gui[#gui + 1] = {class: "checkbox", name: "comment_source", label: Core.L("comment_source"), value: DEFAULTS.comment_source, x: 6, y: 6, width: 6}
     when "Clip boolean with text/shape"
@@ -5088,7 +5128,7 @@ Core.show_action_options = (operation) ->
   return Core.normalize_options {operation: operation} if ACTION_DIRECT[operation]
   section = Core.config_section operation
   while true
-    gui = Core.options_gui operation, true
+    gui = Core.options_gui operation
     options = Core.read_configured_gui section, gui
     button, res = aegisub.dialog.display gui, {Core.L("apply"), Core.L("cancel")}, {ok: Core.L("apply"), close: Core.L("cancel")}
     if button == Core.L("apply")
@@ -5168,12 +5208,20 @@ Core.run_operation = (subs, sel, active, operation) ->
   unless sel and #sel > 0
     Core.show_message Core.L("select_one")
     aegisub.cancel!
-  Core.enrich_selected_lines subs, sel unless READ_ONLY_ACTIONS[operation]
   opts = Core.show_action_options operation
   return nil unless opts
-  ok = Core.dispatch subs, sel, active, opts
-  aegisub.cancel! unless ok
-  ok
+  return Core.dispatch(subs, sel, active, opts) if READ_ONLY_ACTIONS[operation]
+
+  state = LineOps.snapshot subs
+  succeeded, result = pcall ->
+    error "Cliptomaniac could not prepare the selected dialogue lines.", 0 unless Core.enrich_selected_lines(subs, sel)
+    Core.dispatch subs, sel, active, opts
+  unless succeeded and result
+    restored, restore_error = pcall LineOps.restore, subs, state
+    error "Cliptomaniac could not roll back a failed operation: #{tostring(restore_error or 'unknown error')}", 0 unless restored
+    error result, 0 unless succeeded
+    aegisub.cancel!
+  result
 
 Core.main = (subs, sel, active) ->
   while true

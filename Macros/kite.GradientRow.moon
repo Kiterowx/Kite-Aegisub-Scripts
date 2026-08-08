@@ -2,7 +2,7 @@ export script_name = "Gradient Row"
 export script_description = "Create adaptive color gradients across selected lines and visible text from palettes or inline color states."
 export script_author = "Kiterow"
 export script_namespace = "kite.GradientRow"
-export script_version = "1.8.1"
+export script_version = "1.8.3"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
@@ -16,9 +16,9 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"},
     {"arch.Perspective", version: "1.2.1", url: "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"},
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
     {"SubInspector.Inspector", version: "0.6.0", url: "https://github.com/TypesettingTools/SubInspector",
       feed: "https://raw.githubusercontent.com/TypesettingTools/SubInspector/master/DependencyControl.json",
@@ -32,6 +32,18 @@ have_SubInspector = depctrl\checkOptionalModules "SubInspector.Inspector"
 
 color_slots = {"c", "2c", "3c", "4c"}
 gradient_modes = {"Horizontal", "Vertical", "Rotated", "Char Line", "Char Selection"}
+GEOMETRY_EPSILON = 0.0005
+BOUNDARY_SEARCH_ITERATIONS = 12
+CLIP_BLEED = 0.5
+CLIP_COVER_BLEED = CLIP_BLEED * 2
+MIN_STRIP_SIZE = 1
+MIN_ACCELERATION = 0.01
+PERSPECTIVE_PADDING = 4
+ROTATED_MIN_PADDING = 1
+ROTATED_MAX_PADDING = 4
+ROTATED_PADDING_RATIO = 0.25
+MAX_GRADIENT_SEGMENTS = 5000
+MAX_TOTAL_GRADIENT_LINES = 20000
 
 color_tag_name = (slot) ->
   return "color1" if slot == "c"
@@ -53,14 +65,19 @@ read_slots = (res) ->
       slots[slot] = res[slot] and true or false
   slots
 
+finite_number = (value, fallback = nil) ->
+  number = tonumber value
+  return fallback unless number and number == number and number != math.huge and number != -math.huge
+  number
+
 normalize_gui_color = (value) ->
-  value = tostring value or ""
+  value = tostring(value or "")
   r, g, b = value\match "^#(%x%x)(%x%x)(%x%x)$"
   if r
     return ("#%s%s%s")\format r\upper!, g\upper!, b\upper!
-  hex = value\match "&[Hh](%x+)&?"
-  if hex
-    hex = hex\sub -6
+  hex = value\match "^&[Hh](%x+)&?$"
+  if hex and (#hex == 6 or #hex == 8)
+    hex = hex\sub -6 if #hex == 8
     if #hex == 6
       b = hex\sub 1, 2
       g = hex\sub 3, 4
@@ -78,9 +95,9 @@ normalize_state = (state) ->
       break
   state.mode = "Horizontal" unless known_mode
   state.use_between = state.use_between and true or false
-  state.strip = math.max(1, tonumber(state.strip) or 2)
-  state.accel = math.max(0.01, tonumber(state.accel) or 1)
-  state.angle = tonumber(state.angle) or 0
+  state.strip = math.max(MIN_STRIP_SIZE, math.floor(finite_number(state.strip, 2)))
+  state.accel = math.max(MIN_ACCELERATION, finite_number(state.accel, 1))
+  state.angle = finite_number state.angle, 0
   defaults = make_default_slots!
   state.slots or= {}
   for slot in *color_slots
@@ -152,13 +169,10 @@ round = (value) ->
   math.floor(value + 0.5)
 
 format_num = (value) ->
-  value = tonumber value
+  value = finite_number value
   error "Gradient Row could not format a vector clip coordinate." unless value
-  value = 0 if math.abs(value) < 0.0005
+  value = 0 if math.abs(value) < GEOMETRY_EPSILON
   ("%.2f")\format value
-
-clip_bleed = 0.5
-clip_cover_bleed = clip_bleed * 2
 
 ass_color = (color) ->
   "&H%02X%02X%02X&"\format color.b, color.g, color.r
@@ -172,23 +186,26 @@ strip_tags = (text) -> LineOps.visibleText text
 is_vector_line = (text) -> LineOps.hasDrawing text
 
 tag_value = (tag, fallback = 0) ->
-  return tonumber(tag) or fallback unless type(tag) == "table"
-  return tonumber(tag.value) or fallback if tag.value != nil
+  return finite_number(tag, fallback) unless type(tag) == "table"
+  return finite_number(tag.value, fallback) if tag.value != nil
   fallback
 
 layout_scale_for_line = (line) ->
   collection = line and line.parentCollection
   meta = collection and collection.meta or {}
-  play_y = tonumber(meta.PlayResY or meta.playresy or meta.res_y)
-  layout_y = tonumber(meta.LayoutResY or meta.layoutresy)
-  return play_y / layout_y if play_y and layout_y and layout_y != 0
+  play_y = finite_number(meta.PlayResY or meta.playresy or meta.res_y)
+  layout_y = finite_number(meta.LayoutResY or meta.layoutresy)
+  return play_y / layout_y if play_y and layout_y and play_y > 0 and layout_y > 0
   1
 
 position_from_text = (text) ->
   x, y, call = LineOps.tagPair text, "pos", nil, nil, true
+  x, y = finite_number(x), finite_number(y)
   return x, y if call and x != nil and y != nil
   args, move = LineOps.tagArguments text, "move", true
-  return tonumber(args[1]), tonumber(args[2]) if move and tonumber(args[1]) and tonumber(args[2])
+  if move
+    x, y = finite_number(args[1]), finite_number(args[2])
+    return x, y if x and y
   nil, nil
 
 implicit_position_tag = (line) ->
@@ -196,7 +213,8 @@ implicit_position_tag = (line) ->
   return nil if x != nil and y != nil
   return nil unless line.getDefaultPosition
   ok, x, y = pcall -> line\getDefaultPosition!
-  return nil unless ok and tonumber(x) and tonumber(y)
+  x, y = finite_number(x), finite_number(y)
+  return nil unless ok and x and y
   "\\pos(#{format_num x},#{format_num y})"
 
 origin_from_text = (line) ->
@@ -210,7 +228,7 @@ rotation_from_text = (line) ->
   rotation, call = LineOps.tagNumber line.text, "frz", nil, true
   rotation, call = LineOps.tagNumber(line.text, "fr", nil, true) unless call
   style = line.styleRef or line.styleref or {}
-  rotation or tonumber(style.angle) or 0
+  finite_number(rotation) or finite_number(style.angle, 0)
 
 rotate_point = (point, origin, angle) ->
   radians = math.rad angle
@@ -222,13 +240,14 @@ rotate_point = (point, origin, angle) ->
   }
 
 number_tag = (text, tag, fallback) ->
-  LineOps.tagNumber text, tag, tonumber(fallback), true
+  value = LineOps.tagNumber text, tag, finite_number(fallback, 0), true
+  finite_number value, finite_number(fallback, 0)
 
 text_pad = (line) ->
   style = line.styleRef or line.styleref or {}
   outline = number_tag(line.text, "bord", style.outline or 0)
   shadow = number_tag(line.text, "shad", style.shadow or 0)
-  outline + shadow + 2
+  math.abs(outline) + math.abs(shadow) + 2
 
 anchored_text_bounds = (line, width, height, pad) ->
   x, y = position_from_text line.text
@@ -258,16 +277,21 @@ measured_text_bounds = (line) ->
   ok_parse, data = pcall -> ASS\parse line
   return nil unless ok_parse and data
   ok, width, height = pcall -> data\getTextExtents true
+  width, height = finite_number(width), finite_number(height)
   return nil unless ok and width and height and width > 0 and height > 0
   anchored_text_bounds line, width, height, text_pad line
 
 remove_color_tag_text = (text, slot) ->
+  transforms = {}
+  text = tostring(text or "")\gsub "\\t%s*%b()", (transform) ->
+    transforms[#transforms + 1] = transform
+    "\1GRADIENT_TRANSFORM_#{#transforms}\1"
   if slot == "c"
     text = text\gsub "\\1c%s*&[Hh]%x+&", ""
     text = text\gsub "\\c%s*&[Hh]%x+&", ""
   else
     text = text\gsub "\\#{slot}%s*&[Hh]%x+&", ""
-  text
+  text\gsub "\1GRADIENT_TRANSFORM_(%d+)\1", (index) -> transforms[tonumber(index)] or ""
 
 apply_color_tags_text = (text, slots, color) ->
   text = ensure_tag_block text
@@ -285,26 +309,40 @@ rough_text_bounds = (line) ->
   char_count = 0
   char_count += 1 for _ in visible\gmatch "[%z\1-\127\194-\244][\128-\191]*"
   char_count = math.max 1, char_count
-  fs = number_tag(line.text, "fs", style.fontsize or 40)
-  fscx = number_tag(line.text, "fscx", style.scale_x or 100) / 100
-  fscy = number_tag(line.text, "fscy", style.scale_y or 100) / 100
+  fs = math.max(GEOMETRY_EPSILON, math.abs(number_tag(line.text, "fs", style.fontsize or 40)))
+  fscx = math.abs(number_tag(line.text, "fscx", style.scale_x or 100)) / 100
+  fscy = math.abs(number_tag(line.text, "fscy", style.scale_y or 100)) / 100
 
   width = math.max(fs * 0.75, char_count * fs * 0.58 * fscx)
   height = fs * 1.15 * fscy
   anchored_text_bounds line, width, height, text_pad line
 
 normalize_bounds = (bounds) ->
+  return nil unless type(bounds) == "table"
   left, top, right, bottom = unpack bounds
+  left, top = finite_number(left), finite_number(top)
+  right, bottom = finite_number(right), finite_number(bottom)
+  return nil unless left and top and right and bottom
   left, right = right, left if left > right
   top, bottom = bottom, top if top > bottom
   {left, top, right, bottom}
 
+valid_bounds = (bounds) ->
+  normalized = normalize_bounds bounds
+  return nil unless normalized
+  return nil unless normalized[3] - normalized[1] > GEOMETRY_EPSILON and normalized[4] - normalized[2] > GEOMETRY_EPSILON
+  normalized
+
 bounds_to_rect = (bounds) ->
-  return nil unless bounds
-  if bounds.x and bounds.y and bounds.w and bounds.h and bounds.w > 0 and bounds.h > 0
-    return normalize_bounds {bounds.x, bounds.y, bounds.x + bounds.w, bounds.y + bounds.h}
-  if bounds[1] and bounds[2] and bounds[1].x and bounds[1].y and bounds[2].x and bounds[2].y
-    return normalize_bounds {bounds[1].x, bounds[1].y, bounds[2].x, bounds[2].y}
+  return nil unless type(bounds) == "table"
+  x, y = finite_number(bounds.x), finite_number(bounds.y)
+  width, height = finite_number(bounds.w), finite_number(bounds.h)
+  if x and y and width and height and width > 0 and height > 0
+    return normalize_bounds {x, y, x + width, y + height}
+  if bounds[1] and bounds[2]
+    x1, y1 = finite_number(bounds[1].x), finite_number(bounds[1].y)
+    x2, y2 = finite_number(bounds[2].x), finite_number(bounds[2].y)
+    return normalize_bounds {x1, y1, x2, y2} if x1 and y1 and x2 and y2
   left = bounds.left or bounds.l
   top = bounds.top or bounds.t
   right = bounds.right or bounds.r
@@ -327,16 +365,16 @@ drawing_local_bounds = (data) ->
   normalize_bounds {left, top, right, bottom}
 
 rect_clip_from_text = (text) ->
-  x1, y1, x2, y2 = text\match "\\i?clip%(%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*%)"
-  return nil unless x1
-  normalize_bounds {tonumber(x1), tonumber(y1), tonumber(x2), tonumber(y2)}
+  args, call = LineOps.tagArguments text, "clip", true
+  return nil unless call and #args == 4
+  valid_bounds {args[1], args[2], args[3], args[4]}
 
 rect_clip_tag = (bounds) ->
-  left, top, right, bottom = unpack normalize_bounds bounds
+  left, top, right, bottom = unpack(valid_bounds(bounds) or error("Gradient Row received empty clip bounds."))
   "\\clip(#{math.floor(left)},#{math.floor(top)},#{math.ceil(right)},#{math.ceil(bottom)})"
 
 rect_points = (bounds) ->
-  left, top, right, bottom = unpack normalize_bounds bounds
+  left, top, right, bottom = unpack(valid_bounds(bounds) or error("Gradient Row received empty geometry bounds."))
   {
     {x: left, y: top}
     {x: right, y: top}
@@ -359,7 +397,7 @@ point_distance = (a, b) ->
 
 normalize_vector = (x, y) ->
   length = math.sqrt x * x + y * y
-  return {x: 0, y: 0} if length < 0.0005
+  return {x: 0, y: 0} if length < GEOMETRY_EPSILON
   {x: x / length, y: y / length}
 
 outward_edge_normal = (a, b) ->
@@ -376,7 +414,7 @@ line_intersection = (a1, a2, b1, b2) ->
   dax, day = a2.x - a1.x, a2.y - a1.y
   dbx, dby = b2.x - b1.x, b2.y - b1.y
   denominator = dax * dby - day * dbx
-  return nil if math.abs(denominator) < 0.0005
+  return nil if math.abs(denominator) < GEOMETRY_EPSILON
   t = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / denominator
   {x: a1.x + dax * t, y: a1.y + day * t}
 
@@ -413,18 +451,21 @@ extract_vector_points = (data) ->
         ok, command_points = pcall -> command\getPoints true
         if ok and command_points
           for point in *command_points
-            x, y = tonumber(point.x), tonumber(point.y)
+            x, y = finite_number(point.x), finite_number(point.y)
             if x and y
               points[#points + 1] = {:x, :y}
               got_points = true
       unless got_points
         x, y = command\get!
+        x, y = finite_number(x), finite_number(y)
         if x and y
           points[#points + 1] = {:x, :y}
   points
 
 bounds_from_points = (points) ->
-  return nil if #points == 0
+  return nil unless type(points) == "table" and #points > 0
+  for point in *points
+    return nil unless point and finite_number(point.x) != nil and finite_number(point.y) != nil
   left, top, right, bottom = points[1].x, points[1].y, points[1].x, points[1].y
   for point in *points
     left = math.min(left, point.x)
@@ -466,14 +507,15 @@ prepare_perspective_line = (line) ->
 
 screen_padding_for_line = (line, tags) ->
   blur = number_tag line.text, "blur", 0
-  blur_pad = math.abs(tonumber(blur) or 0) * 2
-  pad_x = math.max(math.abs(tag_value(tags.outline_x)), math.abs(tag_value(tags.shadow_x)), 0) + blur_pad + 4
-  pad_y = math.max(math.abs(tag_value(tags.outline_y)), math.abs(tag_value(tags.shadow_y)), 0) + blur_pad + 4
+  blur_pad = math.abs(finite_number(blur, 0)) * 2
+  pad_x = math.max(math.abs(tag_value(tags.outline_x)), math.abs(tag_value(tags.shadow_x)), 0) + blur_pad + PERSPECTIVE_PADDING
+  pad_y = math.max(math.abs(tag_value(tags.outline_y)), math.abs(tag_value(tags.shadow_y)), 0) + blur_pad + PERSPECTIVE_PADDING
   pad_x, pad_y
 
 base_local_rect_for_perspective = (data, width, height) ->
   bounds = drawing_local_bounds data
-  bounds or {0, 0, math.max(width, 0.01), math.max(height, 0.01)}
+  width, height = finite_number(width, MIN_ACCELERATION), finite_number(height, MIN_ACCELERATION)
+  bounds or {0, 0, math.max(width, MIN_ACCELERATION), math.max(height, MIN_ACCELERATION)}
 
 projected_quad_for_line = (line, data, tags, width, height, layout_scale) ->
   bounds = base_local_rect_for_perspective data, width, height
@@ -554,12 +596,12 @@ boundary_delta = (a, b) ->
   return nil unless a and b and a[1] and a[2] and b[1] and b[2]
   math.max point_distance(a[1], b[1]), point_distance(a[2], b[2])
 
-shift_boundary_t = (boundary_at, t, direction, max_step, amount = clip_bleed) ->
+shift_boundary_t = (boundary_at, t, direction, max_step, amount = CLIP_BLEED) ->
   return t if amount <= 0 or max_step <= 0
   base = boundary_at t
   return t unless base and base[1] and base[2]
   low, high = 0, max_step
-  for _ = 1, 12
+  for _ = 1, BOUNDARY_SEARCH_ITERATIONS
     mid = (low + high) / 2
     candidate_t = clamp t + direction * mid, 0, 1
     candidate = boundary_at candidate_t
@@ -570,11 +612,19 @@ shift_boundary_t = (boundary_at, t, direction, max_step, amount = clip_bleed) ->
       high = mid
   clamp t + direction * low, 0, 1
 
+gradient_segment_count = (span, strip) ->
+  span, strip = finite_number(span), finite_number(strip)
+  window_error "Gradient Row received an invalid span or strip size." unless span and strip and span > GEOMETRY_EPSILON and strip > 0
+  sections = math.max 1, math.ceil(span / strip)
+  window_error "This gradient would create #{sections} lines; increase Pixels per strip (maximum #{MAX_GRADIENT_SEGMENTS} per source)." if sections > MAX_GRADIENT_SEGMENTS
+  sections
+
 create_rect_clips = (bounds, mode, strip) ->
-  bounds = normalize_bounds bounds
+  bounds = valid_bounds bounds
+  window_error "The selected line has empty gradient bounds." unless bounds
   left, top, right, bottom = unpack bounds
   span = mode == "Vertical" and bottom - top or right - left
-  sections = math.max(1, math.ceil(span / strip))
+  sections = gradient_segment_count span, strip
   clips = {}
   for i = 1, sections
     start_off = (i - 1) * strip
@@ -582,14 +632,14 @@ create_rect_clips = (bounds, mode, strip) ->
     if mode == "Vertical"
       y1 = top + start_off
       y2 = top + end_off
-      y1 -= clip_bleed if i > 1
-      y2 += clip_bleed if i < sections
+      y1 -= CLIP_BLEED if i > 1
+      y2 += CLIP_BLEED if i < sections
       clips[#clips + 1] = rect_clip_tag {left, y1, right, y2}
     else
       x1 = left + start_off
       x2 = left + end_off
-      x1 -= clip_bleed if i > 1
-      x2 += clip_bleed if i < sections
+      x1 -= CLIP_BLEED if i > 1
+      x2 += CLIP_BLEED if i < sections
       clips[#clips + 1] = rect_clip_tag {x1, top, x2, bottom}
   clips
 
@@ -600,8 +650,8 @@ create_quad_clips = (points, mode, strip) ->
     (point_distance(quad[1], quad[4]) + point_distance(quad[2], quad[3])) / 2
   else
     (point_distance(quad[1], quad[2]) + point_distance(quad[4], quad[3])) / 2
-  return nil if span <= 0.0005
-  sections = math.max 1, math.ceil(span / math.max(1, strip))
+  return nil if span <= GEOMETRY_EPSILON
+  sections = gradient_segment_count span, math.max(MIN_STRIP_SIZE, strip)
   step_t = 1 / sections
   boundary_at = (t) ->
     if mode == "Vertical"
@@ -612,7 +662,7 @@ create_quad_clips = (points, mode, strip) ->
   for i = 1, sections
     t1 = (i - 1) / sections
     t2 = i / sections
-    t2 = shift_boundary_t boundary_at, t2, 1, step_t / 2, clip_cover_bleed if i < sections
+    t2 = shift_boundary_t boundary_at, t2, 1, step_t / 2, CLIP_COVER_BLEED if i < sections
     if mode == "Vertical"
       top = boundary_at t1
       bottom = boundary_at t2
@@ -678,8 +728,8 @@ create_quad_mesh_clips = (points, mode, strip) ->
     (point_distance(points[1], points[4]) + point_distance(points[2], points[3])) / 2
   else
     (point_distance(points[1], points[2]) + point_distance(points[4], points[3])) / 2
-  return nil if span <= 0.0005
-  sections = math.max 1, math.ceil(span / math.max(1, strip))
+  return nil if span <= GEOMETRY_EPSILON
+  sections = gradient_segment_count span, math.max(MIN_STRIP_SIZE, strip)
   step_t = 1 / sections
   boundary_at = (t) ->
     if mode == "Vertical"
@@ -690,7 +740,7 @@ create_quad_mesh_clips = (points, mode, strip) ->
   for i = 1, sections
     t1 = (i - 1) / sections
     t2 = i / sections
-    t2 = shift_boundary_t boundary_at, t2, 1, step_t / 2, clip_cover_bleed if i < sections
+    t2 = shift_boundary_t boundary_at, t2, 1, step_t / 2, CLIP_COVER_BLEED if i < sections
     if mode == "Vertical"
       top = boundary_at t1
       bottom = boundary_at t2
@@ -704,10 +754,10 @@ create_quad_mesh_clips = (points, mode, strip) ->
   clips
 
 valid_point = (point) ->
-  point and type(point.x) == "number" and type(point.y) == "number"
+  point and finite_number(point.x) != nil and finite_number(point.y) != nil
 
 create_rotated_clips = (points, strip, angle) ->
-  angle = tonumber(angle) or 0
+  angle = finite_number angle, 0
   window_error "Could not create rotated clips from the selected line." unless points and #points >= 3
   for point in *points
     window_error "Could not create rotated clips from the selected line." unless valid_point point
@@ -727,15 +777,16 @@ create_rotated_clips = (points, strip, angle) ->
     max_across = math.max(max_across, across)
 
   span = max_proj - min_proj
-  sections = math.max(1, math.ceil(span / strip))
-  across_pad = math.min(4, math.max(1, strip * 0.25))
+  window_error "The selected line has an empty gradient span." unless span > GEOMETRY_EPSILON
+  sections = gradient_segment_count span, strip
+  across_pad = math.min(ROTATED_MAX_PADDING, math.max(ROTATED_MIN_PADDING, strip * ROTATED_PADDING_RATIO))
   min_across -= across_pad
   max_across += across_pad
   clips = {}
   for i = 1, sections
     start_proj = min_proj + (i - 1) * strip
     end_proj = i == sections and max_proj or min_proj + i * strip
-    end_proj += clip_cover_bleed if i < sections
+    end_proj += CLIP_COVER_BLEED if i < sections
     clips[#clips + 1] = vector_clip_tag {
       point_on_strip axis, perp, start_proj, min_across
       point_on_strip axis, perp, end_proj, min_across
@@ -749,7 +800,7 @@ intersect_perpendicular = (points) ->
   x2, y2 = points[2].x, points[2].y
   x3, y3 = points[3].x, points[3].y
   denominator = (x2 - x1) ^ 2 + (y2 - y1) ^ 2
-  return nil if denominator == 0
+  return nil if math.abs(denominator) <= GEOMETRY_EPSILON
   k = ((x3 - x1) * (x2 - x1) + (y3 - y1) * (y2 - y1)) / denominator
   {
     x: x1 + k * (x2 - x1)
@@ -775,7 +826,7 @@ gradient_axis_angle = (state, line_rotation) ->
 line_needs_projected_clips = (line) ->
   text = tostring(line.text or "")
   return true if is_vector_line text
-  return true if math.abs(rotation_from_text line) >= 0.0005
+  return true if math.abs(rotation_from_text line) >= GEOMETRY_EPSILON
   for pattern in *{"\\frx", "\\fry", "\\frz", "\\fr", "\\fax", "\\fay", "\\fscx", "\\fscy", "\\xbord", "\\ybord", "\\xshad", "\\yshad", "\\org"}
     return true if text\find pattern, 1, true
   false
@@ -803,6 +854,11 @@ explicit_clip_info = (line) ->
   if data
     points = extract_vector_points data
     if points and #points > 0
+      if #points == 5
+        first, last = points[1], points[#points]
+        if math.abs(first.x - last.x) <= GEOMETRY_EPSILON and math.abs(first.y - last.y) <= GEOMETRY_EPSILON
+          table.remove points, #points
+      window_error "Gradient Row supports rectangular or four-corner vector clips. Simplify this clip to four corners before applying a spatial gradient." unless #points == 4
       bounds = bounds_from_points points
       return {:bounds, :points, is_vector_clip: true}
   nil
@@ -814,7 +870,7 @@ gradient_points_for_line = (line, bounds) ->
     return points if #points >= 4
 
   rotation = rotation_from_text line
-  if math.abs(rotation) >= 0.0005
+  if math.abs(rotation) >= GEOMETRY_EPSILON
     text_bounds = measured_text_bounds(line) or rough_text_bounds(line)
     if text_bounds
       origin = origin_from_text line
@@ -830,8 +886,8 @@ clip_tags_for_line = (sub, line, state) ->
     if info.is_vector_clip and #info.points >= 4 and state.mode != "Rotated"
       if clips = create_quad_mesh_clips(info.points, state.mode, strip) or create_quad_clips info.points, state.mode, strip
         return clips
-    if state.mode == "Rotated" or math.abs(line_rotation) >= 0.0005
-      angle = angle_from_vector_clip(line) or gradient_axis_angle state, line_rotation
+    if state.mode == "Rotated" or math.abs(line_rotation) >= GEOMETRY_EPSILON
+      angle = if state.mode == "Rotated" then gradient_axis_angle(state, line_rotation) else angle_from_vector_clip(line) or gradient_axis_angle(state, line_rotation)
       return create_rotated_clips info.points, strip, angle
     return create_rect_clips info.bounds, state.mode, strip
 
@@ -841,9 +897,9 @@ clip_tags_for_line = (sub, line, state) ->
   bounds = line_bounds sub, line
   strip = math.max(1, state.strip)
   line_rotation = rotation_from_text line
-  if state.mode == "Rotated" or math.abs(line_rotation) >= 0.0005
+  if state.mode == "Rotated" or math.abs(line_rotation) >= GEOMETRY_EPSILON
     points = gradient_points_for_line line, bounds
-    angle = angle_from_vector_clip(line) or gradient_axis_angle state, line_rotation
+    angle = if state.mode == "Rotated" then gradient_axis_angle(state, line_rotation) else angle_from_vector_clip(line) or gradient_axis_angle(state, line_rotation)
     return create_rotated_clips points, strip, angle
   create_rect_clips bounds, state.mode, strip
 
@@ -983,8 +1039,9 @@ parse_ass_color_value = (value) ->
 
 block_color_tags = (content) ->
   colors = {}
-  for raw, value in tostring(content or "")\gmatch "\\([1234]-c)%s*(&[Hh]%x+&)"
-    slot = if raw == "1c" then "c" else raw
+  static_content = tostring(content or "")\gsub "\\t%s*%b()", ""
+  for number, value in static_content\gmatch "\\([1-4]?)c%s*(&[Hh]%x+&)"
+    slot = if number == "" or number == "1" then "c" else number .. "c"
     if color_tag_name slot
       color = parse_ass_color_value value
       colors[slot] = color if color
@@ -1133,9 +1190,7 @@ collect_sources = (sub, sel) ->
   sources = {}
   for selected_index in *sel
     source = by_index[selected_index]
-    unless source
-      source = Line sub[selected_index], collection
-      source.number = selected_index
+    window_error "Gradient Row could not resolve selected dialogue line #{selected_index}." unless source
     sources[#sources + 1] = {index: selected_index, line: source}
   sources, collection
 
@@ -1203,10 +1258,33 @@ create_dialog = ->
 is_char_mode = (mode) ->
   mode == "Char Line" or mode == "Char Selection"
 
+validate = (sub, sel) ->
+  return false unless sel and #sel >= 1
+  for index in *sel
+    line = sub and sub[index]
+    return false unless line and line.class == "dialogue" and not line.comment
+  true
+
 main = (sub, sel) ->
+  window_error "Select only uncommented dialogue lines." unless validate sub, sel
   state = create_dialog!
   return unless state
   state = normalize_state state
+  unless is_char_mode state.mode
+    for index in *sel
+      text = tostring(sub[index].text or "")
+      visible_started = false
+      for section in *LineOps.scanSections text
+        if section.type == "override"
+          for call in *LineOps.tagCalls "{#{section.text}}", {"clip", "iclip"}
+            window_error "Animated clips inside \\t are not supported because generating strips would discard their animation." unless call.top_level
+            window_error "Spatial gradients require the source clip before visible content; split lines that change clip between runs." if visible_started
+        elseif section.type == "text" or section.type == "drawing"
+          visible_part = tostring(section.text or "")\gsub("\\[Nnh]", "")
+          visible_started = true if visible_part\match "%S"
+      window_error "Inverse clips are not supported because replacing an \\iclip would invert the gradient area." if #LineOps.tagCalls(text, "iclip") > 0
+      clip_count = #LineOps.tagCalls(text, "clip")
+      window_error "Use at most one clip per line before applying Gradient Row." if clip_count > 1
   LineOps.transaction sub, script_name, ->
     if is_char_mode state.mode
       active_slots = if state.use_between then {} else collect_active_slots state.slots
@@ -1215,15 +1293,25 @@ main = (sub, sel) ->
     active_slots = collect_active_slots state.slots
     palette = [parse_color color for color in *state.colors]
     sources, collection = collect_sources sub, sel
+    plans, total_lines = {}, 0
+    for line_no, source_info in ipairs sources
+      aegisub.cancel! if aegisub.progress.is_cancelled!
+      clips = clip_tags_for_line sub, source_info.line, state
+      window_error "No gradient clips were generated." unless clips and #clips > 0
+      total_lines += #clips
+      window_error "This selection would create #{total_lines} gradient lines; increase Pixels per strip or process a smaller selection (maximum #{MAX_TOTAL_GRADIENT_LINES})." if total_lines > MAX_TOTAL_GRADIENT_LINES
+      plans[#plans + 1] = {source_info: source_info, clips: clips}
+      aegisub.progress.set math.floor(40 * line_no / math.max(#sources, 1))
+
     generated_selection = {}
     inserted_before = 0
 
-    for line_no, source_info in ipairs sources
+    for line_no, plan in ipairs plans
       aegisub.cancel! if aegisub.progress.is_cancelled!
+      source_info = plan.source_info
       source_index = source_info.index + inserted_before
       source = source_info.line
-      clips = clip_tags_for_line sub, source, state
-      window_error "No gradient clips were generated." if #clips == 0
+      clips = plan.clips
 
       commented = Line source, collection
       commented.comment = true
@@ -1240,10 +1328,7 @@ main = (sub, sel) ->
         insert_at += 1
 
       inserted_before += #clips
-      aegisub.progress.set math.floor(100 * line_no / math.max(#sources, 1))
+      aegisub.progress.set 40 + math.floor(60 * line_no / math.max(#plans, 1))
 
     generated_selection
-
-validate = (sub, sel) -> #sel >= 1
-
 depctrl\registerMacro main, validate

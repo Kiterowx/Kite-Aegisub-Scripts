@@ -1,7 +1,7 @@
 export script_name = "Selesub"
 export script_description = "Filters, imports, exports, and manages subtitle events"
 export script_author = "Kiterow"
-export script_version = "2.1.1"
+export script_version = "2.1.3"
 export script_namespace = "kite.Selesub"
 
 HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
@@ -11,29 +11,27 @@ DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
   feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
   {
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     {"aegisub.re"}
     {"aegisub.unicode"}
     {"myaa.ASSParser", version: "0.0.4", url: "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json"}
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-KiteUI, re, unicode, ASSParser = depctrl\requireModules!
+KiteUI, re, unicode, ASSParser, LineOps, PyBridge = depctrl\requireModules!
 unicode_lower = unicode.to_lower_case
 
-visible_text = (value) ->
-  text = tostring(value or "")
-  text = text\gsub("{\\alpha&HFF&}[^{}]-{[^{}]-}", "")
-  text = text\gsub("{\\alpha&HFF&}[^{}]*$", "")
-  text = text\gsub("{[^}]*}", "")\gsub("\\[Nn]", " ")
-  text = text\gsub "^%s+", ""
-  return (text\gsub "%s+$", "")
+visible_text = (value) -> LineOps.visibleText value
 
 ass_comments = (value) ->
   comments = {}
-  for block in tostring(value or "")\gmatch "{([^}]*)}"
-    comments[#comments + 1] = block unless block\match "^\\"
+  for section in *LineOps.scanSections(value)
+    comments[#comments + 1] = section.text if section.type == "comment"
   table.concat comments, "\n"
 
 word_count = (value) ->
@@ -46,7 +44,8 @@ character_count = (value) ->
   unicode.len text
 
 blur_value = (value) ->
-  tonumber(tostring(value or "")\match("\\blur([%d%.]+)")) or 0
+  number = LineOps.tagNumber value, "blur", 0, true
+  number
 
 DIRECT_FIELDS = {
   {label: "Effect", key: "effect", kind: "string"}
@@ -114,7 +113,7 @@ ACTIONS = {"Select", "Comment", "Delete"}
 MANAGER_SCOPES = {"Selection", "All"}
 
 is_event = (line) ->
-  type(line) == "table" and (line.class == nil or line.class == "dialogue")
+  type(line) == "table" and line.class == "dialogue"
 
 raw_field_value = (line, field) ->
   return field.value line if field.value
@@ -396,17 +395,35 @@ parse_time = (value) ->
     milliseconds = tonumber(("0." .. fraction)) * 1000
     return ((tonumber(hours) * 60 + tonumber(minutes)) * 60 + tonumber(seconds)) * 1000 + milliseconds
 
-  hours, minutes, seconds = text\match "^(%d+)h(%d+)m([%d%.]+)s$"
+  hours, minutes, seconds = text\match "^(%d+)h(%d+)m(%d+%.?%d*)s$"
   if hours
+    return nil if tonumber(minutes) >= 60 or tonumber(seconds) >= 60
     return (tonumber(hours) * 3600 + tonumber(minutes) * 60 + tonumber(seconds)) * 1000
-  minutes, seconds = text\match "^(%d+)m([%d%.]+)s$"
-  return (tonumber(minutes) * 60 + tonumber(seconds)) * 1000 if minutes
-  seconds = text\match "^([%d%.]+)s$"
+  minutes, seconds = text\match "^(%d+)m(%d+%.?%d*)s$"
+  if minutes
+    return nil if tonumber(seconds) >= 60
+    return (tonumber(minutes) * 60 + tonumber(seconds)) * 1000
+  seconds = text\match "^(%d+%.?%d*)s$"
   return tonumber(seconds) * 1000 if seconds
   nil
 
+finite_number = (value) ->
+  number = tonumber value
+  return nil unless number and number == number and number != math.huge and number != -math.huge
+  number
+
 parse_number = (value, kind) ->
-  if kind == "time" then parse_time(value) else tonumber(trim(value))
+  raw = if kind == "time" then parse_time(value) else trim(value)
+  finite_number raw
+
+parse_range = (value, kind) ->
+  text = tostring(value or "")
+  for position = 1, #text
+    if text\sub(position, position) == "-"
+      low = parse_number text\sub(1, position - 1), kind
+      high = parse_number text\sub(position + 1), kind
+      return low, high if low != nil and high != nil
+  nil, nil
 
 compile_number_matcher = (field, state) ->
   operator = normalize_operator field, state.operator
@@ -418,11 +435,8 @@ compile_number_matcher = (field, state) ->
   if trim(state.query) == ""
     return nil, "Enter an advanced value."
   if operator == "Range"
-    first, last = state.query\match "^%s*(.-)%s+%-%s+(.-)%s*$"
-    first, last = state.query\match("^%s*([^%-]+)%-([^%-]+)%s*$") unless first
-    low = first and parse_number(first, field.kind) or nil
-    high = last and parse_number(last, field.kind) or nil
-    return nil, "Use a valid range, such as 3-8." unless low and high
+    low, high = parse_range state.query, field.kind
+    return nil, "Use a valid range, such as 3-8." unless low != nil and high != nil
     low, high = high, low if low > high
     return ((value) -> value >= low and value <= high), nil
 
@@ -525,19 +539,27 @@ matching_indexes = (subs, state, criteria, search_matcher, selection) ->
         break if state.only_first
   indexes
 
-apply_comment = (subs, indexes) ->
+apply_comment = (subs, indexes, undo_name) ->
+  changes = {}
   changed = 0
   for index in *indexes
     line = subs[index]
     unless line.comment
-      line.comment = true
-      subs[index] = line
+      candidate = LineOps.copy line
+      candidate.comment = true
+      changes[#changes + 1] = {index: index, line: candidate}
       changed += 1
+  if changed > 0
+    LineOps.transaction subs, undo_name, ->
+      subs[change.index] = change.line for change in *changes
   changed
 
-apply_delete = (subs, indexes) ->
-  for position = #indexes, 1, -1
-    subs.delete indexes[position]
+apply_delete = (subs, indexes, undo_name) ->
+  return 0 if #indexes == 0
+  LineOps.transaction subs, undo_name, ->
+    for position = #indexes, 1, -1
+      subs.delete indexes[position]
+  #indexes
 
 manager_indexes = (subs, selection, scope) ->
   allowed = nil
@@ -662,9 +684,7 @@ confirm_selection_delete = (target_count) ->
   pressed == "Delete"
 
 selection_events = (subs, selection) ->
-  indexes = [index for index in *(selection or {}) when is_event subs[index]]
-  table.sort indexes
-  indexes
+  LineOps.normalizeIndices subs, selection, is_event
 
 manage_values = (subs, selection, initial_action = nil) ->
   state = manager_state!
@@ -696,12 +716,10 @@ manage_values = (subs, selection, initial_action = nil) ->
       elseif state.action == "Select"
         return targets, true
       elseif state.action == "Comment"
-        changed = apply_comment subs, targets
-        aegisub.set_undo_point "#{script_name}: comment selection" if changed > 0
+        changed = apply_comment subs, targets, "#{script_name}: comment selection"
         return targets, true
       elseif confirm_selection_delete #targets
-        apply_delete subs, targets
-        aegisub.set_undo_point "#{script_name}: delete selection"
+        apply_delete subs, targets, "#{script_name}: delete selection"
         return {}, true
       continue
 
@@ -725,12 +743,10 @@ manage_values = (subs, selection, initial_action = nil) ->
         if state.action == "Select"
           return targets, true
         if state.action == "Comment" and confirm_manager_action "Comment", kept_count, #targets
-          changed = apply_comment subs, targets
-          aegisub.set_undo_point "#{script_name}: comment values" if changed > 0
+          changed = apply_comment subs, targets, "#{script_name}: comment values"
           return targets, true
         if state.action == "Delete" and confirm_manager_action "Delete", kept_count, #targets
-          apply_delete subs, targets
-          aegisub.set_undo_point "#{script_name}: delete values"
+          apply_delete subs, targets, "#{script_name}: delete values"
           return {}, true
 
 execute_state = (subs, selection, state) ->
@@ -744,8 +760,7 @@ execute_state = (subs, selection, state) ->
   return nil, "No events matched." if #matches == 0
 
   if state.action == "Comment"
-    changed = apply_comment subs, matches
-    aegisub.set_undo_point "#{script_name}: comment" if changed > 0
+    changed = apply_comment subs, matches, "#{script_name}: comment"
     return matches, nil
 
   if state.action == "Delete"
@@ -753,8 +768,7 @@ execute_state = (subs, selection, state) ->
       {class: "label", label: "#{#matches} lines will be deleted. Use Ctrl+Z to undo.", x: 0, y: 0, width: 36, height: 2}
     }, {"Delete", "Cancel"}, close: "Cancel"
     return selection, nil unless confirm == "Delete"
-    apply_delete subs, matches
-    aegisub.set_undo_point "#{script_name}: delete"
+    apply_delete subs, matches, "#{script_name}: delete"
     return {}, nil
 
   matches, nil
@@ -783,16 +797,12 @@ export_ass = (subs, selection) ->
   return selection, false unless path and path != ""
   path ..= ".ass" unless unicode_lower(path)\match "%.ass$"
 
-  file, open_error = io.open path, "wb"
-  unless file
-    show_message "Export failed: #{open_error or "unknown error"}"
-    return selection, false
-
   script_info, garbage, styles = collect_ass_sections subs
   events = [KiteUI.copy(subs[index]) for index in *indexes]
-  ok, failure = pcall ->
-    ASSParser.generate_file script_info, garbage, styles, events, {}, (chunk) -> file\write chunk
-  file\close!
+  ok, failure = PyBridge.withAtomicFile path, (file) ->
+    ASSParser.generate_file script_info, garbage, styles, events, {}, (chunk) ->
+      written, write_error = file\write chunk
+      error write_error or "Could not write ASS output." unless written
   unless ok
     show_message "Export failed: #{failure}"
     return selection, false
@@ -809,7 +819,7 @@ import_ass = (subs, selection) ->
     return selection, false
   ok, parsed = pcall -> ASSParser.parse_file file
   file\close!
-  unless ok and parsed
+  unless ok and type(parsed) == "table" and type(parsed.events) == "table" and type(parsed.styles) == "table"
     show_message "Import failed: #{parsed or "invalid ASS"}"
     return selection, false
   if #parsed.events == 0
@@ -825,27 +835,27 @@ import_ass = (subs, selection) ->
     elseif is_event(line) and first_event == #subs + 1
       first_event = index
 
-  added_styles = 0
-  for source_style in *parsed.styles
-    name = tostring(source_style.name or "")
-    key = unicode_lower name
-    unless styles_by_key[key]
-      subs.insert first_event, KiteUI.copy(source_style)
-      first_event += 1
-      added_styles += 1
-      styles_by_key[key] = name
+  imported, added_styles = LineOps.transaction subs, "#{script_name}: import", ->
+    added_styles = 0
+    for source_style in *parsed.styles
+      name = tostring(source_style.name or "")
+      key = unicode_lower name
+      unless styles_by_key[key]
+        subs.insert first_event, KiteUI.copy(source_style)
+        first_event += 1
+        added_styles += 1
+        styles_by_key[key] = name
 
-  insert_at = #subs + 1
-  imported = {}
-  for source_line in *parsed.events
-    line = KiteUI.copy source_line
-    mapped_style = styles_by_key[unicode_lower(tostring(line.style or ""))]
-    line.style = mapped_style if mapped_style
-    subs.insert insert_at, line
-    imported[#imported + 1] = insert_at
-    insert_at += 1
-
-  aegisub.set_undo_point "#{script_name}: import"
+    insert_at = #subs + 1
+    imported = {}
+    for source_line in *parsed.events
+      line = KiteUI.copy source_line
+      mapped_style = styles_by_key[unicode_lower(tostring(line.style or ""))]
+      line.style = mapped_style if mapped_style
+      subs.insert insert_at, line
+      imported[#imported + 1] = insert_at
+      insert_at += 1
+    imported, added_styles
   show_message "Imported #{#imported} lines and #{added_styles} styles."
   imported, true
 

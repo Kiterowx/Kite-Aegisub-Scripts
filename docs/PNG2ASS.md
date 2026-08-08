@@ -1,4 +1,4 @@
-# PNG2ASS 1.4.1
+# PNG2ASS 1.4.3
 
 PNG2ASS converts images and SVG files into ASS drawing lines through the `kite-png2ass` Python package.
 

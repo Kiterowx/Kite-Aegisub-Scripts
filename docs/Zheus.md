@@ -1,4 +1,4 @@
-# Zheus Colormanager 4.5.0
+# Zheus Colormanager 4.5.2
 
 Zheus manages actor colors, solid ASS colors, VSFilterMod corner colors, replacement workflows, persistent color changes, and accessibility-oriented palettes.
 

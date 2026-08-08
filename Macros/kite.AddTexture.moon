@@ -1,12 +1,20 @@
 export script_name        = "AddTexture"
 export script_description = "Apply pasted ASS drawing textures clipped to selected text outlines"
 export script_author      = "Kiterow"
-export script_version     = "2.0.8"
+export script_version     = "2.0.11"
 export script_namespace   = "kite.AddTexture"
 
 CONFIG_FILE = "kite-addtexture.json"
+NUMBER_EPSILON = 0.000001
+NUMBER_DECIMALS = 3
+DEFAULT_TOLERANCE = 1
+MIN_TOLERANCE = 1
+MAX_TOLERANCE = 50
+MIN_LAYER_OFFSET = 0
+MAX_LAYER_OFFSET = 100
+MAX_GENERATED_LINES = 20000
 
-local ZF, ASS, KiteUI, depctrl
+local ZF, ASS, KiteUI, LineOps, depctrl
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
   feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
@@ -15,11 +23,13 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"}
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-ZF, ASS, KiteUI = depctrl\requireModules!
+ZF, ASS, KiteUI, LineOps = depctrl\requireModules!
 
 ConfigHandler = (interface, file_name, _has_sections, version) ->
   KiteUI.dialogHandler interface, script_namespace, version, {
@@ -43,38 +53,52 @@ DEFAULTS = {
 }
 
 trim = (value) ->
-  text = tostring value or ""
+  text = tostring(value or "")
   text = text\gsub "^%s+", ""
   text = text\gsub "%s+$", ""
   text
 
 normalize_color = (color) ->
   return nil unless type(color) == "string"
-  hex = color\match "&[Hh](%x+)&?"
-  return nil unless hex
+  hex = trim(color)\match "^&[Hh](%x+)&?$"
+  return nil unless hex and (#hex == 6 or #hex == 8)
   hex = hex\sub(-6) if #hex > 6
-  hex = string.rep("0", 6 - #hex) .. hex if #hex < 6
   "&H" .. hex\upper! .. "&"
 
+finite_number = (value, fallback = 0) ->
+  number = tonumber value
+  return fallback unless number and number == number and number != math.huge and number != -math.huge
+  number
+
 normalize_tolerance = (tolerance) ->
-  value = tonumber(tolerance) or 1
-  if value < 1 then 1 else value
+  value = finite_number tolerance, DEFAULT_TOLERANCE
+  math.max MIN_TOLERANCE, math.min MAX_TOLERANCE, value
+
+normalize_layer_offset = (value) ->
+  value = math.floor(finite_number(value, DEFAULTS.layer_offset) + 0.5)
+  math.max MIN_LAYER_OFFSET, math.min MAX_LAYER_OFFSET, value
 
 format_number = (n) ->
-  n = tonumber(n) or 0
-  n = 0 if math.abs(n) < 0.000001
-  if math.abs(n - math.floor(n + 0.5)) < 0.000001
-    return tostring math.floor(n + 0.5)
-  s = string.format "%.3f", n
+  n = finite_number n, 0
+  n = 0 if math.abs(n) < NUMBER_EPSILON
+  if math.abs(n - math.floor(n + 0.5)) < NUMBER_EPSILON
+    return tostring(math.floor(n + 0.5))
+  s = string.format "%.#{NUMBER_DECIMALS}f", n
   s = s\gsub "0+$", ""
   s\gsub "%.$", ""
 
 normalize_draw_scale = (drawing, p_scale) ->
-  scale = tonumber(p_scale) or 1
+  scale = finite_number p_scale, 1
   return drawing if scale <= 1
   factor = math.pow 2, scale - 1
-  drawing\gsub "%-?%d+%.?%d*", (n) ->
-    format_number((tonumber(n) or 0) / factor)
+  tokens = {}
+  for token in tostring(drawing or "")\gmatch "%S+"
+    number = tonumber token
+    if number and number == number and number != math.huge and number != -math.huge
+      tokens[#tokens + 1] = format_number(number / factor)
+    else
+      tokens[#tokens + 1] = token
+  table.concat tokens, " "
 
 read_clipboard = ->
   return "" unless clipboard and clipboard.get
@@ -82,17 +106,17 @@ read_clipboard = ->
   if ok and type(data) == "string" then data else ""
 
 clean_shape = (raw) ->
-  s = tostring raw or ""
+  s = tostring(raw or "")
   s = s\gsub "\r", " "
   s = s\gsub "\n", " "
   s = s\gsub "\\N", " "
   s = s\gsub "%b{}", " "
   s = s\gsub "\\p%d+", " "
   s = s\gsub ",", " "
-  s = s\gsub "([mMlLbB])", (c) -> " " .. c\lower! .. " "
+  s = s\gsub "([mMnNlLbBsSpPcC])", (c) -> " " .. c\lower! .. " "
   s = s\gsub "%s+", " "
   s = trim s
-  trim(s\match("(m%s+%-?[%d%.]+%s+%-?[%d%.]+.*)") or s)
+  trim(s\match("([mn]%s+%-?[%d%.]+%s+%-?[%d%.]+.*)") or s)
 
 parse_dialogue_line = (line) ->
   s = trim line
@@ -110,18 +134,24 @@ parse_dialogue_line = (line) ->
   { text: fields[10] or "" }
 
 split_payloads = (input) ->
-  payloads = {}
   normalized = tostring(input or "")\gsub "\r\n", "\n"
   normalized = normalized\gsub "\r", "\n"
+  return {} if trim(normalized) == ""
+
+  lines, parsed_count = {}, 0
   for line in (normalized .. "\n")\gmatch "([^\n]*)\n"
     if trim(line) != ""
       parsed = parse_dialogue_line line
-      payloads[#payloads + 1] = {
-        text: parsed and parsed.text or line
-        line: parsed
-      }
-  if #payloads == 0 and trim(normalized) != ""
-    payloads[1] = { text: normalized }
+      parsed_count += 1 if parsed
+      lines[#lines + 1] = { text: parsed and parsed.text or line, line: parsed }
+
+  -- Physical newlines are valid separators inside a raw ASS drawing. Splitting
+  -- those lines would discard every continuation that does not start with m/n.
+  return { { text: normalized } } if parsed_count == 0
+
+  payloads = {}
+  for item in *lines
+    payloads[#payloads + 1] = item
   payloads
 
 copy_state = (state = {}) ->
@@ -135,7 +165,9 @@ copy_state = (state = {}) ->
   }
 
 update_tag_state = (tags, state) ->
-  tags = tostring tags or ""
+  tags = tostring(tags or "")
+  -- A target inside \t() is not the current static state of the drawing.
+  tags = tags\gsub "\\t%s*%b()", ""
   for color in tags\gmatch "\\1?c%s*(&[Hh]%x+&?)"
     state.color = normalize_color(color) or state.color
   for p in tags\gmatch "\\p(%d+)"
@@ -163,7 +195,7 @@ collect_tag_state = (input) ->
 
 append_record = (records, raw, state = {}, source_index = 1, kind = "drawing", apply_position = false) ->
   drawing = clean_shape raw
-  return false if drawing == "" or not drawing\match "^m%s+"
+  return false if drawing == "" or not drawing\match "^[mn]%s+"
   drawing = normalize_draw_scale drawing, state.p or 1
   records[#records + 1] = {
     drawing: drawing
@@ -180,11 +212,11 @@ append_record = (records, raw, state = {}, source_index = 1, kind = "drawing", a
 
 append_clip_args = (records, args, state = {}, source_index = 1) ->
   local_state = copy_state state
-  p_scale, drawing = tostring(args or "")\match "^%s*(%d+)%s*,%s*([mM]%s+.+)$"
+  p_scale, drawing = tostring(args or "")\match "^%s*(%d+)%s*,%s*([mMnN]%s+.+)$"
   if drawing
     local_state.p = tonumber(p_scale) or 1
   else
-    drawing = tostring(args or "")\match "^%s*([mM]%s+.+)$"
+    drawing = tostring(args or "")\match "^%s*([mMnN]%s+.+)$"
     local_state.p = 1
   if drawing
     return append_record records, drawing, local_state, source_index, "clip", false
@@ -203,7 +235,7 @@ extract_clip_shapes = (text, records, source_index) ->
   #records > before
 
 extract_p_drawings = (text, records, source_index) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   seed = collect_tag_state text
   state = { p: 0, color: nil, align: seed.align, pos: seed.pos, scale_x: 100, scale_y: 100 }
   pos = 1
@@ -222,7 +254,7 @@ extract_raw_shape = (text, records, source_index) ->
   stripped = tostring(text or "")\gsub "%b{}", " "
   stripped = stripped\gsub "\r", " "
   stripped = stripped\gsub "\n", " "
-  drawing = stripped\match "%f[%a]([mM]%s*%-?[%d%.]+%s+%-?[%d%.]+.*)"
+  drawing = stripped\match "%f[%a]([mMnN]%s*%-?[%d%.]+%s+%-?[%d%.]+.*)"
   if drawing
     return append_record records, drawing, state, source_index, "drawing", state.pos != nil
   false
@@ -287,7 +319,7 @@ append_assf_clip = (records, tag, state, source_index) ->
       local_state.p = tonumber(values[1]) or 1
     else
       drawing = values[1]
-  if drawing and type(drawing) == "string" and drawing\match "^%s*[mM]%s+"
+  if drawing and type(drawing) == "string" and drawing\match "^%s*[mMnN]%s+"
     return append_record records, drawing, local_state, source_index, "clip", false
 
   if tag.getDrawing
@@ -335,7 +367,6 @@ extract_ass_drawings = (input) ->
   records = {}
   payloads = split_payloads input
   for i, payload in ipairs payloads
-    extracted = false
     extracted = extract_assf_sections payload, records, i
     extract_from_text payload.text, records, i unless extracted
   extract_from_text input, records, 1 if #records == 0
@@ -344,7 +375,12 @@ extract_ass_drawings = (input) ->
 shape_info = (drawing) ->
   ok, shape = pcall -> ZF.shape drawing
   return nil, "Invalid ASS shape." unless ok and shape
-  return nil, "ASS shape has empty bounds." unless shape.w and shape.h and shape.w > 0 and shape.h > 0
+  shape_l = finite_number shape.l, nil
+  shape_t = finite_number shape.t, nil
+  shape_w = finite_number shape.w, nil
+  shape_h = finite_number shape.h, nil
+  return nil, "ASS shape has invalid bounds." unless shape_l and shape_t and shape_w and shape_h
+  return nil, "ASS shape has empty bounds." unless shape_w > 0 and shape_h > 0
   shape
 
 build_shape = (shape) ->
@@ -462,10 +498,10 @@ prepare_texture_groups = (input, tolerance, preserve_colors) ->
   groups, global
 
 fit_texture_to_box = (group, target_l, target_t, target_w, target_h) ->
-  target_l = tonumber(target_l) or 0
-  target_t = tonumber(target_t) or 0
-  target_w = tonumber(target_w) or 0
-  target_h = tonumber(target_h) or 0
+  target_l = finite_number target_l, 0
+  target_t = finite_number target_t, 0
+  target_w = finite_number target_w, 0
+  target_h = finite_number target_h, 0
   return nil, "Text outline has empty bounds." if target_w <= 0 or target_h <= 0
   return nil, "Texture shape has empty bounds." unless group and group.w and group.h and group.w > 0 and group.h > 0
 
@@ -502,12 +538,24 @@ build_text_clip = (dlg, line, tolerance) ->
   shape = ZF.util\isShape line.text
   unless shape
     shape = call\toShape dlg, nil, px, py
-    line.styleref.scale_x = 100
-    line.styleref.scale_y = 100
-  clip_abs = ZF.shape(shape, true)\setPosition(line.styleref.align)\expand(line, pers)\move(px, py)\build!
+  style_ref = line.styleref
+  old_scale_x, old_scale_y = nil, nil
+  changed_style_scale = false
+  if not ZF.util\isShape(line.text) and style_ref
+    old_scale_x, old_scale_y = style_ref.scale_x, style_ref.scale_y
+    style_ref.scale_x, style_ref.scale_y = 100, 100
+    changed_style_scale = true
+  ok, clip_abs = pcall ->
+    align = style_ref and style_ref.align or 7
+    ZF.shape(shape, true)\setPosition(align)\expand(line, pers)\move(px, py)\build!
+  if style_ref and changed_style_scale
+    style_ref.scale_x, style_ref.scale_y = old_scale_x, old_scale_y
+  error clip_abs unless ok
   tol = normalize_tolerance tolerance
   simplified = trim ZF.clipper(clip_abs)\simplify!\build "line", tol
   sh = ZF.shape simplified
+  error "Text outline has invalid bounds." unless finite_number(sh.l, nil) and finite_number(sh.t, nil) and finite_number(sh.w, nil) and finite_number(sh.h, nil)
+  error "Text outline has empty bounds." unless sh.w > 0 and sh.h > 0
   {
     clip: simplified
     l: sh.l
@@ -519,7 +567,8 @@ build_text_clip = (dlg, line, tolerance) ->
   }
 
 text_primary_color = (l, line) ->
-  c1 = l.text\match "\\1?c%s*(&[Hh]%x+&?)"
+  static_text = tostring(l.text or "")\gsub "\\t%s*%b()", ""
+  c1 = static_text\match "\\1?c%s*(&[Hh]%x+&?)"
   return normalize_color c1 if c1
   if line.styleref and line.styleref.color1
     return normalize_color(line.styleref.color1) or line.styleref.color1
@@ -549,34 +598,44 @@ match_visibility_tag = (text, pos) ->
   nil
 
 scan_visibility_tags = (tags) ->
-  out = {}
-  pos = 1
-  while pos <= #tags
-    if tags\sub(pos, pos) == "\\"
-      chunk = tags\sub(pos)
+  frames = {{text: tostring(tags or ""), pos: 1, out: {}}}
+  while #frames > 0
+    frame = frames[#frames]
+    if frame.pos > #frame.text
+      result = table.concat frame.out, ""
+      table.remove frames
+      return result if #frames == 0
+      parent = frames[#frames]
+      parent.out[#parent.out + 1] = "\\t(" .. frame.prefix .. result .. ")" if result != ""
+    elseif frame.text\sub(frame.pos, frame.pos) == "\\"
+      chunk = frame.text\sub(frame.pos)
       transform_start = chunk\match "^\\t%s*%("
       if transform_start
-        open_pos = pos + #transform_start - 1
-        close_pos = balanced_paren_end tags, open_pos
+        open_pos = frame.pos + #transform_start - 1
+        close_pos = balanced_paren_end frame.text, open_pos
         unless close_pos
-          break
-        body = tags\sub(open_pos + 1, close_pos - 1)
+          frame.pos = #frame.text + 1
+          continue
+        body = frame.text\sub(open_pos + 1, close_pos - 1)
         tag_start = body\find "\\", 1, true
+        frame.pos = close_pos + 1
         if tag_start
-          prefix = body\sub(1, tag_start - 1)
-          transform_tags = scan_visibility_tags(body\sub(tag_start))
-          out[#out + 1] = "\\t(" .. prefix .. transform_tags .. ")" if transform_tags != ""
-        pos = close_pos + 1
+          frames[#frames + 1] = {
+            text: body\sub tag_start
+            pos: 1
+            out: {}
+            prefix: body\sub(1, tag_start - 1)
+          }
       else
-        tag = match_visibility_tag tags, pos
+        tag = match_visibility_tag frame.text, frame.pos
         if tag
-          out[#out + 1] = tag
-          pos += #tag
+          frame.out[#frame.out + 1] = tag
+          frame.pos += #tag
         else
-          pos += 1
+          frame.pos += 1
     else
-      pos += 1
-  table.concat out, ""
+      frame.pos += 1
+  ""
 
 collect_visibility_tags = (text) ->
   out = {}
@@ -646,7 +705,7 @@ build_interface = ->
         value: DEFAULTS.clip_tolerance
         config: true
         min: 1
-        max: 50
+        max: MAX_TOLERANCE
         x: 4
         y: 15
         width: 3
@@ -657,7 +716,7 @@ build_interface = ->
         value: DEFAULTS.shape_tolerance
         config: true
         min: 1
-        max: 50
+        max: MAX_TOLERANCE
         x: 4
         y: 16
         width: 3
@@ -667,8 +726,8 @@ build_interface = ->
         class: "intedit"
         value: DEFAULTS.layer_offset
         config: true
-        min: 0
-        max: 100
+        min: MIN_LAYER_OFFSET
+        max: MAX_LAYER_OFFSET
         x: 4
         y: 17
         width: 3
@@ -692,20 +751,35 @@ show_dialog = ->
     options\write!
   res
 
+valid_selection = (subs, sel) ->
+  return false unless sel and #sel > 0
+  for index in *sel
+    line = subs[index]
+    return false unless line and line.class == "dialogue" and not line.comment
+  true
+
 main = (subs, sel, active) ->
-  unless sel and #sel >= 1
-    aegisub.dialog.display { { class: "label", label: "Select at least one line." } }, { "OK" }
+  unless valid_selection subs, sel
+    aegisub.dialog.display { { class: "label", label: "Select at least one uncommented dialogue line." } }, { "OK" }
     aegisub.cancel!
 
   opts = show_dialog!
+  opts.clip_tolerance = normalize_tolerance opts.clip_tolerance
+  opts.shape_tolerance = normalize_tolerance opts.shape_tolerance
+  opts.layer_offset = normalize_layer_offset opts.layer_offset
   texture_groups, err = prepare_texture_groups opts.shape_input or "", opts.shape_tolerance, opts.preserve_colors and true or false
   unless texture_groups
     show_message "AddTexture - invalid drawing input", err
+    aegisub.cancel!
+  estimated_lines = #sel * #texture_groups
+  if estimated_lines > MAX_GENERATED_LINES
+    show_message "AddTexture - output limit", "This operation would generate #{estimated_lines} lines; reduce the selection or texture groups (maximum #{MAX_GENERATED_LINES})."
     aegisub.cancel!
 
   aegisub.progress.title "AddTexture"
   dlg = ZF.dialog subs, sel, active, false
   processed = 0
+  plans = {}
 
   for l, line, sel_idx, _, n in dlg\iterSelected!
     processed += 1
@@ -745,12 +819,16 @@ main = (subs, sel, active) ->
           group.color or fallback_color,
           clip_tag,
           drawing
-        dlg\insertLine new_line, sel_idx
+        plans[#plans + 1] = {line: new_line, selection_index: sel_idx}
+        error "AddTexture output exceeded the validated line budget." if #plans > MAX_GENERATED_LINES
 
   aegisub.progress.set 100
-  dlg\getSelection!
+  LineOps.transaction subs, script_name, ->
+    for plan in *plans
+      dlg\insertLine plan.line, plan.selection_index
+    dlg\getSelection!
 
-validate = (subs, sel) -> sel and #sel >= 1
+validate = valid_selection
 if depctrl and depctrl.registerMacro
   depctrl\registerMacro script_name, script_description, main, validate, nil, false
 else

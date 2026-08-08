@@ -1,7 +1,7 @@
 export script_name        = "Zagreo Glyphs"
 export script_description = "Generate vector-path glyph animation moments from ASS text or drawings"
 export script_author      = "Kiterow"
-export script_version     = "1.1.0"
+export script_version     = "1.1.2"
 export script_namespace   = "kite.ZagreoGlyphs"
 
 CONFIG_FILE = "kite-zagreo-glyphs.json"
@@ -17,9 +17,9 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     "Yutils"
   }
@@ -331,13 +331,19 @@ MAX_OUTPUT_LINES = 2000
 LARGE_OUTPUT_WARNING_LINES = 120
 MAX_TEXT_CHARS = 80
 MAX_SHAPE_NUMBERS = 7000
+MAX_POINTS_PER_SHAPE = math.floor MAX_SHAPE_NUMBERS / 2
 MIN_SAFE_SPLIT = 2
 MORPH_SAFE_SPLIT = 4
 MIN_RATIO = -1.5
 MAX_RATIO = 2.5
 MIN_MORPH_POINTS = 8
+MIN_CONTOUR_POINTS = 3
 MAX_MORPH_POINTS = 360
 MAX_CONFETTI_SITES = 220
+GEOMETRY_EPSILON = 0.000001
+MORPH_STEP_COUNT = 4
+MAX_SEED_ABS = 999999
+MAX_TRACKING_FRAME = 999999
 HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
 HOTKEY_MENU_SCRIPT = script_name
 WINDOW_W = 30
@@ -356,7 +362,7 @@ clamp = (value, min_value, max_value) ->
 
 round = (value) ->
   value = finite_number(value) or 0
-  math.floor value + 0.5
+  math.floor(value + 0.5)
 
 trim = (value) ->
   tostring(value or "")\match("^%s*(.-)%s*$") or ""
@@ -462,7 +468,7 @@ normalize_options = (result = {}) ->
     frequency: clamp result.frequency or spec_default(effect, "frequency"), 0, 100
     noise_scale: clamp result.noise_scale or spec_default(effect, "noise_scale"), 1, 2000
     period: round clamp result.period or spec_default(effect, "period"), 0, 60000
-    seed: round clamp result.seed or spec_default(effect, "seed"), -999999, 999999
+    seed: round clamp result.seed or spec_default(effect, "seed"), -MAX_SEED_ABS, MAX_SEED_ABS
     layers: round clamp result.layers or spec_default(effect, "layers"), 1, MAX_LAYERS
     blur: clamp result.blur or spec_default(effect, "blur"), 0, 20
     alpha: round clamp result.alpha or spec_default(effect, "alpha"), 0, 255
@@ -472,7 +478,7 @@ normalize_options = (result = {}) ->
     timing_mode: choice_or_default result.timing_mode, TIMING_MODES, DEFAULTS.timing_mode
     motion_mode: choice_or_default result.motion_mode, MOTION_MODES, DEFAULTS.motion_mode
     tracking_data: tostring(result.tracking_data or DEFAULTS.tracking_data)
-    tracking_ref_frame: round clamp result.tracking_ref_frame or DEFAULTS.tracking_ref_frame, 1, 999999
+    tracking_ref_frame: round clamp result.tracking_ref_frame or DEFAULTS.tracking_ref_frame, 1, MAX_TRACKING_FRAME
   }
 
 config_section = (effect) ->
@@ -524,7 +530,7 @@ export add_shape_controls = (gui, y, effect) ->
 
 export add_seed_direction_controls = (gui, y, effect, spec) ->
   gui[#gui + 1] = {class: "label", label: "Seed", x: 0, y: y, width: 2}
-  gui[#gui + 1] = {class: "intedit", name: "seed", value: spec_default(effect, "seed"), min: -999999, max: 999999, x: 2, y: y, width: 4}
+  gui[#gui + 1] = {class: "intedit", name: "seed", value: spec_default(effect, "seed"), min: -MAX_SEED_ABS, max: MAX_SEED_ABS, x: 2, y: y, width: 4}
   gui[#gui + 1] = {class: "label", label: "Period ms", x: 7, y: y, width: 3}
   gui[#gui + 1] = {class: "intedit", name: "period", value: spec_default(effect, "period"), min: 0, max: 60000, x: 10, y: y, width: 4}
   if spec and spec.dir
@@ -554,7 +560,7 @@ export add_motion_controls = (gui, y, effect) ->
   gui[#gui + 1] = {class: "label", label: "Motion", x: 0, y: y, width: 3}
   gui[#gui + 1] = {class: "dropdown", name: "motion_mode", items: MOTION_MODES, value: spec_default(effect, "motion_mode"), x: 3, y: y, width: 9}
   gui[#gui + 1] = {class: "label", label: "Ref", x: 13, y: y, width: 2}
-  gui[#gui + 1] = {class: "intedit", name: "tracking_ref_frame", value: spec_default(effect, "tracking_ref_frame"), min: 1, max: 999999, x: 15, y: y, width: 3}
+  gui[#gui + 1] = {class: "intedit", name: "tracking_ref_frame", value: spec_default(effect, "tracking_ref_frame"), min: 1, max: MAX_TRACKING_FRAME, x: 15, y: y, width: 3}
   gui[#gui + 1] = {class: "textbox", name: "tracking_data", value: spec_default(effect, "tracking_data"), x: 0, y: y + 1, width: WINDOW_W, height: 4}
 
 export options_gui = (effect) ->
@@ -674,7 +680,7 @@ export auto_ratios = (count) ->
   ratios
 
 export same_ratio = (a, b) ->
-  math.abs((finite_number(a) or 0) - (finite_number(b) or 0)) < 0.000001
+  math.abs((finite_number(a) or 0) - (finite_number(b) or 0)) < GEOMETRY_EPSILON
 
 export legacy_default_ratios = (ratios) ->
   #ratios == 3 and same_ratio(ratios[1], 0) and same_ratio(ratios[2], 0.5) and same_ratio(ratios[3], 1)
@@ -738,7 +744,11 @@ clean_shape = (shape) ->
   shape = tostring(shape or "")
   shape = shape\gsub "^%s+", ""
   shape = shape\gsub "%s+$", ""
-  shape
+  tokens = {}
+  for token in shape\gmatch "%S+"
+    lower = token\lower!
+    tokens[#tokens + 1] = if lower\match("^[mnlbspc]$") then lower else token
+  table.concat tokens, " "
 
 DRAW_COMMANDS = {
   m: true
@@ -762,6 +772,47 @@ shape_signature = (shape) ->
         return nil, "invalid drawing token '#{token}'"
   table.concat signature, " "
 
+validate_shape_structure = (shape, allow_empty = false) ->
+  return true if allow_empty and clean_shape(shape) == ""
+  current, count, saw_move, spline_open = nil, 0, false, false
+  validate_group = ->
+    return true unless current
+    if current == "c"
+      return nil, "command c cannot have coordinates" unless count == 0
+      return nil, "command c needs a preceding spline" unless spline_open
+      spline_open = false
+    elseif current == "s"
+      return nil, "command s needs at least three complete points" unless count >= 6 and count % 2 == 0
+      spline_open = true
+    elseif current == "p"
+      return nil, "command p needs a preceding spline" unless spline_open
+      return nil, "command p needs exactly one coordinate pair" unless count == 2
+    elseif current == "b"
+      return nil, "command b needs complete groups of three coordinate pairs" unless count >= 6 and count % 6 == 0
+      spline_open = false
+    elseif current == "l"
+      return nil, "command l needs one or more complete coordinate pairs" unless count >= 2 and count % 2 == 0
+      spline_open = false
+    else
+      return nil, "command #{current} needs exactly one coordinate pair" unless count == 2
+      spline_open = false
+    true
+  for token in tostring(shape or "")\gmatch "%S+"
+    if finite_number(token) != nil
+      return nil, "numeric coordinate appears before a drawing command" unless current
+      count += 1
+    else
+      ok, err = validate_group!
+      return nil, err unless ok
+      current = token\lower!
+      return nil, "drawing must start with m or n" unless saw_move or current == "m" or current == "n"
+      saw_move = true if current == "m" or current == "n"
+      count = 0
+  ok, err = validate_group!
+  return nil, err unless ok
+  return nil, "drawing has no move command" unless saw_move
+  true
+
 export shape_limit_error = (label, number_count) ->
   "#{label} is too complex (#{number_count} numeric coordinates; max #{MAX_SHAPE_NUMBERS}). Increase Split len, reduce text length, or apply #{script_name} to fewer/smaller shapes."
 
@@ -769,6 +820,8 @@ guard_shape = (shape, label = "Shape", allow_empty = false) ->
   shape = clean_shape shape
   signature, sig_err = shape_signature shape
   return nil, "#{label} has #{sig_err}." unless signature
+  structured, structure_err = validate_shape_structure shape, allow_empty
+  return nil, "#{label} has invalid drawing structure: #{structure_err}." unless structured
   number_count = count_numbers shape
   return nil, "#{label} has no numeric coordinates." if number_count == 0 and not allow_empty
   return nil, "#{label} has an odd number of numeric coordinates." if number_count % 2 != 0
@@ -802,7 +855,7 @@ parse_contours = (shape) ->
         pending = value
     else
       pending = nil
-      if token\lower! == "m"
+      if token\lower! == "m" or token\lower! == "n"
         current = {}
         contours[#contours + 1] = current
   result = {}
@@ -934,18 +987,24 @@ simplify_shape_to_limit = (shape, label = "Shape", max_numbers = MAX_SHAPE_NUMBE
   shape = clean_shape shape
   signature, sig_err = shape_signature shape
   return nil, nil, "#{label} has #{sig_err}." unless signature
+  structured, structure_err = validate_shape_structure shape
+  return nil, nil, "#{label} has invalid drawing structure: #{structure_err}." unless structured
   return nil, nil, "#{label} has an odd number of numeric coordinates." if count_numbers(shape) % 2 != 0
   contours = parse_contours shape
   return nil, nil, "#{label} has no drawable contours to simplify." if #contours == 0
-  max_points = math.max 1, math.floor(max_numbers / 2)
-  if #contours > max_points
+  max_points = math.max 2, math.floor(max_numbers / 2)
+  return nil, nil, "#{label} has an insufficient point budget." if max_points < MIN_CONTOUR_POINTS
+  contours = [contour for contour in *contours when #contour >= MIN_CONTOUR_POINTS]
+  return nil, nil, "#{label} has no non-degenerate contours to simplify." if #contours == 0
+  max_contours = math.max 1, math.floor(max_points / MIN_CONTOUR_POINTS)
+  if #contours > max_contours
     ranked = {}
     for i, contour in ipairs contours
       _, len = contour_metrics contour
       ranked[#ranked + 1] = {index: i, len: len}
     table.sort ranked, (a, b) -> a.len > b.len
     keep = {}
-    for i = 1, max_points
+    for i = 1, max_contours
       keep[ranked[i].index] = true if ranked[i]
     filtered = {}
     for i, contour in ipairs contours
@@ -957,7 +1016,7 @@ simplify_shape_to_limit = (shape, label = "Shape", max_numbers = MAX_SHAPE_NUMBE
     _, len = contour_metrics contour
     lengths[i] = len
     total_len += math.max 0.001, len
-  min_points = if #contours * 3 <= max_points then 3 else 1
+  min_points = MIN_CONTOUR_POINTS
   counts, used = {}, 0
   for i, contour in ipairs contours
     base = math.min #contour, min_points
@@ -970,14 +1029,15 @@ simplify_shape_to_limit = (shape, label = "Shape", max_numbers = MAX_SHAPE_NUMBE
     add = math.min math.max(0, #contour - counts[i]), share
     counts[i] += add
     remaining -= add
-  i = 1
-  while remaining > 0 and #contours > 0
-    if counts[i] < #contours[i]
-      counts[i] += 1
-      remaining -= 1
-    i += 1
-    i = 1 if i > #contours
-    break if remaining > 0 and #contours == 0
+  while remaining > 0
+    progressed = false
+    for i, contour in ipairs contours
+      break if remaining <= 0
+      if counts[i] < #contour
+        counts[i] += 1
+        remaining -= 1
+        progressed = true
+    break unless progressed
   out = {}
   for i, contour in ipairs contours
     if counts[i] >= #contour
@@ -1009,6 +1069,8 @@ shape_for_geo = (shape, opts, label = "Shape") ->
   shape = clean_shape shape
   signature, sig_err = shape_signature shape
   return nil, "#{label} has #{sig_err}." unless signature
+  structured, structure_err = validate_shape_structure shape
+  return nil, "#{label} has invalid drawing structure: #{structure_err}." unless structured
   number_count = count_numbers shape
   return nil, "#{label} has no numeric coordinates." if number_count == 0
   return nil, "#{label} has an odd number of numeric coordinates." if number_count % 2 != 0
@@ -1029,6 +1091,40 @@ flatten_shape = (shape, label = "Shape") ->
   return nil, "#{label} after flatten has #{sig_err}." unless signature
   result
 
+allocate_contour_counts = (desired, max_points, label = "Shape") ->
+  contour_count = #desired
+  return {}, nil if contour_count == 0
+  return nil, "#{label} has too many contours to keep #{MIN_CONTOUR_POINTS} points per contour within the shape limit." if contour_count * MIN_CONTOUR_POINTS > max_points
+
+  base = if contour_count * MIN_MORPH_POINTS <= max_points then MIN_MORPH_POINTS else MIN_CONTOUR_POINTS
+  counts, desired_extra, used = {}, 0, 0
+  for i, wanted in ipairs desired
+    wanted = math.max base, round wanted
+    desired[i] = wanted
+    counts[i] = base
+    used += base
+    desired_extra += wanted - base
+
+  remaining = math.max 0, max_points - used
+  initial_remaining = remaining
+  if desired_extra > 0
+    for i, wanted in ipairs desired
+      share = math.floor initial_remaining * ((wanted - base) / desired_extra)
+      add = math.min(wanted - counts[i], share)
+      counts[i] += add
+      remaining -= add
+
+  while remaining > 0
+    progressed = false
+    for i, wanted in ipairs desired
+      break if remaining <= 0
+      if counts[i] < wanted
+        counts[i] += 1
+        remaining -= 1
+        progressed = true
+    break unless progressed
+  counts, nil
+
 normalize_pair = (shape_a, shape_b, opts) ->
   flat_a, err = flatten_shape shape_a, "Source shape"
   return nil, nil, err unless flat_a
@@ -1044,18 +1140,14 @@ normalize_pair = (shape_a, shape_b, opts) ->
   for i = #contours_b + 1, pair_count
     contours_b[i] = {contour_centroid contours_a[i]}
   seg_len = math.max MORPH_SAFE_SPLIT, finite_number(opts.split_len) or MORPH_SAFE_SPLIT
-  counts, total_points = {}, 0
+  desired = {}
   for i = 1, pair_count
     _, len_a = contour_metrics contours_a[i]
     _, len_b = contour_metrics contours_b[i]
     count = round clamp math.max(len_a, len_b) / seg_len, MIN_MORPH_POINTS, MAX_MORPH_POINTS
-    counts[i] = count
-    total_points += count
-  max_points = math.floor MAX_SHAPE_NUMBERS / 4
-  if total_points > max_points
-    shrink = max_points / total_points
-    for i = 1, pair_count
-      counts[i] = math.max MIN_MORPH_POINTS, math.floor counts[i] * shrink
+    desired[i] = count
+  counts, allocation_err = allocate_contour_counts desired, MAX_POINTS_PER_SHAPE, "Shape pair"
+  return nil, nil, allocation_err unless counts
   out_a, out_b = {}, {}
   for i = 1, pair_count
     sampled_a = resample_contour contours_a[i], counts[i]
@@ -1111,7 +1203,7 @@ octave_noise = (x, y, seed, octaves = 3) ->
 
 norm_span = (value, min_value, max_value) ->
   span = max_value - min_value
-  return 0 if math.abs(span) < 0.000001
+  return 0 if math.abs(span) < GEOMETRY_EPSILON
   clamp (value - min_value) / span, 0, 1
 
 shape_center = (bbox) ->
@@ -1120,7 +1212,7 @@ shape_center = (bbox) ->
 unit_from_center = (x, y, center) ->
   dx, dy = x - center.x, y - center.y
   len = math.sqrt(dx * dx + dy * dy)
-  return 0, -1, 0 if len <= 0.000001
+  return 0, -1, 0 if len <= GEOMETRY_EPSILON
   dx / len, dy / len, len
 
 curve_ratio = (ratio, mode) ->
@@ -1130,7 +1222,7 @@ curve_ratio = (ratio, mode) ->
     when "overshoot" then ratio + math.sin(ratio * math.pi) * 0.22
     when "anticipation" then ratio * ratio * 1.18 - math.sin((1 - ratio) * math.pi) * 0.12
     when "bounce" then ratio + math.sin(ratio * math.pi * 3) * (1 - ratio) * 0.16
-    when "steps" then math.floor(ratio * 4 + 0.000001) / 4
+    when "steps" then math.floor(ratio * MORPH_STEP_COUNT + GEOMETRY_EPSILON) / MORPH_STEP_COUNT
     when "rubber" then ratio + math.sin(ratio * math.pi * 2) * 0.10
     when "glitch" then ratio
     else ratio * ratio * (3 - 2 * ratio)
@@ -1180,7 +1272,7 @@ prep_geo = (shape, opts, label = "Shape") ->
       nxt = pts[i == n and 1 or i + 1]
       tx, ty = nxt.x - prev.x, nxt.y - prev.y
       tl = math.sqrt tx * tx + ty * ty
-      if tl < 0.000001
+      if tl < GEOMETRY_EPSILON
         normals[i] = {x: 0, y: -1, tx: 1, ty: 0}
       else
         normals[i] = {x: ty * sign / tl, y: -tx * sign / tl, tx: tx / tl, ty: ty / tl}
@@ -1284,10 +1376,12 @@ line_frame_bounds = (source) ->
   end_time = finite_number(source.end_time) or start_time + 1
   end_time = start_time + 1 if end_time <= start_time
   ok_start, start_frame = pcall aegisub.frame_from_ms, start_time
-  ok_end, end_frame = pcall aegisub.frame_from_ms, end_time
-  return nil unless ok_start and ok_end and start_frame != nil and end_frame != nil
+  ok_end, last_frame = pcall aegisub.frame_from_ms, math.max(start_time, end_time - 1)
+  start_frame = ok_start and finite_number(start_frame) or nil
+  last_frame = ok_end and finite_number(last_frame) or nil
+  return nil unless start_frame and last_frame
   start_frame = round start_frame
-  end_frame = round end_frame
+  end_frame = round(last_frame) + 1
   end_frame = start_frame + 1 if end_frame <= start_frame
   start_frame, end_frame
 
@@ -2429,7 +2523,7 @@ CONTOUR_FX.c_zoom = (ctx, co, ci, rank) ->
   {sx: s, sy: s}
 CONTOUR_FX.c_type = (ctx, co, ci, rank) ->
   order = (ci - 1) / math.max(1, ctx.geo.cn)
-  visible = if ctx.spec.phase == "in" then order < ctx.prog + 0.000001 else order < 1 - ctx.prog - 0.000001
+  visible = if ctx.spec.phase == "in" then order < ctx.prog + GEOMETRY_EPSILON else order < 1 - ctx.prog - GEOMETRY_EPSILON
   {vis: visible}
 CONTOUR_FX.c_domino = (ctx, co, ci, rank) ->
   am = contour_local ctx, rank
@@ -2639,22 +2733,19 @@ shape_morph_pair = (shape, opts, mode) ->
   contours = parse_contours flat
   return nil, nil, "Shape morph source has no contours." if #contours == 0
   seg_len = math.max MORPH_SAFE_SPLIT, finite_number(opts.split_len) or MORPH_SAFE_SPLIT
-  out_src, out_tgt, total_points = {}, {}, 0
+  desired = {}
   for ci, contour in ipairs contours
     _, len = contour_metrics contour
-    count = round clamp len / seg_len, MIN_MORPH_POINTS, MAX_MORPH_POINTS
-    total_points += count
+    desired[ci] = round clamp len / seg_len, MIN_MORPH_POINTS, MAX_MORPH_POINTS
+  counts, allocation_err = allocate_contour_counts desired, MAX_POINTS_PER_SHAPE, "Shape morph"
+  return nil, nil, allocation_err unless counts
+  out_src, out_tgt = {}, {}
+  for ci, contour in ipairs contours
+    count = counts[ci]
     sampled = resample_contour contour, count
     return nil, nil, "Shape morph resampling failed for contour #{ci}." unless sampled
     out_src[ci] = sampled
     out_tgt[ci] = builder sampled, nil, ci, opts
-  max_points = math.floor MAX_SHAPE_NUMBERS / 4
-  if total_points > max_points
-    shrink = max_points / total_points
-    for ci = 1, #out_src
-      count = math.max MIN_MORPH_POINTS, math.floor #out_src[ci] * shrink
-      out_src[ci] = resample_contour out_src[ci], count
-      out_tgt[ci] = resample_contour out_tgt[ci], count
   src_shape, err = guard_shape contours_to_shape(out_src), "Shape morph source after resample"
   return nil, nil, err unless src_shape
   tgt_shape, err = guard_shape contours_to_shape(out_tgt), "Shape morph target"
@@ -2695,17 +2786,17 @@ export tag_bool = (value) ->
   tostring(value) != "0"
 
 export raw_num_tag = (tag_block, name, default_value) ->
-  value = tag_block\match "\\" .. name .. "([%-%d%.]+)"
+  value = LineOps.tagNumber tag_block, name, default_value, true
   finite_number(value) or default_value
 
 export raw_bool_tag = (tag_block, name, default_value) ->
-  value = tag_block\match "\\" .. name .. "([%-%d]+)"
-  return default_value if value == nil
+  value, call = LineOps.tagNumber tag_block, name, nil, true
+  return default_value unless call and finite_number(value) != nil
   tag_bool finite_number(value)
 
 export raw_font_tag = (tag_block, default_value) ->
-  value = tag_block\match "\\fn([^\\}]*)"
-  value = trim value
+  call = LineOps.lastTagCall tag_block, "fn", true
+  value = trim(call and call.value or "")
   if value == "" then default_value else value
 
 export style_number = (style, field, default_value) ->
@@ -2720,7 +2811,7 @@ style_from_line = (source) ->
   style = source.styleRef or source.styleref or source.style_ref
   if not style and source.parentCollection and source.parentCollection.styles
     style = source.parentCollection.styles[source.style]
-  tag_block = collect_initial_tag_blocks source.text
+  tag_block = "{" .. collect_initial_tag_blocks(source.text) .. "}"
   {
     fontname: raw_font_tag tag_block, tostring(style and style.fontname or "Arial")
     bold: raw_bool_tag tag_block, "b", style_bool(style, "bold", false)
@@ -2732,6 +2823,22 @@ style_from_line = (source) ->
     scale_y: raw_num_tag tag_block, "fscy", style_number(style, "scale_y", 100)
     spacing: raw_num_tag tag_block, "fsp", style_number(style, "spacing", 0)
   }
+
+TEXT_STYLE_TAGS = {"fn", "fs", "fscx", "fscy", "fsp", "b", "i", "u", "s"}
+
+uniform_text_style_error = (text) ->
+  visible_started = false
+  for section in *LineOps.scanSections text
+    if section.type == "override"
+      wrapped = "{#{section.text}}"
+      return "Style resets (\\r) are not supported while converting text to one shape; split the line into uniform runs first." if LineOps.hasTag wrapped, "r", false
+      for call in *LineOps.tagCalls wrapped, TEXT_STYLE_TAGS
+        return "Animated typography is not supported while converting text to one shape; remove typography changes inside \\t first." unless call.top_level
+        return "Inline typography changes are not supported while converting text to one shape; split the line into uniform runs first." if visible_started
+    elseif section.type == "text"
+      plain = tostring(section.text or "")\gsub "\\[Nnh]", ""
+      visible_started = true if plain != ""
+  nil
 
 text_to_shape = (text, style, fontname = nil) ->
   text = tostring(text or "")
@@ -2793,6 +2900,14 @@ source_info = (source, opts) ->
   ok_count, drawing_count = pcall -> data\getSectionCount ASS.Section.Drawing
   return nil, "ASS drawing section detection failed: #{drawing_count}" unless ok_count
   drawing_count = tonumber(drawing_count) or 0
+  ok_text_count, text_count = pcall -> data\getSectionCount ASS.Section.Text
+  return nil, "ASS text section detection failed: #{text_count}" unless ok_text_count
+  text_count = tonumber(text_count) or 0
+  visible_source = visible_text source.text
+  style_err = uniform_text_style_error source.text
+  return nil, style_err if style_err
+  if drawing_count > 0 and text_count > 0 and visible_source != ""
+    return nil, "Mixed drawing and visible text runs are not supported; split them into separate lines first."
   if drawing_count > 0
     sections = {}
     ok_callback, callback_err = pcall ->
@@ -2813,11 +2928,8 @@ source_info = (source, opts) ->
     return nil, err unless info.shape
     info.kind = "drawing"
     return info
-  ok_count, text_count = pcall -> data\getSectionCount ASS.Section.Text
-  return nil, "ASS text section detection failed: #{text_count}" unless ok_count
-  text_count = tonumber(text_count) or 0
   if text_count > 0
-    info.text = visible_text source.text
+    info.text = visible_source
     return nil, "Text line has no visible text." if info.text == ""
     info.style = style_from_line source
     shape, err = text_to_shape info.text, info.style
@@ -2886,7 +2998,7 @@ tracking_active = (opts) ->
   opts and opts.motion_mode == "Bake AE position data" and trim(opts.tracking_data) != ""
 
 parse_tracking_points = (text) ->
-  text = tostring text or ""
+  text = tostring(text or "")
   points = {}
   has_header = text\match "[\r\n]Position[\r\n]" or text\match "[\r\n]Anchor Point[\r\n]" or text\match "^Position[\r\n]" or text\match "^Anchor Point[\r\n]"
   collecting = not has_header
@@ -2914,7 +3026,7 @@ parse_tracking_points = (text) ->
     return nil, "Tracking data mixes rows with and without frame numbers. Paste dense Position rows or run Aegisub-Motion first." if frame_rows != #points
     for i = 2, #points
       expected = points[i - 1].frame + 1
-      unless math.abs(points[i].frame - expected) < 0.000001
+      unless math.abs(points[i].frame - expected) < GEOMETRY_EPSILON
         return nil, "Tracking data has non-contiguous frame rows at #{points[i - 1].frame} -> #{points[i] and points[i].frame or "?"}. Run Aegisub-Motion FBF first or paste dense per-frame Position rows."
   points
 
@@ -3110,8 +3222,8 @@ a_mo_uuid = (line) ->
   extra = line_extra_value line, "a-mo"
   return nil unless extra
   if type(extra) == "table"
-    return tostring extra.uuid if extra.uuid
-  text = tostring extra
+    return tostring(extra.uuid) if extra.uuid
+  text = tostring(extra)
   uuid = text\match '"uuid"%s*:%s*"([^"]+)"'
   uuid or= text\match "'uuid'%s*:%s*'([^']+)'"
   uuid or "__a-mo:" .. text
@@ -3294,26 +3406,26 @@ pair_morph_outputs = (source, target, collection, opts) ->
   return nil, err unless base_shape and target_shape
   target_nums = collect_numbers target_shape
   spec = effect_spec opts.effect
-  old_start, old_end = source.start_time, source.end_time
-  source.start_time = math.min finite_number(source.start_time) or 0, finite_number(target.start_time) or finite_number(source.start_time) or 0
-  source.end_time = math.max finite_number(source.end_time) or source.start_time + 1, finite_number(target.end_time) or finite_number(source.end_time) or source.start_time + 1
-  slices, err = temporal_slices source, opts
-  unless slices
-    source.start_time, source.end_time = old_start, old_end
-    return nil, err
+  source_copy = {}
+  source_copy[key] = value for key, value in pairs source
+  timed_source, err = safe_line source_copy, collection, "Pair morph timing source"
+  return nil, err unless timed_source
+  source_start = finite_number(source.start_time) or 0
+  target_start = finite_number(target.start_time) or source_start
+  source_end = finite_number(source.end_time) or source_start + 1
+  target_end = finite_number(target.end_time) or source_end
+  timed_source.start_time = math.min source_start, target_start
+  timed_source.end_time = math.max source_end, target_end
+  slices, err = temporal_slices timed_source, opts
+  return nil, err unless slices
   lines = {}
   for slice in *slices
     morph_ratio = if spec.elastic then curve_ratio(slice.progress, "overshoot") else curve_ratio(slice.ratio, spec.curve or "linear")
     shape, err = lerp_shape base_shape, target_shape, morph_ratio, target_nums
-    unless shape
-      source.start_time, source.end_time = old_start, old_end
-      return nil, err
-    line, err = new_line source, collection, shape, opts, slice_marker(slice, "pair "), slice.start_time, slice.end_time, "", 0, src_info, base_shape
-    unless line
-      source.start_time, source.end_time = old_start, old_end
-      return nil, err
+    return nil, err unless shape
+    line, err = new_line timed_source, collection, shape, opts, slice_marker(slice, "pair "), slice.start_time, slice.end_time, "", 0, src_info, base_shape
+    return nil, err unless line
     lines[#lines + 1] = line
-  source.start_time, source.end_time = old_start, old_end
   compress_contiguous_lines lines
 
 outputs_for = (source, collection, opts) ->
@@ -3347,7 +3459,12 @@ estimated_output_count = (opts) ->
   else
     opts.moments
 
-validate = (sub, sel) -> sel and #sel >= 1
+validate = (sub, sel) ->
+  return false unless sub and sel and #sel >= 1
+  for index in *sel
+    line = sub[index]
+    return false unless line and line.class == "dialogue" and not line.comment
+  true
 
 run_with_options = (sub, sel, opts) ->
   return unless opts
@@ -3366,7 +3483,7 @@ run_with_options = (sub, sel, opts) ->
     return window_error err unless source
     target, err = safe_line sub[sorted_sel[2]], collection, "Target line #{sorted_sel[2]}"
     return window_error err unless target
-    return window_error "#{opts.effect} needs two dialogue lines." unless source.class == "dialogue" and target.class == "dialogue"
+    return window_error "#{opts.effect} needs two uncommented dialogue lines." unless source.class == "dialogue" and target.class == "dialogue" and not source.comment and not target.comment
     if collection.styles
       source.styleRef = collection.styles[source.style] if not source.styleRef
       target.styleRef = collection.styles[target.style] if not target.styleRef
@@ -3379,19 +3496,19 @@ run_with_options = (sub, sel, opts) ->
     return window_error err unless commented_target
     commented_source.comment = true
     commented_target.comment = true
-    ok_set, set_err = pcall -> sub[sorted_sel[1]] = commented_source
-    return window_error "Could not comment source line #{sorted_sel[1]}: #{set_err}" unless ok_set
-    ok_set, set_err = pcall -> sub[sorted_sel[2]] = commented_target
-    return window_error "Could not comment target line #{sorted_sel[2]}: #{set_err}" unless ok_set
-    generated_selection = {}
-    insert_at = sorted_sel[2] + 1
-    for line in *lines
-      ok_insert, insert_err = pcall -> sub.insert insert_at, line
-      return window_error "Could not insert generated pair morph line: #{insert_err}" unless ok_insert
-      generated_selection[#generated_selection + 1] = insert_at
-      insert_at += 1
-    aegisub.set_undo_point script_name
-    return generated_selection
+    ok_apply, generated_or_error = pcall ->
+      LineOps.transaction sub, script_name, ->
+        sub[sorted_sel[1]] = commented_source
+        sub[sorted_sel[2]] = commented_target
+        generated_selection = {}
+        insert_at = sorted_sel[2] + 1
+        for line in *lines
+          sub.insert insert_at, line
+          generated_selection[#generated_selection + 1] = insert_at
+          insert_at += 1
+        generated_selection
+    return window_error "Could not apply pair morph atomically: #{generated_or_error}" unless ok_apply
+    return generated_or_error
   plans = {}
   for i, index in ipairs sorted_sel
     aegisub.cancel! if progress_is_cancelled!
@@ -3399,8 +3516,8 @@ run_with_options = (sub, sel, opts) ->
     progress_set math.floor(50 * i / #sorted_sel)
     source, err = safe_line sub[index], collection, "Selected line #{index}"
     return window_error err unless source
-    unless source and source.class == "dialogue"
-      return window_error "Selection contains a non-dialogue line."
+    unless source and source.class == "dialogue" and not source.comment
+      return window_error "Selection contains a non-dialogue or commented line."
     if collection.styles and not source.styleRef
       source.styleRef = collection.styles[source.style]
     source_opts = opts
@@ -3414,25 +3531,26 @@ run_with_options = (sub, sel, opts) ->
   for plan in *plans
     actual_total += #plan.lines
   return unless confirm_large_output actual_total, "the actual output"
-  inserted = 0
-  generated_selection = {}
-  for i, plan in ipairs plans
-    source_index = plan.index + inserted
-    commented, err = safe_line plan.source, collection, "Commented source line"
-    return window_error err unless commented
-    commented.comment = true
-    ok_set, set_err = pcall -> sub[source_index] = commented
-    return window_error "Could not comment source line #{plan.index}: #{set_err}" unless ok_set
-    insert_at = source_index + 1
-    for line in *plan.lines
-      ok_insert, insert_err = pcall -> sub.insert insert_at, line
-      return window_error "Could not insert generated line below #{plan.index}: #{insert_err}" unless ok_insert
-      generated_selection[#generated_selection + 1] = insert_at
-      insert_at += 1
-    inserted += #plan.lines
-    progress_set 50 + math.floor(50 * i / #plans)
-  aegisub.set_undo_point script_name
-  generated_selection
+  ok_apply, generated_or_error = pcall ->
+    LineOps.transaction sub, script_name, ->
+      inserted = 0
+      generated_selection = {}
+      for i, plan in ipairs plans
+        source_index = plan.index + inserted
+        commented, comment_err = safe_line plan.source, collection, "Commented source line"
+        error comment_err unless commented
+        commented.comment = true
+        sub[source_index] = commented
+        insert_at = source_index + 1
+        for line in *plan.lines
+          sub.insert insert_at, line
+          generated_selection[#generated_selection + 1] = insert_at
+          insert_at += 1
+        inserted += #plan.lines
+        progress_set 50 + math.floor(50 * i / #plans)
+      generated_selection
+  return window_error "Could not apply generated lines atomically: #{generated_or_error}" unless ok_apply
+  generated_or_error
 
 main = (sub, sel) ->
   opts = read_options!
@@ -3443,7 +3561,7 @@ validate_any = -> true
 validate_effect = (effect) ->
   spec = effect_spec effect
   if spec.kind == "pair_morph"
-    (sub, sel) -> sel and #sel == 2
+    (sub, sel) -> validate(sub, sel) and #sel == 2
   else
     validate
 

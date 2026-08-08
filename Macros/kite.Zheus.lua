@@ -1,7 +1,7 @@
 script_name        = "Zheus Colormanager"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.5.0"
+script_version     = "4.5.2"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -13,7 +13,7 @@ local depRec = DependencyControl{
     namespace = script_namespace,
     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
-        { "kite.PyBridge", version = "1.4.0",
+        { "kite.PyBridge", version = "1.4.4",
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
     },
@@ -29,12 +29,32 @@ local COLOR_WHITE = "&HFFFFFF&"
 local COLOR_BLACK = "&H000000&"
 local ASS_COLOR_MODULO = 0x1000000
 local ASS_ALPHA_MODULO = 4294967296
+local ASS_SIGNED_COLOR_MIN = -2147483648
+local ASS_UNSIGNED_COLOR_MAX = ASS_ALPHA_MODULO - 1
 local RGB_CHANNEL_MAX  = 255
 local UI_ACTORS_PER_PAGE = 8
 local PER_PAGE = UI_ACTORS_PER_PAGE
 local WCAG_FAIL = 3.0
 local WCAG_AA   = 4.5
 local CONTRAST_CRITICAL = 2.5
+local FALLBACK_FRAME_RATE = 24000 / 1001
+local INTERVAL_SUMMARY_LIMIT = 10
+local COLOR_CACHE_LIMIT = 4096
+local CONFIG_FILE_LIMIT = 512 * 1024
+local PALETTE_FILE_LIMIT = 4 * 1024 * 1024
+local CONFIG_HOOK_GRANULARITY = 1000
+local CONFIG_INSTRUCTION_LIMIT = 100000
+local CONFIG_MAX_DEPTH = 16
+local CONFIG_MAX_NODES = 10000
+local PALETTE_MAX_NODES = 200000
+local ACTOR_PALETTE_FORMAT_VERSION = 3
+local TRANSFORM_MIN_ACCEL = 0.000001
+local MAX_TIMELINE_FRAME = 2147483647
+local MAX_FADE_DURATION_MS = 2147483647
+local PROFILE_ID_LIMIT = 64
+local PROFILE_LABEL_LIMIT = 96
+local PROFILE_TEXT_LIMIT = 512
+local EMPTY_ACTOR_LABEL = "[Actor vacío]"
 
 local UI = {
     dashboard_width = 12,
@@ -66,9 +86,20 @@ local PALETTE_SCORE_WEIGHTS = {
     luma_drift = 20,
 }
 
+local function finiteNumber(value)
+    local n = tonumber(value)
+    if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
+    return n
+end
+
 local function trim(s)
     s = tostring(s or "")
     return (s:match("^%s*(.-)%s*$")) or ""
+end
+
+local function actorLabel(actor)
+    actor = tostring(actor or "")
+    return actor == "" and EMPTY_ACTOR_LABEL or actor
 end
 
 local function isDialogueLine(line)
@@ -88,22 +119,20 @@ local ColorUtil = {}
 
 function ColorUtil.normalizeStrict(c)
     if c == nil or c == "" then return nil end
-    if type(c) == "string" and #c == 9 and c:byte(1) == 38 and c:byte(2) == 72 and c:byte(9) == 38
-       and c:find("^&H[%dA-F][%dA-F][%dA-F][%dA-F][%dA-F][%dA-F]&$") then
-        return c
-    end
     if type(c) == "number" then
+        if not finiteNumber(c) then return nil end
+        if c ~= math.floor(c) then return nil end
+        if c < ASS_SIGNED_COLOR_MIN or c > ASS_UNSIGNED_COLOR_MAX then return nil end
         if c < 0 then c = c + ASS_ALPHA_MODULO end
         return string.format("&H%06X&", c % ASS_COLOR_MODULO)
     end
     c = trim(c)
-    local hex = c:match("&[Hh](%x+)&?")
-    if hex then
-        if #hex > 6 then hex = hex:sub(-6) end
-        while #hex < 6 do hex = "0" .. hex end
+    local hex = c:match("^&[Hh](%x+)&?$")
+    if hex and (#hex == 6 or #hex == 8) then
+        if #hex == 8 then hex = hex:sub(-6) end
         return "&H" .. hex:upper() .. "&"
     end
-    local r, g, b = c:match("#?(%x%x)(%x%x)(%x%x)")
+    local r, g, b = c:match("^#?(%x%x)(%x%x)(%x%x)$")
     if r then
         return string.format("&H%s%s%s&", b:upper(), g:upper(), r:upper())
     end
@@ -118,7 +147,9 @@ end
 
 function ColorUtil.fromStyle(n)
     if type(n) == "string" then return ColorUtil.normalize(n) end
-    if type(n) ~= "number" then return COLOR_WHITE end
+    if type(n) ~= "number" or not finiteNumber(n) then return COLOR_WHITE end
+    n = math.floor(n)
+    if n < ASS_SIGNED_COLOR_MIN or n > ASS_UNSIGNED_COLOR_MAX then return COLOR_WHITE end
     if n < 0 then n = n + ASS_ALPHA_MODULO end
     return string.format("&H%06X&", n % ASS_COLOR_MODULO)
 end
@@ -170,6 +201,18 @@ function ColorUtil.fromRGB(r, g, b)
         return v
     end
     return string.format("&H%02X%02X%02X&", clamp(b), clamp(g), clamp(r))
+end
+
+function ColorUtil.interpolate(c1, c2, factor)
+    factor = finiteNumber(factor) or 0
+    if factor <= 0 then return ColorUtil.normalize(c1) end
+    if factor >= 1 then return ColorUtil.normalize(c2) end
+    local r1, g1, b1 = ColorUtil.toRGB(c1)
+    local r2, g2, b2 = ColorUtil.toRGB(c2)
+    return ColorUtil.fromRGB(
+        r1 + (r2 - r1) * factor,
+        g1 + (g2 - g1) * factor,
+        b1 + (b2 - b1) * factor)
 end
 
 local PAT_COLOR_ANY  = "\\[1-4]?c&H%x+&?"
@@ -251,6 +294,27 @@ local function cleanupTransforms(text)
         if not inner:find("\\") then return "" end
         return "\\t(" .. inner .. ")"
     end))
+end
+
+local function withoutTransforms(text)
+    return (tostring(text or ""):gsub("\\t%s*%b()", ""))
+end
+
+local function hasTopLevelStyleReset(text)
+    for block in tostring(text or ""):gmatch("{([^}]*)}") do
+        if block:match("^%s*\\") and withoutTransforms(block):find("\\r", 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function firstSelectedStyleReset(subs, sel)
+    for _, index in ipairs(sel or {}) do
+        local line = subs[index]
+        if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then return index end
+    end
+    return nil
 end
 
 local function stripColorsFromBody(body)
@@ -493,19 +557,36 @@ end
 function ColorRelay.parseTransform(inner, lineDur)
     local num = "([%+%-]?%d*%.?%d+)"
     inner = trim(inner)
-    local t1, t2, _accel, tags = inner:match("^" .. num .. "%s*,%s*" .. num .. "%s*,%s*" .. num .. "%s*,%s*(.+)$")
+    lineDur = math.max(0, finiteNumber(lineDur) or 0)
+    local t1, t2, accel, tags = inner:match("^" .. num .. "%s*,%s*" .. num .. "%s*,%s*" .. num .. "%s*,%s*(.+)$")
     if t1 then
-        return tonumber(t1) or 0, tonumber(t2) or lineDur, tags or ""
+        return finiteNumber(t1) or 0, finiteNumber(t2) or lineDur,
+            math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL), tags or ""
     end
     t1, t2, tags = inner:match("^" .. num .. "%s*,%s*" .. num .. "%s*,%s*(.+)$")
     if t1 then
-        return tonumber(t1) or 0, tonumber(t2) or lineDur, tags or ""
+        return finiteNumber(t1) or 0, finiteNumber(t2) or lineDur, 1, tags or ""
     end
-    local accel, rest = inner:match("^" .. num .. "%s*,%s*(.+)$")
-    if accel and rest and rest:find("\\", 1, true) then
-        return 0, lineDur, rest
+    accel, tags = inner:match("^" .. num .. "%s*,%s*(.+)$")
+    if accel and tags and tags:find("\\", 1, true) then
+        return 0, lineDur, math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL), tags
     end
-    return 0, lineDur, inner
+    return 0, lineDur, 1, inner
+end
+
+function ColorRelay.applyTransformAt(state, tags, offset, t1, t2, accel)
+    if offset < t1 then return end
+    local target = ColorRelay.copyState(state)
+    ColorRelay.applyColorTagsToState(target, tags)
+    if t2 <= t1 or offset >= t2 then
+        for slot = 1, 4 do state[slot] = target[slot] end
+        return
+    end
+    local factor = math.max(0, math.min(1, (offset - t1) / (t2 - t1)))
+    factor = factor ^ math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL)
+    for slot = 1, 4 do
+        state[slot] = ColorUtil.interpolate(state[slot], target[slot], factor)
+    end
 end
 
 function ColorRelay.originalStateAt(line, style, absMs)
@@ -522,11 +603,11 @@ function ColorRelay.originalStateAt(line, style, absMs)
         end)
         ColorRelay.applyColorTagsToState(state, base)
         for _, inner in ipairs(transforms) do
-            local t1, t2, tags = ColorRelay.parseTransform(inner, lineDur)
+            local t1, t2, accel, tags = ColorRelay.parseTransform(inner, lineDur)
+            t1 = math.max(0, math.min(lineDur, t1))
+            t2 = math.max(0, math.min(lineDur, t2))
             if t2 < t1 then t1, t2 = t2, t1 end
-            if offset >= t1 then
-                ColorRelay.applyColorTagsToState(state, tags)
-            end
+            ColorRelay.applyTransformAt(state, tags, offset, t1, t2, accel)
         end
     end
 
@@ -552,23 +633,33 @@ end
 
 function ColorRelay.frameFromMs(ms)
     if not aegisub or type(aegisub.frame_from_ms) ~= "function" then return nil end
+    ms = finiteNumber(ms)
+    if not ms then return nil end
     local ok, frame = pcall(aegisub.frame_from_ms, ms)
-    if ok then return frame end
+    frame = ok and finiteNumber(frame) or nil
+    if frame and frame >= 0 and frame <= MAX_TIMELINE_FRAME then return math.floor(frame) end
     return nil
 end
 
 function ColorRelay.msFromFrame(frame)
     if not aegisub or type(aegisub.ms_from_frame) ~= "function" then return nil end
+    frame = finiteNumber(frame)
+    if not frame or frame < 0 or frame > MAX_TIMELINE_FRAME then return nil end
+    frame = math.floor(frame)
     local ok, ms = pcall(aegisub.ms_from_frame, frame)
-    if ok then return ms end
+    ms = ok and finiteNumber(ms) or nil
+    if ms then return ms end
     return nil
 end
 
 function ColorRelay.frameDurationMs(frame)
+    frame = finiteNumber(frame)
+    if not frame then return 1000 / FALLBACK_FRAME_RATE end
+    frame = math.floor(frame)
     local a = ColorRelay.msFromFrame(frame)
     local b = ColorRelay.msFromFrame(frame + 1)
     if a and b and b > a then return b - a end
-    return 1000 / 23.976
+    return 1000 / FALLBACK_FRAME_RATE
 end
 
 function ColorRelay.currentVideoFrame()
@@ -576,7 +667,9 @@ function ColorRelay.currentVideoFrame()
     local ok, props = pcall(aegisub.project_properties)
     if not ok or not props then return nil end
     if props.video_position == nil then return nil end
-    return tonumber(props.video_position)
+    local frame = finiteNumber(props.video_position)
+    if not frame or frame < 0 or frame > MAX_TIMELINE_FRAME then return nil end
+    return math.floor(frame)
 end
 
 function ColorRelay.collectDialogueSelection(subs, sel)
@@ -627,7 +720,7 @@ end
 function ColorRelay.intervalsSummary(intervals)
     local out = {}
     for i, it in ipairs(intervals or {}) do
-        if i > 10 then
+        if i > INTERVAL_SUMMARY_LIMIT then
             out[#out + 1] = "..."
             break
         end
@@ -673,7 +766,8 @@ function ColorRelay.parseFrameToken(token)
     token = trim(token)
     if token == "" then return nil end
     local raw = token:match("^[Ff]?(%d+)[Ff]?$")
-    if raw then return tonumber(raw) end
+    local frame = raw and finiteNumber(raw) or nil
+    if frame and frame >= 0 and frame <= MAX_TIMELINE_FRAME then return math.floor(frame) end
     return nil
 end
 
@@ -682,15 +776,23 @@ function ColorRelay.parseFadeToMs(raw, frame)
     if raw == "" then return 0, "0" end
     local frames = raw:match("^(%d+)[Ff]$")
     if frames then
-        frames = tonumber(frames) or 0
+        frames = finiteNumber(frames)
+        if not frames or frames ~= math.floor(frames) or frames > MAX_TIMELINE_FRAME then return nil, nil end
         local a = ColorRelay.msFromFrame(frame)
         local b = ColorRelay.msFromFrame(frame + frames)
-        if a and b then return math.max(0, b - a), tostring(frames) .. "f" end
-        return math.max(0, math.floor(frames * ColorRelay.frameDurationMs(frame) + 0.5)), tostring(frames) .. "f"
+        local duration = a and b and (b - a) or (frames * ColorRelay.frameDurationMs(frame))
+        duration = finiteNumber(duration)
+        if not duration or duration < 0 or duration > MAX_FADE_DURATION_MS then return nil, nil end
+        return math.floor(duration + 0.5), tostring(frames) .. "f"
     end
     local ms = raw:match("^(%d+)%s*[Mm][Ss]$")
-    if ms then return tonumber(ms) or 0, tostring(tonumber(ms) or 0) end
-    if tonumber(raw) then return math.max(0, tonumber(raw)), tostring(math.max(0, tonumber(raw))) end
+    if ms then
+        ms = finiteNumber(ms)
+        if not ms or ms > MAX_FADE_DURATION_MS then return nil, nil end
+        return ms, tostring(ms)
+    end
+    local numeric = finiteNumber(raw)
+    if numeric and numeric >= 0 and numeric <= MAX_FADE_DURATION_MS then return numeric, tostring(numeric) end
     return nil, nil
 end
 
@@ -899,10 +1001,94 @@ function ColorRelay.sortedEffectiveEvents(events)
     return out
 end
 
+function ColorRelay.validateEventWindows(events)
+    local bySlot = { {}, {}, {}, {} }
+    for _, event in ipairs(events or {}) do
+        local winStart, winEnd = ColorRelay.eventWindow(event)
+        for slot = 1, 4 do
+            if (not event.slots) or event.slots[slot] then
+                bySlot[slot][#bySlot[slot] + 1] = { first = winStart, last = winEnd }
+            end
+        end
+    end
+    for slot = 1, 4 do
+        table.sort(bySlot[slot], function(a, b)
+            if a.first == b.first then return a.last < b.last end
+            return a.first < b.first
+        end)
+        for index = 2, #bySlot[slot] do
+            if bySlot[slot][index].first < bySlot[slot][index - 1].last then
+                return nil, "Los fundidos de ColorRelay se solapan en el canal " .. tostring(slot) .. ". Ajusta su duración o separa los fotogramas de control."
+            end
+        end
+    end
+    return true
+end
+
+function ColorRelay.transformTouchesSlots(text, slots)
+    for parens in tostring(text or ""):gmatch("\\t%s*(%b())") do
+        for rawSlot in parens:gmatch("\\([1-4]?)c%s*&[Hh]%x+&?") do
+            local slot = rawSlot == "" and 1 or tonumber(rawSlot)
+            if slot and slots[slot] then return true, slot end
+        end
+    end
+    return false, nil
+end
+
+function ColorRelay.hasLateColorRun(text, slots)
+    text = tostring(text or "")
+    local cursor, visibleStarted = 1, false
+    while cursor <= #text do
+        local open = text:find("{", cursor, true)
+        local segmentEnd = open and (open - 1) or #text
+        local segment = text:sub(cursor, segmentEnd)
+        if segment:gsub("\\[Nnh]", ""):match("%S") then visibleStarted = true end
+        if not open then break end
+        local close = text:find("}", open + 1, true)
+        if not close then return true end
+        local block = text:sub(open + 1, close - 1)
+        if block:match("^%s*\\") then
+            local static = block:gsub("\\t%s*%b()", "")
+            if static:find("\\r", 1, true) then return true end
+            if visibleStarted then
+                for rawSlot in static:gmatch("\\([1-4]?)c%s*&[Hh]%x+&?") do
+                    local slot = rawSlot == "" and 1 or tonumber(rawSlot)
+                    if slot and slots[slot] then return true end
+                end
+            end
+        end
+        cursor = close + 1
+    end
+    return false
+end
+
 function ColorRelay.applyEventsToSelection(subs, sel, events)
     local styles = collectStyles(subs)
     local effective = ColorRelay.sortedEffectiveEvents(events)
     if #effective == 0 then return 0 end
+    local windowsOk, windowsError = ColorRelay.validateEventWindows(effective)
+    if not windowsOk then return nil, windowsError end
+    local selectedSlots = { false, false, false, false }
+    for _, event in ipairs(effective) do
+        for slot = 1, 4 do
+            if (not event.slots) or event.slots[slot] then selectedSlots[slot] = true end
+        end
+    end
+    for _, idx in ipairs(sel or {}) do
+        local line = subs[idx]
+        if isDialogueLine(line) then
+            if hasTopLevelStyleReset(line.text) then
+                return nil, "La línea " .. tostring(idx) .. " usa \\r. ColorRelay no puede resolver todavía colores de estilos reiniciados; divide la línea en runs uniformes."
+            end
+            local touches, slot = ColorRelay.transformTouchesSlots(line.text, selectedSlots)
+            if touches then
+                return nil, "La línea " .. tostring(idx) .. " ya anima el canal de color " .. tostring(slot) .. " dentro de \\t. Divídela o fija ese color antes de usar ColorRelay."
+            end
+            if ColorRelay.hasLateColorRun(line.text, selectedSlots) then
+                return nil, "La línea " .. tostring(idx) .. " cambia color después de iniciar el texto. Divide los runs antes de usar ColorRelay para no aplanar sus colores."
+            end
+        end
+    end
 
     local count = 0
     for _, idx in ipairs(sel or {}) do
@@ -912,16 +1098,30 @@ function ColorRelay.applyEventsToSelection(subs, sel, events)
             local lineEnd = line.end_time
             local lineDur = lineEnd - lineStart
             local originalStartState = ColorRelay.originalStateAt(line, styles[line.style], lineStart)
-            local state = ColorRelay.copyState(originalStartState)
             local touchedSlots = {}
             local transforms = {}
+            local plans = {}
+            local previousEvents = {}
 
             for _, event in ipairs(effective) do
                 local winStart, winEnd = ColorRelay.eventWindow(event)
-                local after = ColorRelay.copyState(state)
-                local _, changed, anyChanged = ColorRelay.applyReplacementsToState(after, event.replacements, event.slots)
+                local sampledAt = math.max(lineStart, math.min(lineEnd, event.time))
+                local before = ColorRelay.originalStateAt(line, styles[line.style], sampledAt)
+                ColorRelay.applyPreviousEventsToState(before, previousEvents, event.time)
+                local after = ColorRelay.copyState(before)
+                local _, changed, anyChanged = ColorRelay.applyReplacementsToState(
+                    after, event.replacements, event.slots
+                )
 
                 if anyChanged then
+                    plans[#plans + 1] = {
+                        event = event,
+                        winStart = winStart,
+                        winEnd = winEnd,
+                        before = before,
+                        after = after,
+                        changed = changed,
+                    }
                     if winEnd <= lineStart then
                         for slot = 1, 4 do
                             if changed[slot] then touchedSlots[slot] = true end
@@ -939,10 +1139,19 @@ function ColorRelay.applyEventsToSelection(subs, sel, events)
                                 touchedSlots[slot] = true
                             end
                         end
+                        local target = ColorRelay.copyState(after)
+                        if winEnd > winStart and lineEnd < winEnd then
+                            local targetFactor = math.max(0, math.min(1, (lineEnd - winStart) / (winEnd - winStart)))
+                            for slot = 1, 4 do
+                                if changed[slot] then
+                                    target[slot] = ColorUtil.interpolate(before[slot], after[slot], targetFactor)
+                                end
+                            end
+                        end
                         transforms[#transforms + 1] = {
                             t1 = relStart,
                             t2 = relEnd,
-                            tags = ColorRelay.tagsFromState(after, payloadSlots),
+                            tags = ColorRelay.tagsFromState(target, payloadSlots),
                         }
                     elseif event.time < lineStart then
                         for slot = 1, 4 do
@@ -950,16 +1159,24 @@ function ColorRelay.applyEventsToSelection(subs, sel, events)
                         end
                     end
                 end
-
-                state = after
+                previousEvents[#previousEvents + 1] = event
             end
 
             if next(touchedSlots) then
                 local base = ColorRelay.copyState(originalStartState)
-                for _, event in ipairs(effective) do
-                    local _, winEnd = ColorRelay.eventWindow(event)
-                    if winEnd <= lineStart then
-                        ColorRelay.applyReplacementsToState(base, event.replacements, event.slots)
+                for _, plan in ipairs(plans) do
+                    if plan.winEnd <= lineStart or plan.winEnd <= plan.winStart then
+                        for slot = 1, 4 do
+                            if plan.changed[slot] then base[slot] = plan.after[slot] end
+                        end
+                    elseif plan.winStart < lineStart then
+                        local factor = math.max(0, math.min(1,
+                            (lineStart - plan.winStart) / (plan.winEnd - plan.winStart)))
+                        for slot = 1, 4 do
+                            if plan.changed[slot] then
+                                base[slot] = ColorUtil.interpolate(plan.before[slot], plan.after[slot], factor)
+                            end
+                        end
                     end
                 end
 
@@ -1067,7 +1284,11 @@ function ColorRelay.run(subs, sel)
                     end
                 end
 
-                local changed = ColorRelay.applyEventsToSelection(subs, sel, approved)
+                local changed, applyError = ColorRelay.applyEventsToSelection(subs, sel, approved)
+                if not changed then
+                    ColorRelay.showMessage(ColorRelay.name, applyError or "No se pudieron aplicar los cambios de ColorRelay.")
+                    return nil, "cancel"
+                end
                 if changed > 0 then
                     aegisub.set_undo_point(ColorRelay.name)
                     ColorRelay.showMessage(ColorRelay.name, tostring(changed) .. " líneas actualizadas.")
@@ -1158,7 +1379,6 @@ function StyleScanner.scanActors(subs, sel, styleMap)
         local l = subs[i]
         if isDialogueLine(l) then
             local actor = trim(l.actor)
-            if actor == "" then actor = "[Actor vacío]" end
             if not data[actor] then
                 local s   = styleMap[l.style] or styleMap["Default"]
                 local baseColors = styleColors(s)
@@ -1188,18 +1408,19 @@ function StyleScanner.scanActors(subs, sel, styleMap)
             table.insert(entry.ids, i)
             entry.line_count = entry.line_count + 1
             local text = tostring(l.text or "")
+            local staticText = withoutTransforms(text)
             local s = styleMap[l.style] or styleMap["Default"]
             local lineColors = styleColors(s)
             local lineVSF = {}
 
-            for n, raw in text:gmatch(PAT_COLOR_CAP) do
+            for n, raw in staticText:gmatch(PAT_COLOR_CAP) do
                 if n == "" then n = "1" end
                 local k = COLOR_KEYS[n]
                 local v = ColorUtil.normalizeStrict(raw)
                 if k and v then lineColors[k] = v end
             end
 
-            for n, parens in text:gmatch(PAT_VC_CAP) do
+            for n, parens in staticText:gmatch(PAT_VC_CAP) do
                 if n == "" then n = "1" end
                 local key = n .. "vc"
                 entry.has_vsf = true
@@ -1283,7 +1504,7 @@ function ActorReport.summary(actors, data)
             flag = flag .. "BIEN RC:" .. string.format("%.1f", ratio)
         end
         table.insert(lines, string.format("%-15s  c:%s  3c:%s  [%s]",
-            a:sub(1, 15), ColorUtil.toHex(info.colors.c), ColorUtil.toHex(info.colors["3c"]), flag))
+            actorLabel(a):sub(1, 15), ColorUtil.toHex(info.colors.c), ColorUtil.toHex(info.colors["3c"]), flag))
     end
     return table.concat(lines, "\n")
 end
@@ -1305,7 +1526,7 @@ function ActorReport.conflicts(actors, data)
         local info = data[a]
         if info.has_mixed and #info.conflicts > 0 then
             hasChanges = true
-            table.insert(lines, "- " .. a .. " (" .. info.line_count .. " líneas):")
+            table.insert(lines, "- " .. actorLabel(a) .. " (" .. info.line_count .. " líneas):")
             for _, c in ipairs(info.conflicts) do
                 table.insert(lines, string.format("   Linea %d: %s cambio %s -> %s",
                     c.ln, c.tag, ColorUtil.toHex(c.old or COLOR_WHITE), ColorUtil.toHex(c.new)))
@@ -1325,7 +1546,7 @@ function ActorReport.conflicts(actors, data)
         local info = data[a]
         if info.has_vsf_mixed and #info.vsf_conflicts > 0 then
             hasVSFChanges = true
-            table.insert(lines, "- " .. a .. " (" .. info.line_count .. " líneas):")
+            table.insert(lines, "- " .. actorLabel(a) .. " (" .. info.line_count .. " líneas):")
             for _, c in ipairs(info.vsf_conflicts) do
                 table.insert(lines, string.format("   Linea %d: %s cambio %s -> %s",
                     c.ln, c.tag, tupleText(c.old), tupleText(c.new)))
@@ -1354,15 +1575,15 @@ function ActorReport.conflicts(actors, data)
         local dup = ""
         if info.colors.c == info.colors["3c"] then dup = " [c = 3c DUPLICADO]"; totalDup = totalDup + 1 end
         if info.colors.c == info.colors["4c"] then dup = dup .. " [c = 4c]" end
-        table.insert(lines, string.format("  %-12s  CR:%.1f %s%s", a:sub(1, 12), ratio, label, dup))
+        table.insert(lines, string.format("  %-12s  CR:%.1f %s%s", actorLabel(a):sub(1, 12), ratio, label, dup))
     end
     table.insert(lines, "")
     table.insert(lines, "== VSF ==")
     table.insert(lines, "")
     local vsfActors, plainActors = {}, {}
     for _, a in ipairs(actors) do
-        if data[a].has_vsf then table.insert(vsfActors, a); totalVSF = totalVSF + 1
-        else table.insert(plainActors, a) end
+        if data[a].has_vsf then table.insert(vsfActors, actorLabel(a)); totalVSF = totalVSF + 1
+        else table.insert(plainActors, actorLabel(a)) end
     end
     if #vsfActors > 0 and #plainActors > 0 then
         table.insert(lines, "  Compatibilidad mixta de VSFilterMod:")
@@ -1422,7 +1643,7 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
             local r = k - s + 3
             local info = data[a]
             local vc = info.vsf_corners[activeTag]
-            table.insert(g, { class = "label",      label = a:sub(1, UI.vsf_actor_label_chars), x = 0, y = r, hint = a })
+            table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.vsf_actor_label_chars), x = 0, y = r, hint = actorLabel(a) })
             table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_1", value = vc[1], x = 1, y = r })
             table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_2", value = vc[2], x = 2, y = r })
             table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_3", value = vc[3], x = 3, y = r })
@@ -1446,7 +1667,7 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
         local a = actors[k]
         local r = k - s + 3
         local info = data[a]
-        table.insert(g, { class = "label",      label = a:sub(1, UI.actor_label_chars), x = 0, y = r, hint = a .. " (" .. info.line_count .. " líneas)" })
+        table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.actor_label_chars), x = 0, y = r, hint = actorLabel(a) .. " (" .. info.line_count .. " líneas)" })
         table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_c",  value = info.colors.c,    x = 1, y = r })
         table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_3c", value = info.colors["3c"], x = 2, y = r })
         table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_4c", value = info.colors["4c"], x = 3, y = r })
@@ -1495,25 +1716,106 @@ local function buildVSFTag(vsfTag, vc)
         ColorUtil.normalize(vc[4]) .. ")"
 end
 
+local function generatedStyleInventory(subs)
+    local styleIndex, usage = {}, {}
+    for i = 1, #subs do
+        local item = subs[i]
+        if item.class == "style" and type(item.name) == "string" then
+            styleIndex[item.name] = i
+        elseif isDialogueLine(item) and type(item.style) == "string" then
+            usage[item.style] = usage[item.style] or {}
+            usage[item.style][i] = true
+        end
+    end
+    return styleIndex, usage
+end
+
+local function idsAsSet(ids)
+    local out = {}
+    for _, id in ipairs(ids or {}) do
+        if type(id) == "number" then out[id] = true end
+    end
+    return out
+end
+
+local function usageIsContained(usage, targets)
+    local any = false
+    for id in pairs(usage or {}) do
+        any = true
+        if not targets[id] then return false, any end
+    end
+    return true, any
+end
+
+local function generatedStyleCandidate(rawName, suffix)
+    if suffix == 1 then return rawName end
+    return rawName .. "_" .. tostring(suffix)
+end
+
+-- Prefer the style already used exclusively by the actor's target lines. This
+-- makes repeated runs idempotent without modifying a style shared elsewhere.
+local function chooseGeneratedStyleName(rawName, subs, styleIndex, usage, targets, claimed)
+    local unusedName
+    for suffix = 1, #subs + 1 do
+        local name = generatedStyleCandidate(rawName, suffix)
+        if not claimed[name] then
+            local contained, any = usageIsContained(usage[name], targets)
+            if styleIndex[name] and contained and any then
+                return name, styleIndex[name]
+            elseif not styleIndex[name] and contained and not unusedName then
+                unusedName = name
+            end
+        end
+    end
+    local name = unusedName
+    if not name then return nil, nil end
+    return name, styleIndex[name]
+end
+
+local function styleColorWithInheritedAlpha(color, inherited, preserveAlpha)
+    local alpha = "00"
+    if preserveAlpha then
+        if type(inherited) == "number" then
+            local numeric = finiteNumber(inherited)
+            if numeric and numeric == math.floor(numeric) and numeric >= ASS_SIGNED_COLOR_MIN and numeric <= ASS_UNSIGNED_COLOR_MAX then
+                if numeric < 0 then numeric = numeric + ASS_ALPHA_MODULO end
+                alpha = string.format("%02X", math.floor(numeric / ASS_COLOR_MODULO) % 256)
+            end
+        else
+            local hex = tostring(inherited or ""):match("^&[Hh](%x+)&?$")
+            if hex and #hex == 8 then alpha = hex:sub(1, 2):upper() end
+        end
+    end
+    return string.format("&H%s%06X&", alpha, ColorUtil.toNumber(color))
+end
+
 local ManagerApply = {}
 
 function ManagerApply.execute(subs, data, actors, styleMap, op, autoClean, vsfMode, vsfTag)
     styleMap = styleMap or {}
     local count = 0
 
+    for _, actor in ipairs(actors or {}) do
+        for _, index in ipairs((data[actor] and data[actor].ids) or {}) do
+            local line = subs[index]
+            if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then
+                return nil, "La línea " .. tostring(index) .. " usa \\r. El gestor no modifica líneas con reinicios de estilo hasta poder resolver sus colores por run."
+            end
+        end
+    end
+
     if op == "Estilos" and vsfMode then
         return nil, "Los colores VSFilterMod requieren el modo Etiquetas."
     end
 
     if op == "Estilos" then
-        local nameMap, newStyles, usedNames = {}, {}, {}
-        local styleIdx = {}
+        local nameMap, newStyles, claimedNames = {}, {}, {}
+        local styleIndex, styleUsage = generatedStyleInventory(subs)
         local insertPos, lastNonDialoguePos, foundStyle = 1, 0, false
         for si = 1, #subs do
             local cls = subs[si].class
             if cls == "style" then
                 insertPos = si + 1
-                styleIdx[subs[si].name] = si
                 foundStyle = true
             elseif cls ~= "dialogue" then
                 lastNonDialoguePos = si
@@ -1531,14 +1833,13 @@ function ManagerApply.execute(subs, data, actors, styleMap, op, autoClean, vsfMo
             local firstId = data[a].ids[1]
             if firstId and isDialogueLine(subs[firstId]) then
                 local base    = styleMap[subs[firstId].style]
-                local rawName = (a:gsub("[^%w_]", "_")) .. "_Z"
-                local name    = rawName
-                if usedNames[name] then
-                    local suf = 2
-                    while usedNames[rawName .. suf] do suf = suf + 1 end
-                    name = rawName .. suf
-                end
-                usedNames[name] = true
+                local rawName = (actorLabel(a):gsub("[^%w_]", "_")) .. "_Z"
+                local name, existingIndex = chooseGeneratedStyleName(
+                    rawName, subs, styleIndex, styleUsage,
+                    idsAsSet(data[a].ids), claimedNames
+                )
+                if not name then return nil, "No se pudo reservar un nombre de estilo para '" .. tostring(a) .. "'." end
+                claimedNames[name] = true
                 local ns = { class = "style", name = name }
                 if base then
                     for k, v in pairs(base) do
@@ -1547,14 +1848,13 @@ function ManagerApply.execute(subs, data, actors, styleMap, op, autoClean, vsfMo
                 else
                     copyFallbackStyle(ns)
                 end
-                ns.color1 = string.format("&H00%06X&", ColorUtil.toNumber(sc1))
-                ns.color2 = string.format("&H00%06X&", ColorUtil.toNumber(sc2))
-                ns.color3 = string.format("&H00%06X&", ColorUtil.toNumber(sc3))
-                ns.color4 = string.format("&H00%06X&", ColorUtil.toNumber(sc4))
+                ns.color1 = styleColorWithInheritedAlpha(sc1, base and base.color1, true)
+                ns.color2 = styleColorWithInheritedAlpha(sc2, base and base.color2, true)
+                ns.color3 = styleColorWithInheritedAlpha(sc3, base and base.color3, true)
+                ns.color4 = styleColorWithInheritedAlpha(sc4, base and base.color4, true)
 
-                local existingIdx = styleIdx[name]
-                if existingIdx then
-                    subs[existingIdx] = ns
+                if existingIndex then
+                    subs[existingIndex] = ns
                 else
                     table.insert(newStyles, ns)
                 end
@@ -1567,7 +1867,7 @@ function ManagerApply.execute(subs, data, actors, styleMap, op, autoClean, vsfMo
             local sname = nameMap[a]
             if sname then
                 for _, id in ipairs(data[a].ids) do
-                    local idx = id + offset
+                    local idx = id >= insertPos and id + offset or id
                     local l = subs[idx]
                     if isDialogueLine(l) then
                         l.style = sname
@@ -1641,6 +1941,21 @@ end
 
 local ActorColorFile = {}
 
+local function encodePaletteField(value)
+    return (tostring(value or ""):gsub("([^%w%._%-%~ ])", function(char)
+        return string.format("%%%02X", string.byte(char))
+    end))
+end
+
+local function decodePaletteField(value)
+    value = tostring(value or "")
+    local unescaped = value:gsub("%%(%x%x)", "")
+    if unescaped:find("%", 1, true) then return nil end
+    return (value:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end))
+end
+
 function ActorColorFile.io(data, actors, mode)
     if mode == "Export" then
         local fp = aegisub.dialog.save("Exportar paleta de colores - Zheus Colormanager", "", "", "*.txt", false)
@@ -1652,12 +1967,12 @@ function ActorColorFile.io(data, actors, mode)
         local ok, err = PyBridge.withAtomicFile(fp, function(f)
             f:write("# Zheus Colormanager\n")
             f:write("# Exportación de paleta de color por actor\n")
-            f:write("# Versión de formato: 2\n")
+            f:write("# Versión de formato: " .. ACTOR_PALETTE_FORMAT_VERSION .. "\n")
             f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n")
-            f:write("# Esquema: Actor|c,3c,4c[|1vc:c1,c2,c3,c4|2vc:c1,c2,c3,c4|...]\n\n")
+            f:write("# Esquema: Actor-porcentaje-codificado|c,3c,4c[|1vc:c1,c2,c3,c4|...]\n\n")
             for _, a in ipairs(actors) do
                 local info = data[a]
-                local line = a .. "|" .. info.colors.c .. "," .. info.colors["3c"] .. "," .. info.colors["4c"]
+                local line = encodePaletteField(a) .. "|" .. info.colors.c .. "," .. info.colors["3c"] .. "," .. info.colors["4c"]
                 if info.has_vsf then
                     for _, tag in ipairs(VSF_TAGS) do
                         local vc = info.vsf_corners[tag]
@@ -1676,20 +1991,30 @@ function ActorColorFile.io(data, actors, mode)
 
     local fn = aegisub.dialog.open("Importar paleta de colores - Zheus Colormanager", "", "", "*.txt", false, true)
     if not fn then return nil end
-    local content, readError = PyBridge.readFile(fn)
+    local content, readError = PyBridge.readFile(fn, PALETTE_FILE_LIMIT + 1)
     if not content then return "Error al leer: " .. tostring(readError) end
+    if #content > PALETTE_FILE_LIMIT then return "La paleta supera el límite de tamaño permitido." end
+    local fileVersion = tonumber(content:match("#%s*Versión de formato:%s*(%d+)")) or 2
+    if fileVersion < 2 or fileVersion > ACTOR_PALETTE_FORMAT_VERSION then
+        return "Versión de paleta no compatible: " .. tostring(fileVersion)
+    end
     local imported, missing, invalid, has_vsf_data = 0, {}, {}, false
     local updated = {}
     for l in content:gmatch("[^\r\n]+") do
         if not l:match("^#") and l ~= "" then
-            local parts = {}
-            for p in l:gmatch("[^|]+") do table.insert(parts, p) end
+            local actorField, remainder = l:match("^(.-)|(.+)$")
+            local parts = actorField and { actorField } or {}
+            for p in tostring(remainder or ""):gmatch("[^|]+") do table.insert(parts, p) end
             if #parts >= 2 then
-                local actor = trim(parts[1])
+                local actor = fileVersion >= 3 and decodePaletteField(parts[1]) or trim(parts[1])
+                if not actor then
+                    table.insert(invalid, "actor codificado")
+                    actor = ""
+                end
                 if data[actor] then
                     local t = {}
                     for x in parts[2]:gmatch("[^,]+") do table.insert(t, x) end
-                    if #t >= 3 then
+                    if #t == 3 then
                         local c1 = ColorUtil.normalizeStrict(t[1])
                         local c3 = ColorUtil.normalizeStrict(t[2])
                         local c4 = ColorUtil.normalizeStrict(t[3])
@@ -1712,7 +2037,7 @@ function ActorColorFile.io(data, actors, mode)
                                 local n = ColorUtil.normalizeStrict(x)
                                 if n then table.insert(vc, n) else okTuple = false end
                             end
-                            if okTuple and #vc >= 4 then
+                            if okTuple and #vc == 4 then
                                 data[actor].vsf_corners[tag] = { vc[1], vc[2], vc[3], vc[4] }
                                 data[actor].has_vsf = true
                                 has_vsf_data = true
@@ -1938,64 +2263,11 @@ end
 
 local AlphaUtil = {}
 
-local function _hexBody(raw)
-    if raw == nil then return nil end
-    local s = tostring(raw)
-    return s:match("&[Hh](%x+)&?")
-end
-
-function AlphaUtil.extractAlpha(raw)
-    local hex = _hexBody(raw)
-    if not hex or #hex <= 6 then return "00" end
-    local a = hex:sub(1, #hex - 6):upper():sub(-2)
-    if #a == 1 then a = "0" .. a end
-    return a
-end
-
-function AlphaUtil.join(alpha, color)
-    local a = tostring(alpha or "00"):gsub("[^%x]", ""):upper()
-    if #a == 0 then a = "00" end
-    if #a == 1 then a = "0" .. a end
-    if #a > 2 then a = a:sub(1, 2) end
-    local hex = _hexBody(ColorUtil.normalize(color)) or "FFFFFF"
-    if #hex > 6 then hex = hex:sub(-6) end
-    while #hex < 6 do hex = "0" .. hex end
-    return "&H" .. a .. hex:upper() .. "&"
-end
-
-function AlphaUtil.fromTextSlot(text, slot)
-    if not text then return nil end
-    slot = slot or ""
-    local pat = (slot == "" or slot == "1")
-        and "\\1?c(&H%x+&?)"
-        or  ("\\" .. slot .. "c(&H%x+&?)")
-    local raw = tostring(text):match(pat)
-    if not raw then return nil end
-    local a = AlphaUtil.extractAlpha(raw)
-    return a ~= "00" and a or nil
-end
-
-function AlphaUtil.fromAlphaTag(text, slot)
-    if not text then return nil end
-    text = tostring(text)
-    slot = tostring(slot or "1")
-    local pat
-    if slot == "1" then
-        pat = "\\1a&H(%x+)&"
-    else
-        pat = "\\" .. slot .. "a&H(%x+)&"
-    end
-    local m = text:match(pat)
-    if not m then m = text:match("\\alpha&H(%x+)&") end
-    if not m then return nil end
-    if #m > 2 then m = m:sub(-2) end
-    if #m == 1 then m = "0" .. m end
-    m = m:upper()
-    return (m ~= "00") and m or nil
-end
-
-function AlphaUtil.fromAnySlot(text, slot)
-    return AlphaUtil.fromTextSlot(text, slot) or AlphaUtil.fromAlphaTag(text, slot)
+function AlphaUtil.expandEmbeddedColorAlpha(text)
+    return (tostring(text or ""):gsub("\\([1-4]?)c&[Hh](%x%x)(%x%x%x%x%x%x)&?", function(rawSlot, alpha, rgb)
+        local alphaSlot = rawSlot == "" and "1" or rawSlot
+        return "\\" .. alphaSlot .. "a&H" .. alpha:upper() .. "&\\" .. rawSlot .. "c&H" .. rgb:upper() .. "&"
+    end))
 end
 
 local ColorSpace = {}
@@ -2048,7 +2320,7 @@ function ColorSpace.colorToOklab(c)
     if hit then return hit[1], hit[2], hit[3] end
     local r, g, b = ColorUtil.toRGB(c)
     local L, A, B = ColorSpace.rgbToOklab(r, g, b)
-    if _oklabMemoN >= 4096 then _oklabMemo, _oklabMemoN = {}, 0 end
+    if _oklabMemoN >= COLOR_CACHE_LIMIT then _oklabMemo, _oklabMemoN = {}, 0 end
     _oklabMemo[key] = { L, A, B }
     _oklabMemoN = _oklabMemoN + 1
     return L, A, B
@@ -2104,7 +2376,7 @@ local _cvdMemo, _cvdMemoN = {}, 0
 
 function CVDSim.simulate(color, cvdType, severity)
     if color == nil or color == "" then return COLOR_WHITE end
-    severity = tonumber(severity)
+    severity = finiteNumber(severity)
     if severity == nil then severity = 1.0 end
     if severity < 0 then severity = 0 end
     if severity > 1 then severity = 1 end
@@ -2124,7 +2396,7 @@ function CVDSim.simulate(color, cvdType, severity)
             result = ColorUtil.fromRGB(r2, g2, b2)
         end
     end
-    if _cvdMemoN >= 4096 then _cvdMemo, _cvdMemoN = {}, 0 end
+    if _cvdMemoN >= COLOR_CACHE_LIMIT then _cvdMemo, _cvdMemoN = {}, 0 end
     _cvdMemo[key] = result
     _cvdMemoN = _cvdMemoN + 1
     return result
@@ -2214,15 +2486,97 @@ AccessibilityProfiles.list = {
     },
 }
 
+local BUILTIN_PROFILE_IDS = {
+    NORMAL = true, DALTONICO = true, UNIVERSAL_SAFE = true,
+    PROTAN_SAFE = true, DEUTAN_SAFE = true, TRITAN_SAFE = true,
+    MONOCHROME = true, HIGH_CONTRAST = true,
+}
+
 function AccessibilityProfiles.get(id)
     if type(id) == "table" and id.id then return id end
     return AccessibilityProfiles.list[id] or AccessibilityProfiles.list.DALTONICO or AccessibilityProfiles.list.UNIVERSAL_SAFE
 end
 
-function AccessibilityProfiles.register(p)
-    if type(p) ~= "table" or type(p.id) ~= "string" or p.id == "" then return false end
-    AccessibilityProfiles.list[p.id] = p
-    return true
+local function boundedProfileString(value, fallback, limit)
+    if value == nil then return fallback end
+    if type(value) ~= "string" or #value > limit then return nil end
+    return value
+end
+
+local function boundedProfileNumber(value, fallback, minimum, maximum)
+    if value == nil then return fallback end
+    local number = finiteNumber(value)
+    if not number or number < minimum or number > maximum then return nil end
+    return number
+end
+
+function AccessibilityProfiles.sanitize(p, forcedId)
+    if type(p) ~= "table" then return nil end
+    local id = forcedId or p.id
+    if type(id) ~= "string" or id == "" or #id > PROFILE_ID_LIMIT or not id:match("^[%w_.%-]+$") then return nil end
+    local label = boundedProfileString(p.label, id, PROFILE_LABEL_LIMIT)
+    local description = boundedProfileString(p.description, "", PROFILE_TEXT_LIMIT)
+    local criteria = boundedProfileString(p.criteria, "", PROFILE_TEXT_LIMIT)
+    if not label or not description or not criteria or (p.simulate ~= nil and type(p.simulate) ~= "table") or
+        (p.thresholds ~= nil and type(p.thresholds) ~= "table") or
+        (p.policy ~= nil and type(p.policy) ~= "table") then return nil end
+
+    local simulate, sourceSim = {}, p.simulate or {}
+    for _, key in ipairs({ "protan", "deutan", "tritan", "mono" }) do
+        simulate[key] = boundedProfileNumber(sourceSim[key], 0, 0, 1)
+        if simulate[key] == nil then return nil end
+    end
+    local sourceThresholds = p.thresholds or {}
+    local thresholds = {
+        min_text_contrast = boundedProfileNumber(sourceThresholds.min_text_contrast, 4.5, 1, 21),
+        min_cvd_text_contrast = boundedProfileNumber(sourceThresholds.min_cvd_text_contrast, 4.0, 1, 21),
+        min_actor_delta = boundedProfileNumber(sourceThresholds.min_actor_delta, 0.055, 0, 1),
+        min_mono_luma_delta = boundedProfileNumber(sourceThresholds.min_mono_luma_delta, 0.12, 0, 1),
+    }
+    for _, value in pairs(thresholds) do if value == nil then return nil end end
+
+    local sourcePolicy, policy = p.policy or {}, {}
+    for _, key in ipairs({
+        "preserve_hue", "destructive", "audit_only", "allow_bord_shad_override",
+        "add_bord_shad", "force_mono", "calibrated"
+    }) do
+        if sourcePolicy[key] ~= nil then
+            if type(sourcePolicy[key]) ~= "boolean" then return nil end
+            policy[key] = sourcePolicy[key]
+        end
+    end
+    for _, key in ipairs({ "bord", "shad" }) do
+        if sourcePolicy[key] ~= nil then
+            policy[key] = boundedProfileNumber(sourcePolicy[key], nil, 0, 100)
+            if policy[key] == nil then return nil end
+        end
+    end
+    if sourcePolicy.use_palette ~= nil then
+        policy.use_palette = boundedProfileString(sourcePolicy.use_palette, nil, PROFILE_ID_LIMIT)
+        if not policy.use_palette then return nil end
+    end
+    for _, key in ipairs({ "force_fill", "force_outline", "force_shadow" }) do
+        if sourcePolicy[key] ~= nil then
+            policy[key] = ColorUtil.normalizeStrict(sourcePolicy[key])
+            if not policy[key] then return nil end
+        end
+    end
+    return {
+        id = id,
+        label = label,
+        description = description,
+        criteria = criteria,
+        simulate = simulate,
+        thresholds = thresholds,
+        policy = policy,
+    }
+end
+
+function AccessibilityProfiles.register(p, forcedId)
+    local sanitized = AccessibilityProfiles.sanitize(p, forcedId)
+    if not sanitized then return false end
+    AccessibilityProfiles.list[sanitized.id] = sanitized
+    return true, sanitized
 end
 
 local _BUILTIN_PROFILE_ORDER = {
@@ -2615,7 +2969,7 @@ function AccessibilityReport.format(report, actors)
     for _, a in ipairs(actors) do
         local m = report.actors[a]
         if m then
-            local line = string.format("  %-14s CR:%-5.1f", a:sub(1, 14), m.contrast.c_3c or 0)
+            local line = string.format("  %-14s CR:%-5.1f", actorLabel(a):sub(1, 14), m.contrast.c_3c or 0)
             for _, cvd in ipairs(CVD_KINDS) do
                 local v = m.contrast[cvd .. "_c_3c"]
                 if v then
@@ -2637,7 +2991,7 @@ function AccessibilityReport.format(report, actors)
     else
         for _, p in ipairs(report.pairs) do
             w(string.format("  %s / %s: se parecen en %s (delta %.3f).",
-                p.a, p.b, AccessibilityReport.kindText(p.kind), p.worst))
+                actorLabel(p.a), actorLabel(p.b), AccessibilityReport.kindText(p.kind), p.worst))
         end
     end
     w("")
@@ -2647,21 +3001,21 @@ function AccessibilityReport.format(report, actors)
     else
         for _, v in ipairs(report.vsf) do
             w(string.format("  %s \\%s: %s (%.2f)",
-                v.a, v.tag, AccessibilityReport.kindText(v.kind), v.value or 0))
+                actorLabel(v.a), v.tag, AccessibilityReport.kindText(v.kind), v.value or 0))
         end
     end
     w("")
     if next(report.drawingActors) then
         w("== DIBUJOS DETECTADOS ==")
         for a in pairs(report.drawingActors) do
-            w("  " .. a .. "  (la opción Incluir dibujos controla su aplicación)")
+            w("  " .. actorLabel(a) .. "  (la opción Incluir dibujos controla su aplicación)")
         end
         w("")
     end
     if next(report.alphaRisks) then
         w("== ETIQUETAS ALFA DETECTADAS ==")
         for a in pairs(report.alphaRisks) do
-            w("  " .. a .. "  (Preservar alfa mantiene la transparencia original)")
+            w("  " .. actorLabel(a) .. "  (Preservar alfa mantiene la transparencia original)")
         end
         w("")
     end
@@ -2845,8 +3199,8 @@ function PaletteEngine.sortActors(data, actors)
         local lx = (data[x] and data[x].line_count) or 0
         local ly = (data[y] and data[y].line_count) or 0
         if lx ~= ly then return lx > ly end
-        local xn = (x == "[Actor vacío]") and 1 or 0
-        local yn = (y == "[Actor vacío]") and 1 or 0
+        local xn = (x == "") and 1 or 0
+        local yn = (y == "") and 1 or 0
         if xn ~= yn then return xn < yn end
         return x < y
     end)
@@ -3022,14 +3376,23 @@ local function _sanitizeStyleName(actor)
     return s
 end
 
-local function _styleColorFromAss(c)
-    return string.format("&H00%06X&", ColorUtil.toNumber(c))
+local function _styleColorFromAss(c, inherited, preserveAlpha)
+    return styleColorWithInheritedAlpha(c, inherited, preserveAlpha)
 end
 
 function AccessibilityApply.execute(subs, data, actors, styleMap, profile, options)
     profile = AccessibilityProfiles.get(profile)
     options = options or {}
     styleMap = styleMap or {}
+
+    for _, actor in ipairs(actors or {}) do
+        for _, index in ipairs((data[actor] and data[actor].ids) or {}) do
+            local line = subs[index]
+            if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then
+                return 0, 0, "La línea " .. tostring(index) .. " usa \\r. La paleta accesible no se aplicó porque aún no resuelve colores por run de estilo."
+            end
+        end
+    end
 
     local applyMode      = options.apply_mode or "Tags"
     local preserveAlpha  = options.preserve_alpha ~= false
@@ -3049,21 +3412,28 @@ function AccessibilityApply.execute(subs, data, actors, styleMap, profile, optio
 
     if applyMode == "Styles" then
         for _, a in ipairs(actors) do
-            if data[a] and data[a].has_vsf then
-                return 0, 0, "El actor '" .. a .. "' usa colores VSF; aplica como Etiquetas."
+            local rawVSF = false
+            for _, id in ipairs((data[a] and data[a].ids) or {}) do
+                local candidate = subs[id]
+                if isDialogueLine(candidate) and _lineHasAnyVSF(candidate.text) then
+                    rawVSF = true
+                    break
+                end
+            end
+            if data[a] and (data[a].has_vsf or rawVSF) then
+                return 0, 0, "El actor '" .. actorLabel(a) .. "' usa colores VSF; aplica como Etiquetas."
             end
         end
         local suffix = "_Z_ACC"
         if profile.id == "HIGH_CONTRAST" then suffix = "_Z_ACC_HC" end
-        local nameMap, newStyles, usedNames, styleIdx = {}, {}, {}, {}
+        local nameMap, newStyles, claimedNames = {}, {}, {}
+        local styleIndex, styleUsage = generatedStyleInventory(subs)
         local insertPos, lastNonDialoguePos, foundStyle = 1, 0, false
         for si = 1, #subs do
             local cls = subs[si].class
             if cls == "style" then
                 insertPos = si + 1
-                styleIdx[subs[si].name] = si
                 foundStyle = true
-                usedNames[subs[si].name] = true
             elseif cls ~= "dialogue" then
                 lastNonDialoguePos = si
             end
@@ -3072,16 +3442,25 @@ function AccessibilityApply.execute(subs, data, actors, styleMap, profile, optio
 
         for _, a in ipairs(actors) do
             local acc = data[a].accessibility
-            local firstId = (data[a].ids or {})[1]
+            local modifiableIds = {}
+            for _, id in ipairs(data[a].ids or {}) do
+                local candidate = subs[id]
+                if isDialogueLine(candidate) and (includeDraw or not _hasDrawing(candidate.text)) then
+                    modifiableIds[#modifiableIds + 1] = id
+                end
+            end
+            local firstId = modifiableIds[1]
             if acc and firstId and isDialogueLine(subs[firstId]) then
                 local base = styleMap[subs[firstId].style]
                 local rawName = _sanitizeStyleName(a) .. suffix
-                local name = rawName
-                local sufN = 2
-                while usedNames[name] and not styleIdx[name] do
-                    name = rawName .. "_" .. sufN; sufN = sufN + 1
+                local name, existingIndex = chooseGeneratedStyleName(
+                    rawName, subs, styleIndex, styleUsage,
+                    idsAsSet(modifiableIds), claimedNames
+                )
+                if not name then
+                    return 0, 0, "No se pudo reservar un nombre de estilo para '" .. tostring(a) .. "'."
                 end
-                usedNames[name] = true
+                claimedNames[name] = true
 
                 local ns = { class = "style", name = name }
                 if base then
@@ -3092,17 +3471,16 @@ function AccessibilityApply.execute(subs, data, actors, styleMap, profile, optio
                     copyFallbackStyle(ns)
                 end
 
-                ns.color1 = _styleColorFromAss(acc.fill)
-                ns.color3 = _styleColorFromAss(acc.outline)
-                ns.color4 = _styleColorFromAss(acc.shadow)
+                ns.color1 = _styleColorFromAss(acc.fill, base and base.color1, preserveAlpha)
+                ns.color3 = _styleColorFromAss(acc.outline, base and base.color3, preserveAlpha)
+                ns.color4 = _styleColorFromAss(acc.shadow, base and base.color4, preserveAlpha)
                 if addBordShad then
                     ns.outline = profileBord
                     ns.shadow  = profileShad
                 end
 
-                local existing = styleIdx[name]
-                if existing then
-                    subs[existing] = ns
+                if existingIndex then
+                    subs[existingIndex] = ns
                 else
                     table.insert(newStyles, ns)
                 end
@@ -3116,32 +3494,19 @@ function AccessibilityApply.execute(subs, data, actors, styleMap, profile, optio
             local sname = nameMap[a]
             if sname then
                 for _, id in ipairs(data[a].ids or {}) do
-                    local idx = id + offset
+                    local idx = id >= insertPos and id + offset or id
                     local l = subs[idx]
                     if isDialogueLine(l) then
                         if (not includeDraw) and _hasDrawing(l.text) then
                             skipped = skipped + 1
                         else
                             local origText = tostring(l.text or "")
-                            local aC, a3, a4
-                            if preserveAlpha then
-                                aC = AlphaUtil.fromAnySlot(origText, "1")
-                                a3 = AlphaUtil.fromAnySlot(origText, "3")
-                                a4 = AlphaUtil.fromAnySlot(origText, "4")
-                            end
+                            if preserveAlpha then origText = AlphaUtil.expandEmbeddedColorAlpha(origText) end
                             l.style = sname
                             l.text  = TagStripper.clearColors(origText)
                             if not preserveAlpha then
 
                                 l.text = _stripAlphaTags(l.text)
-                            elseif aC or a3 or a4 then
-
-                                local payload = ""
-                                if aC then payload = payload .. "\\1a&H" .. aC .. "&" end
-                                if a3 then payload = payload .. "\\3a&H" .. a3 .. "&" end
-                                if a4 then payload = payload .. "\\4a&H" .. a4 .. "&" end
-                                l.text = injectFirstTags(l.text, payload)
-                                l.text = l.text:gsub("{%s*}", "")
                             end
                             subs[idx] = l
                             count = count + 1
@@ -3167,12 +3532,7 @@ function AccessibilityApply.execute(subs, data, actors, styleMap, profile, optio
 
                         local fill, outline, shadow = acc.fill, acc.outline, acc.shadow
                         if preserveAlpha then
-                            local aC = AlphaUtil.fromAnySlot(txt, "1")
-                            local a3 = AlphaUtil.fromAnySlot(txt, "3")
-                            local a4 = AlphaUtil.fromAnySlot(txt, "4")
-                            if aC then fill    = AlphaUtil.join(aC, fill) end
-                            if a3 then outline = AlphaUtil.join(a3, outline) end
-                            if a4 then shadow  = AlphaUtil.join(a4, shadow) end
+                            txt = AlphaUtil.expandEmbeddedColorAlpha(txt)
                         else
 
                             txt = _stripAlphaTags(txt)
@@ -3255,8 +3615,9 @@ local function _serializeLua(v, indent)
     return table.concat(parts, "\n")
 end
 
-local function _safeLoadLuaTable(content)
+local function _safeLoadLuaTable(content, sizeLimit, maxNodes)
     if not content or content == "" then return nil end
+    if #content > (sizeLimit or CONFIG_FILE_LIMIT) then return nil end
 
     local stripped = tostring(content):gsub("^%s+", ""):gsub("%s+$", "")
     if stripped == "" then return nil end
@@ -3269,27 +3630,69 @@ local function _safeLoadLuaTable(content)
         chunk = load(src, "zheus_access_cfg", "t", {})
     end
     if not chunk then return nil end
+    if not debug or type(debug.sethook) ~= "function" then return nil end
+
+    local oldHook, oldMask, oldCount
+    if type(debug.gethook) == "function" then
+        oldHook, oldMask, oldCount = debug.gethook()
+    end
+    local instructions = 0
+    local hookActive = true
+    local function instructionGuard()
+        if not hookActive then return end
+        instructions = instructions + CONFIG_HOOK_GRANULARITY
+        if instructions > CONFIG_INSTRUCTION_LIMIT then error("configuration instruction limit exceeded", 0) end
+    end
+    local hookOk = pcall(debug.sethook, instructionGuard, "", CONFIG_HOOK_GRANULARITY)
+    if not hookOk then return nil end
     local ok, t = pcall(chunk)
+    hookActive = false
+    if oldHook then
+        pcall(debug.sethook, oldHook, oldMask or "", oldCount or 0)
+    else
+        pcall(debug.sethook)
+    end
     if not ok or type(t) ~= "table" then return nil end
+
+    local seen, nodes = {}, 0
+    local function plain(value, depth)
+        local valueType = type(value)
+        if valueType == "nil" or valueType == "string" or valueType == "boolean" then return true end
+        if valueType == "number" then return finiteNumber(value) ~= nil end
+        if valueType ~= "table" or depth > CONFIG_MAX_DEPTH or seen[value] then return false end
+        seen[value] = true
+        for key, child in pairs(value) do
+            nodes = nodes + 1
+            if nodes > (maxNodes or CONFIG_MAX_NODES) then return false end
+            local keyType = type(key)
+            if (keyType ~= "string" and keyType ~= "number") or
+                (keyType == "number" and not finiteNumber(key)) or
+                not plain(child, depth + 1) then return false end
+        end
+        seen[value] = nil
+        return true
+    end
+    if not plain(t, 1) then return nil end
     return t
 end
 
 function AccessibilityConfig.load()
     local merged = {}
     for k, v in pairs(ACCESS_CONFIG_DEFAULTS) do merged[k] = v end
-    local content = PyBridge.readFile(_accessConfigPath())
+    local content = PyBridge.readFile(_accessConfigPath(), CONFIG_FILE_LIMIT + 1)
     if not content then return merged end
     local stored = _safeLoadLuaTable(content)
     if not stored then return merged end
 
     if type(stored.custom_profiles) == "table" then
-        merged.custom_profiles = stored.custom_profiles
+        local validProfiles = {}
         for id, p in pairs(stored.custom_profiles) do
-            if type(p) == "table" and not AccessibilityProfiles.list[id] then
-                p.id = p.id or id
-                AccessibilityProfiles.register(p)
+            if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
+                local registered, sanitized = AccessibilityProfiles.register(p, id)
+                if registered then validProfiles[id] = sanitized end
             end
         end
+        merged.custom_profiles = validProfiles
     end
     for k, def in pairs(ACCESS_CONFIG_DEFAULTS) do
         local v = stored[k]
@@ -3310,13 +3713,14 @@ function AccessibilityConfig.save(t)
     local current = AccessibilityConfig.load()
 
     if type(t.custom_profiles) == "table" then
+        local validProfiles = {}
         for id, p in pairs(t.custom_profiles) do
-            if type(p) == "table" then
-                p.id = p.id or id
-                AccessibilityProfiles.list[id] = p
+            if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
+                local registered, sanitized = AccessibilityProfiles.register(p, id)
+                if registered then validProfiles[id] = sanitized end
             end
         end
-        current.custom_profiles = t.custom_profiles
+        current.custom_profiles = validProfiles
     end
     for k, def in pairs(ACCESS_CONFIG_DEFAULTS) do
         local v = t[k]
@@ -3330,7 +3734,9 @@ function AccessibilityConfig.save(t)
             end
         end
     end
-    return PyBridge.writeFile(_accessConfigPath(), "return " .. _serializeLua(current))
+    local serialized = "return " .. _serializeLua(current)
+    if #serialized > CONFIG_FILE_LIMIT then return false, "configuration exceeds the size limit" end
+    return PyBridge.writeFile(_accessConfigPath(), serialized)
 end
 
 local function _registerCustomProfilesFromDisk()
@@ -3338,9 +3744,8 @@ local function _registerCustomProfilesFromDisk()
     if not ok or type(cfg) ~= "table" then return end
     if type(cfg.custom_profiles) ~= "table" then return end
     for id, p in pairs(cfg.custom_profiles) do
-        if type(p) == "table" and not AccessibilityProfiles.list[id] then
-            p.id = id
-            AccessibilityProfiles.register(p)
+        if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
+            AccessibilityProfiles.register(p, id)
         end
     end
 end
@@ -3396,7 +3801,9 @@ function AccessibilityExportFile.export(data, actors, profile)
         out.actors[a] = row
     end
 
-    local ok, err = PyBridge.writeFile(fp, "return " .. _serializeLua(out))
+    local serialized = "return " .. _serializeLua(out)
+    if #serialized > PALETTE_FILE_LIMIT then return "La paleta accesible supera el límite de tamaño." end
+    local ok, err = PyBridge.writeFile(fp, serialized)
     if not ok then return "Error al escribir: " .. tostring(err) end
     return "Exportados " .. #actors .. " actores -> " .. fp
 end
@@ -3404,46 +3811,92 @@ end
 function AccessibilityExportFile.import(data, actors)
     local fp = aegisub.dialog.open("Importar paleta accesible - Zheus Colormanager", "", "", "*.txt;*.lua", false, true)
     if not fp then return nil end
-    local content, readError = PyBridge.readFile(fp)
+    local content, readError = PyBridge.readFile(fp, PALETTE_FILE_LIMIT + 1)
     if not content then return "Error al leer el archivo: " .. tostring(readError) end
+    if #content > PALETTE_FILE_LIMIT then return "La paleta accesible supera el límite de tamaño." end
 
-    local imported, missing, updated = 0, {}, {}
+    local imported, invalid, missing, updated = 0, 0, {}, {}
 
-    local v3 = _safeLoadLuaTable(content)
-    if type(v3) == "table" and v3.version == 3 and type(v3.actors) == "table" then
+    local v3 = _safeLoadLuaTable(content, PALETTE_FILE_LIMIT, PALETTE_MAX_NODES)
+    if type(v3) == "table" then
+        if v3.version ~= 3 then
+            return "Versión de paleta accesible no compatible: " .. tostring(v3.version)
+        end
+        if type(v3.actors) ~= "table" then
+            return "La paleta accesible v3 no contiene una tabla de actores válida."
+        end
         for actor, row in pairs(v3.actors) do
-            if data[actor] then
-                local src = row.remap or row.original or {}
-                if src.c then
-                    data[actor].colors.c = ColorUtil.normalize(src.c)
-                    data[actor].colors["2c"] = ColorUtil.normalize(src["2c"] or data[actor].colors["2c"])
-                    data[actor].colors["3c"] = ColorUtil.normalize(src["3c"] or data[actor].colors["3c"])
-                    data[actor].colors["4c"] = ColorUtil.normalize(src["4c"] or data[actor].colors["4c"])
-                    imported = imported + 1
-                    updated[actor] = true
-                end
-                if type(row.vsf) == "table" then
+            if type(actor) == "string" and data[actor] and type(row) == "table" then
+                local src = type(row.remap) == "table" and row.remap or row.original
+                local c1 = type(src) == "table" and ColorUtil.normalizeStrict(src.c) or nil
+                local c2 = type(src) == "table" and src["2c"] ~= nil and ColorUtil.normalizeStrict(src["2c"]) or nil
+                local c3 = type(src) == "table" and src["3c"] ~= nil and ColorUtil.normalizeStrict(src["3c"]) or nil
+                local c4 = type(src) == "table" and src["4c"] ~= nil and ColorUtil.normalizeStrict(src["4c"]) or nil
+                local valid2 = type(src) == "table" and (src["2c"] == nil or c2 ~= nil)
+                local valid3 = type(src) == "table" and (src["3c"] == nil or c3 ~= nil)
+                local valid4 = type(src) == "table" and (src["4c"] == nil or c4 ~= nil)
+                local validVSF, normalizedVSF = true, {}
+                if row.vsf ~= nil and type(row.vsf) ~= "table" then
+                    validVSF = false
+                elseif type(row.vsf) == "table" then
                     for tag, vc in pairs(row.vsf) do
-                        if data[actor].vsf_corners[tag] and type(vc) == "table" and #vc >= 4 then
-                            data[actor].vsf_corners[tag] = {
-                                ColorUtil.normalize(vc[1]),
-                                ColorUtil.normalize(vc[2]),
-                                ColorUtil.normalize(vc[3]),
-                                ColorUtil.normalize(vc[4]),
-                            }
-                            data[actor].has_vsf = true
+                        local tuple = {}
+                        local tupleValid = data[actor].vsf_corners[tag] ~= nil and type(vc) == "table"
+                        local tupleCount = 0
+                        if tupleValid then
+                            for key in pairs(vc) do
+                                if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 4 then
+                                    tupleValid = false
+                                    break
+                                end
+                                tupleCount = tupleCount + 1
+                            end
                         end
+                        if tupleValid and tupleCount == 4 then
+                            for corner = 1, 4 do
+                                tuple[corner] = ColorUtil.normalizeStrict(vc[corner])
+                                if not tuple[corner] then tupleValid = false; break end
+                            end
+                        else
+                            tupleValid = false
+                        end
+                        if not tupleValid then
+                            validVSF = false
+                            break
+                        end
+                        normalizedVSF[tag] = tuple
                     end
                 end
-            else
+                if c1 and valid2 and valid3 and valid4 and validVSF then
+                    data[actor].colors.c = c1
+                    data[actor].colors["2c"] = c2 or data[actor].colors["2c"]
+                    data[actor].colors["3c"] = c3 or data[actor].colors["3c"]
+                    data[actor].colors["4c"] = c4 or data[actor].colors["4c"]
+                    for tag, tuple in pairs(normalizedVSF) do
+                        data[actor].vsf_corners[tag] = tuple
+                        data[actor].has_vsf = true
+                    end
+                    imported = imported + 1
+                    updated[actor] = true
+                else
+                    invalid = invalid + 1
+                end
+            elseif type(actor) == "string" and not data[actor] then
                 table.insert(missing, actor)
+            else
+                invalid = invalid + 1
             end
         end
         local msg = "Importados (v3): " .. imported .. " / " .. #actors
+        if invalid > 0 then msg = msg .. "\nEntradas inválidas omitidas: " .. tostring(invalid) end
         if #missing > 0 then
             msg = msg .. "\nFuera de selección: " .. table.concat(missing, ", "):sub(1, 80)
         end
         return msg
+    end
+
+    if not content:find("|", 1, true) then
+        return "El archivo no contiene una paleta accesible v2 o v3 reconocible."
     end
 
     for l in content:gmatch("[^\r\n]+") do
@@ -3455,12 +3908,17 @@ function AccessibilityExportFile.import(data, actors)
                 if data[actor] then
                     local t = {}
                     for x in parts[2]:gmatch("[^,]+") do table.insert(t, x) end
-                    if #t >= 3 then
-                        data[actor].colors.c     = ColorUtil.normalize(t[1])
-                        data[actor].colors["3c"] = ColorUtil.normalize(t[2])
-                        data[actor].colors["4c"] = ColorUtil.normalize(t[3])
+                    local c1 = #t == 3 and ColorUtil.normalizeStrict(t[1]) or nil
+                    local c3 = c1 and ColorUtil.normalizeStrict(t[2]) or nil
+                    local c4 = c3 and ColorUtil.normalizeStrict(t[3]) or nil
+                    if c1 and c3 and c4 then
+                        data[actor].colors.c = c1
+                        data[actor].colors["3c"] = c3
+                        data[actor].colors["4c"] = c4
                         imported = imported + 1
                         updated[actor] = true
+                    else
+                        invalid = invalid + 1
                     end
                 else
                     table.insert(missing, actor)
@@ -3469,6 +3927,7 @@ function AccessibilityExportFile.import(data, actors)
         end
     end
     local msg = "Importados (v2): " .. imported .. " / " .. #actors
+    if invalid > 0 then msg = msg .. "\nEntradas inválidas omitidas: " .. tostring(invalid) end
     if #missing > 0 then msg = msg .. "\nFuera de selección: " .. table.concat(missing, ", "):sub(1, 80) end
     return msg
 end
@@ -3604,7 +4063,7 @@ local function configPath()
 end
 
 local function readConfigFile()
-    local content = PyBridge.readFile(configPath())
+    local content = PyBridge.readFile(configPath(), CONFIG_FILE_LIMIT + 1)
     return content and (_safeLoadLuaTable(content) or {}) or {}
 end
 
@@ -3718,12 +4177,15 @@ local function gestorDeActores(subs, sel)
     local map = {}
     for i, original in ipairs(unique) do
         local new = newActors[i]
-        if new ~= nil and new ~= original then map[original] = new end
+        if new ~= nil and trim(new) ~= "" and new ~= original then map[original] = new end
     end
     local changed = 0
     for _, idx in ipairs(sel) do
         local l = subs[idx]
-        if map[l.actor] ~= nil then l.actor = map[l.actor]; subs[idx] = l; changed = changed + 1 end
+        if isDialogueLine(l) then
+            local original = textoNormalizado(l.actor)
+            if map[original] ~= nil then l.actor = map[original]; subs[idx] = l; changed = changed + 1 end
+        end
     end
     local uc = 0; for _ in pairs(map) do uc = uc + 1 end
     showMsg(string.format("Se actualizaron %d actores en %d líneas.", uc, changed))
@@ -3756,7 +4218,6 @@ function SelectionReport.collect(subs, sel)
             local actor = trim(l.actor or "")
             if actor == "" then
                 stats.emptyActorLines = stats.emptyActorLines + 1
-                actor = "[Actor vacío]"
             end
             stats.actorLines[actor] = (stats.actorLines[actor] or 0) + 1
             local text = tostring(l.text or "")
@@ -3830,7 +4291,7 @@ function SelectionReport.format(subs, sel)
         else                            nFail = nFail + 1 end
         local visibleStatus = status == "OK" and "BIEN" or status
         w(string.format("  %-18s %7.1f %7.1f   %s",
-            a:sub(1, 18), cr3, cr4, visibleStatus))
+            actorLabel(a):sub(1, 18), cr3, cr4, visibleStatus))
     end
     w("")
     w(string.format("  %d BIEN   ·   %d REVISAR   ·   %d AJUSTAR",
@@ -3898,6 +4359,11 @@ local openAccessibilityExport
 local function MainController(subs, sel, init_mode, data_in, actors_in)
     if not sel or #sel == 0 then
         showMsg("Selecciona líneas.")
+        return
+    end
+    local resetLine = firstSelectedStyleReset(subs, sel)
+    if resetLine then
+        showMsg("La línea " .. tostring(resetLine) .. " usa \\r. Zheus no puede auditar ni reasignar fielmente colores de estilos reiniciados; divide la línea en runs uniformes.")
         return
     end
 
@@ -4161,6 +4627,8 @@ end
 
 openAccessibilityAudit = function(subs, sel)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para auditar."); return end
+    local resetLine = firstSelectedStyleReset(subs, sel)
+    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; la auditoría no puede resolver aún colores por run de estilo."); return end
     local cfg = AccessibilityConfig.load()
     local report = AccessibilityAudit.run(subs, sel, cfg.active_profile)
     local text = AccessibilityReport.format(report, (function()
@@ -4213,6 +4681,8 @@ end
 
 openAccessibilityApply = function(subs, sel, profileId, silent)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para aplicar Daltonismo."); return end
+    local resetLine = firstSelectedStyleReset(subs, sel)
+    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; la paleta no se aplicó porque aún no resuelve colores por run de estilo."); return end
     local cfg = AccessibilityConfig.load()
     local styleMap = collectStyles(subs)
 
@@ -4297,7 +4767,7 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
         if chosenApplyMode == "Styles" then
             for _, a in ipairs(actors) do
                 if data[a].has_vsf then
-                    showMsg("El actor '" .. a .. "' usa colores VSF. Para este caso, aplica como Etiquetas.")
+                    showMsg("El actor '" .. actorLabel(a) .. "' usa colores VSF. Para este caso, aplica como Etiquetas.")
                     return "retry", chosenProfileId
                 end
             end
@@ -4352,6 +4822,8 @@ end
 
 openAccessibilityExport = function(subs, sel)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para exportar."); return end
+    local resetLine = firstSelectedStyleReset(subs, sel)
+    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; no se exportó una paleta potencialmente incorrecta."); return end
     local cfg = AccessibilityConfig.load()
     local audit, data, actors = AccessibilityAudit.run(subs, sel, cfg.active_profile)
     if #actors == 0 then showMsg("La selección está vacía de actores."); return end

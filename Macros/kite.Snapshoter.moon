@@ -1,7 +1,7 @@
 export script_name        = "Snapshoter"
 export script_description = "Capture subtitle frames, frame lists, frame sequences, and clip crops from the loaded video"
 export script_author      = "Kiterow"
-export script_version     = "1.6.0"
+export script_version     = "1.6.3"
 export script_namespace   = "kite.Snapshoter"
 
 DependencyControl = require "l0.DependencyControl"
@@ -10,21 +10,19 @@ depctrl = DependencyControl{
   {
     {"a-mo.LineCollection", version: "1.3.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"a-mo.Tags", version: "1.3.4", url: "https://github.com/TypesettingTools/Aegisub-Motion",
-      feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
     {"a-mo.Log", version: "1.0.0", url: "https://github.com/TypesettingTools/Aegisub-Motion",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"}
     {"l0.ASSFoundation", version: "0.5.0", url: "https://github.com/TypesettingTools/ASSFoundation",
       feed: "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"}
-    {"kite.PyBridge", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-LineCollection, KiteUI, Tags, log, ASS, PyBridge, LineOps = depctrl\requireModules!
+LineCollection, KiteUI, log, ASS, PyBridge, LineOps = depctrl\requireModules!
 
 ConfigHandler = (interface, file_name, _has_sections, version) ->
   KiteUI.dialogHandler interface, script_namespace, version, {
@@ -32,10 +30,53 @@ ConfigHandler = (interface, file_name, _has_sections, version) ->
   }
 
 CONFIG_FILE = "kite-snapshoter.json"
+ASS_CENTISECOND_MS = 10
+MAX_FFMPEG_ERROR_BYTES = 12000
+MAX_CROP_PADDING = 256
+MAX_MANUAL_RECT_VALUE = 20000
+
+CAPTURE_MODES = {
+  "Selected lines"
+  "Frame list"
+  "Frame sequence"
+  "Clip crop"
+  "Manual rectangle"
+  "Densest subtitle frame"
+}
+
+TIMING_MODES = {
+  "Midpoint"
+  "Start and end"
+  "Start, middle, end"
+  "Current video frame"
+}
+
+CLIP_OUTPUTS = {
+  "Rectangle crop"
+  "Clip alpha crop"
+  "Clip alpha full frame"
+  "Drawing alpha crop"
+  "Drawing alpha full frame"
+}
+
+choice_or_default = (value, items, defaultValue) ->
+  for item in *items
+    return item if value == item
+  defaultValue
+
+normalize_mode = (value) ->
+  if value == "Rectangular clip" then "Clip crop" else value
+
+normalize_clip_output = (value) ->
+  switch value
+    when "Vector alpha crop" then "Clip alpha crop"
+    when "Vector alpha full frame" then "Clip alpha full frame"
+    else value
 
 round_ms = LineOps.round
 trim = LineOps.trim
 file_exists = PyBridge.fileExists
+file_size = PyBridge.fileSize
 join_path = PyBridge.joinPath
 write_file = PyBridge.writeFile
 remove_file = PyBridge.removeFile
@@ -58,7 +99,7 @@ safe_name = (text, defaultValue = "snapshoter") ->
   return defaultValue if value == "." or value == ".." or value\match("^%.+$") or reserved
   if value == "" then defaultValue else value
 
-read_file = (path, maxBytes = 8192) ->
+read_file = (path, maxBytes) ->
   content = PyBridge.readFile path, maxBytes
   content or ""
 
@@ -109,8 +150,12 @@ ass_time = (ms) ->
   h = math.floor(ms / 3600000)
   m = math.floor((ms % 3600000) / 60000)
   s = math.floor((ms % 60000) / 1000)
-  cs = math.floor((ms % 1000) / 10)
+  cs = math.floor((ms % 1000) / ASS_CENTISECOND_MS)
   string.format "%d:%02d:%02d.%02d", h, m, s, cs
+
+ass_end_time = (ms) ->
+  value = math.max 0, tonumber(ms) or 0
+  ass_time(math.ceil(value / ASS_CENTISECOND_MS) * ASS_CENTISECOND_MS)
 
 file_time = (ms) ->
   ms = math.max 0, round_ms(ms)
@@ -141,11 +186,10 @@ clean_text = (text) ->
   text = text\gsub "%s+", " "
   trim(text)
 
-frame_duration_ms = (ms) ->
-  frame = aegisub.frame_from_ms(ms)
-  now = aegisub.ms_from_frame(frame)
-  nextMs = aegisub.ms_from_frame(frame + 1)
-  if nextMs and now and nextMs > now then nextMs - now else 1
+last_active_frame = (startMs, endMs) ->
+  startMs, endMs = tonumber(startMs), tonumber(endMs)
+  return nil unless startMs and endMs and endMs > startMs
+  aegisub.frame_from_ms math.max(startMs, endMs - 1)
 
 current_video_frame = ->
   return nil unless aegisub.project_properties
@@ -158,7 +202,7 @@ line_intervals = (lines) ->
   raw = {}
   for line in *lines
     startFrame = aegisub.frame_from_ms line.start_time
-    endFrame = aegisub.frame_from_ms math.max(line.start_time, line.end_time - 1)
+    endFrame = last_active_frame line.start_time, line.end_time
     if startFrame and endFrame
       endFrame = startFrame if endFrame < startFrame
       table.insert raw, { first: startFrame, last: endFrame }
@@ -181,7 +225,7 @@ frame_in_intervals = (frame, intervals) ->
 collect_effect_frames = (lines, intervals) ->
   seen, out = {}, {}
   for line in *lines
-    effect = tostring line.effect or ""
+    effect = tostring(line.effect or "")
     for token in effect\gmatch "[^;,%s]+"
       raw = token\match "^[Ff]?(%d+)$"
       raw = token\match("^[Ff]?(%d+)[Ff]?$") unless raw
@@ -242,7 +286,7 @@ line_contains_frame = (line, frame) ->
   startMs = tonumber(line.start_time) or 0
   endMs = tonumber(line.end_time) or startMs
   startFrame = aegisub.frame_from_ms startMs
-  endFrame = aegisub.frame_from_ms math.max(startMs, endMs - 1)
+  endFrame = last_active_frame startMs, endMs
   startFrame and endFrame and frame >= startFrame and frame <= endFrame
 
 line_points = (line, timingMode, currentFrame = nil) ->
@@ -260,13 +304,15 @@ line_points = (line, timingMode, currentFrame = nil) ->
       { key: "current", label: "current frame", time: time, frame: frame }
     }
   elseif timingMode == "Start and end"
-    lastMs = math.max startMs, endMs - frame_duration_ms(endMs)
+    lastFrame = last_active_frame startMs, endMs
+    lastMs = lastFrame and aegisub.ms_from_frame(lastFrame) or startMs
     {
       { key: "start", label: "start", time: startMs }
       { key: "end", label: "end", time: lastMs }
     }
   elseif timingMode == "Start, middle, end"
-    lastMs = math.max startMs, endMs - frame_duration_ms(endMs)
+    lastFrame = last_active_frame startMs, endMs
+    lastMs = lastFrame and aegisub.ms_from_frame(lastFrame) or startMs
     {
       { key: "start", label: "start", time: startMs }
       { key: "mid", label: "midpoint", time: midMs }
@@ -286,7 +332,9 @@ selected_lines = (subs, sel) ->
   collection, lines
 
 video_size = ->
-  width, height = aegisub.video_size!
+  return 0, 0 unless aegisub and aegisub.video_size
+  ok, width, height = pcall aegisub.video_size
+  return 0, 0 unless ok
   tonumber(width) or 0, tonumber(height) or 0
 
 normalize_crop = (x, y, w, h, padding, videoW, videoH) ->
@@ -349,13 +397,14 @@ vector_payload_parts = (payload) ->
   scale = 1
   rawScale, rest = body\match "^([%+%-]?%d*%.?%d+)%s*,%s*(.+)$"
   if rawScale and rest and rest\match "^%s*[mM]%s"
-    scale = tonumber(rawScale) or 1
+    scale = tonumber rawScale
+    return nil, nil unless scale and scale >= 1 and scale == math.floor(scale)
     body = rest
   body, scale
 
 clip_vector_rect_from_payload = (payload) ->
   body, scale = vector_payload_parts payload
-  return nil unless body\match "^%s*[mM]%s"
+  return nil unless body and scale and body\match "^%s*[mM]%s"
   divisor = math.pow 2, scale - 1
   divisor = 1 unless divisor and divisor > 0
   bounds = {}
@@ -373,13 +422,49 @@ clip_info_from_payload = (name, payload) ->
   else
     rect_from_payload payload
   return nil unless rect
-  { rect: rect, tag: "\\#{name}(#{payload})", isVector: payload\match("[mM]") != nil }
+  {
+    rect: rect
+    tag: "\\#{name}(#{payload})"
+    isVector: payload\match("[mM]") != nil
+    inverse: name == "iclip"
+  }
+
+relevant_clip_entries = (text) ->
+  entries = {}
+  for call in *LineOps.tagCalls(text, {clip: true, iclip: true})
+    if call.top_level
+      table.insert entries, {start: call.start, raw: call.raw, static: true}
+  for transform in *LineOps.tagCalls(text, "t")
+    continue unless transform.top_level
+    clips = LineOps.tagCalls("{#{transform.raw}}", {clip: true, iclip: true})
+    continue if #clips == 0
+    value = tostring(transform.value or "")
+    value = value\sub(2, -2) if value\sub(1, 1) == "(" and value\sub(-1) == ")"
+    firstTag = value\find "\\", 1, true
+    continue unless firstTag
+    prefix = value\sub 1, firstTag - 1
+    clipTags = [call.raw for call in *clips]
+    table.insert entries, {
+      start: transform.start
+      raw: "\\t(#{prefix}#{table.concat(clipTags, '')})"
+      animated: true
+    }
+  table.sort entries, (a, b) -> a.start < b.start
+  entries
 
 clip_info_from_tags = (text) ->
-  for name, raw in tostring(text or "")\gmatch "\\(i?clip)%s*(%b())"
-    info = clip_info_from_payload name, raw\sub 2, -2
-    return info if info
-  nil
+  entries = relevant_clip_entries text
+  info = nil
+  for entry in *entries
+    if entry.static
+      name, raw = entry.raw\match "^\\(i?clip)%s*(%b())$"
+      parsed = clip_info_from_payload(name, raw\sub(2, -2)) if name and raw
+      info = parsed if parsed
+  if info
+    info.entries = entries
+    for item in *entries
+      info.animated = true if item.animated
+  info
 
 assf_tag_name = (tag) ->
   if tag and tag.__tag then tag.__tag.name else nil
@@ -409,7 +494,12 @@ line_clip_info = (line) ->
   return nil unless ok and data
   clips = data\getTags { "clip_rect", "iclip_rect", "clip_vect", "iclip_vect" }
   return nil unless clips and #clips > 0
-  clip_info_from_assf clips[1]
+  info = clip_info_from_assf clips[1]
+  if info
+    info.entries = relevant_clip_entries line.text
+    for item in *info.entries
+      info.animated = true if item.animated
+  info
 
 last_drawing_level = (tagBody) ->
   level = nil
@@ -455,7 +545,9 @@ densest_frame = (lines) ->
   for line in *lines
     log.checkCancellation!
     startFrame = aegisub.frame_from_ms line.start_time
-    endFrame = math.max startFrame, aegisub.frame_from_ms(line.end_time) - 1
+    endFrame = last_active_frame line.start_time, line.end_time
+    continue unless startFrame and endFrame
+    endFrame = math.max startFrame, endFrame
     table.insert events, { frame: startFrame, delta: 1 }
     table.insert events, { frame: endFrame + 1, delta: -1 }
   table.sort events, (a, b) ->
@@ -501,8 +593,14 @@ draw_rect_shape = (w, h) ->
   h = math.floor((tonumber(h) or 1) + 0.5)
   "m 0 0 l #{w} 0 #{w} #{h} 0 #{h}"
 
-clip_mask_text = (clipTag, playX, playY) ->
-  "{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\blur0\\1c&HFFFFFF&\\alpha&H00&#{clipTag}}#{draw_rect_shape playX, playY}"
+clip_mask_text = (clipInfo, playX, playY) ->
+  entries = clipInfo.entries or {}
+  tags = table.concat([entry.raw for entry in *entries], "")
+  hasStatic = false
+  for entry in *entries
+    hasStatic = true if entry.static
+  tags = clipInfo.tag .. tags unless hasStatic
+  "{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\blur0\\1c&HFFFFFF&\\alpha&H00&#{tags}}#{draw_rect_shape playX, playY}"
 
 make_jobs = (collection, lines, cfg) ->
   jobs, skipped, errors, seq = {}, {}, {}, 0
@@ -555,7 +653,7 @@ make_jobs = (collection, lines, cfg) ->
   for line in *lines
     log.checkCancellation!
     rect = nil
-    alphaMaskText, alphaCrop, alphaDetectCrop = nil, nil, false
+    alphaMaskText, alphaDetectCrop = nil, false
     currentFrameTouchesLine = true if currentFrame and line_contains_frame line, currentFrame
     if mode == "Clip crop"
       if cfg.clipOutput == "Drawing alpha crop" or cfg.clipOutput == "Drawing alpha full frame"
@@ -569,14 +667,19 @@ make_jobs = (collection, lines, cfg) ->
       else
         clipInfo = line_clip_info line
         if clipInfo and clipInfo.rect
-          scaledRect = scale_clip_rect clipInfo.rect, collection, cfg
           if cfg.clipOutput == "Clip alpha crop"
-            alphaMaskText = clip_mask_text clipInfo.tag, cfg.playX, cfg.playY
-            alphaCrop = scaledRect
+            alphaMaskText = clip_mask_text clipInfo, cfg.playX, cfg.playY
+            alphaDetectCrop = true
           elseif cfg.clipOutput == "Clip alpha full frame"
-            alphaMaskText = clip_mask_text clipInfo.tag, cfg.playX, cfg.playY
+            alphaMaskText = clip_mask_text clipInfo, cfg.playX, cfg.playY
           else
-            rect = scaledRect
+            if clipInfo.inverse
+              table.insert errors, "Line #{line.number}: Rectangle crop cannot represent \\iclip. Choose Clip alpha crop/full frame."
+              continue
+            if clipInfo.animated
+              table.insert errors, "Line #{line.number}: Rectangle crop cannot follow an animated clip. Choose Clip alpha crop/full frame."
+              continue
+            rect = scale_clip_rect clipInfo.rect, collection, cfg
         else
           table.insert skipped, line.number
           continue
@@ -588,6 +691,9 @@ make_jobs = (collection, lines, cfg) ->
     for point in *points
       seq += 1
       extra = if rect or alphaMaskText then clip_output_extra(cfg.clipOutput) else nil
+      maskDurationMs = math.max 1, (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0)
+      maskTimeMs = frame_seek_ms(point.time) - (tonumber(line.start_time) or 0)
+      maskTimeMs = math.max 0, math.min(maskDurationMs - 1, maskTimeMs)
       table.insert jobs, {
         time: point.time
         frame: point.frame or aegisub.frame_from_ms(point.time)
@@ -597,8 +703,9 @@ make_jobs = (collection, lines, cfg) ->
         mode: mode
         crop: rect
         alphaMaskText: alphaMaskText
-        alphaCrop: alphaCrop
         alphaDetectCrop: alphaDetectCrop
+        :maskDurationMs
+        :maskTimeMs
       }
   if cfg.timing == "Current video frame" and #jobs == 0 and not currentFrameTouchesLine
     table.insert errors, "The current video frame is not inside any selected line."
@@ -627,9 +734,11 @@ ffmpeg_error_message = (label, path, errPath) ->
 run_ffmpeg = (command, outDir, job, label, path) ->
   errPath = ffmpeg_error_path outDir, job, safe_name(label, "error")
   ok = run_command command, errPath
-  if ok
+  if ok and file_exists(path) and (file_size(path) or 0) > 0
     remove_file errPath
     return true, nil
+  if ok
+    write_file errPath, "FFmpeg exited successfully but did not create a non-empty output file."
   message = ffmpeg_error_message label, path, errPath
   remove_file errPath
   false, message
@@ -644,10 +753,11 @@ mask_ass_text = (text) ->
   text = tostring(text or "")\gsub "\r\n", "\\N"
   text\gsub "[\r\n]", "\\N"
 
-write_mask_ass = (path, maskText, playX, playY) ->
+write_mask_ass = (path, maskText, playX, playY, durationMs) ->
   playX = math.floor((tonumber(playX) or 0) + 0.5)
   playY = math.floor((tonumber(playY) or 0) + 0.5)
   return false if playX <= 0 or playY <= 0
+  durationMs = math.max ASS_CENTISECOND_MS, round_ms(tonumber(durationMs) or 1000)
   rows = {
     "[Script Info]"
     "ScriptType: v4.00+"
@@ -660,7 +770,7 @@ write_mask_ass = (path, maskText, playX, playY) ->
     ""
     "[Events]"
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
-    "Dialogue: 0,0:00:00.00,0:00:01.00,Mask,,0000,0000,0000,,#{mask_ass_text maskText}"
+    "Dialogue: 0,0:00:00.00,#{ass_end_time durationMs},Mask,,0000,0000,0000,,#{mask_ass_text maskText}"
   }
   write_file path, table.concat(rows, "\n")
 
@@ -677,8 +787,8 @@ capture_command = (video, ffmpeg, job, outPath) ->
 
 alpha_capture_command = (video, ffmpeg, job, outPath, maskPath, videoW, videoH) ->
   assFilter = filter_path_quote maskPath
-  filter = "[1:v]format=rgb24,subtitles=#{assFilter},format=gray,lut=y='min(255,val*255/235)'[mask];[0:v]format=rgba[base];[base][mask]alphamerge"
-  filter ..= ",#{crop_filter job.alphaCrop}" if job.alphaCrop
+  maskTime = ffmpeg_time(job.maskTimeMs or 0)
+  filter = "[1:v]setpts=PTS+#{maskTime}/TB,format=rgb24,subtitles=#{assFilter},setpts=PTS-STARTPTS,format=gray,lut=y='min(255,val*255/235)'[mask];[0:v]format=rgba[base];[base][mask]alphamerge"
   filter ..= "[out]"
   sourceW = math.floor((tonumber(videoW) or 1) + 0.5)
   sourceH = math.floor((tonumber(videoH) or 1) + 0.5)
@@ -705,7 +815,7 @@ parse_cropdetect = (text) ->
 detect_alpha_crop = (ffmpeg, imagePath, outDir, job) ->
   errPath = ffmpeg_error_path outDir, job, "cropdetect"
   ok = run_command cropdetect_command(ffmpeg, imagePath), errPath
-  details = read_file errPath, 12000
+  details = read_file errPath, MAX_FFMPEG_ERROR_BYTES
   remove_file errPath
   detailsText = trim details
   return nil, "FFmpeg returned an error while detecting alpha bounds:\n#{imagePath}\n\nFFmpeg:\n#{detailsText}" unless ok
@@ -719,13 +829,6 @@ crop_png_command = (ffmpeg, imagePath, crop, outPath) ->
     "-vf", crop_filter(crop), "-frames:v", "1", outPath
   }
 
-job_without_alpha_crop = (job) ->
-  copy = {}
-  for key, value in pairs job
-    copy[key] = value
-  copy.alphaCrop = nil
-  copy
-
 run_capture_jobs = (video, outDir, cfg, jobs) ->
   made, make_error = ensure_dir outDir
   return false, "Could not create output folder: #{make_error or outDir}" unless made
@@ -735,12 +838,11 @@ run_capture_jobs = (video, outDir, cfg, jobs) ->
     outPath = join_path outDir, job.name
     if job.alphaMaskText
       maskPath = mask_ass_path outDir, job
-      ok = write_mask_ass maskPath, job.alphaMaskText, cfg.playX, cfg.playY
+      ok = write_mask_ass maskPath, job.alphaMaskText, cfg.playX, cfg.playY, job.maskDurationMs
       return false, "Snapshoter could not write the temporary vector mask." unless ok
       if job.alphaDetectCrop
         tempPath = alpha_temp_path outDir, job
-        fullJob = job_without_alpha_crop job
-        ok, message = run_ffmpeg alpha_capture_command(video, cfg.ffmpeg, fullJob, tempPath, maskPath, cfg.videoW, cfg.videoH), outDir, job, "writing alpha mask", tempPath
+        ok, message = run_ffmpeg alpha_capture_command(video, cfg.ffmpeg, job, tempPath, maskPath, cfg.videoW, cfg.videoH), outDir, job, "writing alpha mask", tempPath
         unless ok
           remove_file maskPath
           remove_file tempPath
@@ -804,27 +906,27 @@ style_ass_line = (style) ->
   values = {
     ass_field style.name, "Default"
     ass_field style.fontname, "Arial"
-    tostring ass_number(style.fontsize, 20)
+    tostring(ass_number(style.fontsize, 20))
     ass_color style.color1, "&H00FFFFFF&"
     ass_color style.color2, "&H000000FF&"
     ass_color style.color3, "&H00000000&"
     ass_color style.color4, "&H00000000&"
-    tostring ass_bool(style.bold)
-    tostring ass_bool(style.italic)
-    tostring ass_bool(style.underline)
-    tostring ass_bool(style.strikeout)
-    tostring ass_number(style.scale_x, 100)
-    tostring ass_number(style.scale_y, 100)
-    tostring ass_number(style.spacing, 0)
-    tostring ass_number(style.angle, 0)
-    tostring ass_int(style.borderstyle, 1)
-    tostring ass_number(style.outline, 2)
-    tostring ass_number(style.shadow, 0)
-    tostring ass_int(style.align, 2)
-    tostring ass_int(style.margin_l, 10)
-    tostring ass_int(style.margin_r, 10)
-    tostring ass_int(style.margin_t or style.margin_v, 10)
-    tostring ass_int(style.encoding, 1)
+    tostring(ass_bool(style.bold))
+    tostring(ass_bool(style.italic))
+    tostring(ass_bool(style.underline))
+    tostring(ass_bool(style.strikeout))
+    tostring(ass_number(style.scale_x, 100))
+    tostring(ass_number(style.scale_y, 100))
+    tostring(ass_number(style.spacing, 0))
+    tostring(ass_number(style.angle, 0))
+    tostring(ass_int(style.borderstyle, 1))
+    tostring(ass_number(style.outline, 2))
+    tostring(ass_number(style.shadow, 0))
+    tostring(ass_int(style.align, 2))
+    tostring(ass_int(style.margin_l, 10))
+    tostring(ass_int(style.margin_r, 10))
+    tostring(ass_int(style.margin_t or style.margin_v, 10))
+    tostring(ass_int(style.encoding, 1))
   }
   "Style: " .. table.concat values, ","
 
@@ -843,7 +945,7 @@ dialogue_ass_line = (line, range) ->
   values = {
     "Dialogue: " .. tostring(ass_int(line.layer, 0))
     ass_time startMs
-    ass_time endMs
+    ass_end_time endMs
     ass_field line.style, "Default"
     ass_field line.actor, ""
     string.format "%04d", ass_int(line.margin_l, 0)
@@ -929,7 +1031,8 @@ sequence_output_count = (outputs) ->
   count
 
 run_id = (prefix) ->
-  safe_name("#{prefix}_#{os.date("%Y%m%d_%H%M%S")}", "snapshoter")
+  suffix = if PyBridge.uniqueSuffix then PyBridge.uniqueSuffix! else tostring(os.time!)
+  safe_name("#{prefix}_#{os.date("%Y%m%d_%H%M%S")}_#{suffix}", "snapshoter")
 
 prefix_job_names = (jobs, prefix) ->
   return unless jobs and prefix and prefix != ""
@@ -976,6 +1079,16 @@ sequence_output_pattern = (dir, item, range, flatten, sequenceName) ->
   else
     join_path dir, "frame_%06d.png"
 
+sequence_frame_path = (pattern, frame) ->
+  path, count = tostring(pattern or "")\gsub "%%06d", string.format("%06d", frame), 1
+  if count == 1 then path else nil
+
+sequence_output_complete = (pattern, range) ->
+  first = sequence_frame_path pattern, range.startFrame
+  last = sequence_frame_path pattern, range.endFrame
+  return false unless first and last
+  file_exists(first) and (file_size(first) or 0) > 0 and file_exists(last) and (file_size(last) or 0) > 0
+
 run_frame_sequence = (subs, lines, video, outDir, cfg) ->
   return false, "Select at least one timed dialogue line for Frame sequence." unless lines and #lines > 0
   range = sequence_range lines
@@ -986,16 +1099,16 @@ run_frame_sequence = (subs, lines, video, outDir, cfg) ->
   outputs = sequence_outputs cfg
   return false, "Select at least one Frame sequence output." if sequence_output_count(outputs) == 0
 
+  sequenceName = sequence_folder_name range
   assPath, rendered = "", 0
   if outputs.withSubtitles or outputs.subtitlesOnly
-    assPath = join_path temp_folder(outDir), "_snapshoter_sequence_#{range.startFrame}_#{range.endFrame}_#{os.date("%Y%m%d_%H%M%S")}.ass"
+    assPath = join_path temp_folder(outDir), "_snapshoter_#{sequenceName}.ass"
     ok, count = write_sequence_ass subs, assPath, range, cfg.videoW, cfg.videoH
     return false, "Snapshoter could not write the temporary ASS file." unless ok
     rendered = count
 
   aegisub.progress.title "Snapshoter"
   aegisub.progress.task "Extracting frame sequence with FFmpeg"
-  sequenceName = sequence_folder_name range
   sequenceDir = if cfg.flatSnapshots then outDir else join_path outDir, sequenceName
   unless cfg.flatSnapshots
     made, make_error = ensure_dir sequenceDir
@@ -1014,6 +1127,9 @@ run_frame_sequence = (subs, lines, video, outDir, cfg) ->
     unless ok
       remove_file assPath if assPath != ""
       return false, "FFmpeg returned an error while writing sequence frames to:\n#{dir}\n\n#{details or ''}"
+    unless sequence_output_complete pattern, range
+      remove_file assPath if assPath != ""
+      return false, "FFmpeg did not create the complete requested frame range in:\n#{dir}"
   remove_file assPath if assPath != ""
 
   message = "Frame sequence written to:\n#{outDir}"
@@ -1053,15 +1169,15 @@ build_interface = (video, lineCount, frameDefaults) ->
       frameText: { class: "textbox", value: frameDefaults or "", config: false, x: 2, y: 7, width: 12, height: 4 }
       rectInfo: { class: "label", label: "Rectangle uses \\clip/\\iclip bounds. Drawing alpha uses selected \\p vector lines.", x: 0, y: 11, width: 14, height: 1 }
       paddingLabel: { class: "label", label: "Padding", x: 0, y: 12, width: 2, height: 1 }
-      cropPadding: { class: "intedit", value: 0, min: 0, max: 256, config: true, x: 2, y: 12, width: 3, height: 1 }
+      cropPadding: { class: "intedit", value: 0, min: 0, max: MAX_CROP_PADDING, config: true, x: 2, y: 12, width: 3, height: 1 }
       xLabel: { class: "label", label: "X", x: 5, y: 12, width: 1, height: 1 }
-      manualX: { class: "intedit", value: 0, min: 0, max: 20000, config: true, x: 6, y: 12, width: 3, height: 1 }
+      manualX: { class: "intedit", value: 0, min: 0, max: MAX_MANUAL_RECT_VALUE, config: true, x: 6, y: 12, width: 3, height: 1 }
       yLabel: { class: "label", label: "Y", x: 9, y: 12, width: 1, height: 1 }
-      manualY: { class: "intedit", value: 0, min: 0, max: 20000, config: true, x: 10, y: 12, width: 3, height: 1 }
+      manualY: { class: "intedit", value: 0, min: 0, max: MAX_MANUAL_RECT_VALUE, config: true, x: 10, y: 12, width: 3, height: 1 }
       wLabel: { class: "label", label: "W", x: 0, y: 13, width: 1, height: 1 }
-      manualW: { class: "intedit", value: 320, min: 1, max: 20000, config: true, x: 1, y: 13, width: 3, height: 1 }
+      manualW: { class: "intedit", value: 320, min: 1, max: MAX_MANUAL_RECT_VALUE, config: true, x: 1, y: 13, width: 3, height: 1 }
       hLabel: { class: "label", label: "H", x: 4, y: 13, width: 1, height: 1 }
-      manualH: { class: "intedit", value: 180, min: 1, max: 20000, config: true, x: 5, y: 13, width: 3, height: 1 }
+      manualH: { class: "intedit", value: 180, min: 1, max: MAX_MANUAL_RECT_VALUE, config: true, x: 5, y: 13, width: 3, height: 1 }
     }
     config: {
       title: { class: "label", label: "Snapshoter Config", x: 0, y: 0, width: 6, height: 1 }
@@ -1124,12 +1240,20 @@ snapshoter = (subs, sel) ->
   collection, lines = selected_lines subs, sel or {}
 
   frameDefaults = build_frame_defaults default_frame_list(lines)
-  cfg = read_config video, #lines, frameDefaults
+  configOk, cfg = pcall read_config, video, #lines, frameDefaults
+  unless configOk
+    show_message "Could not read Snapshoter settings: #{tostring(cfg)}"
+    return
   return unless cfg
   cfg.ffmpeg = "ffmpeg" if cfg.ffmpeg == ""
   cfg.videoW, cfg.videoH = video_size!
-  cfg.playX = tonumber(collection.meta and collection.meta.PlayResX) or cfg.videoW
-  cfg.playY = tonumber(collection.meta and collection.meta.PlayResY) or cfg.videoH
+  if cfg.videoW <= 0 or cfg.videoH <= 0
+    show_message "Could not obtain the loaded video's dimensions."
+    return
+  cfg.playX = tonumber(collection.meta and collection.meta.PlayResX)
+  cfg.playY = tonumber(collection.meta and collection.meta.PlayResY)
+  cfg.playX = cfg.videoW unless cfg.playX and cfg.playX > 0
+  cfg.playY = cfg.videoH unless cfg.playY and cfg.playY > 0
 
   outDir = snapshots_folder video
   made, make_error = ensure_dir outDir
@@ -1138,7 +1262,7 @@ snapshoter = (subs, sel) ->
     return
 
   if cfg.mode == "Frame sequence"
-    ok, message = run_frame_sequence subs, lines, video, outDir, cfg
+    _, message = run_frame_sequence subs, lines, video, outDir, cfg
     show_message message
     return
 

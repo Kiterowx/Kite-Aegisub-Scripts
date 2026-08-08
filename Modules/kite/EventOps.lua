@@ -1,4 +1,5 @@
-local EventOps = { version = "1.0.0" }
+local MODULE_VERSION = "1.0.2"
+local EventOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -12,14 +13,14 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.EventOps",
-        version = EventOps.version,
+        version = MODULE_VERSION,
         description = "Shared dialogue-event transformations for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.EventOps",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.LineOps", version = "1.5.0" },
+            { "kite.LineOps", version = "1.5.2" },
         },
     })
 end
@@ -211,15 +212,19 @@ local function continuousFadeCleanup(subtitles, selection)
     local groups, byTime = {}, {}
     for _, index in ipairs(dialogueIndices(subtitles, selection)) do
         local line = subtitles[index]
-        local key = tostring(line.start_time) .. "\31" .. tostring(line.end_time)
-        local group = byTime[key]
-        if not group then
-            group = { start_time = line.start_time, end_time = line.end_time, first_index = index, indices = {} }
-            byTime[key] = group
-            groups[#groups + 1] = group
+        local startTime, endTime = tonumber(line.start_time), tonumber(line.end_time)
+        if startTime and endTime and startTime == startTime and endTime == endTime
+            and math.abs(startTime) < math.huge and math.abs(endTime) < math.huge and endTime > startTime then
+            local key = tostring(startTime) .. "\31" .. tostring(endTime)
+            local group = byTime[key]
+            if not group then
+                group = { start_time = startTime, end_time = endTime, first_index = index, indices = {} }
+                byTime[key] = group
+                groups[#groups + 1] = group
+            end
+            if index < group.first_index then group.first_index = index end
+            group.indices[#group.indices + 1] = index
         end
-        if index < group.first_index then group.first_index = index end
-        group.indices[#group.indices + 1] = index
     end
     if #groups < 2 then return selection, 0 end
     table.sort(groups, function(left, right)
@@ -227,12 +232,23 @@ local function continuousFadeCleanup(subtitles, selection)
         if left.end_time ~= right.end_time then return left.end_time < right.end_time end
         return left.first_index < right.first_index
     end)
-    local removeIn, removeOut = {}, {}
-    for index = 1, #groups - 1 do
-        if groups[index].end_time == groups[index + 1].start_time then
-            removeOut[index] = true
-            removeIn[index + 1] = true
+    local startsAt, endsAt = {}, {}
+    for index, group in ipairs(groups) do
+        startsAt[group.start_time] = startsAt[group.start_time] or {}
+        endsAt[group.end_time] = endsAt[group.end_time] or {}
+        startsAt[group.start_time][#startsAt[group.start_time] + 1] = index
+        endsAt[group.end_time][#endsAt[group.end_time] + 1] = index
+    end
+    local function hasOther(indices, current)
+        for _, index in ipairs(indices or {}) do
+            if index ~= current then return true end
         end
+        return false
+    end
+    local removeIn, removeOut = {}, {}
+    for index, group in ipairs(groups) do
+        removeIn[index] = hasOther(endsAt[group.start_time], index)
+        removeOut[index] = hasOther(startsAt[group.end_time], index)
     end
     local modified = 0
     for groupIndex, group in ipairs(groups) do
@@ -251,8 +267,12 @@ local function continuousFadeCleanup(subtitles, selection)
     return selection, modified
 end
 
+local RANDOM_MODULUS = 2147483647
+local RANDOM_MULTIPLIER = 48271
+local DEFAULT_SEED_STRIDE = 7919
+
 local function randomIndex(state, maximum)
-    state = (1103515245 * state + 12345) % 2147483648
+    state = (RANDOM_MULTIPLIER * state) % RANDOM_MODULUS
     return state, math.floor(state % maximum) + 1
 end
 
@@ -264,7 +284,12 @@ local function shuffleLineText(subtitles, selection, seed)
         original[position] = tostring(subtitles[index].text or "")
         shuffled[position] = original[position]
     end
-    local state = math.floor(tonumber(seed) or (os.time() + #indices * 7919)) % 2147483648
+    local numericSeed = tonumber(seed)
+    if not numericSeed or numericSeed ~= numericSeed or math.abs(numericSeed) == math.huge then
+        numericSeed = os.time() + #indices * DEFAULT_SEED_STRIDE
+    end
+    local state = math.floor(numericSeed % RANDOM_MODULUS)
+    if state <= 0 then state = state + RANDOM_MODULUS - 1 end
     for index = #shuffled, 2, -1 do
         local swap
         state, swap = randomIndex(state, index)
@@ -298,5 +323,8 @@ EventOps.adjustFade = adjustFade
 EventOps.continuousFadeCleanup = continuousFadeCleanup
 EventOps.shuffleLineText = shuffleLineText
 
-if depctrl then return depctrl:register(EventOps) end
+if depctrl then
+    EventOps.version = depctrl
+    return depctrl:register(EventOps)
+end
 return EventOps

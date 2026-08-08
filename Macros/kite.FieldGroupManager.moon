@@ -1,22 +1,23 @@
 export script_name        = "Field Group Manager"
 export script_description = "Group unique dialogue field values and write mapped values into another field"
 export script_author      = "Kiterow"
-export script_version     = "1.1.0"
+export script_version     = "1.1.3"
 export script_namespace   = "kite.FieldGroupManager"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
   feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
 KiteUI, LineOps = depctrl\requireModules!
 
 MIXED_MARK = "<mixed>"
+ESCAPED_MIXED_MARK = "\\<mixed>"
 EMPTY_MARK = "<empty>"
 NO_GROUPS_MARK = "<no groups>"
 
@@ -75,7 +76,7 @@ find_field = (label) ->
   FIELDS[1]
 
 is_dialogue = (line) ->
-  type(line) == "table" and (line.class == nil or line.class == "dialogue")
+  type(line) == "table" and line.class == "dialogue"
 
 ass_time = (ms) ->
   total_cs = math.max 0, math.floor(((tonumber(ms) or 0) / 10) + 0.5)
@@ -296,7 +297,7 @@ build_dialog = (state, source_text, target_text, group_count, line_count) ->
 
     { class: "label", label: "Single value", x: 0, y: y_single, width: 4, height: 1 }
     { class: "edit",  name: "single_value", value: state.single_value, x: 4, y: y_single, width: 26, height: 1 }
-    { class: "label", label: "#{MIXED_MARK} in the right list is skipped unless edited.", x: 0, y: y_single + 1, width: 30, height: 1 }
+    { class: "label", label: "#{MIXED_MARK} skips mixed groups; #{ESCAPED_MIXED_MARK} writes the literal text.", x: 0, y: y_single + 1, width: 30, height: 1 }
   }
 
 prepare_parallel_tasks = (subs, groups, target_field, dest_text) ->
@@ -311,9 +312,11 @@ prepare_parallel_tasks = (subs, groups, target_field, dest_text) ->
   skipped = 0
   for idx, group in ipairs groups
     row = rows[idx]
+    literal_mixed = target_field.kind == "string" and row == ESCAPED_MIXED_MARK
+    row = MIXED_MARK if literal_mixed
     if row == nil
       skipped += 1
-    elseif row == MIXED_MARK
+    elseif row == MIXED_MARK and not literal_mixed
       _, is_mixed = target_summary subs, group, target_field
       if is_mixed
         skipped += 1
@@ -347,6 +350,7 @@ validate_tasks = (subs, tasks, target_field) ->
   nil
 
 apply_tasks = (subs, tasks, target_field) ->
+  changes = {}
   changed_lines = 0
   changed_groups = 0
   for task in *tasks
@@ -354,24 +358,31 @@ apply_tasks = (subs, tasks, target_field) ->
     for idx in *task.group.indexes
       line = subs[idx]
       before = field_text line, target_field
-      write_field line, target_field, task.value
-      after = field_text line, target_field
+      candidate = LineOps.copy line
+      write_field candidate, target_field, task.value
+      after = field_text candidate, target_field
       if after != before
         changed_lines += 1
         group_changed = true
-      subs[idx] = line
+        table.insert changes, {index: idx, line: candidate}
     changed_groups += 1 if group_changed
+
+  if #changes > 0
+    LineOps.transaction subs, script_name, ->
+      for change in *changes
+        subs[change.index] = change.line
   changed_groups, changed_lines
 
 field_group_manager = (subs, sel) ->
-  saved = FIELD_SETTINGS\values "main"
+  saved = FIELD_SETTINGS\values("main") or {}
+  saved_scope = choice_or_default saved.scope, SCOPES, "Selection"
   state = {
-    source: saved.source
-    target: saved.target
-    scope: if saved.scope == "Selection" and (not sel or #sel == 0) then "Whole script" else saved.scope
-    mode: saved.mode
-    include_comments: saved.include_comments
-    include_empty_source: saved.include_empty_source
+    source: choice_or_default saved.source, FIELD_LABELS, "Effect"
+    target: choice_or_default saved.target, FIELD_LABELS, "Layer"
+    scope: if saved_scope == "Selection" and (not sel or #sel == 0) then "Whole script" else saved_scope
+    mode: choice_or_default saved.mode, MODES, "Parallel list"
+    include_comments: if type(saved.include_comments) == "boolean" then saved.include_comments else true
+    include_empty_source: if type(saved.include_empty_source) == "boolean" then saved.include_empty_source else false
     single_value: ""
   }
 
@@ -422,7 +433,6 @@ field_group_manager = (subs, sel) ->
     changed_groups, changed_lines = apply_tasks subs, tasks, target_field
     FIELD_SETTINGS\update "main", new_state, {"source", "target", "scope", "mode", "include_comments", "include_empty_source"}
     FIELD_SETTINGS\write!
-    aegisub.set_undo_point script_name if changed_lines > 0
     show_message "Updated #{changed_groups} group(s) and #{changed_lines} line(s).\nSkipped #{skipped} group(s)."
     return
 

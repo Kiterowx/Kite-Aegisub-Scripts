@@ -1,4 +1,4 @@
-# Selesub 2.1.1
+# Selesub 2.1.3
 
 Selesub filters, selects, comments, deletes, imports, and exports subtitle events from one interface.
 
@@ -18,14 +18,16 @@ Advanced search covers:
 
 The result can be selected, commented, or deleted. Destructive actions require confirmation and remain undoable through Aegisub.
 
+Visible-text, ASS-comment, drawing, alpha, and top-level `\blur` handling use the shared ASS-aware parser. Numeric and time ranges reject malformed or non-finite values, including ambiguous decimal strings.
+
 ## Values manager
 
 **Values** groups Style, Actor, Effect, or Layer values, displays their event counts, and lets you keep or remove groups from the editable list. The selected action is then applied to the omitted groups within the chosen scope.
 
 ## Import and export
 
-- **Export** writes the selected events to an ASS file together with the current script information, project data, and styles.
-- **Import** adds ASS events and any missing styles, preserving existing style names case-insensitively.
+- **Export** atomically writes the selected events to an ASS file together with the current script information, project data, and styles.
+- **Import** transactionally adds ASS events and any missing styles, preserving existing style names case-insensitively.
 
 ## Hotkey actions
 
@@ -39,7 +41,9 @@ Assignable entries are registered under `: Kite Hotkeys :/Selesub` for Style, Ac
 
 ## Requirements
 
-- `kite.UI` 1.1.0
+- `kite.UI` 1.1.3
 - `aegisub.re`
 - `aegisub.unicode`
 - `myaa.ASSParser` 0.0.4
+- `kite.LineOps` 1.5.2
+- `kite.PyBridge` 1.4.4

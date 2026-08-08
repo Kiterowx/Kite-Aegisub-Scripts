@@ -1,4 +1,6 @@
-local PyBridge = { version = "1.4.2" }
+local MODULE_VERSION = "1.4.4"
+local PyBridge = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
+local unpack = table.unpack or unpack
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -13,7 +15,7 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.PyBridge",
-        version = PyBridge.version,
+        version = MODULE_VERSION,
         description = "Shared process and filesystem bridge for Kite backends",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
@@ -30,6 +32,11 @@ PyBridge.separator = PyBridge.isWindows and "\\" or "/"
 PyBridge.available = command ~= nil and type(command.run_cmd_c) == "function"
 
 local counter = 0
+local CLOCK_SUBSECOND_SCALE = 1000000
+
+local function pack(...)
+    return { n = select("#", ...), ... }
+end
 
 local function trim(value)
     return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
@@ -57,73 +64,101 @@ local function parentPath(path)
 end
 
 local function fileExists(path)
-    if trim(path) == "" then return false end
+    if type(path) ~= "string" or trim(path) == "" then return false end
+    if lfs then
+        local attributes = lfs.attributes(path)
+        if attributes then return attributes.mode == "file" end
+    end
     local handle = io.open(path, "rb")
     if not handle then return false end
-    handle:close()
-    return true
+    local readOk, _, readMessage = pcall(handle.read, handle, 1)
+    pcall(handle.close, handle)
+    return readOk and readMessage == nil
 end
 
 local function directoryExists(path)
-    if trim(path) == "" then return false end
+    if type(path) ~= "string" or trim(path) == "" then return false end
     if lfs then
         local attributes = lfs.attributes(path)
         return attributes and attributes.mode == "directory" or false
     end
     local ok, _, code = os.rename(path, path)
-    if ok or code == 13 then
-        local probe = io.open(path, "rb")
-        if probe then probe:close(); return true end
-        return true
-    end
-    return false
+    if not ok and code ~= 13 then return false end
+    local probe = io.open(path, "rb")
+    if not probe then return true end
+    local readable, _, readMessage = pcall(probe.read, probe, 1)
+    pcall(probe.close, probe)
+    return not readable or readMessage ~= nil
 end
 local function readFile(path, limit)
+    if type(path) ~= "string" or trim(path) == "" then return nil, "file path is empty" end
     local handle, message = io.open(path, "rb")
     if not handle then return nil, message end
-    local data, readMessage = handle:read(limit or "*a")
-    handle:close()
+    local called, data, readMessage = pcall(handle.read, handle, limit or "*a")
+    pcall(handle.close, handle)
+    if not called then return nil, data end
     if data == nil then return nil, readMessage end
     return data
 end
 
 local function fileSize(path)
+    if type(path) ~= "string" or trim(path) == "" then return nil end
     local handle = io.open(path, "rb")
     if not handle then return nil end
-    local size = handle:seek("end")
-    handle:close()
-    return size
+    local called, size = pcall(handle.seek, handle, "end")
+    pcall(handle.close, handle)
+    return called and size or nil
 end
 
 local function uniqueSuffix()
     counter = counter + 1
-    return string.format("%d.%d.%d", os.time(), counter, math.floor(os.clock() * 1000000) % 1000000)
+    return string.format("%d.%d.%d", os.time(), counter,
+        math.floor(os.clock() * CLOCK_SUBSECOND_SCALE) % CLOCK_SUBSECOND_SCALE)
 end
 
 local function removeFile(path)
-    if trim(path) == "" then return true end
+    if path == nil or path == "" then return true end
+    if type(path) ~= "string" then return false, "file path must be a string" end
     if not fileExists(path) then return true end
     local ok, message = os.remove(path)
     return ok and true or false, message
 end
 
 local function ensureDir(path)
-    path = trim(path)
-    if path == "" then return false, "directory path is empty" end
+    if type(path) ~= "string" then return false, "directory path must be a string" end
+    if trim(path) == "" then return false, "directory path is empty" end
     if directoryExists(path) then return true end
     if not lfs then return false, "lfs is required to create directories" end
-    local normalized = path:gsub("[/\\]+", PyBridge.separator):gsub("[/\\]+$", "")
+    local wasUnc = PyBridge.isWindows and path:match("^[/\\][/\\]") ~= nil
+    local normalized = path:gsub("[/\\]+", PyBridge.separator)
+    local isWindowsRoot = PyBridge.isWindows and normalized:match("^[A-Za-z]:\\$") ~= nil
+    if normalized ~= "/" and normalized ~= "\\" and not isWindowsRoot then
+        normalized = normalized:gsub("[/\\]+$", "")
+    end
+    if wasUnc and normalized:sub(1, 2) ~= "\\\\" then normalized = "\\" .. normalized end
     local root = ""
     local remainder = normalized
     if PyBridge.isWindows then
-        local drive = normalized:match("^([A-Za-z]:)[/\\]?")
-        local uncServer, uncShare = normalized:match("^\\\\([^\\]+)\\([^\\]+)")
-        if drive then
+        local drive = normalized:match("^([A-Za-z]:)\\")
+        if normalized:match("^[A-Za-z]:[^\\]") then
+            return false, "drive-relative paths are not supported"
+        elseif normalized:sub(1, 2) == "\\\\" then
+            local tail = normalized:sub(3)
+            local first = tail:find("\\", 1, true)
+            local second = first and tail:find("\\", first + 1, true) or nil
+            local server = first and tail:sub(1, first - 1) or nil
+            local share = first and (second and tail:sub(first + 1, second - 1) or tail:sub(first + 1)) or nil
+            if not server or server == "" or not share or share == "" then
+                return false, "UNC paths require a server and share"
+            end
+            root = "\\\\" .. server .. "\\" .. share
+            remainder = second and tail:sub(second + 1) or ""
+        elseif drive then
             root = drive .. PyBridge.separator
             remainder = normalized:sub(#drive + 1):gsub("^[/\\]+", "")
-        elseif uncServer and uncShare then
-            root = "\\\\" .. uncServer .. "\\" .. uncShare
-            remainder = normalized:sub(#root + 1):gsub("^[/\\]+", "")
+        elseif normalized:sub(1, 1) == "\\" then
+            root = "\\"
+            remainder = normalized:sub(2)
         end
     elseif normalized:sub(1, 1) == "/" then
         root = "/"
@@ -140,11 +175,14 @@ local function ensureDir(path)
             end
         end
     end
-    return directoryExists(path) or directoryExists(normalized), directoryExists(path) and nil or "directory was not created"
+    if directoryExists(path) or directoryExists(normalized) then return true end
+    return false, "directory was not created"
 end
 
 local function replaceFile(source, target)
-    if trim(source) == "" or trim(target) == "" then return false, "source and target are required" end
+    if type(source) ~= "string" or type(target) ~= "string" or trim(source) == "" or trim(target) == "" then
+        return false, "source and target are required"
+    end
     local backup = target .. ".backup." .. uniqueSuffix()
     local hadTarget = fileExists(target)
     if hadTarget then
@@ -153,7 +191,13 @@ local function replaceFile(source, target)
     end
     local ok, message = os.rename(source, target)
     if not ok then
-        if hadTarget then pcall(os.rename, backup, target) end
+        if hadTarget then
+            local restored, restoreMessage = os.rename(backup, target)
+            if not restored then
+                return false, tostring(message or "replacement failed") .. "; backup retained at " .. backup
+                    .. ": " .. tostring(restoreMessage or "restore failed")
+            end
+        end
         return false, message
     end
     if hadTarget then removeFile(backup) end
@@ -162,8 +206,22 @@ end
 
 local writableDirectory
 
+local function flushAndClose(handle, flush)
+    local flushOk, flushResult, flushMessage = true, true, nil
+    if flush then
+        flushOk, flushResult, flushMessage = pcall(handle.flush, handle)
+        flushOk = flushOk and flushResult ~= nil and flushResult ~= false
+    end
+    local closeOk, closeResult, closeMessage = pcall(handle.close, handle)
+    closeOk = closeOk and closeResult ~= nil and closeResult ~= false
+    if not flushOk or not closeOk then
+        return false, flushMessage or closeMessage or flushResult or closeResult or "file finalization failed"
+    end
+    return true
+end
+
 local function withAtomicFile(path, callback)
-    if trim(path) == "" then return false, "target path is empty" end
+    if type(path) ~= "string" or trim(path) == "" then return false, "target path is empty" end
     if type(callback) ~= "function" then return false, "writer callback is required" end
     local parent = parentPath(path)
     if parent and parent ~= "" then
@@ -173,9 +231,8 @@ local function withAtomicFile(path, callback)
     local temporary = path .. ".temporary." .. uniqueSuffix()
     local handle, message = io.open(temporary, "wb")
     if not handle then return false, message end
-    local packed = { pcall(callback, handle, temporary) }
-    local flushOk, flushMessage = pcall(handle.flush, handle)
-    local closeOk, closeMessage = pcall(handle.close, handle)
+    local packed = pack(pcall(callback, handle, temporary))
+    local finalized, finalMessage = flushAndClose(handle, true)
     if not packed[1] then
         removeFile(temporary)
         return false, packed[2]
@@ -184,17 +241,18 @@ local function withAtomicFile(path, callback)
         removeFile(temporary)
         return false, packed[3]
     end
-    if not flushOk or not closeOk then
+    if not finalized then
         removeFile(temporary)
-        return false, flushMessage or closeMessage
+        return false, finalMessage
     end
     local replaced, replaceMessage = replaceFile(temporary, path)
     if not replaced then removeFile(temporary) end
     if not replaced then return false, replaceMessage end
-    return true, packed[2], packed[3], packed[4]
+    return true, unpack(packed, 2, packed.n)
 end
 
 local function writeFile(path, data)
+    if type(path) ~= "string" or trim(path) == "" then return false, "target path is empty" end
     local parent = parentPath(path)
     if parent and parent ~= "" then
         local ok, message = writableDirectory(parent)
@@ -203,12 +261,11 @@ local function writeFile(path, data)
     local temporary = path .. ".temporary." .. uniqueSuffix()
     local handle, message = io.open(temporary, "wb")
     if not handle then return false, message end
-    local ok, writeMessage = handle:write(data or "")
-    if ok then handle:flush() end
-    local closeOk, closeMessage = handle:close()
-    if not ok or closeOk == false then
+    local called, ok, writeMessage = pcall(handle.write, handle, data or "")
+    local finalized, finalMessage = flushAndClose(handle, called and ok ~= nil and ok ~= false)
+    if not called or ok == nil or ok == false or not finalized then
         removeFile(temporary)
-        return false, writeMessage or closeMessage
+        return false, (not called and ok) or writeMessage or finalMessage
     end
     local replaced, replaceMessage = replaceFile(temporary, path)
     if not replaced then removeFile(temporary) end
@@ -217,14 +274,20 @@ end
 
 local function quote(value)
     value = tostring(value or "")
-    if PyBridge.isWindows then return "'" .. value:gsub("'", "''") .. "'" end
+    if command and type(command.p) == "function" then
+        local ok, quoted = pcall(command.p, value)
+        if ok and type(quoted) == "string" and quoted ~= "" then return quoted end
+    end
+    if PyBridge.isWindows then
+        return '"' .. value:gsub("%%", "%%%%"):gsub('"', '\\"') .. '"'
+    end
     return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
 local function program(value, fallback)
     value = trim(value)
     if value == "" then value = tostring(fallback or "python") end
-    if value:find("[/\\]") or value:find("%s") then return quote(value) end
+    if not value:match("^[%w_.+%-]+$") then return quote(value) end
     return value
 end
 
@@ -241,15 +304,19 @@ local function commandLine(executable, arguments)
     local parts = {program(executable)}
     if type(arguments) == "string" then
         if trim(arguments) ~= "" then parts[#parts + 1] = arguments end
-    else
-        for _, value in ipairs(arguments or {}) do parts[#parts + 1] = argument(value) end
+    elseif type(arguments) == "table" then
+        for _, value in ipairs(arguments) do parts[#parts + 1] = argument(value) end
+    elseif arguments ~= nil then
+        parts[#parts + 1] = argument(arguments)
     end
     return table.concat(parts, " ")
 end
 
 local function run(commandText, quiet)
     if not PyBridge.available then return false, "aka.command is required to run commands", nil end
-    local ok, output, status, reason, exitCode = pcall(command.run_cmd_c, tostring(commandText or ""), quiet ~= false)
+    commandText = tostring(commandText or "")
+    if trim(commandText) == "" then return false, "command is empty", nil end
+    local ok, output, status, reason, exitCode = pcall(command.run_cmd_c, commandText, quiet ~= false)
     if not ok then return false, tostring(output), nil end
     if status == true then return true, tostring(output or ""), tonumber(exitCode) or 0 end
     local ending = reason == "exit" and ("exit code " .. tostring(exitCode)) or (tostring(reason or "failure") .. " " .. tostring(exitCode or ""))
@@ -258,15 +325,16 @@ end
 
 local function chain(...)
     local parts = {}
-    for _, value in ipairs({...}) do
+    local values = pack(...)
+    for index = 1, values.n do
+        local value = values[index]
         if trim(value) ~= "" then parts[#parts + 1] = tostring(value) end
     end
     return table.concat(parts, "\n")
 end
 
 writableDirectory = function(path)
-    path = trim(path)
-    if path == "" then return nil, "directory path is empty" end
+    if type(path) ~= "string" or trim(path) == "" then return nil, "directory path is empty" end
 
     local function probe()
         local probePath = joinPath(path, ".kite-temp-probe-" .. uniqueSuffix())
@@ -304,8 +372,10 @@ local function tempRoot()
     end
 
     addCandidate(decodedPath("?temp"))
+    if not PyBridge.isWindows then addCandidate(os.getenv("TMPDIR")) end
     addCandidate(os.getenv("TEMP"))
     addCandidate(os.getenv("TMP"))
+    if not PyBridge.isWindows then addCandidate("/tmp") end
     local user = decodedPath("?user")
     if user then
         addCandidate(joinPath(user, "temp"))
@@ -326,13 +396,15 @@ local function tempPaths(prefix, names)
     if not root then return nil, message or "temporary directory is unavailable" end
     local stem = string.format("%s_%s", tostring(prefix or "kite"):gsub("[^%w_.-]", "_"), uniqueSuffix())
     local paths = {}
-    for key, suffix in pairs(names or {}) do paths[key] = joinPath(root, stem .. tostring(suffix or "")) end
+    for key, suffix in pairs(type(names) == "table" and names or {}) do
+        paths[key] = joinPath(root, stem .. tostring(suffix or ""))
+    end
     return paths
 end
 
 local function cleanup(paths)
     local failures = {}
-    for _, path in pairs(paths or {}) do
+    for _, path in pairs(type(paths) == "table" and paths or {}) do
         local ok, message = removeFile(path)
         if not ok then failures[#failures + 1] = tostring(message or path) end
     end
@@ -440,5 +512,8 @@ PyBridge.scriptCommand = scriptCommand
 PyBridge.runScript = runScript
 PyBridge.runDetachedScript = runDetachedScript
 
-if depctrl then return depctrl:register(PyBridge) end
+if depctrl then
+    PyBridge.version = depctrl
+    return depctrl:register(PyBridge)
+end
 return PyBridge

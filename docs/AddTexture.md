@@ -1,4 +1,4 @@
-# AddTexture 2.0.8
+# AddTexture 2.0.11
 
 AddTexture applies pasted ASS drawing textures to selected text outlines.
 

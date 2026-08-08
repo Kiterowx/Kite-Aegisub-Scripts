@@ -1,4 +1,4 @@
-# Rhea Signs 1.7.0
+# Rhea Signs 1.7.3
 
 Rhea Signs is a typesetting and sign-operations suite.
 

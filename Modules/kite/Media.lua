@@ -1,4 +1,5 @@
-local Media = { version = "1.2.0" }
+local MODULE_VERSION = "1.2.2"
+local Media = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -9,19 +10,28 @@ end
 local DependencyControl = safeRequire("l0.DependencyControl")
 local LineOps = safeRequire("kite.LineOps")
 local PyBridge = safeRequire("kite.PyBridge")
+local MILLISECOND = 1
+local PNG_SIGNATURE = "\137PNG\r\n\26\n"
+local PNG_MINIMUM_SIZE = 33
+local PNG_HEADER_SIZE = 13
+local PNG_INTEGER_SIZE = 4
+local PNG_CHUNK_OVERHEAD = 12
+local MINIMUM_RATE_SAMPLES = 16
+local DEFAULT_TIMECODE_TOLERANCE_MS = 1.1
+local COMMON_RATE_TOLERANCE = 0.02
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.Media",
-        version = Media.version,
+        version = MODULE_VERSION,
         description = "Shared project-media, frame-window and media-output utilities for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.Media",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.LineOps", version = "1.5.0" },
-            { "kite.PyBridge", version = "1.4.0" },
+            { "kite.LineOps", version = "1.5.2" },
+            { "kite.PyBridge", version = "1.4.4" },
         },
     })
 end
@@ -29,6 +39,12 @@ end
 local function trim(value)
     if LineOps and LineOps.trim then return LineOps.trim(value) end
     return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
+end
+
+local function finiteNumber(value)
+    local number = tonumber(value)
+    if not number or number ~= number or math.abs(number) == math.huge then return nil end
+    return number
 end
 
 local function fileExists(path)
@@ -61,7 +77,7 @@ local function isDummy(path)
 end
 
 local function projectPath(kind, options)
-    options = options or {}
+    options = type(options) == "table" and options or {}
     kind = kind == "audio" and "audio" or "video"
     local properties = projectProperties()
     local candidates = {}
@@ -85,31 +101,41 @@ end
 
 local function frameFromMs(milliseconds)
     if not aegisub or type(aegisub.frame_from_ms) ~= "function" then return nil end
-    local ok, value = pcall(aegisub.frame_from_ms, tonumber(milliseconds) or 0)
-    if ok and type(value) == "number" then return value end
+    milliseconds = finiteNumber(milliseconds)
+    if not milliseconds then return nil end
+    local ok, value = pcall(aegisub.frame_from_ms, milliseconds)
+    value = ok and finiteNumber(value) or nil
+    if value then return value end
     return nil
 end
 
 local function msFromFrame(frame)
     if not aegisub or type(aegisub.ms_from_frame) ~= "function" then return nil end
-    local ok, value = pcall(aegisub.ms_from_frame, tonumber(frame) or 0)
-    if ok and type(value) == "number" then return value end
+    frame = finiteNumber(frame)
+    if not frame then return nil end
+    local ok, value = pcall(aegisub.ms_from_frame, frame)
+    value = ok and finiteNumber(value) or nil
+    if value then return value end
     return nil
 end
 
 local function exclusiveEndFrame(startTime, endTime)
+    startTime, endTime = finiteNumber(startTime), finiteNumber(endTime)
+    if not startTime or not endTime or endTime <= startTime then return nil end
     local first = frameFromMs(startTime)
-    local last = frameFromMs(endTime)
-    if not first or not last then return nil end
-    return math.max(first + 1, last)
+    local lastInclusive = frameFromMs(math.max(startTime, endTime - MILLISECOND))
+    if not first or not lastInclusive then return nil end
+    return math.max(first + 1, lastInclusive + 1)
 end
 
 local function selectionWindow(subtitles, selection, options)
-    options = options or {}
+    options = type(options) == "table" and options or {}
     local predicate = function(line)
         if not line or line.class ~= "dialogue" then return false end
         if options.includeComments ~= true and line.comment then return false end
-        if options.positiveDuration ~= false and (tonumber(line.end_time) or 0) <= (tonumber(line.start_time) or 0) then return false end
+        local startTime, endTime = finiteNumber(line.start_time), finiteNumber(line.end_time)
+        if not startTime or not endTime then return false end
+        if options.positiveDuration ~= false and endTime <= startTime then return false end
         return true
     end
     local records, rejected
@@ -129,9 +155,10 @@ local function selectionWindow(subtitles, selection, options)
     local indices, minimumStart, maximumEnd = {}, nil, nil
     for _, record in ipairs(records) do
         local line = record.line
+        local startTime, endTime = finiteNumber(line.start_time), finiteNumber(line.end_time)
         indices[#indices + 1] = record.index
-        minimumStart = math.min(minimumStart or line.start_time, line.start_time)
-        maximumEnd = math.max(maximumEnd or line.end_time, line.end_time)
+        minimumStart = math.min(minimumStart or startTime, startTime)
+        maximumEnd = math.max(maximumEnd or endTime, endTime)
     end
     table.sort(indices)
     local startFrame = frameFromMs(minimumStart)
@@ -163,8 +190,8 @@ local commonRates = {
 }
 
 local function frameRate(startFrame, endFrame)
-    startFrame = tonumber(startFrame)
-    endFrame = tonumber(endFrame)
+    startFrame = finiteNumber(startFrame)
+    endFrame = finiteNumber(endFrame)
     if not startFrame or not endFrame or endFrame <= startFrame then return nil end
     local startTime = msFromFrame(startFrame)
     local endTime = msFromFrame(endFrame)
@@ -173,22 +200,24 @@ local function frameRate(startFrame, endFrame)
 end
 
 local function constantFrameRate(startFrame, endFrame, options)
-    options = options or {}
-    startFrame = tonumber(startFrame)
-    endFrame = tonumber(endFrame)
+    options = type(options) == "table" and options or {}
+    startFrame = finiteNumber(startFrame)
+    endFrame = finiteNumber(endFrame)
     if not startFrame or not endFrame or endFrame <= startFrame then return false, nil, { reason = "invalid range" } end
     local startTime = msFromFrame(startFrame)
     local endTime = msFromFrame(endFrame)
     if not startTime or not endTime or endTime <= startTime then return false, nil, { reason = "timecodes unavailable" } end
     local count = endFrame - startFrame
-    local maximumSamples = math.max(16, math.floor(tonumber(options.maximumSamples) or 4096))
+    local requestedSamples = finiteNumber(options.maximumSamples)
+    local maximumSamples = requestedSamples and math.max(MINIMUM_RATE_SAMPLES, math.floor(requestedSamples))
+        or math.max(1, math.ceil(count))
     local step = math.max(1, math.ceil(count / maximumSamples))
     local minimumDuration, maximumDuration, maximumPhase = nil, nil, 0
     local sampled = 0
-    local function inspect(frame)
+    local function inspect(frame, current, following)
         if frame < startFrame or frame >= endFrame then return true end
-        local current = msFromFrame(frame)
-        local following = msFromFrame(frame + 1)
+        current = current or msFromFrame(frame)
+        following = following or msFromFrame(frame + 1)
         if not current or not following or following <= current then return false end
         local duration = following - current
         minimumDuration = math.min(minimumDuration or duration, duration)
@@ -198,16 +227,27 @@ local function constantFrameRate(startFrame, endFrame, options)
         sampled = sampled + 1
         return true
     end
-    local frame = startFrame
-    while frame < endFrame do
-        if not inspect(frame) then return false, nil, { reason = "invalid timecode", frame = frame } end
-        frame = frame + step
+    if step == 1 then
+        local current = startTime
+        for frame = startFrame, endFrame - 1 do
+            local following = frame + 1 == endFrame and endTime or msFromFrame(frame + 1)
+            if not inspect(frame, current, following) then
+                return false, nil, { reason = "invalid timecode", frame = frame }
+            end
+            current = following
+        end
+    else
+        local frame = startFrame
+        while frame < endFrame do
+            if not inspect(frame) then return false, nil, { reason = "invalid timecode", frame = frame } end
+            frame = frame + step
+        end
+        if endFrame - 1 >= startFrame and ((endFrame - 1 - startFrame) % step ~= 0) then
+            if not inspect(endFrame - 1) then return false, nil, { reason = "invalid timecode", frame = endFrame - 1 } end
+        end
     end
-    if endFrame - 1 >= startFrame and ((endFrame - 1 - startFrame) % step ~= 0) then
-        if not inspect(endFrame - 1) then return false, nil, { reason = "invalid timecode", frame = endFrame - 1 } end
-    end
-    local durationTolerance = tonumber(options.durationTolerance) or 1.1
-    local phaseTolerance = tonumber(options.phaseTolerance) or 1.1
+    local durationTolerance = math.max(0, finiteNumber(options.durationTolerance) or DEFAULT_TIMECODE_TOLERANCE_MS)
+    local phaseTolerance = math.max(0, finiteNumber(options.phaseTolerance) or DEFAULT_TIMECODE_TOLERANCE_MS)
     local rate = count * 1000 / (endTime - startTime)
     local constant = minimumDuration ~= nil
         and maximumDuration - minimumDuration <= durationTolerance
@@ -223,7 +263,7 @@ local function constantFrameRate(startFrame, endFrame, options)
 end
 
 local function frameRateArgument(startFrame, endFrame, options)
-    options = options or {}
+    options = type(options) == "table" and options or {}
     local rate
     if options.requireConstant == false then
         rate = frameRate(startFrame, endFrame)
@@ -234,7 +274,7 @@ local function frameRateArgument(startFrame, endFrame, options)
     end
     if not rate then return nil end
     for _, candidate in ipairs(commonRates) do
-        if math.abs(rate - candidate.value) <= 0.02 then return candidate.text, rate end
+        if math.abs(rate - candidate.value) <= COMMON_RATE_TOLERANCE then return candidate.text, rate end
     end
     return string.format("%.6f", rate):gsub("0+$", ""):gsub("%.$", ""), rate
 end
@@ -251,11 +291,46 @@ end
 local function verifyPng(path)
     local handle = io.open(path, "rb")
     if not handle then return false, "missing" end
-    local signature = handle:read(8)
+    local signature = handle:read(#PNG_SIGNATURE)
+    if signature ~= PNG_SIGNATURE then handle:close(); return false, "invalid" end
+    local size = handle:seek("end")
+    if not size or size < PNG_MINIMUM_SIZE then handle:close(); return false, "empty" end
+    handle:seek("set", #PNG_SIGNATURE)
+    local function uint32(bytes)
+        if type(bytes) ~= "string" or #bytes ~= PNG_INTEGER_SIZE then return nil end
+        local a, b, c, d = bytes:byte(1, PNG_INTEGER_SIZE)
+        return ((a * 256 + b) * 256 + c) * 256 + d
+    end
+    local seenHeader, seenData, seenEnd = false, false, false
+    while true do
+        local cursor = handle:seek()
+        if not cursor or cursor + PNG_CHUNK_OVERHEAD > size then break end
+        local length = uint32(handle:read(PNG_INTEGER_SIZE))
+        local kind = handle:read(PNG_INTEGER_SIZE)
+        local position = handle:seek()
+        if not length or not kind or #kind ~= PNG_INTEGER_SIZE or not position
+            or length > size - position - PNG_INTEGER_SIZE then break end
+        if not seenHeader and kind ~= "IHDR" then break end
+        if kind == "IHDR" then
+            if seenHeader or length ~= PNG_HEADER_SIZE then break end
+            local header = handle:read(length)
+            local width = header and uint32(header:sub(1, 4)) or nil
+            local height = header and uint32(header:sub(5, 8)) or nil
+            if not width or not height or width <= 0 or height <= 0 then break end
+            seenHeader = true
+        else
+            if kind == "IDAT" and length > 0 then seenData = true end
+            if not handle:seek("cur", length) then break end
+        end
+        local checksum = handle:read(PNG_INTEGER_SIZE)
+        if not checksum or #checksum ~= PNG_INTEGER_SIZE then break end
+        if kind == "IEND" then
+            seenEnd = length == 0
+            break
+        end
+    end
     handle:close()
-    if signature ~= "\137PNG\r\n\26\n" then return false, "invalid" end
-    local size = fileSize(path)
-    if not size or size <= 8 then return false, "empty" end
+    if not (seenHeader and seenData and seenEnd) then return false, "invalid" end
     return true, size
 end
 
@@ -288,5 +363,8 @@ Media.fileSize = fileSize
 Media.verifyPng = verifyPng
 Media.filterPath = filterPath
 
-if depctrl then return depctrl:register(Media) end
+if depctrl then
+    Media.version = depctrl
+    return depctrl:register(Media)
+end
 return Media

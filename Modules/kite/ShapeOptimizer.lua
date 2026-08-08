@@ -1,4 +1,5 @@
-local ShapeOptimizer = { version = "1.0.0" }
+local MODULE_VERSION = "1.0.2"
+local ShapeOptimizer = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safeRequire(name)
   local ok, value = pcall(require, name)
@@ -13,15 +14,15 @@ local depctrl
 if DependencyControl then
   depctrl = DependencyControl({
     name = "kite.ShapeOptimizer",
-    version = ShapeOptimizer.version,
+    version = MODULE_VERSION,
     description = "Shared ASS vector-shape color and gradient optimizer for Kite macros",
     author = "Kiterow",
     url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
     moduleName = "kite.ShapeOptimizer",
     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
-      { "kite.LineOps", version = "1.5.0" },
-      { "kite.UI", version = "1.1.0" },
+      { "kite.LineOps", version = "1.5.2" },
+      { "kite.UI", version = "1.1.3" },
     },
   })
 end
@@ -224,13 +225,24 @@ local INTENSITY_KEYS = {
   Aggressive = "intensity_aggressive"
 }
 local EPSILON = 0.000001
+local FORMAT_DECIMALS = 3
+local FORMAT_ROUND_EPSILON = 0.5 * 10 ^ -FORMAT_DECIMALS
+local MAX_DRAWING_SCALE = 6
+local MIN_THRESHOLD, MAX_THRESHOLD = 0.005, 0.25
+local MIN_BANDS, MAX_BANDS = 2, 64
+local DEFAULT_MAX_BANDS = 8
+local MIN_GRADIENT_ITEMS = 4
+local MIN_GRADIENT_ENDPOINT_DELTA = 0.03
+local MIN_GRADIENT_AVERAGE_LIMIT, MIN_GRADIENT_MAX_LIMIT = 0.075, 0.180
+local GRADIENT_AVERAGE_FACTOR, GRADIENT_MAX_FACTOR = 1.6, 3.0
+local PROFILE_THRESHOLDS = { Fidelity = 0.035, Balanced = 0.065, Aggressive = 0.100 }
 local settingsCache = {}
 local settingsDefaults = {
   main = {
     mode = "Auto",
     intensity = "Balanced",
     threshold = 0,
-    max_bands = 8,
+    max_bands = DEFAULT_MAX_BANDS,
     show_summary = false
   }
 }
@@ -238,7 +250,7 @@ local settingsDefaults = {
 local function settingsFor(context)
   context = context or {}
   local namespace = context.settings_namespace or "kite.ShapeOptimizer"
-  local version = context.settings_version or ShapeOptimizer.version
+  local version = context.settings_version or ShapeOptimizer.VERSION
   local key = namespace .. "\31" .. version
   if not settingsCache[key] then
     settingsCache[key] = KiteUI.settings(namespace, version, settingsDefaults, {})
@@ -262,17 +274,23 @@ clamp = function(value, low, high)
   value = tonumber(value) or 0
   return math.max(low, math.min(high, value))
 end
+local finite_number
+finite_number = function(value)
+  local number = tonumber(value)
+  if not number or number ~= number or math.abs(number) == math.huge then return nil end
+  return number
+end
 local format_number
 format_number = function(value)
   value = tonumber(value) or 0
-  if math.abs(value) < 0.0005 then
+  if math.abs(value) < FORMAT_ROUND_EPSILON then
     value = 0
   end
   local nearest = math.floor(value + 0.5)
-  if math.abs(value - nearest) < 0.0005 then
+  if math.abs(value - nearest) < FORMAT_ROUND_EPSILON then
     return tostring(nearest)
   end
-  local text = ("%.3f"):format(value)
+  local text = ("%." .. tostring(FORMAT_DECIMALS) .. "f"):format(value)
   text = text:gsub("0+$", "")
   text = text:gsub("%.$", "")
   return text
@@ -299,20 +317,11 @@ cancel_with = function(message)
 end
 local profile_threshold
 profile_threshold = function(intensity)
-  local _exp_0 = intensity
-  if "Fidelity" == _exp_0 then
-    return 0.035
-  elseif "Aggressive" == _exp_0 then
-    return 0.100
-  else
-    return 0.065
-  end
+  return PROFILE_THRESHOLDS[intensity] or PROFILE_THRESHOLDS.Balanced
 end
 local normalize_options
 normalize_options = function(opts)
-  if opts == nil then
-    opts = { }
-  end
+  opts = type(opts) == "table" and opts or { }
   local mode = opts.mode or "Auto"
   local known_mode = false
   for _index_0 = 1, #MODES do
@@ -337,16 +346,16 @@ normalize_options = function(opts)
   if not (known_intensity) then
     intensity = "Balanced"
   end
-  local threshold = tonumber(opts.threshold) or 0
+  local threshold = finite_number(opts.threshold) or 0
   if threshold <= 0 then
     threshold = profile_threshold(intensity)
   end
-  threshold = clamp(threshold, 0.005, 0.25)
+  threshold = clamp(threshold, MIN_THRESHOLD, MAX_THRESHOLD)
   return {
     mode = mode,
     intensity = intensity,
     threshold = threshold,
-    max_bands = math.max(2, math.min(64, math.floor((tonumber(opts.max_bands) or 8) + 0.5))),
+    max_bands = math.max(MIN_BANDS, math.min(MAX_BANDS, math.floor((finite_number(opts.max_bands) or DEFAULT_MAX_BANDS) + 0.5))),
     show_summary = opts.show_summary and true or false
   }
 end
@@ -357,7 +366,8 @@ normalize_ass_color = function(value)
     return nil
   end
   hex = hex:upper()
-  hex = ("000000" .. hex):sub(-6)
+  if #hex > 8 then return nil end
+  hex = #hex > 6 and hex:sub(-6) or ("000000" .. hex):sub(-6)
   return "&H" .. tostring(hex) .. "&"
 end
 local rgb_to_ass
@@ -381,11 +391,8 @@ ass_to_rgb = function(color)
   if not (color) then
     return nil
   end
-  local hex = color:match("&H(%x%x)(%x%x)(%x%x)&")
-  if not (hex) then
-    return nil
-  end
   local b, g, r = color:match("&H(%x%x)(%x%x)(%x%x)&")
+  if not b then return nil end
   return {
     r = tonumber(r, 16),
     g = tonumber(g, 16),
@@ -446,20 +453,20 @@ delta_lab = function(left, right)
   local db = left.b - right.b
   return math.sqrt(dl * dl + da * da + db * db)
 end
-local delta_color
-delta_color = function(left, right)
-  return delta_lab(color_to_oklab(left), color_to_oklab(right))
+local last_match
+last_match = function(text, pattern)
+  local found = nil
+  for value in tostring(text or ""):gmatch(pattern) do
+    found = value
+  end
+  return found
 end
 local extract_tag
-extract_tag = function(tags, name, fallback)
-  if fallback == nil then
-    fallback = nil
-  end
-  local value = tags:match("\\" .. tostring(name) .. "([%-%d%.]+)")
-  return value or fallback
+extract_tag = function(tags, name)
+  return last_match(tags, "\\" .. tostring(name) .. "([%-%d%.]+)")
 end
 local parse_drawing_bounds
-parse_drawing_bounds = function(drawing, pos_x, pos_y, scale)
+parse_drawing_bounds = function(drawing, pos_x, pos_y, scale, alignment, scale_x, scale_y)
   local nums = { }
   for token in tostring(drawing or ""):gmatch("%S+") do
     local n = tonumber(token)
@@ -476,8 +483,8 @@ parse_drawing_bounds = function(drawing, pos_x, pos_y, scale)
   local left, top, right, bottom = nil, nil, nil, nil
   local i = 1
   while i <= #nums do
-    local x = pos_x + nums[i] / scale
-    local y = pos_y + nums[i + 1] / scale
+    local x = nums[i] / scale * scale_x / 100
+    local y = nums[i + 1] / scale * scale_y / 100
     if not left or x < left then
       left = x
     end
@@ -492,20 +499,28 @@ parse_drawing_bounds = function(drawing, pos_x, pos_y, scale)
     end
     i = i + 2
   end
+  alignment = math.max(1, math.min(9, math.floor((tonumber(alignment) or 2) + 0.5)))
+  local column = ((alignment - 1) % 3) + 1
+  local row = math.floor((alignment - 1) / 3) + 1
+  local anchor_x = column == 1 and left or (column == 2 and (left + right) / 2 or right)
+  local anchor_y = row == 1 and bottom or (row == 2 and (top + bottom) / 2 or top)
+  local origin_x, origin_y = pos_x - anchor_x, pos_y - anchor_y
   return {
-    left = left,
-    top = top,
-    right = right,
-    bottom = bottom,
+    left = origin_x + left,
+    top = origin_y + top,
+    right = origin_x + right,
+    bottom = origin_y + bottom,
     width = math.max(0, right - left),
     height = math.max(0, bottom - top),
-    center_x = (left + right) / 2,
-    center_y = (top + bottom) / 2,
-    area = math.max(1, (right - left) * (bottom - top))
+    center_x = origin_x + (left + right) / 2,
+    center_y = origin_y + (top + bottom) / 2,
+    area = math.max(1, (right - left) * (bottom - top)),
+    origin_x = origin_x,
+    origin_y = origin_y
   }
 end
 local parse_shape_line
-parse_shape_line = function(text)
+parse_shape_line = function(text, style)
   text = tostring(text or "")
   if not (text:match("^%s*{")) then
     return nil, L("err_simple_shape")
@@ -544,54 +559,79 @@ parse_shape_line = function(text)
   residue = residue:gsub("\\p%d+", "")
   residue = residue:gsub("\\1?c&[Hh]%x+&?", "")
   residue = residue:gsub("%s+", "")
-  if residue:find("\\") then
+  if residue ~= "" then
     return nil, L("err_unsupported_tags", residue)
   end
-  local p_scale = tonumber(tags:match("\\p(%d+)"))
+  local p_scale = tonumber(last_match(tags, "\\p(%d+)"))
   if not (p_scale and p_scale >= 1) then
     return nil, L("err_missing_p")
   end
-  if p_scale > 6 then
+  if p_scale > MAX_DRAWING_SCALE then
     return nil, L("err_unsupported_p")
   end
-  local pos_x, pos_y = tags:match("\\pos%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)")
+  local pos_value = last_match(tags, "\\pos(%b())")
+  local pos_x, pos_y
+  if pos_value then
+    pos_x, pos_y = pos_value:match("^%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)")
+  end
   if not (pos_x and pos_y) then
     return nil, L("err_missing_pos")
   end
-  pos_x, pos_y = tonumber(pos_x), tonumber(pos_y)
+  pos_x, pos_y = finite_number(pos_x), finite_number(pos_y)
   if not (pos_x and pos_y) then
     return nil, L("err_invalid_pos")
   end
-  local color_hex = tags:match("\\1?c&[Hh](%x+)&?")
-  if not (color_hex) then
+  style = type(style) == "table" and style or {}
+  local color_hex = last_match(tags, "\\1?c&[Hh](%x+)&?")
+  local color_source = color_hex and ("&H" .. tostring(color_hex) .. "&")
+    or style.color1 or style.primary_color or style.primaryColor
+  if not color_source then
     return nil, L("err_missing_color")
   end
-  local color = normalize_ass_color("&H" .. tostring(color_hex) .. "&")
+  local color = normalize_ass_color(color_source)
   local rgb = ass_to_rgb(color)
   local lab = color_to_oklab(color)
   if not (rgb and lab) then
     return nil, L("err_invalid_color")
   end
+  local an = finite_number(last_match(tags, "\\an(%d+)")) or finite_number(style.align) or finite_number(style.alignment) or 2
+  an = math.floor(an + 0.5)
+  if an < 1 or an > 9 then an = 2 end
+  local scale_x = finite_number(style.scale_x) or finite_number(style.scalex) or 100
+  local scale_y = finite_number(style.scale_y) or finite_number(style.scaley) or 100
+  if scale_x <= 0 or scale_y <= 0 then
+    return nil, L("err_unsupported_tags", "invalid style scale")
+  end
   local scale = 2 ^ (p_scale - 1)
-  local bounds, bounds_err = parse_drawing_bounds(drawing, pos_x, pos_y, scale)
+  local bounds, bounds_err = parse_drawing_bounds(drawing, pos_x, pos_y, scale, an, scale_x, scale_y)
   if not (bounds) then
     return nil, bounds_err
   end
-  local an = tags:match("\\an(%d+)") or "7"
-  local bord = extract_tag(tags, "bord", "0")
-  local shad = extract_tag(tags, "shad", "0")
-  local blur = extract_tag(tags, "blur", nil)
+  local bord_raw = extract_tag(tags, "bord")
+  local shad_raw = extract_tag(tags, "shad")
+  local blur_raw = extract_tag(tags, "blur")
+  local bord = bord_raw ~= nil and finite_number(bord_raw) or (finite_number(style.outline) or 0)
+  local shad = shad_raw ~= nil and finite_number(shad_raw) or (finite_number(style.shadow) or 0)
+  local blur = blur_raw ~= nil and finite_number(blur_raw) or nil
+  if (bord_raw ~= nil and not bord) or (shad_raw ~= nil and not shad) or (blur_raw ~= nil and not blur) then
+    return nil, L("err_unsupported_tags", "invalid numeric tag")
+  end
+  bord = format_number(bord)
+  shad = format_number(shad)
+  if blur ~= nil then blur = format_number(blur) end
   return {
     tags = tags,
     drawing = drawing:match("^%s*(.-)%s*$"),
     p_scale = p_scale,
     coord_scale = scale,
+    coord_scale_x = scale * 100 / scale_x,
+    coord_scale_y = scale * 100 / scale_y,
     pos_x = pos_x,
     pos_y = pos_y,
     color = color,
     rgb = rgb,
     lab = lab,
-    an = an,
+    an = tostring(an),
     bord = bord,
     shad = shad,
     blur = blur,
@@ -601,7 +641,9 @@ parse_shape_line = function(text)
       an,
       bord,
       shad,
-      blur or ""
+      blur or "",
+      format_number(scale_x),
+      format_number(scale_y)
     }, "|")
   }
 end
@@ -620,28 +662,26 @@ line_key = function(line, parsed)
     line.comment and "1" or "0",
     parsed.visual_key
   }
+  for index = 1, #fields do fields[index] = tostring(fields[index]) end
   return table.concat(fields, "\31")
 end
 local collect_items
 collect_items = function(subs, sel)
-  if not (sel and #sel >= 2) then
+  if type(sel) ~= "table" then
     return nil, L("err_two_shapes")
   end
-  local sorted
-  do
-    local _accum_0 = { }
-    local _len_0 = 1
-    for _index_0 = 1, #sel do
-      local index = sel[_index_0]
-      _accum_0[_len_0] = index
-      _len_0 = _len_0 + 1
-    end
-    sorted = _accum_0
-  end
-  table.sort(sorted)
+  local sorted = LineOps.normalizeIndices(subs, sel)
+  if #sorted < 2 then return nil, L("err_two_shapes") end
   for i = 2, #sorted do
     if sorted[i] ~= sorted[i - 1] + 1 then
       return nil, L("err_contiguous")
+    end
+  end
+  local styles = { }
+  for index = 1, #subs do
+    local candidate = subs[index]
+    if candidate and candidate.class == "style" and candidate.name then
+      styles[candidate.name] = candidate
     end
   end
   local items = { }
@@ -651,7 +691,8 @@ collect_items = function(subs, sel)
     if not (line and line.class == "dialogue") then
       return nil, L("err_not_dialogue", index)
     end
-    local parsed, err = parse_shape_line(line.text)
+    local style = line.styleref or line.styleRef or line.style_ref or styles[line.style]
+    local parsed, err = parse_shape_line(line.text, style)
     if not (parsed) then
       return nil, L("err_line", index, err)
     end
@@ -715,28 +756,28 @@ end
 local merged_text
 merged_text = function(items, color)
   local first = items[1]
-  local base_x, base_y = first.pos_x, first.pos_y
+  local base_x, base_y = first.bounds.left, first.bounds.top
   for _index_0 = 1, #items do
     local item = items[_index_0]
-    if item.pos_x < base_x then
-      base_x = item.pos_x
+    if item.bounds.left < base_x then
+      base_x = item.bounds.left
     end
-    if item.pos_y < base_y then
-      base_y = item.pos_y
+    if item.bounds.top < base_y then
+      base_y = item.bounds.top
     end
   end
   local drawings = { }
   for _index_0 = 1, #items do
     local item = items[_index_0]
-    local dx = (item.pos_x - base_x) * item.coord_scale
-    local dy = (item.pos_y - base_y) * item.coord_scale
+    local dx = (item.bounds.origin_x - base_x) * item.coord_scale_x
+    local dy = (item.bounds.origin_y - base_y) * item.coord_scale_y
     drawings[#drawings + 1] = offset_drawing(item.drawing, dx, dy)
   end
   local blur_tag = ""
   if first.blur and math.abs(tonumber(first.blur) or 0) > EPSILON then
     blur_tag = "\\blur" .. tostring(first.blur)
   end
-  return "{\\an" .. tostring(first.an) .. "\\pos(" .. tostring(format_number(base_x)) .. "," .. tostring(format_number(base_y)) .. ")\\bord" .. tostring(first.bord) .. "\\shad" .. tostring(first.shad) .. tostring(blur_tag) .. "\\p" .. tostring(first.p_scale) .. "\\1c" .. tostring(color) .. "}" .. tostring(table.concat(drawings, " ")) .. "{\\p0}"
+  return "{\\an7\\pos(" .. tostring(format_number(base_x)) .. "," .. tostring(format_number(base_y)) .. ")\\bord" .. tostring(first.bord) .. "\\shad" .. tostring(first.shad) .. tostring(blur_tag) .. "\\p" .. tostring(first.p_scale) .. "\\1c" .. tostring(color) .. "}" .. tostring(table.concat(drawings, " ")) .. "{\\p0}"
 end
 local new_cluster
 new_cluster = function(item)
@@ -766,6 +807,23 @@ add_to_cluster = function(cluster, item)
   cluster.color = rgb_to_ass(cluster.r / cluster.total, cluster.g / cluster.total, cluster.b / cluster.total)
   cluster.lab = color_to_oklab(cluster.color)
 end
+local cluster_accepts
+cluster_accepts = function(cluster, item, threshold)
+  local weight = item.weight or 1
+  local total = cluster.total + weight
+  if total <= 0 then return false end
+  local color = rgb_to_ass(
+    (cluster.r + item.rgb.r * weight) / total,
+    (cluster.g + item.rgb.g * weight) / total,
+    (cluster.b + item.rgb.b * weight) / total
+  )
+  local lab = color_to_oklab(color)
+  if delta_lab(item.lab, lab) > threshold + EPSILON then return false end
+  for _, existing in ipairs(cluster.items) do
+    if delta_lab(existing.lab, lab) > threshold + EPSILON then return false end
+  end
+  return true
+end
 local similar_optimize
 similar_optimize = function(items, opts)
   local clusters = { }
@@ -775,11 +833,11 @@ similar_optimize = function(items, opts)
     for _index_1 = 1, #clusters do
       local cluster = clusters[_index_1]
       local delta = delta_lab(item.lab, cluster.lab)
-      if delta < best_delta then
+      if delta < best_delta and delta <= opts.threshold and cluster_accepts(cluster, item, opts.threshold) then
         best, best_delta = cluster, delta
       end
     end
-    if best and best_delta <= opts.threshold then
+    if best then
       add_to_cluster(best, item)
     else
       local cluster = new_cluster(item)
@@ -846,7 +904,7 @@ gradient_score = function(items, axis)
   end
   local first, last = sorted[1], sorted[#sorted]
   local endpoint_delta = delta_lab(first.lab, last.lab)
-  if endpoint_delta < 0.03 then
+  if endpoint_delta < MIN_GRADIENT_ENDPOINT_DELTA then
     return nil
   end
   local total_w, total_err, max_err = 0, 0, 0
@@ -877,7 +935,7 @@ gradient_score = function(items, axis)
 end
 local detect_gradient
 detect_gradient = function(items, opts)
-  if not (#items >= 4) then
+  if not (#items >= MIN_GRADIENT_ITEMS) then
     return nil
   end
   local horizontal = gradient_score(items, "Horizontal")
@@ -889,8 +947,8 @@ detect_gradient = function(items, opts)
   if not (best) then
     return nil
   end
-  local avg_limit = math.max(0.075, opts.threshold * 1.6)
-  local max_limit = math.max(0.180, opts.threshold * 3.0)
+  local avg_limit = math.max(MIN_GRADIENT_AVERAGE_LIMIT, opts.threshold * GRADIENT_AVERAGE_FACTOR)
+  local max_limit = math.max(MIN_GRADIENT_MAX_LIMIT, opts.threshold * GRADIENT_MAX_FACTOR)
   if best.avg_err > avg_limit or best.max_err > max_limit then
     return nil
   end
@@ -994,7 +1052,15 @@ analyze_selection = function(subs, sel, opts)
   local after_lines = #result.texts
   local before_colors = unique_color_count(items)
   local after_colors = result.colors_after or before_colors
-  local changed = after_lines ~= before_lines or chars_after ~= chars_before or after_colors ~= before_colors
+  local changed = after_lines ~= before_lines
+  if not changed then
+    for index = 1, before_lines do
+      if result.texts[index] ~= tostring(items[index].line.text or "") then
+        changed = true
+        break
+      end
+    end
+  end
   return {
     items = items,
     texts = result.texts,
@@ -1032,33 +1098,23 @@ summary_text = function(report)
   return table.concat(lines, "\n")
 end
 local apply_report
-apply_report = function(subs, sel, report)
-  local sorted
-  do
-    local _accum_0 = { }
-    local _len_0 = 1
-    for _index_0 = 1, #sel do
-      local index = sel[_index_0]
-      _accum_0[_len_0] = index
-      _len_0 = _len_0 + 1
-    end
-    sorted = _accum_0
-  end
+apply_report = function(subs, selection_or_report, report)
+  report = report or selection_or_report
+  local sorted = { }
+  for _, item in ipairs(report.items or {}) do sorted[#sorted + 1] = item.index end
   table.sort(sorted)
   local first_index = sorted[1]
   local template = report.items[1].line
   for i = #sorted, 1, -1 do
     subs.delete(sorted[i])
   end
-  local new_sel = { }
+  local lines = { }
   for i, text in ipairs(report.texts) do
     local new_line = copy_line(template)
     new_line.text = text
-    local insert_at = first_index + i - 1
-    subs.insert(insert_at, new_line)
-    new_sel[#new_sel + 1] = insert_at
+    lines[i] = new_line
   end
-  return new_sel
+  return LineOps.insertLines(subs, { { index = first_index, lines = lines } })
 end
 local localized_values
 localized_values = function(values, keys)
@@ -1126,8 +1182,8 @@ build_dialog = function(saved)
       name = "threshold",
       value = saved.threshold,
       min = 0,
-      max = 0.25,
-      step = 0.005,
+      max = MAX_THRESHOLD,
+      step = MIN_THRESHOLD,
       x = 4,
       y = 2,
       width = 3,
@@ -1145,8 +1201,8 @@ build_dialog = function(saved)
       class = "intedit",
       name = "max_bands",
       value = saved.max_bands,
-      min = 2,
-      max = 64,
+      min = MIN_BANDS,
+      max = MAX_BANDS,
       x = 3,
       y = 3,
       width = 3,
@@ -1210,7 +1266,7 @@ local function main(subs, sel, _, context)
     if confirm ~= execute then return sel end
   end
   local newSelection = LineOps.transaction(subs, "", function()
-    return apply_report(subs, sel, report)
+    return apply_report(subs, report)
   end)
   commitUndo(context)
   if not context.silent then show_message(summary_text(report)) end
@@ -1243,5 +1299,8 @@ ShapeOptimizer.summaryText = summary_text
 ShapeOptimizer.main = main
 ShapeOptimizer.validate = validate
 
-if depctrl then return depctrl:register(ShapeOptimizer) end
+if depctrl then
+  ShapeOptimizer.version = depctrl
+  return depctrl:register(ShapeOptimizer)
+end
 return ShapeOptimizer

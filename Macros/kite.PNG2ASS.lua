@@ -1,7 +1,7 @@
 script_name        = "PNG2ASS"
 script_description = "Convert images and SVG files into ASS drawing lines"
 script_author      = "Kiterow"
-script_version     = "1.4.1"
+script_version     = "1.4.3"
 script_namespace   = "kite.PNG2ASS"
 
 local PNG2ASS = {}
@@ -9,8 +9,19 @@ local PNG2ASS = {}
 local module_name = "ass_png2ass"
 local config_file_name = "kite.PNG2ASS.conf"
 local default_install_source = "git+https://github.com/Kiterowx/kite-png2ass.git"
-local IMAGE_FILTER = "Images (.png .jpg .jpeg .webp .bmp .tif .svg)|"
+local IMAGE_FILTER = "Images (.png .jpg .jpeg .webp .bmp .tif .tiff .gif .tga .svg)|"
     .. "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.tga;*.svg"
+local SUPPORTED_EXTENSIONS = {
+    png = true, jpg = true, jpeg = true, webp = true, bmp = true,
+    tif = true, tiff = true, gif = true, tga = true, svg = true,
+}
+local MAX_SEQUENCE_FRAMES = 10000
+local MAX_SEQUENCE_LINES = 500000
+local MAX_SEQUENCE_CHARS = 100000000
+local MAX_BACKEND_LINE_CHARS = 8000000
+local MAX_LOG_CHARS = 1000000
+local TEMP_STAMP_FORMAT = "%Y%m%d%H%M%S"
+local STATUS_TEXT_LIMIT = 200
 
 local depctrl
 do
@@ -27,19 +38,19 @@ do
                 },
                 {
                     "kite.UI",
-                    version = "1.1.0",
+                    version = "1.1.3",
                     url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
                     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
                 },
                 {
                     "kite.PyBridge",
-                    version = "1.4.2",
+                    version = "1.4.4",
                     url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
                     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
                 },
                 {
                     "kite.LineOps",
-                    version = "1.5.0",
+                    version = "1.5.2",
                     url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
                     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
                 },
@@ -51,6 +62,7 @@ end
 local KiteUI
 local PyBridge
 local LineOps
+local json
 do
     if depctrl and depctrl.requireModules then
         local ok, _, ui, bridge, lineops = pcall(function()
@@ -66,6 +78,14 @@ end
 KiteUI = KiteUI or require("kite.UI")
 PyBridge = PyBridge or require("kite.PyBridge")
 LineOps = LineOps or require("kite.LineOps")
+
+do
+    local ok, value = pcall(require, "json")
+    if not ok or not value or type(value.decode) ~= "function" then
+        ok, value = pcall(require, "l0.dkjson")
+    end
+    if ok and value and type(value.decode) == "function" then json = value end
+end
 
 local DEFAULTS = {
     python = "python",
@@ -91,6 +111,24 @@ local ENGINES = { "auto", "vtracer", "opencv" }
 local MODES = { "auto", "alpha", "white-matte", "dark-matte", "luma", "color" }
 local POSITIONS = { "0,0", "Active pos", "Manual" }
 local COLORS = { "style", "source" }
+local OPTION_LIMITS = {
+    threshold = { min = 1, max = 99, integer = true },
+    p_scale = { min = 1, max = 6, integer = true },
+    filter_speckle = { min = 0, max = 100, integer = true },
+    simplify = { min = 0, max = 20 },
+    min_area = { min = 0, max = 10000 },
+    x = { min = -20000, max = 20000, integer = true },
+    y = { min = -20000, max = 20000, integer = true },
+    blur = { min = 0, max = 20 },
+    denoise = { min = 0, max = 5, integer = true },
+    max_chars = { min = 1000, max = MAX_BACKEND_LINE_CHARS, integer = true },
+    max_pixels = { min = 250000, max = 200000000, integer = true },
+}
+
+local function list_contains(values, wanted)
+    for _, value in ipairs(values) do if value == wanted then return true end end
+    return false
+end
 
 local trim = LineOps.trim
 local join_path = PyBridge.joinPath
@@ -98,20 +136,110 @@ local file_exists = PyBridge.fileExists
 local write_file = PyBridge.writeFile
 local copy_line = LineOps.copy
 
+local function finite_number(value)
+    local number = tonumber(value)
+    if not number or number ~= number or number == math.huge or number == -math.huge then return nil end
+    return number
+end
+
+local function normalize_main_options(values)
+    values = type(values) == "table" and values or {}
+    local normalized = {}
+    normalized.engine = list_contains(ENGINES, values.engine) and values.engine or DEFAULTS.engine
+    normalized.mode = list_contains(MODES, values.mode) and values.mode or DEFAULTS.mode
+    normalized.position = list_contains(POSITIONS, values.position) and values.position or DEFAULTS.position
+    normalized.color = list_contains(COLORS, values.color) and values.color or DEFAULTS.color
+    for name, limits in pairs(OPTION_LIMITS) do
+        local value = finite_number(values[name]) or DEFAULTS[name]
+        value = math.max(limits.min, math.min(limits.max, value))
+        if limits.integer then value = LineOps.round(value) end
+        normalized[name] = value
+    end
+    normalized.python = type(values.python) == "string" and trim(values.python) or ""
+    return normalized
+end
+
+local function valid_ass_shape(shape)
+    local current, count, first, spline_open
+    count, spline_open = 0, false
+    local function finish_command()
+        if not current then return false end
+        if current == "c" then
+            if count ~= 0 or not spline_open then return false end
+            spline_open = false
+            return true
+        elseif current == "s" then
+            if count < 6 or count % 2 ~= 0 then return false end
+            spline_open = true
+            return true
+        elseif current == "p" then
+            return spline_open and count == 2
+        elseif current == "b" then
+            spline_open = false
+            return count >= 6 and count % 6 == 0
+        elseif current == "l" then
+            spline_open = false
+            return count >= 2 and count % 2 == 0
+        end
+        spline_open = false
+        return count == 2
+    end
+    for token in tostring(shape or ""):gmatch("%S+") do
+        local candidate = token:lower()
+        if candidate:match("^[mnlbspc]$") then
+            if token ~= candidate then return false end
+            if current and not finish_command() then return false end
+            current = candidate
+            first = first or current
+            count = 0
+        else
+            if not current or current == "c" or finite_number(token) == nil then return false end
+            count = count + 1
+        end
+    end
+    return (first == "m" or first == "n") and finish_command()
+end
+
+local function valid_ass_shape_line(line)
+    if type(line) ~= "string" or line == "" or #line > MAX_BACKEND_LINE_CHARS then return false end
+    if line:find("[%z\1-\8\11\12\14-\31]") or line:find("[\r\n]") then return false end
+    local drawings = {}
+    for _, section in ipairs(LineOps.scanSections(line)) do
+        if section.type == "drawing" then
+            if trim(section.text) ~= "" then drawings[#drawings + 1] = section.text end
+        elseif section.type ~= "override" and trim(section.text) ~= "" then
+            return false
+        end
+    end
+    if #drawings == 0 then return false end
+    return valid_ass_shape(table.concat(drawings, " "))
+end
+
 local function read_file(path, limit)
     return PyBridge.readFile(path, limit)
 end
 
+local function read_log(path)
+    local content = read_file(path, MAX_LOG_CHARS + 1)
+    if content and #content > MAX_LOG_CHARS then return content:sub(1, MAX_LOG_CHARS) .. "\n[output truncated]" end
+    return content
+end
+
 local function read_lines(path)
-    local content = read_file(path)
+    local content, message = read_file(path, MAX_SEQUENCE_CHARS + 1)
     if not content then
-        return nil
+        return nil, message
     end
+    if #content > MAX_SEQUENCE_CHARS then return nil, "Backend output exceeds the character limit." end
     local lines = {}
     for line in (content .. "\n"):gmatch("([^\r\n]*)\r?\n") do
         line = trim(line)
         if line ~= "" then
+            if not valid_ass_shape_line(line) then
+                return nil, "Backend output contains an invalid ASS drawing at line " .. tostring(#lines + 1) .. "."
+            end
             lines[#lines + 1] = line
+            if #lines > MAX_SEQUENCE_LINES then return nil, "Backend output exceeds the ASS line limit." end
         end
     end
     return lines
@@ -176,12 +304,15 @@ local function run_command_dialog(title, command, ok_message)
         if current == "" then
             log = "Command is empty."
         else
-            local paths = temp_paths()
-            if run_command(current, paths.cmdlog) then
+            local paths, path_error = temp_paths()
+            if not paths then
+                log = path_error or "Could not allocate temporary files."
+            elseif run_command(current, paths.cmdlog) then
                 show_message(ok_message)
                 return true
+            else
+                log = read_log(paths.cmdlog) or "Command failed."
             end
-            log = read_file(paths.cmdlog) or "Command failed."
         end
     end
 end
@@ -319,8 +450,9 @@ function temp_paths()
         return paths
     end
     local temp = join_path(script_dir(), "temp")
-    ensure_dir(temp)
-    local stamp = os.date("%Y%m%d%H%M%S")
+    local created, message = ensure_dir(temp)
+    if not created then return nil, message or "Could not create a temporary directory." end
+    local stamp = os.date(TEMP_STAMP_FORMAT) .. "." .. PyBridge.uniqueSuffix()
     return {
         out = join_path(temp, "png2ass_" .. stamp .. ".txt"),
         list = join_path(temp, "png2ass_" .. stamp .. ".list"),
@@ -334,7 +466,8 @@ local function active_pos(text)
     local calls = LineOps.tagCalls(text, { pos = true })
     for index = #calls, 1, -1 do
         local x, y = calls[index].value:match("^%(%s*([%+%-]?[%d%.]+)%s*,%s*([%+%-]?[%d%.]+)%s*%)$")
-        if x and y then return tonumber(x), tonumber(y) end
+        x, y = finite_number(x), finite_number(y)
+        if x and y then return x, y end
     end
     return nil, nil
 end
@@ -343,20 +476,27 @@ local function natural_key(path)
     local name = tostring(path or ""):match("([^\\/]+)$") or tostring(path or "")
     name = name:lower()
     return name:gsub("(%d+)", function(number)
-        return string.format("%012d", tonumber(number) or 0)
+        local significant = number:gsub("^0+", "")
+        if significant == "" then significant = "0" end
+        return string.format("%08d:%s", #significant, significant)
     end)
 end
 
 local function normalize_paths(value)
     local paths = {}
+    local rejected = {}
     local seen = {}
     local values = type(value) == "table" and value or { value }
     for _, path in ipairs(values) do
         path = type(path) == "string" and trim(path) or ""
-        local key = path:lower()
-        if path ~= "" and not seen[key] then
+        local key = PyBridge.isWindows and path:lower() or path
+        local extension = path:lower():match("%.([^.\\/]+)$")
+        local unsafe_list_path = path:find("[\r\n]") or path:find("%z")
+        if path ~= "" and not unsafe_list_path and SUPPORTED_EXTENSIONS[extension] and file_exists(path) and not seen[key] then
             seen[key] = true
             paths[#paths + 1] = path
+        elseif path ~= "" and (unsafe_list_path or not SUPPORTED_EXTENSIONS[extension] or not file_exists(path)) then
+            rejected[#rejected + 1] = path
         end
     end
     table.sort(paths, function(left, right)
@@ -365,7 +505,7 @@ local function normalize_paths(value)
         if left_key == right_key then return left:lower() < right:lower() end
         return left_key < right_key
     end)
-    return paths
+    return paths, rejected
 end
 
 local function select_pngs()
@@ -377,7 +517,10 @@ local function select_pngs()
         true,
         true
     )
-    local paths = normalize_paths(result)
+    local paths, rejected = normalize_paths(result)
+    if #rejected > 0 then
+        cancel_with("Some selected images are missing or unsupported:\n" .. table.concat(rejected, "\n"))
+    end
     if #paths == 0 then
         aegisub.cancel()
     end
@@ -408,17 +551,6 @@ local function package_config_dialog(title, buttons)
     return button, result
 end
 
-local function status_value(text, key)
-    return tostring(text or ""):match('"' .. key .. '"%s*:%s*"(.-)"')
-end
-
-local function status_boolean(text, key)
-    local value = tostring(text or ""):match('"' .. key .. '"%s*:%s*(%a+)')
-    if value == "true" then return true end
-    if value == "false" then return false end
-    return nil
-end
-
 local function package_status(cfg)
     local command, message = PyBridge.moduleCommand(cfg.python, module_name, { "--status", "--source", cfg.install_source })
     if not command then return false, message end
@@ -426,11 +558,21 @@ local function package_status(cfg)
 end
 
 local function status_summary(detail)
-    local installed = status_value(detail, "installed_version") or "unknown"
-    local latest = status_value(detail, "latest_version") or "unavailable"
-    local ready = status_boolean(detail, "ready")
-    local update_available = status_boolean(detail, "update_available")
-    local update_error = status_value(detail, "update_error")
+    if not json then return "The backend status cannot be decoded because no JSON module is available.", false, nil, false end
+    local ok, status = pcall(json.decode, tostring(detail or ""))
+    if not ok or type(status) ~= "table" or type(status.ready) ~= "boolean" or
+        (status.update_available ~= nil and type(status.update_available) ~= "boolean") then
+        return "The backend returned an invalid status response.", false, nil, false
+    end
+    local function status_text(value, fallback)
+        if type(value) ~= "string" or trim(value) == "" then return fallback end
+        return trim(value):gsub("[\r\n]+", " "):sub(1, STATUS_TEXT_LIMIT)
+    end
+    local installed = status_text(status.installed_version, "unknown")
+    local latest = status_text(status.latest_version, "unavailable")
+    local ready = status.ready
+    local update_available = status.update_available
+    local update_error = status_text(status.update_error, "unavailable")
     local lines = {
         "Package: kite-png2ass",
         "Installed: " .. installed,
@@ -444,7 +586,7 @@ local function status_summary(detail)
     else
         lines[#lines + 1] = "Update check: " .. (update_error or "unavailable")
     end
-    return table.concat(lines, "\n"), ready, update_available
+    return table.concat(lines, "\n"), ready, update_available, true
 end
 
 local function backend_action(message, buttons)
@@ -466,7 +608,8 @@ end
 
 local function configure_package_main()
     local _, cfg = package_config_dialog("PNG2ASS Package", { "Execute", "Cancel" })
-    write_config(cfg)
+    local ok, message = write_config(cfg)
+    if not ok then return show_message("Could not save package configuration:\n" .. tostring(message or "unknown error")) end
     show_message("Package configuration saved.")
 end
 
@@ -489,8 +632,12 @@ local function check_package_main()
         return
     end
 
-    local summary, ready, update_available = status_summary(detail)
-    if ready == false then
+    local summary, ready, update_available, valid_status = status_summary(detail)
+    if not valid_status then
+        local action = backend_action(summary, { "Repair", "Configure", "Close" })
+        if action == "Repair" then return install_package_main() end
+        if action == "Configure" then return configure_package_main() end
+    elseif ready == false then
         local action = backend_action(summary, { "Repair", "Configure", "Close" })
         if action == "Repair" then return install_package_main() end
         if action == "Configure" then return configure_package_main() end
@@ -504,7 +651,7 @@ end
 
 local function create_dialog(line, cfg, image_count, frame_count)
     local px, py = active_pos(line.text)
-    local saved = PNG_SETTINGS:values("main")
+    local saved = normalize_main_options(PNG_SETTINGS:values("main"))
     local default_position = (px and py) and "Active pos" or saved.position
     local count_label = "Images: " .. tostring(image_count or 1)
     if frame_count then
@@ -519,29 +666,29 @@ local function create_dialog(line, cfg, image_count, frame_count)
         color_label = { class = "label", label = "Color", x = 10, y = 1, width = 2, height = 1 },
         color = { class = "dropdown", name = "color", items = COLORS, value = saved.color, x = 12, y = 1, width = 3, height = 1 },
         threshold_label = { class = "label", label = "Threshold", x = 0, y = 2, width = 3, height = 1 },
-        threshold = { class = "intedit", name = "threshold", value = saved.threshold, min = 1, max = 99, x = 3, y = 2, width = 3, height = 1 },
+        threshold = { class = "intedit", name = "threshold", value = saved.threshold, min = OPTION_LIMITS.threshold.min, max = OPTION_LIMITS.threshold.max, x = 3, y = 2, width = 3, height = 1 },
         scale_label = { class = "label", label = "Scale", x = 6, y = 2, width = 2, height = 1 },
-        p_scale = { class = "intedit", name = "p_scale", value = saved.p_scale, min = 1, max = 6, x = 8, y = 2, width = 2, height = 1 },
+        p_scale = { class = "intedit", name = "p_scale", value = saved.p_scale, min = OPTION_LIMITS.p_scale.min, max = OPTION_LIMITS.p_scale.max, x = 8, y = 2, width = 2, height = 1 },
         speckle_label = { class = "label", label = "Speckle", x = 10, y = 2, width = 2, height = 1 },
-        filter_speckle = { class = "intedit", name = "filter_speckle", value = saved.filter_speckle, min = 0, max = 100, x = 12, y = 2, width = 3, height = 1 },
+        filter_speckle = { class = "intedit", name = "filter_speckle", value = saved.filter_speckle, min = OPTION_LIMITS.filter_speckle.min, max = OPTION_LIMITS.filter_speckle.max, x = 12, y = 2, width = 3, height = 1 },
         simplify_label = { class = "label", label = "Simplify", x = 0, y = 3, width = 3, height = 1 },
-        simplify = { class = "floatedit", name = "simplify", value = saved.simplify, min = 0, max = 20, step = 0.25, x = 3, y = 3, width = 3, height = 1 },
+        simplify = { class = "floatedit", name = "simplify", value = saved.simplify, min = OPTION_LIMITS.simplify.min, max = OPTION_LIMITS.simplify.max, step = 0.25, x = 3, y = 3, width = 3, height = 1 },
         min_area_label = { class = "label", label = "Min area", x = 6, y = 3, width = 3, height = 1 },
-        min_area = { class = "floatedit", name = "min_area", value = saved.min_area, min = 0, max = 10000, step = 1, x = 9, y = 3, width = 3, height = 1 },
+        min_area = { class = "floatedit", name = "min_area", value = saved.min_area, min = OPTION_LIMITS.min_area.min, max = OPTION_LIMITS.min_area.max, step = 1, x = 9, y = 3, width = 3, height = 1 },
         position_label = { class = "label", label = "Position", x = 0, y = 4, width = 3, height = 1 },
         position = { class = "dropdown", name = "position", items = POSITIONS, value = default_position, x = 3, y = 4, width = 4, height = 1 },
         x_label = { class = "label", label = "X", x = 7, y = 4, width = 1, height = 1 },
-        x = { class = "intedit", name = "x", value = px or saved.x, min = -20000, max = 20000, x = 8, y = 4, width = 3, height = 1 },
+        x = { class = "intedit", name = "x", value = px or saved.x, min = OPTION_LIMITS.x.min, max = OPTION_LIMITS.x.max, x = 8, y = 4, width = 3, height = 1 },
         y_label = { class = "label", label = "Y", x = 11, y = 4, width = 1, height = 1 },
-        y = { class = "intedit", name = "y", value = py or saved.y, min = -20000, max = 20000, x = 12, y = 4, width = 3, height = 1 },
+        y = { class = "intedit", name = "y", value = py or saved.y, min = OPTION_LIMITS.y.min, max = OPTION_LIMITS.y.max, x = 12, y = 4, width = 3, height = 1 },
         blur_label = { class = "label", label = "Blur", x = 0, y = 5, width = 2, height = 1 },
-        blur = { class = "floatedit", name = "blur", value = saved.blur, min = 0, max = 20, step = 0.1, x = 2, y = 5, width = 3, height = 1 },
+        blur = { class = "floatedit", name = "blur", value = saved.blur, min = OPTION_LIMITS.blur.min, max = OPTION_LIMITS.blur.max, step = 0.1, x = 2, y = 5, width = 3, height = 1 },
         denoise_label = { class = "label", label = "Denoise", x = 5, y = 5, width = 2, height = 1 },
-        denoise = { class = "intedit", name = "denoise", value = saved.denoise, min = 0, max = 5, x = 7, y = 5, width = 2, height = 1 },
+        denoise = { class = "intedit", name = "denoise", value = saved.denoise, min = OPTION_LIMITS.denoise.min, max = OPTION_LIMITS.denoise.max, x = 7, y = 5, width = 2, height = 1 },
         max_label = { class = "label", label = "Max chars", x = 9, y = 5, width = 3, height = 1 },
-        max_chars = { class = "intedit", name = "max_chars", value = saved.max_chars, min = 1000, max = 8000000, x = 12, y = 5, width = 3, height = 1 },
+        max_chars = { class = "intedit", name = "max_chars", value = saved.max_chars, min = OPTION_LIMITS.max_chars.min, max = OPTION_LIMITS.max_chars.max, x = 12, y = 5, width = 3, height = 1 },
         pixels_label = { class = "label", label = "Max pixels", x = 0, y = 6, width = 3, height = 1 },
-        max_pixels = { class = "intedit", name = "max_pixels", value = saved.max_pixels, min = 250000, max = 200000000, x = 3, y = 6, width = 5, height = 1 },
+        max_pixels = { class = "intedit", name = "max_pixels", value = saved.max_pixels, min = OPTION_LIMITS.max_pixels.min, max = OPTION_LIMITS.max_pixels.max, x = 3, y = 6, width = 5, height = 1 },
         count_label = { class = "label", label = count_label, x = 8, y = 6, width = 7, height = 1 },
         python_label = { class = "label", label = "Python", x = 0, y = 7, width = 2, height = 1 },
         python = { class = "edit", name = "python", value = cfg.python, x = 2, y = 7, width = 11, height = 1 },
@@ -550,6 +697,7 @@ local function create_dialog(line, cfg, image_count, frame_count)
     if button ~= "Execute" then
         aegisub.cancel()
     end
+    result = normalize_main_options(result)
     result.python = trim(result.python)
     if result.python == "" then
         result.python = cfg.python
@@ -560,7 +708,7 @@ end
 local function persist_options(options, cfg)
     PNG_SETTINGS:update("main", options)
     cfg.python = options.python
-    write_config(cfg)
+    return write_config(cfg)
 end
 
 local function conversion_arguments(paths, options, pos_x, pos_y, allow_many_lines)
@@ -607,17 +755,16 @@ end
 local function resolve_position(options, line)
     if options.position == "Active pos" then
         local px, py = active_pos(line.text)
-        return px or 0, py or 0
+        if not px or not py then return nil, nil, "The active line does not contain a valid \\pos tag." end
+        return px, py
     end
     if options.position == "Manual" then
-        return tonumber(options.x) or 0, tonumber(options.y) or 0
+        local x, y = finite_number(options.x), finite_number(options.y)
+        if not x or not y then return nil, nil, "The manual position is invalid." end
+        return x, y
     end
     return 0, 0
 end
-
-local MAX_SEQUENCE_FRAMES = 10000
-local MAX_SEQUENCE_LINES = 500000
-local MAX_SEQUENCE_CHARS = 100000000
 
 local function make_shape_line(source, ass_text, start_time, end_time)
     local line = copy_line(source)
@@ -640,21 +787,45 @@ local function selected_dialogue_records(subs, sel)
     return records
 end
 
+local function frame_from_ms(ms)
+    ms = finite_number(ms)
+    if not ms then return nil end
+    local ok, frame = pcall(aegisub.frame_from_ms, ms)
+    frame = ok and finite_number(frame) or nil
+    return frame and math.floor(frame) or nil
+end
+
+local function ms_from_frame(frame)
+    frame = finite_number(frame)
+    if not frame then return nil end
+    local ok, ms = pcall(aegisub.ms_from_frame, math.floor(frame))
+    ms = ok and finite_number(ms) or nil
+    return ms
+end
+
 local function build_frame_jobs(subs, sel)
     if not aegisub.frame_from_ms or not aegisub.ms_from_frame then return nil, "A loaded video is required to map images to frames." end
     local records, message = selected_dialogue_records(subs, sel)
     if not records then return nil, message end
     local jobs = {}
     for _, record in ipairs(records) do
-        local start_frame = aegisub.frame_from_ms(tonumber(record.line.start_time) or 0)
-        local end_frame = aegisub.frame_from_ms(tonumber(record.line.end_time) or 0)
-        if not start_frame or not end_frame then return nil, "Could not read frame timing from selected row " .. tostring(record.index) .. "." end
-        if end_frame <= start_frame then return nil, "Selected row " .. tostring(record.index) .. " is shorter than one frame." end
-        for frame = start_frame, end_frame - 1 do
+        local line_start = finite_number(record.line.start_time)
+        local line_end = finite_number(record.line.end_time)
+        if not line_start or not line_end or line_end <= line_start then
+            return nil, "Selected row " .. tostring(record.index) .. " has invalid timing."
+        end
+        local start_frame = frame_from_ms(line_start)
+        local last_frame = frame_from_ms(math.max(line_start, line_end - 1))
+        if not start_frame or not last_frame then return nil, "Could not read frame timing from selected row " .. tostring(record.index) .. "." end
+        if last_frame < start_frame then return nil, "Selected row " .. tostring(record.index) .. " does not cover a video frame." end
+        for frame = start_frame, last_frame do
             if #jobs >= MAX_SEQUENCE_FRAMES then return nil, "Selected ranges exceed the " .. tostring(MAX_SEQUENCE_FRAMES) .. " frame limit." end
-            local start_ms = aegisub.ms_from_frame(frame)
-            local end_ms = aegisub.ms_from_frame(frame + 1)
+            local start_ms = ms_from_frame(frame)
+            local end_ms = ms_from_frame(frame + 1)
             if not start_ms or not end_ms or end_ms <= start_ms then return nil, "Invalid frame timing at frame " .. tostring(frame) .. "." end
+            start_ms = math.max(start_ms, line_start)
+            end_ms = math.min(end_ms, line_end)
+            if end_ms <= start_ms then return nil, "Selected row " .. tostring(record.index) .. " has an empty frame intersection." end
             jobs[#jobs + 1] = {
                 index = record.index,
                 line = copy_line(record.line),
@@ -685,11 +856,11 @@ local function read_sequence(path, expected_frames)
         if row == "" then
             cursor = cursor + 1
         else
-            local frame_index = tonumber(row:match("^FRAME%s+(%d+)$"))
+            local frame_index = finite_number(row:match("^FRAME%s+(%d+)$"))
             if not frame_index or frame_index ~= expected_index then return nil, "Sequence frame order is invalid near line " .. tostring(cursor) .. "." end
             cursor = cursor + 1
-            local count = tonumber(trim(rows[cursor] or ""):match("^LINES%s+(%d+)$"))
-            if not count or count < 1 then return nil, "Sequence output has an invalid line count for frame " .. tostring(frame_index) .. "." end
+            local count = finite_number(trim(rows[cursor] or ""):match("^LINES%s+(%d+)$"))
+            if not count or count < 1 or count ~= math.floor(count) then return nil, "Sequence output has an invalid line count for frame " .. tostring(frame_index) .. "." end
             total_lines = total_lines + count
             if total_lines > MAX_SEQUENCE_LINES then return nil, "Sequence output exceeds the ASS line limit." end
             cursor = cursor + 1
@@ -697,6 +868,7 @@ local function read_sequence(path, expected_frames)
             for _ = 1, count do
                 if cursor > #rows then return nil, "Sequence output ended before frame " .. tostring(frame_index) .. " was complete." end
                 if trim(rows[cursor]) == "" then return nil, "Sequence output contains an empty ASS line for frame " .. tostring(frame_index) .. "." end
+                if not valid_ass_shape_line(rows[cursor]) then return nil, "Sequence output contains an invalid ASS drawing for frame " .. tostring(frame_index) .. "." end
                 ass_lines[#ass_lines + 1] = rows[cursor]
                 cursor = cursor + 1
             end
@@ -755,23 +927,27 @@ function PNG2ASS.main(subs, sel, active_line)
         end
     end
     local options = create_dialog(line, cfg, #image_paths, frame_jobs and #frame_jobs or nil)
-    local paths = temp_paths()
-    local pos_x, pos_y = resolve_position(options, line)
+    local paths, path_error = temp_paths()
+    if not paths then cancel_with(path_error or "Could not allocate temporary files.") end
+    local pos_x, pos_y, position_error = resolve_position(options, line)
+    if not pos_x then PyBridge.cleanup(paths); cancel_with(position_error) end
     if #image_paths == 1 then
-        local command = build_command(paths, image_paths[1], options, pos_x, pos_y, false)
+        local command, command_error = build_command(paths, image_paths[1], options, pos_x, pos_y, false)
+        if not command then PyBridge.cleanup(paths); cancel_with(command_error or "Could not build the conversion command.") end
         local ok = run_command(command, paths.cmdlog)
-        local ass_lines = read_lines(paths.out)
+        local ass_lines, output_error = read_lines(paths.out)
         local log
         if not ok or not ass_lines or #ass_lines == 0 then
-            log = read_file(paths.log)
-            if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
+            log = output_error or read_log(paths.log)
+            if not log or trim(log) == "" then log = read_log(paths.cmdlog) end
             if continue_after_many_lines(log) then
-                command = build_command(paths, image_paths[1], options, pos_x, pos_y, true)
+                command, command_error = build_command(paths, image_paths[1], options, pos_x, pos_y, true)
+                if not command then PyBridge.cleanup(paths); cancel_with(command_error or "Could not rebuild the conversion command.") end
                 ok = run_command(command, paths.cmdlog)
-                ass_lines = read_lines(paths.out)
+                ass_lines, output_error = read_lines(paths.out)
                 if not ok or not ass_lines or #ass_lines == 0 then
-                    log = read_file(paths.log)
-                    if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
+                    log = output_error or read_log(paths.log)
+                    if not log or trim(log) == "" then log = read_log(paths.cmdlog) end
                 end
             end
         end
@@ -779,27 +955,34 @@ function PNG2ASS.main(subs, sel, active_line)
             PyBridge.cleanup(paths)
             cancel_with(log and trim(log) ~= "" and log or "PNG conversion failed. Use Backend/Check or Backend/Install or Update.")
         end
-        local new_sel = insert_shapes(subs, index, ass_lines)
-        persist_options(options, cfg)
+        local inserted, new_sel = pcall(insert_shapes, subs, index, ass_lines)
+        if not inserted or not new_sel then
+            PyBridge.cleanup(paths)
+            cancel_with("Could not insert converted shapes atomically: " .. tostring(new_sel or "unknown error"))
+        end
+        local settings_ok, settings_error = persist_options(options, cfg)
         PyBridge.cleanup(paths)
+        if not settings_ok then show_message("Conversion completed, but settings could not be saved:\n" .. tostring(settings_error or "unknown error")) end
         return new_sel
     end
     local wrote, write_error = write_file(paths.list, table.concat(image_paths, "\n"))
     if not wrote then PyBridge.cleanup(paths); cancel_with(write_error or "Could not create the image list.") end
-    local command = build_sequence_command(paths, options, pos_x, pos_y, false)
+    local command, command_error = build_sequence_command(paths, options, pos_x, pos_y, false)
+    if not command then PyBridge.cleanup(paths); cancel_with(command_error or "Could not build the sequence command.") end
     local ok = run_command(command, paths.cmdlog)
     local frames, parse_error = read_sequence(paths.sequence, #frame_jobs)
     local log
     if not ok or not frames then
-        log = read_file(paths.log)
-        if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
+        log = read_log(paths.log)
+        if not log or trim(log) == "" then log = read_log(paths.cmdlog) end
         if continue_after_many_lines(log) then
-            command = build_sequence_command(paths, options, pos_x, pos_y, true)
+            command, command_error = build_sequence_command(paths, options, pos_x, pos_y, true)
+            if not command then PyBridge.cleanup(paths); cancel_with(command_error or "Could not rebuild the sequence command.") end
             ok = run_command(command, paths.cmdlog)
             frames, parse_error = read_sequence(paths.sequence, #frame_jobs)
             if not ok or not frames then
-                log = read_file(paths.log)
-                if not log or trim(log) == "" then log = read_file(paths.cmdlog) end
+                log = read_log(paths.log)
+                if not log or trim(log) == "" then log = read_log(paths.cmdlog) end
             end
         end
     end
@@ -807,10 +990,14 @@ function PNG2ASS.main(subs, sel, active_line)
         PyBridge.cleanup(paths)
         cancel_with(log and trim(log) ~= "" and log or parse_error or "PNG sequence conversion failed. Use Backend/Check or Backend/Install or Update.")
     end
-    local new_sel, insert_error = insert_sequence_shapes(subs, frame_jobs, frames)
-    if not new_sel then PyBridge.cleanup(paths); cancel_with(insert_error) end
-    persist_options(options, cfg)
+    local inserted, new_sel, insert_error = pcall(insert_sequence_shapes, subs, frame_jobs, frames)
+    if not inserted or not new_sel then
+        PyBridge.cleanup(paths)
+        cancel_with(insert_error or ("Could not insert converted sequence atomically: " .. tostring(new_sel or "unknown error")))
+    end
+    local settings_ok, settings_error = persist_options(options, cfg)
     PyBridge.cleanup(paths)
+    if not settings_ok then show_message("Conversion completed, but settings could not be saved:\n" .. tostring(settings_error or "unknown error")) end
     return new_sel
 end
 
@@ -822,15 +1009,15 @@ end
 if aegisub and aegisub.register_macro then
     local entries = {
         { script_name, script_description, PNG2ASS.main, PNG2ASS.can_run },
-        { "Backend/Check", "Check installation, dependencies and available updates", check_package_main },
-        { "Backend/Install or Update", "Install or update kite-png2ass from the configured repository", install_package_main },
-        { "Backend/Configure", "Configure Python and package source", configure_package_main },
+        { script_name .. "/Backend/Check", "Check installation, dependencies and available updates", check_package_main },
+        { script_name .. "/Backend/Install or Update", "Install or update kite-png2ass from the configured repository", install_package_main },
+        { script_name .. "/Backend/Configure", "Configure Python and package source", configure_package_main },
     }
     if depctrl and depctrl.registerMacro and depctrl.registerMacros then
         depctrl:registerMacros(entries)
     else
         for _, entry in ipairs(entries) do
-            aegisub.register_macro(script_name .. "/" .. entry[1], entry[2], entry[3], entry[4])
+            aegisub.register_macro(entry[1], entry[2], entry[3], entry[4])
         end
     end
 end

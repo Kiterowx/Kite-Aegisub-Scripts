@@ -1,4 +1,4 @@
-# AutoBlur 2.0.7
+# AutoBlur 2.0.9
 
 AutoBlur matches a sign's `\blur` to frame sharpness with fixed or tracked sample points and time-varying blur curves.
 

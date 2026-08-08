@@ -1,7 +1,7 @@
 script_name = "AutoBlur"
 script_description = "Match a sign's \\blur to frame sharpness with fixed or tracked sample points and time-varying blur curves."
 script_author = "Kiterow"
-script_version = "2.0.7"
+script_version = "2.0.9"
 script_namespace = "kite.AutoBlur"
 
 local function safeRequire(m)
@@ -25,7 +25,7 @@ if DependencyControl then
         namespace = script_namespace,
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.UI", version = "1.1.0", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+            { "kite.UI", version = "1.1.3", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
     })
@@ -65,7 +65,7 @@ local function clamp(v, lo, hi)
 end
 
 local function extractRGB(color)
-    if type(color) ~= "string" then return 0, 0, 0 end
+    if type(color) ~= "string" then return nil, nil, nil end
     color = color:gsub("%s+", "")
     local b, g, r = color:match("&[Hh](%x%x)(%x%x)(%x%x)&?")
     if b then return tonumber(r, 16), tonumber(g, 16), tonumber(b, 16) end
@@ -77,7 +77,7 @@ local function extractRGB(color)
                clamp(tonumber(g) or 0, 0, 255),
                clamp(tonumber(b) or 0, 0, 255)
     end
-    return 0, 0, 0
+    return nil, nil, nil
 end
 
 local function lum(r, g, b)
@@ -94,22 +94,30 @@ local function formatBlurValue(v)
     return s
 end
 
-local function samplePatchLuminance(frame, cx, cy, radius, vw, vh)
+local function pixelLuminance(frame, x, y, vw, vh, cache)
+    x = clamp(x, 0, vw - 1)
+    y = clamp(y, 0, vh - 1)
+    local key = y * vw + x
+    local cached = cache[key]
+    if cached ~= nil then return cached end
+    local color = frame:getPixelFormatted(x, y)
+    local r, g, b = extractRGB(color)
+    if not r then
+        error(string.format("unsupported pixel value at %d,%d: %s", x, y, tostring(color)), 0)
+    end
+    local value = lum(r, g, b)
+    cache[key] = value
+    return value
+end
+
+local function samplePatchLuminance(frame, cx, cy, radius, vw, vh, cache)
     local L = {}
     cx = math.floor(cx + 0.5)
     cy = math.floor(cy + 0.5)
     for dy = -radius, radius do
         local row = {}
         for dx = -radius, radius do
-            local x = clamp(cx + dx, 0, vw - 1)
-            local y = clamp(cy + dy, 0, vh - 1)
-            local ok, color = pcall(function() return frame:getPixelFormatted(x, y) end)
-            if not ok or not color then
-                row[#row + 1] = 128
-            else
-                local r, g, b = extractRGB(color)
-                row[#row + 1] = lum(r, g, b)
-            end
+            row[#row + 1] = pixelLuminance(frame, cx + dx, cy + dy, vw, vh, cache)
         end
         L[#L + 1] = row
     end
@@ -170,9 +178,12 @@ local SAMPLE_OFFSETS = {
 
 local function sampleSharpness(frame, cx, cy, radius, vw, vh)
     local scores = {}
+    -- The five patches overlap heavily. Cache pixels per frame so each source
+    -- pixel crosses the Lua/C boundary at most once.
+    local pixelCache = {}
     local spread = math.max(1, radius * 0.75)
     for _, offset in ipairs(SAMPLE_OFFSETS) do
-        local L = samplePatchLuminance(frame, cx + offset[1] * spread, cy + offset[2] * spread, radius, vw, vh)
+        local L = samplePatchLuminance(frame, cx + offset[1] * spread, cy + offset[2] * spread, radius, vw, vh, pixelCache)
         scores[#scores + 1] = laplacianVariance(L)
     end
     return robustMean(scores)
@@ -216,14 +227,15 @@ local function smoothMovingAverage(arr, window)
     if window <= 1 then return arr end
     local n = #arr
     local out = {}
-    local half = math.floor(window / 2)
+    window = math.max(1, math.floor(tonumber(window) or 1))
+    local left = math.floor((window - 1) / 2)
+    local right = window - left - 1
+    local prefix = {[0] = 0}
+    for i = 1, n do prefix[i] = prefix[i - 1] + arr[i] end
     for i = 1, n do
-        local sum, count = 0, 0
-        for j = math.max(1, i - half), math.min(n, i + half) do
-            sum = sum + arr[j]
-            count = count + 1
-        end
-        out[i] = sum / count
+        local first = math.max(1, i - left)
+        local last = math.min(n, i + right)
+        out[i] = (prefix[last] - prefix[first - 1]) / (last - first + 1)
     end
     return out
 end
@@ -314,6 +326,13 @@ local function buildContinuousTransform(quantized, lineStartFrame, lineStartMs, 
     return out
 end
 
+local ASS_NUMBER_PATTERN = "[%+%-]?%d*%.?%d+"
+
+local function stripBlurTags(text)
+    text = text:gsub("\\blur%s*" .. ASS_NUMBER_PATTERN, "")
+    return text:gsub("\\be%s*" .. ASS_NUMBER_PATTERN, "")
+end
+
 local function stripBlurTransforms(block)
     local out = {}
     local i = 1
@@ -333,8 +352,11 @@ local function stripBlurTransforms(block)
             end
             if depth == 0 then
                 local chunk = block:sub(i, j)
-                if not chunk:find("\\blur", 1, true) and not chunk:find("\\be", 1, true) then
-                    out[#out + 1] = chunk
+                local inner = stripBlurTags(chunk:sub(4, -2))
+                -- Keep mixed transforms. Dropping the complete \t used to erase
+                -- unrelated animation such as \fscx or \frz together with blur.
+                if inner:find("\\", 1, true) then
+                    out[#out + 1] = "\\t(" .. inner .. ")"
                 end
                 i = j + 1
             else
@@ -353,9 +375,7 @@ local function stripBlurFromFirstBlock(text)
     local fs, fe = text:find("^{[^}]*}")
     if not fs then return text end
     local first = text:sub(fs, fe)
-    first = stripBlurTransforms(first)
-    first = first:gsub("\\blur%-?[%d%.]+", "")
-    first = first:gsub("\\be%-?[%d%.]+", "")
+    first = stripBlurTags(stripBlurTransforms(first))
     if first:match("^%{%s*%}$") then
         return text:sub(1, fs - 1) .. text:sub(fe + 1)
     end
@@ -364,9 +384,11 @@ end
 
 local function injectTransform(text, transform)
     if transform == "" then return text end
-    local fs = text:find("^{[^}]*}")
+    local fs, fe = text:find("^{[^}]*}")
     if fs then
-        return text:sub(1, fs) .. transform .. text:sub(fs + 1)
+        -- Put the generated blur last so it wins over earlier blur tags when the
+        -- user intentionally keeps them.
+        return text:sub(1, fe - 1) .. transform .. text:sub(fe)
     end
     return "{" .. transform .. "}" .. text
 end
@@ -382,15 +404,16 @@ local function getPlayRes(subs)
 end
 
 local function getVideoSize()
-    local vw, vh
     if aegisub.video_size then
         local ok, w, h = pcall(aegisub.video_size)
-        if ok and w and h then return w, h end
+        w, h = tonumber(w), tonumber(h)
+        if ok and w and h and w > 0 and h > 0 then return w, h end
     end
     local props = aegisub.project_properties() or {}
-    vw = props.video_width or 1920
-    vh = props.video_height or 1080
-    return vw, vh
+    local vw = tonumber(props.video_width)
+    local vh = tonumber(props.video_height)
+    if vw and vh and vw > 0 and vh > 0 then return vw, vh end
+    return nil, nil
 end
 
 local function parseMoveAtTime(text, relMs, durationMs)
@@ -408,8 +431,58 @@ local function parseMoveAtTime(text, relMs, durationMs)
     return x1 + (x2 - x1) * p, y1 + (y2 - y1) * p
 end
 
+local function topLevelClipPayloads(text)
+    local payloads = {}
+    for block in tostring(text or ""):gmatch("{([^}]*)}") do
+        local index, depth = 1, 0
+        while index <= #block do
+            local char = block:sub(index, index)
+            if char == "(" then
+                depth = depth + 1
+            elseif char == ")" then
+                depth = math.max(0, depth - 1)
+            elseif char == "\\" and depth == 0
+                and block:sub(index):match("^\\i?clip%s*%(") then
+                local open = block:find("(", index, true)
+                local close, nested = open, 0
+                while close and close <= #block do
+                    local current = block:sub(close, close)
+                    if current == "(" then nested = nested + 1
+                    elseif current == ")" then
+                        nested = nested - 1
+                        if nested == 0 then break end
+                    end
+                    close = close + 1
+                end
+                if open and close and nested == 0 then
+                    payloads[#payloads + 1] = block:sub(open + 1, close - 1)
+                    index = close
+                end
+            end
+            index = index + 1
+        end
+    end
+    return payloads
+end
+
+local function firstVectorClipPoint(text)
+    local bestX, bestY
+    for _, inner in ipairs(topLevelClipPayloads(text)) do
+        local scale, path = inner:match("^%s*(%d+)%s*,%s*(.*)$")
+        if not path then path, scale = inner, "1" end
+        local x, y = path:match("^%s*[mM]%s+([%+%-]?%d*%.?%d+)%s+([%+%-]?%d*%.?%d+)")
+        scale = tonumber(scale)
+        x, y = tonumber(x), tonumber(y)
+        if x and y and scale and scale >= 1 and scale == math.floor(scale) then
+            local divisor = 2 ^ (scale - 1)
+            bestX, bestY = x / divisor, y / divisor
+        end
+    end
+    return bestX, bestY
+end
+
 local function autoDetectCoord(line, currentMs)
-    local x, y = line.text:match("\\i?clip%(m%s+([%-%d%.]+)%s+([%-%d%.]+)%s*%)")
+    local x, y = firstVectorClipPoint(line.text)
     if x then return x, y end
     x, y = line.text:match("\\pos%(%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*%)")
     if x then return x, y end
@@ -494,8 +567,8 @@ local function showError(msg)
 end
 
 local function main(subs, sel)
-    if not aegisub.get_frame then
-        showError("Need an Aegisub fork with aegisub.get_frame.")
+    if not aegisub.get_frame or not aegisub.frame_from_ms or not aegisub.ms_from_frame then
+        showError("Need an Aegisub fork with frame access and loaded timecodes.")
         return
     end
     local props = aegisub.project_properties() or {}
@@ -509,19 +582,34 @@ local function main(subs, sel)
     end
 
     local line = subs[sel[1]]
-    local startFrame = aegisub.frame_from_ms(line.start_time)
-    local endFrame = aegisub.frame_from_ms(line.end_time)
-    if endFrame <= startFrame then
+    if type(line) ~= "table" or line.class ~= "dialogue" then
+        showError("Select exactly one dialogue line.")
+        return
+    end
+    local startMs = tonumber(line.start_time)
+    local endMs = tonumber(line.end_time)
+    if not startMs or not endMs or endMs <= startMs then
         showError("Line has zero or negative duration.")
         return
     end
-    local currentFrame = props.video_position or startFrame
+    local startFrame = aegisub.frame_from_ms(startMs)
+    local lastFrame = aegisub.frame_from_ms(math.max(startMs, endMs - 1))
+    if not startFrame or not lastFrame then
+        showError("Could not map the selected line to loaded video frames.")
+        return
+    end
+    local endFrame = math.max(startFrame, lastFrame) + 1
+    local currentFrame = tonumber(props.video_position) or startFrame
     if currentFrame < startFrame or currentFrame >= endFrame then
         showError("Move the video playhead inside the line first.\n(The current frame is the reference for tracking offsets and the BG color.)")
         return
     end
 
     local currentMs = aegisub.ms_from_frame(currentFrame)
+    if not currentMs then
+        showError("Could not map the current video frame to milliseconds.")
+        return
+    end
     local autoX, autoY = autoDetectCoord(line, currentMs)
     local initialCoord = (autoX and (autoX .. "," .. autoY)) or ""
     local clipboardData = readClipboardData()
@@ -529,7 +617,8 @@ local function main(subs, sel)
 
     local btn, res = showDialog(initialCoord, clipboardData, AUTO_SETTINGS:values("main"))
     if btn ~= "Execute" then return end
-    local cx, cy = res.coord:match("([%-%d%.]+),([%-%d%.]+)")
+    local cx, cy = tostring(res.coord or ""):match(
+        "^%s*([%+%-]?%d*%.?%d+)%s*,%s*([%+%-]?%d*%.?%d+)%s*$")
     if not cx then
         showError("Invalid coordinate. Format: x,y (e.g. 960,540).")
         return
@@ -546,30 +635,53 @@ local function main(subs, sel)
         return
     end
 
+    local vw, vh = getVideoSize()
+    if not vw or not vh then
+        showError("Could not obtain the loaded video's dimensions.")
+        return
+    end
+    local prx, pry = getPlayRes(subs)
     local positions = {x = {}, y = {}}
     if res.use_tracking and res.data and res.data ~= "" then
         if not DataWrapper then
             showError("a-mo.DataWrapper not installed; cannot parse tracking data.\nInstall Aegisub-Motion or disable 'Use tracking data'.")
             return
         end
-        local prx, pry = getPlayRes(subs)
         local tdata = DataWrapper()
-        local ok = tdata:bestEffortParsingAttempt(res.data, prx or 1920, pry or 1080)
-        if not ok then
+        local parseW = prx and prx > 0 and prx or vw
+        local parseH = pry and pry > 0 and pry or vh
+        local parseOk, parsed = pcall(tdata.bestEffortParsingAttempt, tdata, res.data, parseW, parseH)
+        if not parseOk or not parsed or type(tdata.dataObject) ~= "table" then
             showError("Could not parse tracking data. Expected After Effects Position export.")
             return
         end
-        if not tdata.dataObject:checkLength(numFrames) then
+        local lengthOk, lengthMatches = pcall(tdata.dataObject.checkLength, tdata.dataObject, numFrames)
+        if not lengthOk or not lengthMatches then
             showError(string.format(
                 "Tracking data length (%d frames) doesn't match line length (%d frames).",
-                tdata.dataObject.length, numFrames))
+                tonumber(tdata.dataObject.length) or 0, numFrames))
             return
         end
-        tdata.dataObject:addReferenceFrame(currentFrame - startFrame + 1)
+        local referenceOk = pcall(tdata.dataObject.addReferenceFrame, tdata.dataObject, currentFrame - startFrame + 1)
+        if not referenceOk then
+            showError("Tracking data could not set the selected reference frame.")
+            return
+        end
         local d = tdata.dataObject
+        if type(d.xPosition) ~= "table" or type(d.yPosition) ~= "table"
+            or not tonumber(d.xStartPosition) or not tonumber(d.yStartPosition) then
+            showError("Tracking data has no usable position channels.")
+            return
+        end
+        local xStart, yStart = tonumber(d.xStartPosition), tonumber(d.yStartPosition)
         for i = 1, numFrames do
-            positions.x[i] = cx + (d.xPosition[i] - d.xStartPosition)
-            positions.y[i] = cy + (d.yPosition[i] - d.yStartPosition)
+            local trackedX, trackedY = tonumber(d.xPosition[i]), tonumber(d.yPosition[i])
+            if not trackedX or not trackedY then
+                showError(string.format("Tracking data is missing a position at frame %d.", i))
+                return
+            end
+            positions.x[i] = cx + (trackedX - xStart)
+            positions.y[i] = cy + (trackedY - yStart)
         end
     else
         for i = 1, numFrames do
@@ -578,8 +690,6 @@ local function main(subs, sel)
         end
     end
 
-    local vw, vh = getVideoSize()
-    local prx, pry = getPlayRes(subs)
     local sx = (prx and prx > 0) and (vw / prx) or 1
     local sy = (pry and pry > 0) and (vh / pry) or 1
 
@@ -592,13 +702,20 @@ local function main(subs, sel)
         end
         local f = startFrame + i - 1
         local ok, frame = pcall(aegisub.get_frame, f, false)
-        if ok and frame then
-            local px = positions.x[i] * sx
-            local py = positions.y[i] * sy
-            variances[i] = sampleSharpness(frame, px, py, radius, vw, vh)
-        else
-            variances[i] = variances[i - 1] or 0
+        if not ok or not frame then
+            showError(string.format("Could not read video frame %d; no subtitle changes were made.", f))
+            return
         end
+        local px = positions.x[i] * sx
+        local py = positions.y[i] * sy
+        local sampleOk, score = pcall(sampleSharpness, frame, px, py, radius, vw, vh)
+        if not sampleOk or type(score) ~= "number" or score ~= score then
+            showError(string.format(
+                "Could not sample video frame %d: %s\nNo subtitle changes were made.",
+                f, tostring(score or "invalid sharpness result")))
+            return
+        end
+        variances[i] = score
         aegisub.progress.set((i / numFrames) * 100)
     end
     aegisub.progress.task("AutoBlur: building transforms")
@@ -631,8 +748,13 @@ local function main(subs, sel)
     local newText = res.remove_existing and stripBlurFromFirstBlock(line.text) or line.text
     line.text = injectTransform(newText, transform)
     subs[sel[1]] = line
-    AUTO_SETTINGS:update("main", res)
-    AUTO_SETTINGS:write()
+    local settingsOk, settingsError = pcall(function()
+        AUTO_SETTINGS:update("main", res)
+        AUTO_SETTINGS:write()
+    end)
+    if not settingsOk and aegisub.log then
+        aegisub.log("AutoBlur: could not persist settings: %s\n", tostring(settingsError))
+    end
     aegisub.set_undo_point(script_name)
 end
 

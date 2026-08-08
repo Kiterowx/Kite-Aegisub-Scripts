@@ -1,7 +1,7 @@
 export script_name = "Moka Motion"
 export script_description = "Unified Mocha motion, shape, clip, perspective and FBF track tools"
 export script_author = "Kiterow"
-export script_version = "3.4.0"
+export script_version = "3.4.2"
 export script_namespace = "kite.MokaMotion"
 
 local depctrl, LineCollection, ASS, AMath, APersp, ArchUtil, Tags, ZF, KiteUI, PyBridge, Media, LineOps, clipboard
@@ -27,13 +27,13 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"}
     {"ZF.main", version: "2.3.0", url: "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.PyBridge", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.Media", version: "1.2.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.Media", version: "1.2.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     "aegisub.clipboard"
   }
@@ -44,6 +44,11 @@ LineCollection, Tags, ASS, AMath, APersp, ArchUtil, ZF, KiteUI, PyBridge, Media,
 
 Core = {}
 Core.api_version = 1
+
+NUMERIC_EPSILON = 0.0000001
+GEOMETRY_EPSILON = 0.000001
+SCALE_EPSILON = 0.000000001
+SINGULAR_EPSILON = 0.000000000001
 
 DEFAULTS = {
   sample_start: 1
@@ -117,9 +122,9 @@ clamp = (value, low, high) ->
 
 format_number = (value, decimals = 2) ->
   value = tonumber(value) or 0
-  value = 0 if math.abs(value) < 0.0000001
+  value = 0 if math.abs(value) < NUMERIC_EPSILON
   value = LineOps.roundTo value, decimals
-  if math.abs(value - math.floor(value + 0.5)) < 0.0000001
+  if math.abs(value - math.floor(value + 0.5)) < NUMERIC_EPSILON
     return tostring math.floor(value + 0.5)
   out = string.format "%.#{decimals}f", value
   out = out\gsub "0+$", ""
@@ -155,7 +160,7 @@ split_lines = (text) ->
   out
 
 parse_meta = (input) ->
-  text = tostring input or ""
+  text = tostring(input or "")
   {
     fps: tonumber(text\match "Units Per Second%s+([%d%.]+)")
     source_width: tonumber(text\match "Source Width%s+([%d%.]+)")
@@ -295,7 +300,7 @@ unwrap_rotation_section = (section) ->
     if not cumulative and previous_raw != nil
       delta = raw_angle - previous_raw
       turns = math.floor(math.abs(delta) / 360 + 0.5)
-      explicit_turn = turns >= 1 and math.abs(math.abs(delta) - turns * 360) <= 0.000001
+      explicit_turn = turns >= 1 and math.abs(math.abs(delta) - turns * 360) <= GEOMETRY_EPSILON
       if previous_raw >= 135 and raw_angle <= -135
         offset += 360
       elseif previous_raw <= -135 and raw_angle >= 135
@@ -634,7 +639,7 @@ shake_points_from_values = (values, expected_vertices = nil) ->
     edge = [values[base + index] for index = 7, 12]
     edge_points[vertex] = edge
     for value in *edge
-      if math.abs(value) > 0.0000001
+      if math.abs(value) > NUMERIC_EPSILON
         has_edge = true
         break
   points, edge_points, has_edge
@@ -752,7 +757,7 @@ parse_legacy_shake_layout = (input, num_shapes, meta, diagnostics) ->
   }
 
 parse_shake_shape_data = (input) ->
-  text = tostring input or ""
+  text = tostring(input or "")
   num_shapes = tonumber text\match "num_shapes%s+([%d]+)"
   return nil, "Shake SSF: num_shapes is missing or invalid." unless num_shapes and num_shapes >= 1
   meta = parse_meta text
@@ -848,7 +853,7 @@ parse_shake_shape_data = (input) ->
   build_shake_track shapes, meta, diagnostics
 
 read_input_or_path = (input) ->
-  raw = tostring input or ""
+  raw = tostring(input or "")
   candidate = trim(raw)\gsub '^"(.*)"$', '%1'
   if not raw\find("\n", 1, true) and candidate != ""
     file = io.open candidate, "rb"
@@ -887,7 +892,7 @@ linear_fit = (times, values) ->
     sum_tt += t * t
     sum_tv += t * v
   denom = n * sum_tt - sum_t * sum_t
-  return nil, "All timestamps are equal." if math.abs(denom) < 0.000000000001
+  return nil, "All timestamps are equal." if math.abs(denom) < SINGULAR_EPSILON
   slope = (n * sum_tv - sum_t * sum_v) / denom
   intercept = (sum_v - slope * sum_t) / n
   residuals, sse, max_abs = {}, 0, 0
@@ -938,7 +943,7 @@ validate_quad = (quad, min_area = 1) ->
     edge = math.sqrt((b.x - a.x)^2 + (b.y - a.y)^2)
     return false, "Degenerate quad: edge #{i} is nearly zero." if edge < 0.001
     cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
-    return false, "Quad is nearly collinear at corner #{i}." if math.abs(cross) < 0.000001
+    return false, "Quad is nearly collinear at corner #{i}." if math.abs(cross) < GEOMETRY_EPSILON
     current = cross > 0 and 1 or -1
     sign or= current
     return false, "Concave quad or crossed corners." if current != sign
@@ -1212,11 +1217,11 @@ exclusive_end_frame = (start_time, end_time) -> Media.exclusiveEndFrame start_ti
 
 selection_window = (subs, sel) ->
   window, err = Media.selectionWindow subs, sel, {includeComments: false, positiveDuration: true, requireFrames: true}
-  return nil, "Select at least one non-comment dialogue line with a positive duration." unless window
+  return nil, err or "Select at least one non-comment dialogue line with a positive duration." unless window
   window
 
 slice_track = (track, sample_start, count, strict = true) ->
-  sample_start = math.floor tonumber(sample_start) or 1
+  sample_start = math.floor(tonumber(sample_start) or 1)
   return nil, "The first sample must be 1 or greater." if sample_start < 1
   if track.kind == "shape" and #track.samples == 1 and count > 1
     out = copy_table track
@@ -1268,6 +1273,7 @@ timing_diagnostics = (track, window) ->
   diagnostics = {}
   start_ms = aegisub.ms_from_frame window.start_frame
   end_ms = aegisub.ms_from_frame window.end_frame
+  return diagnostics unless start_ms and end_ms
   duration = end_ms - start_ms
   if duration > 0
     local_fps = window.frame_count * 1000 / duration
@@ -1275,13 +1281,15 @@ timing_diagnostics = (track, window) ->
     diagnostics.actual_duration_ms = duration
     if track.meta and track.meta.fps
       effective_fps = canonical_fps track.meta.fps
-      diagnostics.effective_export_fps = effective_fps
-      diagnostics.fps_delta = math.abs(effective_fps - local_fps)
-      diagnostics.expected_duration_ms = window.frame_count * 1000 / effective_fps
-      diagnostics.duration_delta_ms = math.abs(duration - diagnostics.expected_duration_ms)
+      if effective_fps
+        diagnostics.effective_export_fps = effective_fps
+        diagnostics.fps_delta = math.abs(effective_fps - local_fps)
+        diagnostics.expected_duration_ms = window.frame_count * 1000 / effective_fps
+        diagnostics.duration_delta_ms = math.abs(duration - diagnostics.expected_duration_ms)
     max_phase = 0
     for i = 0, window.frame_count
       actual = aegisub.ms_from_frame(window.start_frame + i)
+      return diagnostics unless actual
       predicted = start_ms + duration * i / window.frame_count
       max_phase = math.max max_phase, math.abs(actual - predicted)
     diagnostics.max_timeline_phase_ms = max_phase
@@ -1438,10 +1446,10 @@ transform_point = (x, y, sample, reference) ->
   ref_sy = (reference.scale and reference.scale.y or 100) / 100
   cur_sx = (sample.scale and sample.scale.x or 100) / 100
   cur_sy = (sample.scale and sample.scale.y or 100) / 100
-  return nil, nil, "Zero scale at the reference frame." if math.abs(ref_sx) < 0.000000001 or math.abs(ref_sy) < 0.000000001
+  return nil, nil, "Zero scale at the reference frame." if math.abs(ref_sx) < SCALE_EPSILON or math.abs(ref_sy) < SCALE_EPSILON
   coord = reference.coordinate_scale or sample.coordinate_scale or {x: 1, y: 1}
   coord_x, coord_y = tonumber(coord.x) or 1, tonumber(coord.y) or 1
-  return nil, nil, "Invalid coordinate scale." if math.abs(coord_x) < 0.000000001 or math.abs(coord_y) < 0.000000001
+  return nil, nil, "Invalid coordinate scale." if math.abs(coord_x) < SCALE_EPSILON or math.abs(coord_y) < SCALE_EPSILON
   dx, dy = (x - reference.position.x) / coord_x, (y - reference.position.y) / coord_y
   dx, dy = rotate_vector dx, dy, math.rad(reference.rotation or 0)
   dx, dy = dx / ref_sx, dy / ref_sy
@@ -1455,10 +1463,10 @@ inverse_transform_point = (x, y, sample, reference) ->
   ref_sy = (reference.scale and reference.scale.y or 100) / 100
   cur_sx = (sample.scale and sample.scale.x or 100) / 100
   cur_sy = (sample.scale and sample.scale.y or 100) / 100
-  return nil, nil, "Current scale is zero; the transform cannot be inverted." if math.abs(cur_sx) < 0.000000001 or math.abs(cur_sy) < 0.000000001
+  return nil, nil, "Current scale is zero; the transform cannot be inverted." if math.abs(cur_sx) < SCALE_EPSILON or math.abs(cur_sy) < SCALE_EPSILON
   coord = reference.coordinate_scale or sample.coordinate_scale or {x: 1, y: 1}
   coord_x, coord_y = tonumber(coord.x) or 1, tonumber(coord.y) or 1
-  return nil, nil, "Invalid coordinate scale." if math.abs(coord_x) < 0.000000001 or math.abs(coord_y) < 0.000000001
+  return nil, nil, "Invalid coordinate scale." if math.abs(coord_x) < SCALE_EPSILON or math.abs(coord_y) < SCALE_EPSILON
   dx, dy = (x - sample.position.x) / coord_x, (y - sample.position.y) / coord_y
   dx, dy = rotate_vector dx, dy, math.rad(sample.rotation or 0)
   dx, dy = dx / cur_sx, dy / cur_sy
@@ -1496,7 +1504,9 @@ clip_to_float_path = (content) ->
   return rectangle, true if rectangle
   scale, path = content\match "^(%d+)%s*,%s*(.*)$"
   return content, false unless scale
-  factor = 2 ^ (tonumber(scale) - 1)
+  scale = tonumber scale
+  return nil, false unless scale and scale >= 1 and scale == math.floor(scale)
+  factor = 2 ^ (scale - 1)
   path = path\gsub "([%.%d%-]+) ([%.%d%-]+)", (x, y) ->
     "#{format_number(tonumber(x) / factor, 4)} #{format_number(tonumber(y) / factor, 4)}"
   path, false
@@ -1508,7 +1518,7 @@ transform_clip_path = (path, sample, reference, decimals = 2, options = nil) ->
     "#{format_number tx, decimals} #{format_number ty, decimals}"
 
 translate_clip_path = (path, dx, dy, decimals = 2) ->
-  return path if math.abs(dx) < 0.0000001 and math.abs(dy) < 0.0000001
+  return path if math.abs(dx) < NUMERIC_EPSILON and math.abs(dy) < NUMERIC_EPSILON
   path\gsub "([%.%d%-]+) ([%.%d%-]+)", (x, y) ->
     "#{format_number(tonumber(x) + dx, decimals)} #{format_number(tonumber(y) + dy, decimals)}"
 
@@ -1590,8 +1600,8 @@ apply_transform_text = (line, sample, reference, options) ->
     rx = (effective_sample.scale.x or 100) / (reference.scale.x or 100)
     ry = (effective_sample.scale.y or 100) / (reference.scale.y or 100)
     if options.inverse
-      rx = 1 / rx if math.abs(rx) > 0.000000001
-      ry = 1 / ry if math.abs(ry) > 0.000000001
+      rx = 1 / rx if math.abs(rx) > SCALE_EPSILON
+      ry = 1 / ry if math.abs(ry) > SCALE_EPSILON
     scalar = math.sqrt math.abs(rx * ry)
     if options.scale
       text = text\gsub "(\\fscx)([%-%d%.]+)", (tag, value) -> tag .. format_number(tonumber(value) * rx, 2)
@@ -1651,7 +1661,7 @@ shift_frame_karaoke = (frame_line, source_start, frame_start) ->
   frame_line.karaokeShift = (frame_start - source_start) * 0.1
   frame_line\shiftKaraoke!
 
-track_channels_constant = (samples, tolerance = 0.000001, options = nil) ->
+track_channels_constant = (samples, tolerance = GEOMETRY_EPSILON, options = nil) ->
   first = samples[1]
   for sample in *samples
     if not options or options.scale
@@ -1661,11 +1671,11 @@ track_channels_constant = (samples, tolerance = 0.000001, options = nil) ->
       return false if math.abs(sample.rotation - first.rotation) > tolerance
   true
 
-axis_aligned_rotation = (degrees, tolerance = 0.000001) ->
+axis_aligned_rotation = (degrees, tolerance = GEOMETRY_EPSILON) ->
   value = math.abs(tonumber(degrees) or 0) % 180
   value <= tolerance or math.abs(value - 180) <= tolerance
 
-transform_shear_risk = (track, reference_index = 1, tolerance = 0.000001, first_sample = 1, last_sample = nil) ->
+transform_shear_risk = (track, reference_index = 1, tolerance = GEOMETRY_EPSILON, first_sample = 1, last_sample = nil) ->
   return nil unless track and track.samples and #track.samples > 0
   reference = track.samples[math.floor(clamp(reference_index, 1, #track.samples))]
   return "zero reference scale", "zero_scale" if math.abs(reference.scale.x or 0) < tolerance or math.abs(reference.scale.y or 0) < tolerance
@@ -1682,7 +1692,7 @@ transform_shear_risk = (track, reference_index = 1, tolerance = 0.000001, first_
       return "source frame #{sample.source_frame}: aspect change plus rotation requires shear (use Power Pin/Perspective)", "aspect_rotation"
   nil
 
-track_deformation_flags = (track, reference_index = 1, tolerance = 0.000001, first_sample = 1, last_sample = nil) ->
+track_deformation_flags = (track, reference_index = 1, tolerance = GEOMETRY_EPSILON, first_sample = 1, last_sample = nil) ->
   reference = track.samples[math.floor(clamp(reference_index, 1, #track.samples))]
   anisotropic, rotation_changes = false, false
   first_sample = math.floor clamp(first_sample, 1, #track.samples)
@@ -1696,7 +1706,7 @@ track_deformation_flags = (track, reference_index = 1, tolerance = 0.000001, fir
   anisotropic, rotation_changes, reference
 
 line_transform_shear_risk = (line, track, reference_index = 1, options = {}, first_sample = 1, last_sample = nil) ->
-  anisotropic, rotation_changes, reference = track_deformation_flags track, reference_index, 0.000001, first_sample, last_sample
+  anisotropic, rotation_changes, reference = track_deformation_flags track, reference_index, GEOMETRY_EPSILON, first_sample, last_sample
   return nil unless anisotropic or rotation_changes
   fields = {"text", "properties", "align", "xPosition", "yPosition", "move", "hasOrg", "hasClip", "styleRef"}
   saved, present = {}, {}
@@ -1728,7 +1738,7 @@ line_transform_shear_risk = (line, track, reference_index = 1, options = {}, fir
   for tag in *{"fax", "fay", "frx", "fry"}
     pattern = "\\#{tag}([%+%-]?[%d%.]+)"
     for value in probe_text\gmatch pattern
-      if math.abs(tonumber(value) or 0) > 0.000001
+      if math.abs(tonumber(value) or 0) > GEOMETRY_EPSILON
         return "\\#{tag}#{value} cannot be composed faithfully with this deformation; use Power Pin/Perspective"
   nil
 
@@ -1759,7 +1769,7 @@ try_linear_line = (line, track, window, options) ->
   first_frame = aegisub.frame_from_ms line.start_time
   last_frame = exclusive_end_frame line.start_time, line.end_time
   return nil if last_frame - first_frame < 2
-  return nil unless track_channels_constant track.samples, 0.000001, options
+  return nil unless track_channels_constant track.samples, GEOMETRY_EPSILON, options
   prepare_static_line line, options
   positions = [call for call in *LineOps.tagCalls(line.text, "pos") when call.top_level]
   return nil unless #positions == 1
@@ -1802,7 +1812,7 @@ apply_transform_track = (subs, window, raw_track, options) ->
   track = scale_track_coordinates raw_track, script_res, options
   reference_index = math.floor clamp(options.reference_frame, 1, #track.samples)
   reference = track.samples[reference_index]
-  return nil, "X or Y scale is zero at the reference frame." if math.abs(reference.scale.x or 0) < 0.000000001 or math.abs(reference.scale.y or 0) < 0.000000001
+  return nil, "X or Y scale is zero at the reference frame." if math.abs(reference.scale.x or 0) < SCALE_EPSILON or math.abs(reference.scale.y or 0) < SCALE_EPSILON
   effective_track = effective_transform_track track, reference_index, options
   shear_risk, shear_code = transform_shear_risk effective_track, reference_index
   shear_applies = not options.only_clip and shear_risk != nil
@@ -1815,7 +1825,7 @@ apply_transform_track = (subs, window, raw_track, options) ->
       source.endFrame = exclusive_end_frame source.start_time, source.end_time
       first_sample = math.max 1, source.startFrame - window.start_frame + 1
       last_sample = math.min #effective_track.samples, source.endFrame - window.start_frame
-      matrix_risk = transform_shear_risk effective_track, reference_index, 0.000001, first_sample, last_sample
+      matrix_risk = transform_shear_risk effective_track, reference_index, GEOMETRY_EPSILON, first_sample, last_sample
       return nil, "Line #{source.humanizedNumber or source.number or '?'}: #{matrix_risk}." if matrix_risk
       line_risk = line_transform_shear_risk source, effective_track, reference_index, options, first_sample, last_sample
       return nil, "Line #{source.humanizedNumber or source.number or '?'}: #{line_risk}." if line_risk
@@ -1852,6 +1862,7 @@ apply_transform_track = (subs, window, raw_track, options) ->
       outputs[#outputs + 1] = copy_line frame_line
     before = #outputs
     outputs = compress_output_lines outputs
+    return nil, "Line #{source.humanizedNumber or source.number or '?'}: no Transform output was generated." if #outputs == 0
     report.compressed += before - #outputs
     report.fbf += #outputs
     replace_or_insert_outputs subs, source.number, outputs, true
@@ -1915,9 +1926,13 @@ perspective_track = (subs, window, raw_track, options) ->
     quads[#quads + 1] = Quad quad_points
   reference_index = math.floor clamp(options.reference_frame, 1, #quads)
   lines = LineCollection subs, window.indices, accept_all_lines
-  video_w, video_h = aegisub.video_size!
-  return nil, "Could not obtain the video dimensions." unless video_w and video_h and video_h > 0
-  layout_scale = lines.meta.PlayResY / (lines.meta.LayoutResY or video_h)
+  ok_video, video_w, video_h = pcall aegisub.video_size
+  video_w, video_h = tonumber(video_w), tonumber(video_h)
+  return nil, "Could not obtain the video dimensions." unless ok_video and video_w and video_h and video_w > 0 and video_h > 0
+  play_y = tonumber(lines.meta and (lines.meta.PlayResY or lines.meta.playresy or lines.meta.res_y))
+  layout_y = tonumber(lines.meta and (lines.meta.LayoutResY or lines.meta.layoutresy)) or video_h
+  return nil, "The script has no valid PlayResY/LayoutResY for perspective tracking." unless play_y and play_y > 0 and layout_y > 0
+  layout_scale = play_y / layout_y
   abs_reference_frame = window.start_frame + reference_index - 1
   lines\runCallback (collection, line) ->
     line.startFrame = aegisub.frame_from_ms line.start_time
@@ -2087,7 +2102,7 @@ solve_system = (matrix, vector) ->
       value = math.abs(work[row][column] or 0)
       if value > best
         pivot, best = row, value
-    return nil if best < 0.000000000001
+    return nil if best < SINGULAR_EPSILON
     work[column], work[pivot] = work[pivot], work[column] if pivot != column
     divisor = work[column][column]
     work[column][index] /= divisor for index = column, count + 1
@@ -2115,7 +2130,7 @@ poly_predict = (xs, ys, degree, target) ->
     for row = 1, size
       vector[row] += powers[row] * ys[index]
       matrix[row][column] += powers[row] * powers[column] for column = 1, size
-  matrix[index][index] += 0.000000001 for index = 1, size
+  matrix[index][index] += SCALE_EPSILON for index = 1, size
   coefficients = solve_system matrix, vector
   return median ys unless coefficients
   value, power = (target - center) / scale, 1
@@ -2189,7 +2204,7 @@ phase_slip_candidate = (track) ->
     rotation_steps[index] = math.abs((current.rotation or 0) - (previous.rotation or 0))
   moving_steps, sampled_scales, sampled_rotations = {}, {}, {}
   for index = 2, #samples
-    moving_steps[#moving_steps + 1] = steps[index] if steps[index] > 0.000001
+    moving_steps[#moving_steps + 1] = steps[index] if steps[index] > GEOMETRY_EPSILON
     sampled_scales[#sampled_scales + 1] = scale_steps[index]
     sampled_rotations[#sampled_rotations + 1] = rotation_steps[index]
   typical = median moving_steps
@@ -2203,7 +2218,7 @@ phase_slip_candidate = (track) ->
     scale_duplicate = scale_steps[index] <= math.max(0.005, typical_scale * 0.25)
     rotation_duplicate = rotation_steps[index] <= math.max(0.01, typical_rotation * 0.75)
     if stalled and resumes and scale_duplicate and rotation_duplicate
-      score = (1 - math.min(1, steps[index] / math.max(typical, 0.000001))) * math.min(1, steps[index + 1] / typical)
+      score = (1 - math.min(1, steps[index] / math.max(typical, GEOMETRY_EPSILON))) * math.min(1, steps[index + 1] / typical)
       candidate = {
         :index, :score, typical_step: typical, stalled_step: steps[index], resumed_step: steps[index + 1]
         source_frame: samples[index].source_frame
@@ -2288,7 +2303,7 @@ cleanup_transform_track = (track, options) ->
     anchor_delta = values[reference_index] - cleaned[reference_index]
     for index = 1, count
       cleaned[index] += anchor_delta
-      if math.abs(cleaned[index] - values[index]) > 0.0000001
+      if math.abs(cleaned[index] - values[index]) > NUMERIC_EPSILON
         set_channel_value out.samples[index], descriptor, cleaned[index]
         changed += 1
   report = {mode: mode, :changed}
@@ -2362,6 +2377,7 @@ motion_dialog = (inverse = false) ->
     {class: "intedit", name: "cleanup_window", value: 9, min: 3, max: 99, x: 9, y: 15, width: 1, height: 1}
     {class: "label", label: "Degree", x: 10, y: 15, width: 1, height: 1}
     {class: "intedit", name: "cleanup_degree", value: 2, min: 1, max: 3, x: 11, y: 15, width: 1, height: 1}
+    {class: "checkbox", name: "strict_sync", label: "Strict frame/FPS/PAR synchronization", value: DEFAULTS.strict_sync, x: 0, y: 16, width: 5, height: 1}
   }
   pressed, values = aegisub.dialog.display controls, {action, "Cancel"}, {ok: action, close: "Cancel"}
   return nil unless pressed == action
@@ -2410,6 +2426,7 @@ shape_dialog = (mode, script_res) ->
     {class: "intedit", name: "target_height", value: script_res.y, min: 1, x: 3, y: 17, width: 1, height: 1}
     {class: "label", label: "Decimals", x: 4, y: 17, width: 1, height: 1}
     {class: "intedit", name: "decimals", value: DEFAULTS.decimals, min: 0, max: 6, x: 5, y: 17, width: 1, height: 1}
+    {class: "checkbox", name: "strict_sync", label: "Strict frame/FPS/PAR synchronization", value: DEFAULTS.strict_sync, x: 6, y: 17, width: 5, height: 1}
   }
   pressed, values = aegisub.dialog.display controls, {action, "Cancel"}, {ok: action, close: "Cancel"}
   return nil unless pressed == action
@@ -2430,12 +2447,26 @@ powerpin_dialog = ->
     {class: "checkbox", name: "track_clip", label: "Clips", value: true, x: 7, y: 14, width: 2, height: 1}
     {class: "label", label: "Origin mode", x: 0, y: 15, width: 2, height: 1}
     {class: "dropdown", name: "org_mode", items: {"Keep \\org", "Force stable center", "Try \\fax0"}, value: "Force stable center", x: 2, y: 15, width: 4, height: 1}
+    {class: "checkbox", name: "strict_sync", label: "Strict frame/FPS/PAR synchronization", value: DEFAULTS.strict_sync, x: 0, y: 16, width: 5, height: 1}
   }
   pressed, values = aegisub.dialog.display controls, {"Apply Power Pin", "Cancel"}, {ok: "Apply Power Pin", close: "Cancel"}
   return nil unless pressed == "Apply Power Pin"
   values.use_source_meta = true
   values.scale_to_script = true
   values
+
+apply_atomically = (subs, callback) ->
+  state = LineOps.snapshot subs
+  ok, result, details = pcall callback
+  return ok, result, details if ok and result
+  restored, restore_error = pcall LineOps.restore, subs, state
+  unless restored
+    rollback_message = "Rollback failed: #{tostring(restore_error or 'unknown error')}"
+    if ok
+      details = "#{tostring(details or 'No output was generated.')}\n#{rollback_message}"
+    else
+      result = "#{tostring(result or 'Operation failed.')}\n#{rollback_message}"
+  ok, result, details
 
 motion_main = (inverse = false) ->
   (subs, sel, active) ->
@@ -2450,13 +2481,17 @@ motion_main = (inverse = false) ->
       show_message "Moka Motion / #{inverse and 'Revert Motion' or 'Apply Motion'}", parse_error or "The pasted data is not a Transform export."
       return sel
     required = sample_count_for_selection subs, window, options.mapping_mode
-    sliced, slice_error = slice_track track, options.sample_start, required, false
+    sliced, slice_error = slice_track track, options.sample_start, required, options.strict_sync == true
     unless sliced
       show_message script_name, slice_error
       return sel
+    sync_info, sync_error = validate_sync sliced, window, options.strict_sync == true, options.mapping_mode == "Restart on each line"
+    unless sync_info
+      show_message script_name, sync_error
+      return sel
     options.reference_frame = math.floor clamp(options.reference_frame, 1, #sliced.samples)
     prepared, prep = prepare_transform_track sliced, options
-    ok, result, details = pcall apply_transform_track, subs, window, prepared, options
+    ok, result, details = apply_atomically subs, -> apply_transform_track subs, window, prepared, options
     unless ok and result
       show_message script_name, ok and (details or "No output was generated.") or result
       return sel
@@ -2486,11 +2521,15 @@ shape_main = (mode) ->
       show_message script_name, parse_error or "The pasted data is not shape or mask data."
       return sel
     required = sample_count_for_selection subs, window, options.mapping_mode
-    sliced, slice_error = slice_track track, options.sample_start, required, false
+    sliced, slice_error = slice_track track, options.sample_start, required, options.strict_sync == true
     unless sliced
       show_message script_name, slice_error
       return sel
-    ok, result, details = pcall apply_shape_track, subs, window, sliced, options
+    sync_info, sync_error = validate_sync sliced, window, options.strict_sync == true, options.mapping_mode == "Restart on each line"
+    unless sync_info
+      show_message script_name, sync_error
+      return sel
+    ok, result, details = apply_atomically subs, -> apply_shape_track subs, window, sliced, options
     unless ok and result
       show_message script_name, ok and (details or "No shape output was generated.") or result
       return sel
@@ -2511,16 +2550,20 @@ powerpin_main = (subs, sel, active) ->
   unless track and track.kind == "perspective"
     show_message script_name, parse_error or "The pasted data is not CC Power Pin or Corner Pin data."
     return sel
-  sliced, slice_error = slice_track track, options.sample_start, window.frame_count, false
+  sliced, slice_error = slice_track track, options.sample_start, window.frame_count, options.strict_sync == true
   unless sliced
     show_message script_name, slice_error
+    return sel
+  sync_info, sync_error = validate_sync sliced, window, options.strict_sync == true
+  unless sync_info
+    show_message script_name, sync_error
     return sel
   options.reference_frame = math.floor clamp(options.reference_frame, 1, #sliced.samples)
   valid, validation_error = validate_quad_track sliced
   unless valid
     show_message script_name, validation_error
     return sel
-  ok, result, details = pcall perspective_track, subs, window, sliced, options
+  ok, result, details = apply_atomically subs, -> perspective_track subs, window, sliced, options
   unless ok and result
     show_message script_name, ok and (details or "No perspective output was generated.") or result
     return sel
@@ -2573,8 +2616,8 @@ set_position_text = (text, x, y) ->
   insert_first_override replaced, tag
 
 shift_linked_geometry = (text, dx, dy) ->
-  return text if math.abs(dx) < 0.0000001 and math.abs(dy) < 0.0000001
-  text = tostring text or ""
+  return text if math.abs(dx) < NUMERIC_EPSILON and math.abs(dy) < NUMERIC_EPSILON
+  text = tostring(text or "")
   text = text\gsub "\\org%(([%+%-]?[%d%.]+),([%+%-]?[%d%.]+)%)", (x, y) ->
     "\\org(#{format_number(tonumber(x) + dx, 3)},#{format_number(tonumber(y) + dy, 3)})"
   for tag_name in *{"clip", "iclip"}
@@ -2765,7 +2808,7 @@ apply_refinery = (subs, tracks, options) ->
         next_y[index] = ys[index] + dy * weight
     for index, item in ipairs track.items
       dx, dy = next_x[index] - xs[index], next_y[index] - ys[index]
-      if math.abs(dx) > 0.0000001 or math.abs(dy) > 0.0000001
+      if math.abs(dx) > NUMERIC_EPSILON or math.abs(dy) > NUMERIC_EPSILON
         line = subs[item.index]
         text = set_position_text line.text, next_x[index], next_y[index]
         text = shift_linked_geometry text, dx, dy if options.linked_geometry
@@ -2780,7 +2823,7 @@ apply_refinery = (subs, tracks, options) ->
         continue unless complete
         refined = refine_series values, frames, period, options
         for index, item in ipairs track.items
-          continue if math.abs(refined[index] - values[index]) <= 0.0000001
+          continue if math.abs(refined[index] - values[index]) <= NUMERIC_EPSILON
           line = subs[item.index]
           line.text = set_scalar_text line.text, name, refined[index]
           subs[item.index] = line

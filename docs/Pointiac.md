@@ -1,4 +1,4 @@
-# Pointiac 1.1.0
+# Pointiac 1.1.2
 
 Pointiac creates two compact ASS point markers for every selected dialogue line: one on its first frame and another on its last frame.
 
@@ -22,12 +22,13 @@ The source lines remain unchanged. Pointiac inserts the two generated marker lin
 ## Behavior
 
 - Uses Aegisub's video frame mapping when available.
-- Falls back to the configured FPS when frame mapping is unavailable.
+- Falls back to the configured FPS when frame mapping is unavailable, invalid, or reports an out-of-range frame.
 - Keeps both circles spatially separate, enforcing a minimum horizontal distance based on the drawing size.
 - Preserves the source style and metadata while replacing the generated text with a fixed `\p1` circle.
 - Stores stable color, FPS, separation, and layer-offset preferences.
+- Normalizes generated layers to nonnegative integers and ignores invalid script resolutions.
 
 ## Requirements
 
-- `kite.UI` 1.1.0
-- `kite.LineOps` 1.5.0
+- `kite.UI` 1.1.3
+- `kite.LineOps` 1.5.2

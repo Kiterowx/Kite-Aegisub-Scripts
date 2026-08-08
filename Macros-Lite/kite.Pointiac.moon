@@ -1,11 +1,13 @@
 export script_name        = "Pointiac"
 export script_description = "Create first and last frame point markers from selected lines"
 export script_author      = "Kiterow"
-export script_version     = "1.1.0"
+export script_version     = "1.1.2"
 export script_namespace   = "kite.Pointiac"
 
 POINT_PATH = "m 0 4.657 b 0 2.085 2.085 0 4.657 0 7.229 0 9.314 2.085 9.314 4.657 9.314 7.229 7.229 9.314 4.657 9.314 2.085 9.314 0 7.229 0 4.657"
 POINT_SIZE = 9.314
+NUMBER_EPSILON = 0.000001
+NUMBER_DECIMALS = 3
 DEFAULTS = {
   color: "#FFFFFF"
   fps: 24
@@ -27,9 +29,9 @@ if ok_depctrl and DependencyControl
       namespace: script_namespace
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
       {
-        {"kite.UI", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-        {"kite.LineOps", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
       }
     }
@@ -60,18 +62,24 @@ copy_line = (line) ->
   out
 
 round_int = (value) ->
-  value = tonumber(value) or 0
+  value = tonumber value
+  value = 0 unless value and value == value and value != math.huge and value != -math.huge
   if value >= 0
     math.floor(value + 0.5)
   else
     math.ceil(value - 0.5)
 
+finite_number = (value) ->
+  number = tonumber value
+  return nil unless number and number == number and number != math.huge and number != -math.huge
+  number
+
 format_number = (value) ->
-  n = tonumber(value) or 0
-  n = 0 if math.abs(n) < 0.000001
+  n = finite_number(value) or 0
+  n = 0 if math.abs(n) < NUMBER_EPSILON
   nearest = round_int n
-  return tostring nearest if math.abs(n - nearest) < 0.000001
-  out = string.format "%.3f", n
+  return tostring(nearest) if math.abs(n - nearest) < NUMBER_EPSILON
+  out = string.format "%.#{NUMBER_DECIMALS}f", n
   out = out\gsub "0+$", ""
   out\gsub "%.$", ""
 
@@ -81,22 +89,21 @@ normalize_color = (value) ->
   text = text\gsub "%s+$", ""
   r, g, b = text\match "^#?(%x%x)(%x%x)(%x%x)$"
   return "&H#{b\upper!}#{g\upper!}#{r\upper!}&" if r
-  hex = text\match "&[Hh](%x+)&?"
-  if hex
-    hex = hex\sub -6 if #hex > 6
-    hex = string.rep("0", 6 - #hex) .. hex if #hex < 6
+  hex = text\match "^&[Hh](%x+)&?$"
+  if hex and (#hex == 6 or #hex == 8)
+    hex = hex\sub -6 if #hex == 8
     return "&H#{hex\upper!}&"
   "&HFFFFFF&"
 
 safe_fps = (value) ->
-  fps = tonumber(value) or DEFAULTS.fps
+  fps = finite_number(value) or DEFAULTS.fps
   if fps > 0 then fps else DEFAULTS.fps
 
 frame_ms = (fps) ->
   math.max 1, math.floor(1000 / safe_fps(fps) + 0.5)
 
 safe_separation = (value) ->
-  raw = tonumber(value) or DEFAULTS.separation
+  raw = finite_number(value) or DEFAULTS.separation
   sign = if raw < 0 then -1 else 1
   min_sep = POINT_SIZE + 1
   sign * math.max(math.abs(raw), min_sep)
@@ -109,9 +116,11 @@ get_script_resolution = (subs) ->
       if line and line.class == "info"
         key = tostring(line.key or "")\lower!
         if key == "playresx"
-          res.x = tonumber(line.value) or res.x
+          value = finite_number line.value
+          res.x = value if value and value > 0
         elseif key == "playresy"
-          res.y = tonumber(line.value) or res.y
+          value = finite_number line.value
+          res.y = value if value and value > 0
   res
 
 default_position = (script_res) ->
@@ -149,15 +158,15 @@ show_dialog = (script_res) ->
     color: res.color
     fps: safe_fps res.fps
     separation: safe_separation res.separation
-    layer_offset: tonumber(res.layer_offset) or DEFAULTS.layer_offset
+    layer_offset: math.max -100, math.min 100, round_int(finite_number(res.layer_offset) or DEFAULTS.layer_offset)
   }
   POINT_SETTINGS\update "main", stable
   POINT_SETTINGS\write!
   {
     color: normalize_color res.color
     fps: stable.fps
-    x: tonumber(res.x) or pos.x
-    y: tonumber(res.y) or pos.y
+    x: finite_number(res.x) or pos.x
+    y: finite_number(res.y) or pos.y
     separation: stable.separation
     layer_offset: stable.layer_offset
   }
@@ -170,16 +179,22 @@ point_text = (x, y, color) ->
     POINT_PATH
 
 timings = (base, fps) ->
-  start_time = tonumber(base.start_time) or 0
-  end_time = tonumber(base.end_time) or start_time
+  start_time = math.max 0, finite_number(base.start_time) or 0
+  end_time = finite_number(base.end_time) or start_time
   frame_len = frame_ms fps
   end_time = start_time + frame_len if end_time <= start_time
   if aegisub and aegisub.frame_from_ms and aegisub.ms_from_frame
-    start_frame = tonumber aegisub.frame_from_ms start_time
-    last_frame = tonumber aegisub.frame_from_ms math.max(start_time, end_time - 1)
-    if start_frame and last_frame
-      first_end = math.min end_time, tonumber(aegisub.ms_from_frame(start_frame + 1)) or end_time
-      last_start = math.max start_time, tonumber(aegisub.ms_from_frame(last_frame)) or start_time
+    ok_start, start_value = pcall aegisub.frame_from_ms, start_time
+    ok_last, last_value = pcall aegisub.frame_from_ms, math.max(start_time, end_time - 1)
+    start_frame = finite_number start_value if ok_start
+    last_frame = finite_number last_value if ok_last
+    if start_frame and last_frame and start_frame >= 0 and last_frame >= start_frame
+      ok_first_end, first_end_value = pcall aegisub.ms_from_frame, start_frame + 1
+      ok_last_start, last_start_value = pcall aegisub.ms_from_frame, last_frame
+      first_boundary = finite_number first_end_value if ok_first_end
+      last_boundary = finite_number last_start_value if ok_last_start
+      first_end = math.min end_time, first_boundary or end_time
+      last_start = math.max start_time, last_boundary or start_time
       first_end = math.min end_time, start_time + 1 if first_end <= start_time
       last_start = start_time if last_start >= end_time
       return {
@@ -204,8 +219,8 @@ timings = (base, fps) ->
 
 point_lines = (base, opts) ->
   times = timings base, opts.fps
-  base_layer = tonumber(base.layer) or 0
-  layer = base_layer + opts.layer_offset
+  base_layer = finite_number(base.layer) or 0
+  layer = math.max 0, round_int(base_layer + opts.layer_offset)
   first = copy_line base
   last = copy_line base
 
@@ -231,6 +246,7 @@ main = (subs, sel, active) ->
   if #targets == 0
     show_message "Select at least one dialogue line."
     aegisub.cancel!
+    return nil
 
   opts = show_dialog get_script_resolution(subs)
   return nil unless opts
@@ -240,7 +256,7 @@ main = (subs, sel, active) ->
     operations[#operations + 1] = {index: idx + 1, lines: {first, last}}
   LineOps.transaction subs, script_name, -> LineOps.insertLines subs, operations
 
-validate = (subs, sel) -> sel and #sel > 0
+validate = (subs, sel) -> #selected_dialogue_indices(subs, sel) > 0
 if aegisub and aegisub.register_macro
   if depctrl and depctrl.registerMacro
     depctrl\registerMacro script_name, script_description, main, validate, nil, false

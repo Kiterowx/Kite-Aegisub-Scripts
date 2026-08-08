@@ -1,3 +1,4 @@
+local MODULE_VERSION = "1.2.2"
 local function tryRequire(m) local ok, r = pcall(require, m); if ok then return r end end
 local DependencyControl = tryRequire("l0.DependencyControl")
 local LineOps = tryRequire("kite.LineOps")
@@ -6,14 +7,14 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "Timing",
-        version = "1.2.0",
+        version = MODULE_VERSION,
         description = "Voice-timing engines: multi-signal/waveform onset detection and legacy silence timing",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.Timing",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            {"kite.LineOps", version = "1.5.0"},
+            {"kite.LineOps", version = "1.5.2"},
         },
     })
 end
@@ -58,9 +59,17 @@ local TUNE = {
     env_min_range_db = 6,
     env_thr_frac = 0.35,
 }
+local DEFAULT_FRAME_RATE = 24000 / 1001
+local AUX_ALIGNMENT_WINDOW_MS = 40
 local function trim(value)
     if LineOps then return LineOps.trim(value) end
     return (tostring(value or ""):match("^%s*(.-)%s*$")) or ""
+end
+
+local function finite_number(value)
+    local number = tonumber(value)
+    if not number or number ~= number or math.abs(number) == math.huge then return nil end
+    return number
 end
 
 local function round(value)
@@ -156,6 +165,7 @@ local function chapter_of(name)
 end
 
 local function discover_paths(paths)
+    paths = type(paths) == "table" and paths or {}
     local dir, base = script_dir_and_base()
     if not dir then return paths end
     local sep = IS_WINDOWS and "\\" or "/"
@@ -217,6 +227,7 @@ local function style_ok(style, flt, extra)
 end
 
 local function is_spoken(line, cfg)
+    cfg = cfg or {}
     if not line or line.comment then return false end
     local raw = tostring(line.text or "")
     if has_drawing(raw) then return false end
@@ -250,7 +261,7 @@ local function detect_time_scale(header, values)
     if header:find("sec", 1, true) or header:find("time_s", 1, true) then return 1000 end
     local max_abs, n, fractional = 0, 0, false
     for _, v in ipairs(values) do
-        local x = tonumber(v)
+        local x = finite_number(v)
         if x then
             n = n + 1
             max_abs = math.max(max_abs, math.abs(x))
@@ -436,13 +447,16 @@ local function env_refine_edge(env, t, which, w0, w1)
 end
 
 local function frame_to_ms(frame, cfg)
-    frame = tonumber(frame)
+    frame = finite_number(frame)
     if not frame then return nil end
     if aegisub and type(aegisub.ms_from_frame) == "function" then
         local ok, ms = pcall(aegisub.ms_from_frame, frame)
-        if ok and ms then return ms end
+        ms = ok and finite_number(ms) or nil
+        if ms then return ms end
     end
-    return round(frame * 1000 / ((cfg and cfg.fps) or DEFAULTS.fps))
+    local fps = finite_number(cfg and cfg.fps) or DEFAULT_FRAME_RATE
+    if fps <= 0 then fps = DEFAULT_FRAME_RATE end
+    return round(frame * 1000 / fps)
 end
 
 local function parse_keyframe_file(path, cfg)
@@ -487,6 +501,7 @@ local function parse_keyframe_file(path, cfg)
 end
 
 local function get_keyframes(cfg)
+    cfg = cfg or {}
     local ms
     if aegisub and type(aegisub.keyframes) == "function" then
         local ok, kf = pcall(aegisub.keyframes)
@@ -559,6 +574,7 @@ local function flux_intervals(on, off)
 end
 
 local function build_signals(paths)
+    paths = type(paths) == "table" and paths or {}
     local sig = { sources = {}, flux_on = {}, flux_off = {} }
     local silspecs = {
         { paths.sil30, TUNE.w_sil30, "sil30" },
@@ -833,6 +849,9 @@ LZ.tableConfig = {
     merge_gap_ms = 120, min_noise_ms = 80, edge_drop_ms = 60,
     w_cov = 0.65, w_prox = 0.25, w_frag = 0.10, sigma_ms = 200, eps = 1,
 }
+local LEGACY_ACTIVITY_PADDING_MS = 15
+local LEGACY_ACTIVITY_EDGE_TOLERANCE_MS = 30
+local DEFAULT_LEGACY_LIMIT_MS = 500
 LZ.auxVad  = nil
 LZ.auxFlux = nil
 
@@ -889,13 +908,19 @@ function LZ.lowerBound(arr, t)
     return lo
 end
 function LZ.validateIntra(ns, ne, os, oe)
+    ns, ne, os, oe = finite_number(ns), finite_number(ne), finite_number(os), finite_number(oe)
+    if not ns or not ne or not os or not oe then return false, "invalid_time" end
     if ns < os or ne > oe then return false, "out_of_range" end
     if ne - ns < LZ.lazyConfig.min_duration then return false, "min_dur" end
+    if ne - ns > LZ.lazyConfig.max_duration then return false, "max_dur" end
     return true
 end
 function LZ.clampIntra(ns, ne, os, oe)
+    ns, ne, os, oe = finite_number(ns), finite_number(ne), finite_number(os), finite_number(oe)
+    if not ns or not ne or not os or not oe then return false, "invalid_time", ns, ne end
     local ns2, ne2 = math.max(ns, os), math.min(ne, oe)
     if ne2 - ns2 < LZ.lazyConfig.min_duration then return false, "min_dur", ns, ne end
+    if ne2 - ns2 > LZ.lazyConfig.max_duration then return false, "max_dur", ns, ne end
     return true, nil, ns2, ne2
 end
 function LZ.getDensity(t, s, ws)
@@ -926,53 +951,146 @@ function LZ.parseLazyFile(fp, t)
 end
 
 function LZ.parseVADtsv(path)
-    local segs, f = {}, io.open(path, "r"); if not f then return segs end
-    local first = true
+    local segs, nums, header = {}, {}, nil
+    if type(path) ~= "string" or path == "" then return segs end
+    local f = io.open(path, "r"); if not f then return segs end
     for line in f:lines() do
-        if first then first = false
-        else
-            local a, b = line:match("([%d%.]+)%s+([%d%.]+)")
-            if a and b then table.insert(segs, { start = tonumber(a), ["end"] = tonumber(b) }) end
+        local fields = split_fields(line)
+        local a, b = finite_number(fields[1]), finite_number(fields[2])
+        if a and b and b > a then
+            segs[#segs + 1] = { start = a, ["end"] = b }
+            nums[#nums + 1], nums[#nums + 2] = a, b
+        elseif not header then
+            header = line
         end
     end
-    f:close(); return segs
+    f:close()
+    segs.time_scale = detect_time_scale(header, nums)
+    table.sort(segs, function(a, b) return a.start < b.start end)
+    return segs
 end
 
 function LZ.parseFLUXtsv(path)
-    local cands, f = {}, io.open(path, "r"); if not f then return cands end
-    local first = true
+    local cands, nums, header = {}, {}, nil
+    if type(path) ~= "string" or path == "" then return cands end
+    local f = io.open(path, "r"); if not f then return cands end
     for line in f:lines() do
-        if first then first = false
-        else
-            local t, ty, sc = line:match("([%d%.]+)%s+(%a+)%s+([%d%.]+)")
-            if t and ty and sc then table.insert(cands, { time = tonumber(t), type = ty, score = tonumber(sc) }) end
+        local fields = split_fields(line)
+        local t, ty, sc = finite_number(fields[1]), tostring(fields[2] or ""), finite_number(fields[3])
+        if t and ty ~= "" and sc then
+            cands[#cands + 1] = { time = t, type = ty:lower(), score = sc }
+            nums[#nums + 1] = t
+        elseif not header then
+            header = line
         end
     end
-    f:close(); return cands
+    f:close()
+    cands.time_scale = detect_time_scale(header, nums)
+    table.sort(cands, function(a, b) return a.time < b.time end)
+    return cands
+end
+
+local flux_index_cache = setmetatable({}, { __mode = "k" })
+local vad_index_cache = setmetatable({}, { __mode = "k" })
+
+local function indexed_flux(flux)
+    if type(flux) ~= "table" then return {} end
+    local cached = flux_index_cache[flux]
+    if cached then return cached end
+    local by_type = {}
+    for order, candidate in ipairs(flux) do
+        local time = type(candidate) == "table" and finite_number(candidate.time) or nil
+        local kind = type(candidate) == "table" and tostring(candidate.type or ""):lower() or ""
+        if time and kind ~= "" then
+            by_type[kind] = by_type[kind] or {}
+            by_type[kind][#by_type[kind] + 1] = {
+                time = time,
+                score = finite_number(candidate.score) or 0,
+                order = order,
+            }
+        end
+    end
+    for kind, records in pairs(by_type) do
+        table.sort(records, function(left, right)
+            if left.time ~= right.time then return left.time < right.time end
+            return left.order < right.order
+        end)
+        local compact = {}
+        for _, record in ipairs(records) do
+            local previous = compact[#compact]
+            if previous and previous.time == record.time then
+                if record.score > previous.score then previous.score = record.score end
+            else
+                compact[#compact + 1] = record
+            end
+        end
+        by_type[kind] = compact
+    end
+    flux_index_cache[flux] = by_type
+    return by_type
+end
+
+local function indexed_vad(vad)
+    if type(vad) ~= "table" then return {} end
+    local cached = vad_index_cache[vad]
+    if cached then return cached end
+    local boundaries = {}
+    for _, segment in ipairs(vad) do
+        local start_time = type(segment) == "table" and finite_number(segment.start) or nil
+        local end_time = type(segment) == "table" and finite_number(segment["end"]) or nil
+        if start_time then boundaries[#boundaries + 1] = start_time end
+        if end_time then boundaries[#boundaries + 1] = end_time end
+    end
+    table.sort(boundaries)
+    local compact = {}
+    for _, time in ipairs(boundaries) do
+        if compact[#compact] ~= time then compact[#compact + 1] = time end
+    end
+    vad_index_cache[vad] = compact
+    return compact
 end
 
 function LZ.enrichWithAux(cands, flux, vad, want_type)
+    local flux_records = indexed_flux(flux)[tostring(want_type or ""):lower()] or {}
+    local vad_boundaries = indexed_vad(vad)
     local function nearest_flux(t)
+        local lo, hi = 1, #flux_records + 1
+        while lo < hi do
+            local mid = math.floor((lo + hi) / 2)
+            if flux_records[mid].time < t then lo = mid + 1 else hi = mid end
+        end
         local best_d, best_s = math.huge, 0
-        for _, c in ipairs(flux or {}) do
-            if c.type == want_type then
-                local d = math.abs(c.time - t)
-                if d < best_d then best_d, best_s = d, c.score end
+        for _, index in ipairs({ lo - 1, lo }) do
+            local record = flux_records[index]
+            if record then
+                local distance = math.abs(record.time - t)
+                if distance < best_d or (distance == best_d and record.score > best_s) then
+                    best_d, best_s = distance, record.score
+                end
             end
         end
-        if best_d <= 40 then return (1 - best_d / 40) * best_s else return 0 end
+        if best_d <= AUX_ALIGNMENT_WINDOW_MS then
+            return (1 - best_d / AUX_ALIGNMENT_WINDOW_MS) * best_s
+        end
+        return 0
     end
     local function vad_margin(t)
+        local position = lower_bound(vad_boundaries, t)
         local best = math.huge
-        for _, s in ipairs(vad or {}) do
-            local d1 = math.abs((s.start or 0) - t); local d2 = math.abs((s["end"] or 0) - t)
-            local d = (d1 < d2) and d1 or d2
-            if d < best then best = d end
+        for _, index in ipairs({ position - 1, position }) do
+            local boundary = vad_boundaries[index]
+            if boundary then best = math.min(best, math.abs(boundary - t)) end
         end
         if best == math.huge then return 0 end
-        return math.exp(-(best * best) / 1600)
+        return math.exp(-(best * best) / (AUX_ALIGNMENT_WINDOW_MS * AUX_ALIGNMENT_WINDOW_MS))
     end
-    for _, c in ipairs(cands) do c.flux_boost = nearest_flux(c.time); c.vad_align = vad_margin(c.time) end
+    for _, candidate in ipairs(type(cands) == "table" and cands or {}) do
+        if type(candidate) == "table" then
+            local time = finite_number(candidate.time)
+            candidate.flux_boost = time and nearest_flux(time) or 0
+            candidate.vad_align = time and vad_margin(time) or 0
+        end
+    end
 end
 
 function LZ.loadLazyData(fps)
@@ -993,8 +1111,22 @@ function LZ.copyCandidate(ev) return { time = ev.time, duration = ev.duration, t
 function LZ.roundMs(x) return math.floor(x + 0.5) end
 function LZ.orderedByStart(subs, sel)
     local arr = {}
-    for _, i in ipairs(sel) do table.insert(arr, { i = i, st = subs[i].start_time }) end
-    table.sort(arr, function(a, b) return a.st < b.st end)
+    local seen = {}
+    for _, raw in ipairs(type(sel) == "table" and sel or {}) do
+        local i = tonumber(raw)
+        if i and i == math.floor(i) and i >= 1 and not seen[i] then
+            local ok, line = pcall(function() return subs[i] end)
+            local start_time = ok and line and finite_number(line.start_time) or nil
+            if start_time then
+                seen[i] = true
+                arr[#arr + 1] = { i = i, st = start_time }
+            end
+        end
+    end
+    table.sort(arr, function(a, b)
+        if a.st ~= b.st then return a.st < b.st end
+        return a.i < b.i
+    end)
     local out = {}; for _, e in ipairs(arr) do table.insert(out, e.i) end; return out
 end
 function LZ.stripLZ(effect) effect = effect or ""; return (effect:gsub("%s*%[LZ[^%]]*%]", "")) end
@@ -1059,10 +1191,9 @@ function LZ.runClusterAnalysis(subs, sel, lim, files, opts)
     local modified = 0
     local apply_start, apply_end = opts.apply_start, opts.apply_end
     local enable_tagging, tag_mode, tag_scope = opts.enable_tagging, opts.tag_mode, opts.tag_scope
-    aegisub.progress.task("Analyzing (Cluster, intra ±" .. tostring(lim) .. " ms)...")
     local seq = LZ.orderedByStart(subs, sel)
     for idx, ii in ipairs(seq) do
-        aegisub.progress.set(idx / #seq * 100)
+        progress("Analyzing (Cluster, intra ±" .. tostring(lim) .. " ms)...", idx / math.max(#seq, 1) * 100)
         local l = subs[ii]
         if l.class == "dialogue" then
             local os, oe = l.start_time, l.end_time
@@ -1124,14 +1255,21 @@ end
 
 function LZ.normalizeVadToMs(vad_data)
     if not vad_data or #vad_data == 0 then return {} end
-    local vmax = 0
-    for _, s in ipairs(vad_data) do if s["end"] and s["end"] > vmax then vmax = s["end"] end end
-    local in_ms = (vmax > 10000)
+    local scale = finite_number(vad_data.time_scale)
+    if not scale or scale <= 0 then
+        local vmax = 0
+        for _, s in ipairs(vad_data) do
+            local end_time = finite_number(s["end"])
+            if end_time and end_time > vmax then vmax = end_time end
+        end
+        scale = vmax > 10000 and 1 or 1000
+    end
     local out = {}
     for _, s in ipairs(vad_data) do
-        local a = in_ms and s.start    or (s.start    * 1000)
-        local b = in_ms and s["end"]   or (s["end"]   * 1000)
-        table.insert(out, { start = a, ["end"] = b })
+        local start_time, end_time = finite_number(s.start), finite_number(s["end"])
+        if start_time and end_time and end_time > start_time then
+            table.insert(out, { start = start_time * scale, ["end"] = end_time * scale })
+        end
     end
     table.sort(out, function(a, b) return a.start < b.start end)
     return out
@@ -1139,11 +1277,21 @@ end
 
 function LZ.normalizeFluxToMs(flux_data)
     if not flux_data or #flux_data == 0 then return flux_data end
-    local fmax = 0
-    for _, c in ipairs(flux_data) do if c.time and c.time > fmax then fmax = c.time end end
-    if fmax > 10000 then return flux_data end
+    local scale = finite_number(flux_data.time_scale)
+    if not scale or scale <= 0 then
+        local fmax = 0
+        for _, c in ipairs(flux_data) do
+            local time = finite_number(c.time)
+            if time and time > fmax then fmax = time end
+        end
+        scale = fmax > 10000 and 1 or 1000
+    end
+    if scale == 1 then return flux_data end
     local out = {}
-    for _, c in ipairs(flux_data) do out[#out+1] = { time = (c.time or 0) * 1000, type = c.type, score = c.score } end
+    for _, c in ipairs(flux_data) do
+        local time = finite_number(c.time)
+        if time then out[#out+1] = { time = time * scale, type = c.type, score = c.score } end
+    end
     return out
 end
 
@@ -1182,7 +1330,7 @@ function LZ.mergeSilenceToIntervals(files)
             table.insert(merged, { start = sil.start, ["end"] = sil["end"], count = 1 })
         else
             local last = merged[#merged]
-            if sil.start <= last["end"] + 50 then
+            if sil.start <= last["end"] + LZ.lazyConfig.epsilon then
                 last["end"] = math.max(last["end"], sil["end"])
                 last.count = (last.count or 1) + 1
             else
@@ -1205,14 +1353,14 @@ function LZ.findActivityBounds(os_ms, oe_ms, silences, flux_data)
     local cand = s0 and (s0["end"] + 1) or os_ms
     if cand <= oe_ms then
         t_start = cand
-        local fx = LZ.findFluxExact(t_start, flux_data, "onset", 30)
+        local fx = LZ.findFluxExact(t_start, flux_data, "onset", LEGACY_ACTIVITY_EDGE_TOLERANCE_MS)
         if fx and fx >= os_ms then t_start = fx; has_fs = true end
     end
     local s1 = LZ.containingSilence(oe_ms, silences)
     cand = s1 and (s1.start - 1) or oe_ms
     if cand >= os_ms then
         t_end = cand
-        local fx = LZ.findFluxExact(t_end, flux_data, "offset", 30)
+        local fx = LZ.findFluxExact(t_end, flux_data, "offset", LEGACY_ACTIVITY_EDGE_TOLERANCE_MS)
         if fx and fx <= oe_ms then t_end = fx; has_fe = true end
     end
     return t_start, t_end, has_fs, has_fe
@@ -1232,14 +1380,22 @@ function LZ.runLazyFusionAnalysis(subs, sel, files, opts, flux_data)
             local ns, ne = os_ms, oe_ms
             local t_s, t_e, has_fs, has_fe = LZ.findActivityBounds(os_ms, oe_ms, silences, flux_data)
             if t_s and t_e then
-                local ps = has_fs and 0 or 15
-                local pe = has_fe and 0 or 15
+                local ps = has_fs and 0 or LEGACY_ACTIVITY_PADDING_MS
+                local pe = has_fe and 0 or LEGACY_ACTIVITY_PADDING_MS
                 if apply_start then ns = t_s - ps; if ns < 0 then ns = 0 end end
                 if apply_end   then ne = t_e + pe end
                 if ne - ns < LZ.lazyConfig.min_duration then
-                    local center = (t_s + t_e) / 2; local hm = LZ.lazyConfig.min_duration / 2
-                    ns = center - hm; ne = center + hm
-                    if ns < 0 then ns = 0 end
+                    local minimum = LZ.lazyConfig.min_duration
+                    if apply_start and apply_end and oe_ms - os_ms >= minimum then
+                        local center, half = (t_s + t_e) / 2, minimum / 2
+                        ns, ne = center - half, center + half
+                        if ns < os_ms then ns, ne = os_ms, os_ms + minimum end
+                        if ne > oe_ms then ns, ne = oe_ms - minimum, oe_ms end
+                    elseif apply_start and not apply_end then
+                        ns = math.max(os_ms, ne - minimum)
+                    elseif apply_end and not apply_start then
+                        ne = math.min(oe_ms, ns + minimum)
+                    end
                 end
             else
                 if enable_tagging then LZ.addLazyTag(l, "NoActivity") end
@@ -1435,9 +1591,15 @@ function LZ.runTableAnalysis(subs, sel, lim, files, opts)
                 if apply_start then ns = LZ.clamp(n.start, Slo, Shi) end
                 if apply_end   then ne = LZ.clamp(n["end"], Elo, Ehi) end
                 if ne - ns < min_d then
-                    local c = LZ.center(n.start, n["end"])
-                    ns = LZ.clamp(math.floor(c - min_d/2 + 0.5), Slo, Shi)
-                    ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                    if apply_start and apply_end then
+                        local c = LZ.center(n.start, n["end"])
+                        ns = LZ.clamp(math.floor(c - min_d/2 + 0.5), Slo, Shi)
+                        ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                    elseif apply_start then
+                        ns = LZ.clamp(ne - min_d, Slo, Shi)
+                    elseif apply_end then
+                        ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                    end
                 end
                 changed = (ns ~= os) or (ne ~= oe)
             else
@@ -1462,11 +1624,18 @@ function LZ.runTableAnalysis(subs, sel, lim, files, opts)
                         local len = n["end"] - n.start
                         if len > blen then big = n; blen = len end
                     end
-                    ns = LZ.clamp(big.start, Slo, Shi); ne = LZ.clamp(big["end"], Elo, Ehi)
+                    if apply_start then ns = LZ.clamp(big.start, Slo, Shi) end
+                    if apply_end then ne = LZ.clamp(big["end"], Elo, Ehi) end
                     if ne - ns < min_d then
-                        local c = LZ.center(ns, ne)
-                        ns = LZ.clamp(math.floor(c - min_d/2 + 0.5), Slo, Shi)
-                        ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                        if apply_start and apply_end then
+                            local c = LZ.center(ns, ne)
+                            ns = LZ.clamp(math.floor(c - min_d/2 + 0.5), Slo, Shi)
+                            ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                        elseif apply_start then
+                            ns = LZ.clamp(ne - min_d, Slo, Shi)
+                        elseif apply_end then
+                            ne = LZ.clamp(ns + min_d, Elo, Ehi)
+                        end
                     end
                 end
                 changed = (ns ~= os) or (ne ~= oe)
@@ -1500,45 +1669,71 @@ function LZ.runTableAnalysis(subs, sel, lim, files, opts)
 end
 
 function LZ.run(subs, sel, paths, opts)
-    opts = opts or {}
+    opts = type(opts) == "table" and opts or {}
+    paths = type(paths) == "table" and paths or {}
+    LZ.auxVad, LZ.auxFlux = nil, nil
     local files = {}
-    if paths.sil30 and paths.sil30 ~= "" then files[30] = paths.sil30 end
-    if paths.sil40 and paths.sil40 ~= "" then files[40] = paths.sil40 end
-    if paths.sil50 and paths.sil50 ~= "" then files[50] = paths.sil50 end
+    local function add_file(threshold, path)
+        if type(path) ~= "string" or path == "" then return end
+        local handle = io.open(path, "r")
+        if not handle then return end
+        local has_data = handle:read(1) ~= nil
+        handle:close()
+        if has_data then files[threshold] = path end
+    end
+    add_file(30, paths.sil30)
+    add_file(40, paths.sil40)
+    add_file(50, paths.sil50)
     if not (files[30] or files[40] or files[50]) then return nil end
-    for _, i in ipairs(sel) do
+    local selected = LZ.orderedByStart(subs, sel)
+    local originals = {}
+    for _, i in ipairs(selected) do
         local line = subs[i]
         if line and line.class == "dialogue" then
+            if LineOps and LineOps.deepCopy then originals[i] = LineOps.deepCopy(line)
+            else
+                originals[i] = {}
+                for key, value in pairs(line) do originals[i][key] = value end
+            end
             line.effect = LZ.stripLZ(line.effect)
             subs[i] = line
         end
     end
-    if opts.silences_only then
-        return LZ.runLazyFusionAnalysis(subs, sel, files, opts, nil)
-    end
-    local method = opts.method
-    local flux = (paths.flux and paths.flux ~= "") and LZ.normalizeFluxToMs(LZ.parseFLUXtsv(paths.flux)) or nil
-    if method == "LazyFusion" then
-        return LZ.runLazyFusionAnalysis(subs, sel, files, opts, flux)
-    elseif method == "Table (±ms)" then
-        local single = {}
-        if files[40] then single[40] = files[40]
-        elseif files[30] then single[30] = files[30]
-        else single[50] = files[50] end
-        local lim = tonumber(opts.limit) or 500
-        return LZ.runTableAnalysis(subs, sel, lim, single, opts)
-    else
-        LZ.auxVad  = (paths.vad and paths.vad ~= "") and LZ.normalizeVadToMs(LZ.parseVADtsv(paths.vad)) or nil
+    local function execute()
+        if opts.silences_only then
+            return LZ.runLazyFusionAnalysis(subs, selected, files, opts, nil)
+        end
+        local method = opts.method
+        local flux = (type(paths.flux) == "string" and paths.flux ~= "")
+            and LZ.normalizeFluxToMs(LZ.parseFLUXtsv(paths.flux)) or nil
+        if method == "LazyFusion" then
+            return LZ.runLazyFusionAnalysis(subs, selected, files, opts, flux)
+        elseif method == "Table (±ms)" then
+            local single = {}
+            if files[40] then single[40] = files[40]
+            elseif files[30] then single[30] = files[30]
+            else single[50] = files[50] end
+            local lim = math.max(0, finite_number(opts.limit) or DEFAULT_LEGACY_LIMIT_MS)
+            return LZ.runTableAnalysis(subs, selected, lim, single, opts)
+        end
+        LZ.auxVad = (type(paths.vad) == "string" and paths.vad ~= "")
+            and LZ.normalizeVadToMs(LZ.parseVADtsv(paths.vad)) or nil
         LZ.auxFlux = flux
-        local lim = tonumber(opts.limit) or 500
-        local modified = LZ.runClusterAnalysis(subs, sel, lim, files, opts)
-        LZ.auxVad, LZ.auxFlux = nil, nil
-        return modified
+        local lim = math.max(0, finite_number(opts.limit) or DEFAULT_LEGACY_LIMIT_MS)
+        return LZ.runClusterAnalysis(subs, selected, lim, files, opts)
     end
+    local ok, result = pcall(execute)
+    LZ.auxVad, LZ.auxFlux = nil, nil
+    if not ok then
+        for index, line in pairs(originals) do subs[index] = line end
+        error(result, 0)
+    end
+    return result
 end
 
 local Timing = {
-    version = "1.2.0",
+    VERSION = MODULE_VERSION,
+    version = MODULE_VERSION,
     trim = trim, round = round, clamp = clamp, lowerBound = lower_bound, overlapLen = overlap_len,
     progress = progress, visibleText = visible_text, hasDrawing = has_drawing,
     utf8Len = utf8_len, readableChars = readable_chars,
@@ -1554,5 +1749,8 @@ local Timing = {
     lzt = LZ,
 }
 
-if depctrl then return depctrl:register(Timing) end
+if depctrl then
+    Timing.version = depctrl
+    return depctrl:register(Timing)
+end
 return Timing

@@ -1,5 +1,8 @@
-local LineOps = { version = "1.5.0" }
+local MODULE_VERSION = "1.5.2"
+local LineOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 local unpack = table.unpack or unpack
+local MAX_ROUND_DECIMALS = 12
+local RESTORE_CHUNK_SIZE = 500
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -13,7 +16,7 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.LineOps",
-        version = LineOps.version,
+        version = MODULE_VERSION,
         description = "Shared line, selection and lightweight ASS operations for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
@@ -53,16 +56,22 @@ local function deepCopy(value, seen)
     return setmetatable(result, getmetatable(value))
 end
 
+local function finiteNumber(value)
+    local number = tonumber(value)
+    if not number or number ~= number or math.abs(number) == math.huge then return nil end
+    return number
+end
+
 local function round(value)
-    value = tonumber(value) or 0
+    value = finiteNumber(value) or 0
     if value >= 0 then return math.floor(value + 0.5) end
     return math.ceil(value - 0.5)
 end
 
 
 local function roundTo(value, decimals)
-    value = tonumber(value) or 0
-    decimals = math.max(0, math.min(12, round(tonumber(decimals) or 0)))
+    value = finiteNumber(value) or 0
+    decimals = math.max(0, math.min(MAX_ROUND_DECIMALS, round(finiteNumber(decimals) or 0)))
     local factor = 10 ^ decimals
     if value >= 0 then return math.floor(value * factor + 0.5) / factor end
     return math.ceil(value * factor - 0.5) / factor
@@ -76,7 +85,7 @@ local function shallowEqual(left, right)
     return true
 end
 local function clamp(value, minimum, maximum)
-    value = tonumber(value) or 0
+    value = finiteNumber(value) or 0
     if minimum ~= nil and value < minimum then return minimum end
     if maximum ~= nil and value > maximum then return maximum end
     return value
@@ -113,6 +122,88 @@ local function projectProperties()
     local ok, value = pcall(aegisub.project_properties)
     if ok and type(value) == "table" then return value end
     return {}
+end
+
+local subtitleLength, subtitleLine
+
+local function positiveNumber(value)
+    local number = finiteNumber(value)
+    if number and number > 0 then return number end
+    return nil
+end
+
+local function objectMember(object, key)
+    if object == nil then return nil end
+    local ok, value = pcall(function() return object[key] end)
+    if ok then return value end
+    return nil
+end
+
+local function resolutionFields(object)
+    if object == nil then return nil, nil end
+    local x = positiveNumber(objectMember(object, "PlayResX"))
+        or positiveNumber(objectMember(object, "playresx"))
+        or positiveNumber(objectMember(object, "res_x"))
+    local y = positiveNumber(objectMember(object, "PlayResY"))
+        or positiveNumber(objectMember(object, "playresy"))
+        or positiveNumber(objectMember(object, "res_y"))
+    return x, y
+end
+
+local function methodResolution(object)
+    local method = objectMember(object, "script_resolution") or objectMember(object, "scriptResolution")
+    if type(method) ~= "function" then return nil, nil end
+    local ok, x, y = pcall(method, object)
+    if not ok then return nil, nil end
+    return positiveNumber(x), positiveNumber(y)
+end
+
+-- Resolve PlayRes from an ASS subtitle object, a LineCollection/ASS object, a
+-- line belonging to one, or a metadata table. Missing axes independently use
+-- the optional positive fallbacks. The third result is true only when both
+-- axes came from the source rather than a fallback.
+local function scriptResolution(source, fallbackX, fallbackY)
+    local x, y
+    local seen = {}
+    local candidates = {}
+    local function inspect(object)
+        local kind = type(object)
+        if (kind ~= "table" and kind ~= "userdata") or seen[object] then return end
+        seen[object] = true
+        candidates[#candidates + 1] = object
+        local rx, ry = methodResolution(object)
+        x, y = x or rx, y or ry
+        rx, ry = resolutionFields(object)
+        x, y = x or rx, y or ry
+    end
+
+    inspect(source)
+    local parent = objectMember(source, "parentCollection")
+    inspect(parent)
+    inspect(objectMember(source, "meta"))
+    inspect(objectMember(source, "scriptInfo"))
+    inspect(objectMember(parent, "meta"))
+    inspect(objectMember(source, "sub"))
+    inspect(objectMember(parent, "sub"))
+
+    if not x or not y then
+        for _, candidate in ipairs(candidates) do
+            local count = subtitleLength(candidate)
+            for index = 1, count do
+                local line = subtitleLine(candidate, index)
+                if line and line.class == "info" then
+                    local key = tostring(line.key or ""):lower()
+                    if key == "playresx" then x = x or positiveNumber(line.value)
+                    elseif key == "playresy" then y = y or positiveNumber(line.value) end
+                    if x and y then break end
+                end
+            end
+            if x and y then break end
+        end
+    end
+
+    local resolved = x ~= nil and y ~= nil
+    return x or positiveNumber(fallbackX), y or positiveNumber(fallbackY), resolved
 end
 
 local separator = package.config:sub(1, 1)
@@ -231,8 +322,13 @@ local function tagCalls(text, wanted)
                             end
                             if nested ~= 0 then valueEnd = #block end
                         else
-                            local nextSlash = block:find("\\", valueStart, true)
-                            valueEnd = (nextSlash and nextSlash - 1) or #block
+                            local scan = valueStart
+                            while scan <= #block do
+                                local current = block:sub(scan, scan)
+                                if current == "\\" or (current == ")" and depth > 0) then break end
+                                scan = scan + 1
+                            end
+                            valueEnd = scan - 1
                         end
                         local startPosition = openStart + index
                         local finishPosition = openStart + valueEnd
@@ -398,11 +494,11 @@ local function alphaValue(value)
 end
 
 local function newAlphaState()
-    return { global = 0, channels = { [1] = 0, [3] = 0, [4] = 0 } }
+    return { channels = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 } }
 end
 
 local function updateAlphaState(state, section)
-    for _, call in ipairs(tagCalls("{" .. section .. "}", { alpha = true, ["1a"] = true, ["3a"] = true, ["4a"] = true, r = true })) do
+    for _, call in ipairs(tagCalls("{" .. section .. "}", { alpha = true, ["1a"] = true, ["2a"] = true, ["3a"] = true, ["4a"] = true, r = true })) do
         if call.top_level then
             local name = call.name:lower()
             if name == "r" then
@@ -410,7 +506,8 @@ local function updateAlphaState(state, section)
             else
                 local alpha = alphaValue(call.value)
                 if alpha ~= nil then
-                    if name == "alpha" then state.global = alpha
+                    if name == "alpha" then
+                        for channel = 1, 4 do state.channels[channel] = alpha end
                     else
                         local channel = tonumber(name:sub(1, 1))
                         if channel then state.channels[channel] = alpha end
@@ -423,8 +520,10 @@ local function updateAlphaState(state, section)
 end
 
 local function textIsVisible(state)
-    if state.global >= 255 then return false end
-    return state.channels[1] < 255 or state.channels[3] < 255 or state.channels[4] < 255
+    for channel = 1, 4 do
+        if state.channels[channel] < 255 then return true end
+    end
+    return false
 end
 
 local function analyzeText(text)
@@ -518,11 +617,12 @@ local function prependTag(text, tag)
     tag = tostring(tag or "")
     if tag == "" then return text end
     if tag:sub(1, 1) ~= "\\" then tag = "\\" .. tag end
-    if text:sub(1, 1) == "{" then return "{" .. tag .. text:sub(2) end
+    local leading = text:match("^%{%s*(\\)")
+    if leading then return "{" .. tag .. text:sub(2) end
     return "{" .. tag .. "}" .. text
 end
 
-local function subtitleLength(subtitles)
+subtitleLength = function(subtitles)
     if type(subtitles) == "number" then return math.max(0, math.floor(subtitles)) end
     if subtitles == nil then return 0 end
     local ok, count = pcall(function() return #subtitles end)
@@ -531,7 +631,7 @@ local function subtitleLength(subtitles)
     return fallback and math.max(0, math.floor(fallback)) or 0
 end
 
-local function subtitleLine(subtitles, index)
+subtitleLine = function(subtitles, index)
     if subtitles == nil then return nil end
     local ok, line = pcall(function() return subtitles[index] end)
     if ok then return line end
@@ -624,9 +724,8 @@ end
 
 local function restore(subtitles, state)
     for index = #subtitles, 1, -1 do subtitles.delete(index) end
-    local chunkSize = 500
-    for first = 1, #state, chunkSize do
-        local last = math.min(#state, first + chunkSize - 1)
+    for first = 1, #state, RESTORE_CHUNK_SIZE do
+        local last = math.min(#state, first + RESTORE_CHUNK_SIZE - 1)
         local chunk = {}
         for index = first, last do chunk[#chunk + 1] = deepCopy(state[index]) end
         if #chunk > 0 then subtitles.insert(#subtitles + 1, unpack(chunk)) end
@@ -638,7 +737,10 @@ local function transaction(subtitles, undoName, callback)
     if type(undoName) == "function" then callback, undoName = undoName, callback end
     assert(type(callback) == "function", "transaction callback required")
     local state = snapshot(subtitles)
-    local packed = {pcall(callback)}
+    local function pack(...)
+        return { n = select("#", ...), ... }
+    end
+    local packed = pack(pcall(callback))
     if not packed[1] then
         pcall(restore, subtitles, state)
         error(packed[2], 0)
@@ -646,7 +748,7 @@ local function transaction(subtitles, undoName, callback)
     if aegisub and type(aegisub.set_undo_point) == "function" and trim(undoName) ~= "" then
         pcall(aegisub.set_undo_point, tostring(undoName))
     end
-    return unpack(packed, 2)
+    return unpack(packed, 2, packed.n)
 end
 
 LineOps.trim = trim
@@ -659,6 +761,7 @@ LineOps.clamp = clamp
 LineOps.checkCancelled = checkCancelled
 LineOps.progress = progress
 LineOps.projectProperties = projectProperties
+LineOps.scriptResolution = scriptResolution
 LineOps.decodedPath = decodedPath
 LineOps.subtitlePath = subtitlePath
 LineOps.subtitleFolder = subtitleFolder
@@ -691,5 +794,8 @@ LineOps.snapshot = snapshot
 LineOps.restore = restore
 LineOps.transaction = transaction
 
-if depctrl then return depctrl:register(LineOps) end
+if depctrl then
+    LineOps.version = depctrl
+    return depctrl:register(LineOps)
+end
 return LineOps
