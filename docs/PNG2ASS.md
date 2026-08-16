@@ -1,4 +1,4 @@
-# PNG2ASS 1.4.3
+# PNG2ASS 1.5.0
 
 PNG2ASS converts images and SVG files into ASS drawing lines through the `kite-png2ass` Python package.
 
@@ -23,15 +23,23 @@ Accepted input: `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tif`, `.tiff`, `.gif
 
 The default mode is `auto`. It can detect alpha images, white-on-black mattes, dark-on-light mattes, and color images. Use `white-matte` explicitly for Mocha-style mattes where white is the visible shape and black is transparent.
 
+Engine selection is automatic and intentional:
+
+- OpenCV handles alpha, luma, and matte masks as one single-color ASS drawing.
+- VTracer handles `color` and preserves the source palette in separate ASS layers.
+
+`VTracer profile` defaults to `balanced`, which reduces small fragments for faster conversion and libass rendering. Select `quality` when fine color detail matters more than speed and output size. OpenCV does not use this profile.
+
 Photographic sources carry compression noise that fragments the traced palette. Set `Denoise` to 1 to apply a median filter before tracing.
 
 ## Budgets
 
-- `Max chars` guards the responsiveness of the subtitle grid.
+- `Line warning` and `Max chars` are advisory thresholds. Exceeding either shows the measured result before insertion but does not discard a valid conversion.
 - `Max pixels` guards tracing time on very large sources; the default accepts 4K and above.
-- The line budget is enforced by the package and can be accepted from the warning dialog.
 
-The backend checks image dimensions before full decoding, rejects unexpected multiframe input, limits input-list rows and output size, and reports observable line, character, contour, point, and dimension counts rather than a fixed rendering-time estimate.
+The backend retains only emergency ceilings of 500,000 lines and 100,000,000 characters for pathological input. It checks image dimensions before full decoding, rejects unexpected multiframe input, limits input-list rows, and reports observable line, character, contour, point, dimension, and elapsed-time counts rather than a fixed rendering-time estimate.
+
+The macro shows the resulting engine, profile, lines, characters, time, frames, and warnings before changing the subtitle grid. Insertion is chunked and transactional: cancelling during validation or insertion rolls the subtitle document back. During conversion, a managed supervisor signals the backend cooperatively and can stop only the exact Python child created for that job.
 
 ## External package
 

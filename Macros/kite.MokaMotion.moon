@@ -1,10 +1,10 @@
 export script_name = "Moka Motion"
 export script_description = "Unified Mocha motion, shape, clip, perspective and FBF track tools"
 export script_author = "Kiterow"
-export script_version = "3.4.2"
+export script_version = "3.6.1"
 export script_namespace = "kite.MokaMotion"
 
-local depctrl, LineCollection, ASS, AMath, APersp, ArchUtil, Tags, ZF, KiteUI, PyBridge, Media, LineOps, clipboard
+local depctrl, LineCollection, ASS, AMath, APersp, ArchUtil, Tags, ZF, KiteUI, PyBridge, Media, LineOps, FBFOptimizer, ProcessRunner, clipboard
 local Point, Matrix, Quad, an_xshift, an_yshift, relevantTags, usedTags
 local transformPoints, tagsFromQuad, prepareForPerspective
 local shift_frame_karaoke
@@ -29,7 +29,7 @@ depctrl = DependencyControl{
       feed: "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"}
     {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.PyBridge", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     {"kite.Media", version: "1.2.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
@@ -39,6 +39,7 @@ depctrl = DependencyControl{
   }
 }
 LineCollection, Tags, ASS, AMath, APersp, ArchUtil, ZF, KiteUI, PyBridge, Media, LineOps, clipboard = depctrl\requireModules!
+FBFOptimizer = {}
 {:Point, :Matrix} = AMath
 {:Quad, :an_xshift, :an_yshift, :relevantTags, :usedTags, :transformPoints, :tagsFromQuad, :prepareForPerspective} = APersp
 
@@ -55,6 +56,7 @@ DEFAULTS = {
   reference_frame: 1
   strict_sync: false
   optimize_linear: true
+  optimize_fbf: false
   linear_tolerance: 0.20
   x_position: true
   y_position: true
@@ -1213,11 +1215,19 @@ get_script_resolution = (subs) ->
   res.y or= DEFAULTS.target_height
   res
 
-exclusive_end_frame = (start_time, end_time) -> Media.exclusiveEndFrame start_time, end_time
+exclusive_end_frame = (start_time, end_time) ->
+  start_frame = aegisub.frame_from_ms start_time
+  end_frame = aegisub.frame_from_ms end_time
+  return nil unless start_frame and end_frame
+  math.max start_frame + 1, end_frame
 
 selection_window = (subs, sel) ->
   window, err = Media.selectionWindow subs, sel, {includeComments: false, positiveDuration: true, requireFrames: true}
   return nil, err or "Select at least one non-comment dialogue line with a positive duration." unless window
+  end_frame = exclusive_end_frame window.min_start, window.max_end
+  return nil, "The selection covers no loaded video frames." unless end_frame and end_frame > window.start_frame
+  window.end_frame = end_frame
+  window.frame_count = end_frame - window.start_frame
   window
 
 slice_track = (track, sample_start, count, strict = true) ->
@@ -1320,6 +1330,231 @@ compress_output_lines = (lines) ->
     else
       out[#out + 1] = line
   out
+
+FBFOptimizer.DEFAULT_TOLERANCE = 0.05
+FBFOptimizer.MODES = {
+  {label: "Conservative (0.05 px)", tolerance: 0.05}
+  {label: "Exact (0 px)", tolerance: 0}
+  {label: "Subpixel (0.10 px)", tolerance: 0.10}
+}
+
+FBFOptimizer.sameFields = (left, right) ->
+  return false unless left and right
+  return false unless LineOps.shallowEqual left.extra, right.extra
+  for key in *{"class", "layer", "style", "actor", "effect", "margin_l", "margin_r", "margin_t", "margin_b", "margin_v", "comment"}
+    return false if left[key] != right[key]
+  true
+
+FBFOptimizer.metadataKey = (line) ->
+  table.concat [tostring(line[key] or "") for key in *{"class", "layer", "style", "actor", "effect", "margin_l", "margin_r", "margin_t", "margin_b", "margin_v", "comment"}], "\31"
+
+FBFOptimizer.hasDurationTags = (text) ->
+  for name in *{"move", "t", "fad", "fade", "k", "kf", "ko", "kt"}
+    return true if LineOps.hasTag text, name, false
+  false
+
+FBFOptimizer.drawingTemplate = (text, analysis) ->
+  parts = {}
+  geometry_tags = {"p", "pos", "fscx", "fscy", "frz", "fr"}
+  for section in *analysis.sections
+    if section.type == "override"
+      parts[#parts + 1] = LineOps.removeTagCalls "{" .. section.text .. "}", geometry_tags
+    elseif section.type == "drawing"
+      topology = section.text\gsub NUM_PATTERN, "#"
+      topology = topology\gsub "%s+", " "
+      parts[#parts + 1] = "<drawing:#{trim topology}>"
+    elseif section.type == "comment"
+      parts[#parts + 1] = "{" .. section.text .. "}"
+    else
+      parts[#parts + 1] = section.text
+  table.concat parts
+
+FBFOptimizer.state = (line) ->
+  text = tostring(line and line.text or "")
+  duration_unsafe = FBFOptimizer.hasDurationTags text
+  analysis = LineOps.analyzeText text
+  unless analysis.has_drawing
+    position = LineOps.position text
+    template = if position then LineOps.removeTagCalls(text, "pos") else text
+    return {
+      kind: "text"
+      :text, :template, :position, :duration_unsafe
+      lane_key: template
+    }
+
+  drawing_unsafe = false
+  for name in *{"org", "frx", "fry", "fax", "fay", "clip", "iclip", "r"}
+    if LineOps.hasTag text, name, false
+      drawing_unsafe = true
+      break
+  scales, drawing_scale = {}, nil
+  drawing = {}
+  for section in *analysis.sections
+    if section.type == "drawing" and trim(section.text) != ""
+      scale = tonumber section.drawing
+      scales[scale] = true if scale and scale > 0
+      drawing_scale or= scale
+      drawing[#drawing + 1] = section.text
+  scale_count = 0
+  scale_count += 1 for _ in pairs scales
+  drawing_unsafe = true if scale_count != 1
+  path = table.concat drawing, " "
+  coordinates = [tonumber(value) for value in path\gmatch NUM_PATTERN]
+  drawing_unsafe = true if #coordinates == 0 or #coordinates % 2 != 0
+  position = LineOps.position text
+  scale_x = LineOps.tagNumber text, "fscx", 100, true
+  scale_y = LineOps.tagNumber text, "fscy", 100, true
+  rotation, rotation_call = LineOps.tagNumber text, "frz", nil, true
+  rotation = LineOps.tagNumber(text, "fr", 0, true) unless rotation_call
+  align = LineOps.tagNumber text, "an", 7, true
+  template = FBFOptimizer.drawingTemplate text, analysis
+  {
+    kind: "drawing"
+    :text, :template, :position, :duration_unsafe, :drawing_unsafe
+    p: drawing_scale
+    :scale_x, :scale_y, :rotation, :align, :coordinates, :path
+    lane_key: template
+  }
+
+FBFOptimizer.geometryPoints = (state) ->
+  return nil unless state and state.position and state.p and state.p > 0
+  return nil unless finite(state.scale_x) and finite(state.scale_y) and finite(state.rotation)
+  denominator = 2 ^ (state.p - 1)
+  angle = math.rad state.rotation
+  cosine, sine = math.cos(angle), math.sin(angle)
+  points = {}
+  for index = 1, #state.coordinates, 2
+    x = state.coordinates[index] * state.scale_x / 100 / denominator
+    y = state.coordinates[index + 1] * state.scale_y / 100 / denominator
+    points[#points + 1] = {
+      x: x * cosine - y * sine + state.position.x
+      y: x * sine + y * cosine + state.position.y
+    }
+  points
+
+FBFOptimizer.distance = (left, right) ->
+  math.sqrt((left.x - right.x)^2 + (left.y - right.y)^2)
+
+FBFOptimizer.compatible = (left, right, tolerance = FBFOptimizer.DEFAULT_TOLERANCE) ->
+  return false unless left and right
+  return false if left.duration_unsafe or right.duration_unsafe
+  return true if left.text == right.text
+  return false unless left.kind == right.kind and left.template == right.template
+  tolerance = math.max 0, tonumber(tolerance) or FBFOptimizer.DEFAULT_TOLERANCE
+  if left.kind == "text"
+    return false unless left.position and right.position
+    return FBFOptimizer.distance(left.position, right.position) <= tolerance + NUMERIC_EPSILON
+  return false if left.drawing_unsafe or right.drawing_unsafe
+  return false unless left.p == right.p and #left.coordinates == #right.coordinates
+  if left.align != 7 or right.align != 7
+    return false unless left.path == right.path
+    return false unless math.abs(left.scale_x - right.scale_x) <= NUMERIC_EPSILON
+    return false unless math.abs(left.scale_y - right.scale_y) <= NUMERIC_EPSILON
+    return false unless math.abs(left.rotation - right.rotation) <= NUMERIC_EPSILON
+    return left.position and right.position and FBFOptimizer.distance(left.position, right.position) <= tolerance + NUMERIC_EPSILON
+  left_points, right_points = FBFOptimizer.geometryPoints(left), FBFOptimizer.geometryPoints(right)
+  return false unless left_points and right_points and #left_points == #right_points
+  for index = 1, #left_points
+    return false if FBFOptimizer.distance(left_points[index], right_points[index]) > tolerance + NUMERIC_EPSILON
+  true
+
+FBFOptimizer.selectionItems = (subs, selection) ->
+  records = LineOps.selectedLines subs, selection, (line) ->
+    line and line.class == "dialogue" and not line.comment and tonumber(line.end_time) and tonumber(line.start_time) and line.end_time > line.start_time
+  items = {}
+  for record in *records or {}
+    items[#items + 1] = {
+      index: record.index
+      line: record.line
+      state: FBFOptimizer.state record.line
+    }
+  items
+
+FBFOptimizer.buildPlan = (items, tolerance = FBFOptimizer.DEFAULT_TOLERANCE) ->
+  ordered = [item for item in *items or {}]
+  table.sort ordered, (left, right) ->
+    if left.line.start_time == right.line.start_time
+      if left.line.end_time == right.line.end_time then left.index < right.index else left.line.end_time < right.line.end_time
+    else
+      left.line.start_time < right.line.start_time
+  lanes = {}
+  for item in *ordered
+    item.state or= FBFOptimizer.state item.line
+    item.lane_key = FBFOptimizer.metadataKey(item.line) .. "\31" .. tostring(item.state.lane_key or item.line.text or "")
+    lane = nil
+    for candidate in *lanes
+      if candidate.last.line.end_time == item.line.start_time and candidate.key == item.lane_key and FBFOptimizer.sameFields(candidate.last.line, item.line)
+        lane = candidate
+        break
+    unless lane
+      lane = {key: item.lane_key, items: {}}
+      lanes[#lanes + 1] = lane
+    lane.items[#lane.items + 1] = item
+    lane.last = item
+
+  plan = {
+    before: #ordered
+    after: #ordered
+    merged: 0
+    longest_run: 0
+    unsafe_count: 0
+    :lanes
+    updates: {}
+    deletes: {}
+    retained: {}
+  }
+  for item in *ordered
+    plan.unsafe_count += 1 if item.state.duration_unsafe
+  for lane in *lanes
+    anchor, previous, run = nil, nil, 0
+    for item in *lane.items
+      if anchor and previous.line.end_time == item.line.start_time and FBFOptimizer.sameFields(anchor.line, item.line) and FBFOptimizer.compatible(anchor.state, item.state, tolerance)
+        plan.updates[anchor.index] = item.line.end_time
+        plan.deletes[#plan.deletes + 1] = item.index
+        plan.retained[item.index] = nil
+        plan.merged += 1
+        run += 1
+      else
+        anchor = item
+        plan.retained[item.index] = true
+        run = 1
+      previous = item
+      plan.longest_run = math.max plan.longest_run, run
+  plan.after = plan.before - plan.merged
+  plan
+
+FBFOptimizer.applyPlan = (subs, plan) ->
+  for index, end_time in pairs plan.updates or {}
+    line = copy_line subs[index]
+    line.end_time = end_time
+    subs[index] = line
+  deleted = [index for index in *plan.deletes or {}]
+  table.sort deleted
+  LineOps.deleteIndices subs, deleted
+  selection = {}
+  retained = [index for index, keep in pairs(plan.retained or {}) when keep]
+  table.sort retained
+  for original in *retained
+    shift = 0
+    for removed in *deleted
+      break if removed >= original
+      shift += 1
+    selection[#selection + 1] = original - shift
+  selection
+
+FBFOptimizer.optimize = (subs, selection, tolerance = FBFOptimizer.DEFAULT_TOLERANCE) ->
+  items = FBFOptimizer.selectionItems subs, selection
+  plan = FBFOptimizer.buildPlan items, tolerance
+  return selection, plan if plan.merged == 0
+  FBFOptimizer.applyPlan(subs, plan), plan
+
+FBFOptimizer.toleranceForMode = (label) ->
+  for mode in *FBFOptimizer.MODES
+    return mode.tolerance if mode.label == label
+  nil
+
+FBFOptimizer.canRun = (subs, selection) ->
+  #FBFOptimizer.selectionItems(subs, selection) > 1
 
 frame_interval = (line, frame) ->
   start_time = math.max line.start_time, aegisub.ms_from_frame(frame)
@@ -2346,15 +2581,35 @@ sample_count_for_selection = (subs, window, mapping_mode) ->
     largest = math.max largest, last - first
   largest
 
-motion_dialog = (inverse = false) ->
+Core.current_video_frame = ->
+  properties = LineOps.projectProperties!
+  frame = tonumber(properties and properties.video_position)
+  return nil unless finite(frame) and frame >= 0
+  math.floor frame
+
+Core.reference_row_for_window = (window, fallback = DEFAULTS.reference_frame) ->
+  fallback = math.max 1, math.floor(tonumber(fallback) or DEFAULTS.reference_frame)
+  return fallback unless window
+  current_frame = Core.current_video_frame!
+  start_frame = tonumber window.start_frame
+  frame_count = tonumber window.frame_count
+  if not frame_count and start_frame and tonumber(window.end_frame)
+    frame_count = tonumber(window.end_frame) - start_frame
+  return fallback unless current_frame and start_frame and frame_count and frame_count > 0
+  -- Aegisub video frames are 0-based; reference rows are 1-based within the selection.
+  reference_row = current_frame - start_frame + 1
+  if reference_row >= 1 and reference_row <= frame_count then reference_row else fallback
+
+motion_dialog = (inverse = false, window = nil) ->
   action = if inverse then "Revert" else "Apply"
+  reference_row = Core.reference_row_for_window window
   controls = {
     {class: "label", label: "Mocha / After Effects Transform data or a text-file path:", x: 0, y: 0, width: 12, height: 1}
     {class: "textbox", name: "input", text: read_clipboard!, x: 0, y: 1, width: 12, height: 11}
     {class: "label", label: "First data row", x: 0, y: 12, width: 2, height: 1}
     {class: "intedit", name: "sample_start", value: 1, min: 1, x: 2, y: 12, width: 1, height: 1}
     {class: "label", label: "Reference row", x: 3, y: 12, width: 2, height: 1}
-    {class: "intedit", name: "reference_frame", value: 1, min: 1, x: 5, y: 12, width: 1, height: 1}
+    {class: "intedit", name: "reference_frame", value: reference_row, min: 1, x: 5, y: 12, width: 1, height: 1}
     {class: "label", label: "Mapping", x: 6, y: 12, width: 1, height: 1}
     {class: "dropdown", name: "mapping_mode", items: {"Selection timeline", "Restart on each line"}, value: "Selection timeline", x: 7, y: 12, width: 3, height: 1}
     {class: "checkbox", name: "x_position", label: "X", value: true, x: 0, y: 13, width: 1, height: 1}
@@ -2379,6 +2634,7 @@ motion_dialog = (inverse = false) ->
     {class: "intedit", name: "cleanup_degree", value: 2, min: 1, max: 3, x: 11, y: 15, width: 1, height: 1}
     {class: "checkbox", name: "strict_sync", label: "Strict frame/FPS/PAR synchronization", value: DEFAULTS.strict_sync, x: 0, y: 16, width: 5, height: 1}
   }
+  table.insert controls, {class: "checkbox", name: "optimize_fbf", label: "Optimize FBF states (0.05 px)", value: DEFAULTS.optimize_fbf, x: 5, y: 16, width: 7, height: 1} unless inverse
   pressed, values = aegisub.dialog.display controls, {action, "Cancel"}, {ok: action, close: "Cancel"}
   return nil unless pressed == action
   values.inverse = inverse
@@ -2392,6 +2648,7 @@ motion_dialog = (inverse = false) ->
   values.blur_scale = 1
   values.decimals = 2
   values.cleanup_strength = 100
+  values.optimize_fbf = false if inverse
   values
 
 shape_dialog = (mode, script_res) ->
@@ -2433,14 +2690,15 @@ shape_dialog = (mode, script_res) ->
   values.output_mode = mode
   values
 
-powerpin_dialog = ->
+powerpin_dialog = (window = nil) ->
+  reference_row = Core.reference_row_for_window window
   controls = {
     {class: "label", label: "Mocha CC Power Pin / Corner Pin data or a text-file path:", x: 0, y: 0, width: 12, height: 1}
     {class: "textbox", name: "input", text: read_clipboard!, x: 0, y: 1, width: 12, height: 12}
     {class: "label", label: "First data row", x: 0, y: 13, width: 2, height: 1}
     {class: "intedit", name: "sample_start", value: 1, min: 1, x: 2, y: 13, width: 1, height: 1}
     {class: "label", label: "Reference row", x: 3, y: 13, width: 2, height: 1}
-    {class: "intedit", name: "reference_frame", value: 1, min: 1, x: 5, y: 13, width: 1, height: 1}
+    {class: "intedit", name: "reference_frame", value: reference_row, min: 1, x: 5, y: 13, width: 1, height: 1}
     {class: "checkbox", name: "apply_perspective", label: "Perspective", value: true, x: 0, y: 14, width: 2, height: 1}
     {class: "checkbox", name: "track_position", label: "Position", value: true, x: 2, y: 14, width: 2, height: 1}
     {class: "checkbox", name: "track_border_shadow", label: "Border / shadow", value: true, x: 4, y: 14, width: 3, height: 1}
@@ -2468,13 +2726,53 @@ apply_atomically = (subs, callback) ->
       result = "#{tostring(result or 'Operation failed.')}\n#{rollback_message}"
   ok, result, details
 
+FBFOptimizer.optionsDialog = ->
+  labels = [mode.label for mode in *FBFOptimizer.MODES]
+  controls = {
+    {class: "label", label: "Merge consecutive compatible FBF states without accumulating positional drift.", x: 0, y: 0, width: 8, height: 1}
+    {class: "label", label: "Comparison", x: 0, y: 1, width: 1, height: 1}
+    {class: "dropdown", name: "mode", items: labels, value: labels[1], x: 1, y: 1, width: 3, height: 1}
+    {class: "label", label: "Duration-dependent \\move, \\t, fades, and karaoke are protected.", x: 0, y: 2, width: 8, height: 1}
+  }
+  button, values = aegisub.dialog.display controls, {"Optimize", "Cancel"}, {ok: "Optimize", close: "Cancel"}
+  return nil unless button == "Optimize"
+  tolerance = FBFOptimizer.toleranceForMode values.mode
+  return nil unless tolerance != nil
+  {mode: values.mode, :tolerance}
+
+FBFOptimizer.main = (subs, selection) ->
+  items = FBFOptimizer.selectionItems subs, selection
+  if #items < 2
+    show_message "Moka Motion / Optimizer", "Select at least two uncommented FBF dialogue lines.", 6
+    return selection
+  options = FBFOptimizer.optionsDialog!
+  return selection unless options
+  plan = FBFOptimizer.buildPlan items, options.tolerance
+  if plan.merged == 0
+    show_message "Moka Motion / Optimizer", "No consecutive temporal states are compatible with #{options.mode}.", 6
+    return selection
+  ok, result, details = apply_atomically subs, ->
+    optimized = FBFOptimizer.applyPlan subs, plan
+    true, {selection: optimized}
+  unless ok and result
+    show_message "Moka Motion / Optimizer", ok and "No output was generated." or result, 10
+    return selection
+  aegisub.set_undo_point "Moka Motion: Optimizer"
+  show_message "Moka Motion / Optimizer", "Optimization complete.\nLines: #{plan.before} -> #{plan.after}\nMerged: #{plan.merged}\nLongest run: #{plan.longest_run} states\nTemporal tracks: #{#plan.lanes}\nProtected by duration-dependent tags: #{plan.unsafe_count}", 9
+  details.selection
+
+Core.optimize_transform_report = (subs, report, enabled) ->
+  if enabled and report and report.selection and #report.selection > 1
+    report.selection, report.optimizer = FBFOptimizer.optimize subs, report.selection, FBFOptimizer.DEFAULT_TOLERANCE
+  report
+
 motion_main = (inverse = false) ->
   (subs, sel, active) ->
     window, err = selection_window subs, sel
     unless window
       show_message script_name, err
       return sel
-    options = motion_dialog inverse
+    options = motion_dialog inverse, window
     return sel unless options
     track, parse_error = parse_input options.input
     unless track and track.kind == "transform"
@@ -2491,7 +2789,11 @@ motion_main = (inverse = false) ->
       return sel
     options.reference_frame = math.floor clamp(options.reference_frame, 1, #sliced.samples)
     prepared, prep = prepare_transform_track sliced, options
-    ok, result, details = apply_atomically subs, -> apply_transform_track subs, window, prepared, options
+    ok, result, details = apply_atomically subs, ->
+      applied, report = apply_transform_track subs, window, prepared, options
+      return applied, report unless applied
+      Core.optimize_transform_report subs, report, options.optimize_fbf
+      applied, report
     unless ok and result
       show_message script_name, ok and (details or "No output was generated.") or result
       return sel
@@ -2501,6 +2803,9 @@ motion_main = (inverse = false) ->
       notes[#notes + 1] = "Duplicate-sample candidate: row #{prep.phase.index}, source frame #{prep.phase.source_frame or '?'}, score #{format_number(prep.phase.score * 100, 1)}%."
     notes[#notes + 1] = prep.phase_message if prep.phase_message
     notes[#notes + 1] = "Cleanup changed #{prep.cleanup.changed} channel values." if prep.cleanup and prep.cleanup.changed > 0
+    if details and details.optimizer
+      optimizer = details.optimizer
+      notes[#notes + 1] = "FBF Optimizer: #{optimizer.before} -> #{optimizer.after} lines (#{optimizer.merged} merged)."
     show_message script_name, table.concat(notes, "\n"), 6 if #notes > 0
     if details and details.selection and #details.selection > 0
       details.selection, details.selection[1]
@@ -2544,7 +2849,7 @@ powerpin_main = (subs, sel, active) ->
   unless window
     show_message script_name, err
     return sel
-  options = powerpin_dialog!
+  options = powerpin_dialog window
   return sel unless options
   track, parse_error = parse_input options.input
   unless track and track.kind == "perspective"
@@ -2903,9 +3208,9 @@ encoder_command = (value, fallback) ->
 trim_settings_main = ->
   settings = encoder_settings!
   controls = {
-    {class: "label", label: "Leave a field blank to resolve that encoder from PATH.", x: 0, y: 0, width: 10, height: 1}
-    {class: "label", label: "x264", x: 0, y: 1, width: 1, height: 1}
-    {class: "edit", name: "x264", value: settings.x264, x: 1, y: 1, width: 9, height: 1}
+    {class: "label", label: "FFmpeg handles exact seeking; x264 is the automatic fallback. Blank fields use PATH.", x: 0, y: 0, width: 10, height: 1}
+    {class: "label", label: "x264 fallback", x: 0, y: 1, width: 2, height: 1}
+    {class: "edit", name: "x264", value: settings.x264, x: 2, y: 1, width: 8, height: 1}
     {class: "label", label: "FFmpeg", x: 0, y: 2, width: 1, height: 1}
     {class: "edit", name: "ffmpeg", value: settings.ffmpeg, x: 1, y: 2, width: 9, height: 1}
   }
@@ -2930,66 +3235,226 @@ trim_settings_main = ->
 powershell_literal = (value) ->
   "'" .. tostring(value or "")\gsub("'", "''") .. "'"
 
+ProcessRunner = {
+  poll_ms: 100
+  exit_grace_polls: 30
+  output_limit: 4 * 1024 * 1024
+}
+
+ProcessRunner.quoteArgument = (value) ->
+  value = tostring value or ""
+  return '""' if value == ""
+  return value unless value\find '[%s"]'
+  quoted, slashes = {'"'}, 0
+  for index = 1, #value
+    character = value\sub index, index
+    if character == "\\"
+      slashes += 1
+    elseif character == '"'
+      quoted[#quoted + 1] = string.rep "\\", slashes * 2 + 1
+      quoted[#quoted + 1] = '"'
+      slashes = 0
+    else
+      quoted[#quoted + 1] = string.rep("\\", slashes) if slashes > 0
+      quoted[#quoted + 1] = character
+      slashes = 0
+  quoted[#quoted + 1] = string.rep("\\", slashes * 2) if slashes > 0
+  quoted[#quoted + 1] = '"'
+  table.concat quoted
+
+ProcessRunner.buildScript = (command, paths) ->
+  arguments = table.concat [ProcessRunner.quoteArgument(value) for value in *command.args or {}], " "
+  table.concat {
+    "$ErrorActionPreference = 'Stop'"
+    "$process = $null"
+    "$stdout = ''"
+    "$stderr = ''"
+    "$exitCode = -1"
+    "$cancelled = $false"
+    "try {"
+    "  $startInfo = New-Object System.Diagnostics.ProcessStartInfo"
+    "  $startInfo.FileName = #{powershell_literal command.executable}"
+    "  $startInfo.Arguments = #{powershell_literal arguments}"
+    "  $startInfo.UseShellExecute = $false"
+    "  $startInfo.CreateNoWindow = $true"
+    "  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden"
+    "  $startInfo.RedirectStandardOutput = $true"
+    "  $startInfo.RedirectStandardError = $true"
+    "  $process = New-Object System.Diagnostics.Process"
+    "  $process.StartInfo = $startInfo"
+    "  if (-not $process.Start()) { throw 'The process could not be started.' }"
+    "  $stdoutTask = $process.StandardOutput.ReadToEndAsync()"
+    "  $stderrTask = $process.StandardError.ReadToEndAsync()"
+    "  while (-not $process.HasExited) {"
+    "    if (Test-Path -LiteralPath #{powershell_literal paths.cancel}) {"
+    "      $cancelled = $true"
+    "      try { $process.Kill() } catch {}"
+    "      break"
+    "    }"
+    "    Start-Sleep -Milliseconds #{ProcessRunner.poll_ms}"
+    "  }"
+    "  $process.WaitForExit()"
+    "  $stdout = $stdoutTask.Result"
+    "  $stderr = $stderrTask.Result"
+    "  $exitCode = if ($cancelled) { 130 } else { $process.ExitCode }"
+    "} catch {"
+    "  $stderr = ($stderr + \"`r`n\" + $_.Exception.ToString()).Trim()"
+    "  if ($process -and -not $process.HasExited) { try { $process.Kill() } catch {} }"
+    "} finally {"
+    "  [System.IO.File]::WriteAllText(#{powershell_literal paths.stdout}, [string]$stdout)"
+    "  [System.IO.File]::WriteAllText(#{powershell_literal paths.stderr}, [string]$stderr)"
+    "  [System.IO.File]::WriteAllText(#{powershell_literal paths.exit}, [string]$exitCode)"
+    "}"
+  }, "\r\n"
+
+ProcessRunner.cancelled = ->
+  return false unless aegisub and aegisub.progress and aegisub.progress.is_cancelled
+  ok, value = pcall aegisub.progress.is_cancelled
+  ok and value == true
+
+ProcessRunner.waitForExit = (pid, paths) ->
+  cancellation_written, poll = false, 0
+  while not PyBridge.fileExists paths.exit
+    poll += 1
+    is_cancelled = ProcessRunner.cancelled!
+    if is_cancelled and not cancellation_written
+      PyBridge.writeFile paths.cancel, "cancel"
+      cancellation_written = true
+    if poll % 10 == 0 and not PyBridge.processExists(pid)
+      for _ = 1, 5
+        break if PyBridge.fileExists paths.exit
+        PyBridge.sleep ProcessRunner.poll_ms
+      break unless PyBridge.fileExists paths.exit
+    PyBridge.sleep ProcessRunner.poll_ms
+  for _ = 1, ProcessRunner.exit_grace_polls
+    break unless PyBridge.processExists pid
+    PyBridge.sleep ProcessRunner.poll_ms
+  cancellation_written
+
+ProcessRunner.run = (command) ->
+  return false, "The command is invalid.", nil unless command and trim(command.executable) != ""
+  unless PyBridge.isWindows
+    return PyBridge.run PyBridge.commandLine(command.executable, command.args)
+  paths, paths_error = PyBridge.tempPaths "moka_process", {
+    script: ".ps1"
+    stdout: ".stdout.txt"
+    stderr: ".stderr.txt"
+    exit: ".exit.txt"
+    cancel: ".cancel"
+  }
+  return false, paths_error or "The temporary directory is unavailable.", nil unless paths
+  PyBridge.cleanup paths
+  written, write_error = PyBridge.writeFile paths.script, ProcessRunner.buildScript(command, paths)
+  unless written
+    PyBridge.cleanup paths
+    return false, write_error or "The hidden process supervisor could not be written.", nil
+  started, pid = PyBridge.startDetachedScript paths.script
+  unless started
+    PyBridge.cleanup paths
+    return false, pid or "The hidden process supervisor could not be started.", nil
+  cancelled = ProcessRunner.waitForExit pid, paths
+  stdout = PyBridge.readFile(paths.stdout, ProcessRunner.output_limit) or ""
+  stderr = PyBridge.readFile(paths.stderr, ProcessRunner.output_limit) or ""
+  exit_text = PyBridge.readFile(paths.exit, 64)
+  normalized_exit = trim exit_text
+  exit_code = tonumber normalized_exit
+  diagnostic_parts = {}
+  diagnostic_parts[#diagnostic_parts + 1] = stdout if trim(stdout) != ""
+  diagnostic_parts[#diagnostic_parts + 1] = stderr if trim(stderr) != ""
+  diagnostic = table.concat diagnostic_parts, "\n"
+  PyBridge.cleanup paths
+  if cancelled
+    return false, trim(diagnostic) != "" and diagnostic or "Cancelled.", 130
+  return false, trim(diagnostic) != "" and diagnostic or "The hidden process ended without reporting an exit code.", nil unless exit_code
+  exit_code == 0, diagnostic, exit_code
+
+run_hidden_command = (command) -> ProcessRunner.run command
+
 trim_paths = (source, window, temp_root) ->
   directory, stem = path_parts source
   end_frame = window.end_frame - 1
   suffix = "[#{window.start_frame}-#{end_frame}]"
   temp_root = trim(temp_root) != "" and temp_root or PyBridge.tempRoot!
+  return nil, "The temporary directory is unavailable." if trim(temp_root) == ""
   token = "#{stem\gsub '[^%w_.-]', '_'}_#{window.start_frame}_#{end_frame}_#{PyBridge.uniqueSuffix!}"
+  base = stem .. suffix
+  output = PyBridge.joinPath directory, base .. ".mp4"
+  collision = 2
+  while PyBridge.fileExists output
+    output = PyBridge.joinPath directory, "#{base} (#{collision}).mp4"
+    collision += 1
   {
-    output: PyBridge.joinPath directory, stem .. suffix .. ".mp4"
-    index: PyBridge.joinPath temp_root, token .. ".lavf.index"
+    :output
+    partial_output: PyBridge.joinPath directory, ".#{token}.partial.mp4"
+    source_mkv: PyBridge.joinPath temp_root, token .. ".source.mkv"
+    source_y4m: PyBridge.joinPath temp_root, token .. ".source.y4m"
     temp_mkv: PyBridge.joinPath temp_root, token .. ".mkv"
     log: PyBridge.joinPath temp_root, token .. ".log"
   }
 
 build_trim_commands = (source, window, paths, settings) ->
-  fps = Media.frameRateArgument window.start_frame, window.end_frame
-  x264_args = {"--crf", "16", "--tune", "fastdecode"}
-  if fps
-    table.insert x264_args, "--fps"
-    table.insert x264_args, fps
-  for value in *{
-    "-i", "250", "--sar", "1:1", "--index", paths.index
-    "--seek", tostring(window.start_frame), "--frames", tostring(window.frame_count)
-    "--muxer", "mkv", "-o", paths.temp_mkv, source
+  return nil, "The selected frame range is invalid." unless window and tonumber(window.frame_count) and window.frame_count > 0
+  settings = {} unless type(settings) == "table"
+  start_ms = Media.msFromFrame window.start_frame
+  return nil, "The start time for frame #{window.start_frame} is unavailable." unless finite start_ms
+  return nil, "The selection begins before the first decodable video frame." if start_ms < 0
+  fps, measured_fps = Media.frameRateArgument window.start_frame, window.end_frame
+  constant_fps = fps != nil
+  unless fps
+    fps, measured_fps = Media.frameRateArgument window.start_frame, window.end_frame, {requireConstant: false}
+  return nil, "The selected frames do not provide a usable frame rate." unless fps
+  start_seconds = string.format("%.6f", start_ms / 1000)\gsub("0+$", "")\gsub("%.$", "")
+  count = tostring window.frame_count
+  timing_filter = "setpts=N/((#{fps})*TB)"
+  ffmpeg = encoder_command settings.ffmpeg, "ffmpeg"
+  x264 = encoder_command settings.x264, "x264"
+  input_args = {
+    "-hide_banner", "-nostdin", "-loglevel", "warning", "-y"
+    "-ss", start_seconds, "-i", source, "-map", "0:V:0", "-an", "-frames:v", count
   }
-    table.insert x264_args, value
+  direct_args = [value for value in *input_args]
+  for value in *{
+    "-vf", timing_filter, "-r", fps, "-fps_mode", "cfr"
+    "-c:v", "libx264", "-crf", "16", "-tune", "fastdecode"
+    "-f", "matroska", paths.temp_mkv
+  }
+    table.insert direct_args, value
+  lossless_args = [value for value in *input_args]
+  for value in *{
+    "-vf", timing_filter, "-r", fps, "-fps_mode", "cfr"
+    "-c:v", "ffv1", "-level", "3", "-g", "1", "-f", "matroska", paths.source_mkv
+  }
+    table.insert lossless_args, value
+  y4m_args = [value for value in *input_args]
+  for value in *{
+    "-vf", timing_filter .. ",format=yuv420p", "-r", fps, "-fps_mode", "cfr"
+    "-f", "yuv4mpegpipe", paths.source_y4m
+  }
+    table.insert y4m_args, value
   {
-    x264: {
-      executable: encoder_command settings.x264, "x264"
-      args: x264_args
-    }
-    ffmpeg: {
-      executable: encoder_command settings.ffmpeg, "ffmpeg"
-      args: {"-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-i", paths.temp_mkv, "-map", "0:v:0", "-c", "copy", "-movflags", "+faststart", paths.output}
-    }
-    fps: fps
+    :ffmpeg
+    :x264
+    ffmpeg_probe: {executable: ffmpeg, args: {"-hide_banner", "-encoders"}}
+    x264_probe: {executable: x264, args: {"--fullhelp"}}
+    direct: {executable: ffmpeg, args: direct_args}
+    lossless: {executable: ffmpeg, args: lossless_args}
+    y4m: {executable: ffmpeg, args: y4m_args}
+    x264_lossless: {executable: x264, args: {"--crf", "16", "--tune", "fastdecode", "--fps", fps, "--frames", count, "--muxer", "mkv", "-o", paths.temp_mkv, paths.source_mkv}}
+    x264_y4m: {executable: x264, args: {"--demuxer", "y4m", "--crf", "16", "--tune", "fastdecode", "--fps", fps, "--frames", count, "--muxer", "mkv", "-o", paths.temp_mkv, paths.source_y4m}}
+    remux: {executable: ffmpeg, args: {"-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-i", paths.temp_mkv, "-map", "0:V:0", "-c", "copy", "-movflags", "+faststart", "-f", "mp4", paths.partial_output}}
+    :fps
+    :measured_fps
+    :constant_fps
+    :start_seconds
   }
 
 powershell_arguments = (arguments) ->
   table.concat [powershell_literal(value) for value in *arguments], " "
 
 build_trim_powershell = (source, window, paths, settings) ->
-  commands = build_trim_commands source, window, paths, settings
-  parts = {
-    "$x264 = #{powershell_literal commands.x264.executable}"
-    "$ffmpeg = #{powershell_literal commands.ffmpeg.executable}"
-    "$tempMkv = #{powershell_literal paths.temp_mkv}"
-    "$log = #{powershell_literal paths.log}"
-    "Remove-Item -LiteralPath $tempMkv -Force -ErrorAction SilentlyContinue"
-    "Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue"
-    "if (-not (Get-Command $x264 -ErrorAction SilentlyContinue)) { \"Encoder not found: $x264\" | Out-File -LiteralPath $log -Encoding UTF8; exit 1 }"
-    "if (-not (Get-Command $ffmpeg -ErrorAction SilentlyContinue)) { \"Encoder not found: $ffmpeg\" | Out-File -LiteralPath $log -Encoding UTF8; exit 1 }"
-    "& $x264 #{powershell_arguments commands.x264.args} 2>&1 | Out-File -LiteralPath $log -Encoding UTF8"
-    "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
-    "& $ffmpeg #{powershell_arguments commands.ffmpeg.args} 2>&1 | Out-File -LiteralPath $log -Encoding UTF8 -Append"
-    "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
-    "Remove-Item -LiteralPath $tempMkv -Force"
-    "Remove-Item -LiteralPath #{powershell_literal paths.index} -Force -ErrorAction SilentlyContinue"
-    "exit 0"
-  }
-  table.concat parts, "; "
+  commands, err = build_trim_commands source, window, paths, settings
+  return nil, err unless commands
+  "try { & #{powershell_literal commands.direct.executable} #{powershell_arguments commands.direct.args}; exit $LASTEXITCODE } catch { exit 1 }"
 
 video_trim_main = (subs, sel, active) ->
   window, err = selection_window subs, sel
@@ -3000,33 +3465,122 @@ video_trim_main = (subs, sel, active) ->
   unless source
     show_message script_name, "Aegisub has no readable local video path."
     return sel
-  paths = trim_paths source, window, PyBridge.tempRoot!
-  unless paths.temp_mkv and paths.log
-    show_message script_name, "The temporary directory is unavailable."
+  paths, paths_error = trim_paths source, window, PyBridge.tempRoot!
+  unless paths and paths.temp_mkv and paths.source_mkv and paths.partial_output and paths.log
+    show_message script_name, paths_error or "The temporary directory is unavailable."
     return sel
   settings = encoder_settings!
-  commands = build_trim_commands source, window, paths, settings
-  PyBridge.cleanup {paths.temp_mkv, paths.index, paths.log}
-  PyBridge.removeFile paths.output
-  aegisub.progress.task "Encoding #{window.frame_count} frames with x264..."
-  ok_x264, x264_output = PyBridge.run PyBridge.commandLine(commands.x264.executable, commands.x264.args)
-  PyBridge.removeFile paths.index
-  log_parts = {"x264:\n#{x264_output or ''}"}
-  unless ok_x264 and (Media.fileSize(paths.temp_mkv) or 0) > 0
-    PyBridge.removeFile paths.temp_mkv
-    PyBridge.writeFile paths.log, table.concat(log_parts, "\n\n")
-    show_message script_name, "x264 failed. The diagnostic log was kept for inspection.\n\n#{x264_output or ''}\n#{paths.log}", 14
+  commands, command_error = build_trim_commands source, window, paths, settings
+  unless commands
+    show_message script_name, command_error
     return sel
-  aegisub.progress.task "Remuxing the frame-exact clip..."
-  ok_ffmpeg, ffmpeg_output = PyBridge.run PyBridge.commandLine(commands.ffmpeg.executable, commands.ffmpeg.args)
-  log_parts[#log_parts + 1] = "ffmpeg:\n#{ffmpeg_output or ''}"
-  PyBridge.writeFile paths.log, table.concat(log_parts, "\n\n")
-  if ok_ffmpeg and (Media.fileSize(paths.output) or 0) > 0
-    PyBridge.removeFile paths.temp_mkv
-    PyBridge.removeFile paths.log
-    show_message script_name, "Created #{window.frame_count}-frame MP4 for source frames #{window.start_frame}..#{window.end_frame - 1}.\n#{paths.output}", 7
+  PyBridge.cleanup {paths.temp_mkv, paths.source_mkv, paths.source_y4m, paths.partial_output, paths.log}
+  run_command = (command) -> run_hidden_command command
+  cancelled = (exit_code, output) ->
+    code = tonumber exit_code
+    code == -1073741510 or code == 3221225786 or code == 130 or tostring(output or "")\find("^C", 1, true) != nil
+  tail = (value, limit = 5000) ->
+    value = tostring value or ""
+    return value if #value <= limit
+    "... full output is in the diagnostic log ...\n" .. value\sub(-limit)
+  verify_frames = (path) ->
+    command = {
+      executable: commands.ffmpeg
+      args: {"-hide_banner", "-nostdin", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-i", path, "-map", "0:V:0", "-an", "-f", "null", "-"}
+    }
+    ok, output, exit_code = run_command command
+    count = nil
+    for value in tostring(output or "")\gmatch "frame=(%d+)"
+      count = tonumber value
+    ok and count == window.frame_count, count, output, exit_code
+  log_parts = {
+    "Source: #{source}"
+    "Frames: #{window.start_frame}..#{window.end_frame - 1} (#{window.frame_count})"
+    "Seek: #{commands.start_seconds} s"
+    "Output FPS: #{commands.fps} (#{commands.constant_fps and 'source timecodes are CFR' or 'irregular timecodes normalized to CFR'})"
+  }
+  add_log = (label, output, exit_code = nil) ->
+    status = exit_code != nil and " [exit #{exit_code}]" or ""
+    log_parts[#log_parts + 1] = "#{label}#{status}:\n#{output or ''}"
+  fail = (message, output = "", keep_mkv = false) ->
+    PyBridge.removeFile paths.source_mkv
+    PyBridge.removeFile paths.source_y4m
+    PyBridge.removeFile paths.partial_output
+    PyBridge.removeFile paths.temp_mkv unless keep_mkv
+    PyBridge.writeFile paths.log, table.concat(log_parts, "\n\n")
+    kept = keep_mkv and (Media.fileSize(paths.temp_mkv) or 0) > 0 and "\nIntermediate MKV: #{paths.temp_mkv}" or ""
+    show_message script_name, "#{message}\n\n#{tail output}\nDiagnostic log: #{paths.log}#{kept}", 14
+    sel
+
+  aegisub.progress.task "Checking the configured FFmpeg..."
+  ffmpeg_ok, ffmpeg_info, ffmpeg_exit = run_command commands.ffmpeg_probe
+  add_log "FFmpeg capability check", ffmpeg_info, ffmpeg_exit
+  return fail("FFmpeg is unavailable or could not be started. Check Utilities/Trim Settings.", ffmpeg_info) unless ffmpeg_ok
+
+  has_libx264 = tostring(ffmpeg_info or "")\find(" libx264 ", 1, true) != nil
+  encoded = false
+  used_mode = nil
+  last_output, last_exit = "", nil
+  if has_libx264
+    aegisub.progress.task "Seeking to frame #{window.start_frame} and encoding #{window.frame_count} frames with FFmpeg/libx264..."
+    encoded, last_output, last_exit = run_command commands.direct
+    encoded = encoded and (Media.fileSize(paths.temp_mkv) or 0) > 0
+    used_mode = "FFmpeg/libx264" if encoded
+    add_log "FFmpeg/libx264", last_output, last_exit
+    return fail("Video clip creation was cancelled.", last_output) if cancelled last_exit, last_output
+    PyBridge.removeFile paths.temp_mkv unless encoded
   else
-    show_message script_name, "FFmpeg failed. The diagnostic log and intermediate MKV were kept for inspection.\n\n#{ffmpeg_output or ''}\n#{paths.log}", 14
+    add_log "FFmpeg/libx264", "libx264 is not present; using the configured external x264 fallback."
+
+  unless encoded
+    aegisub.progress.task "Checking the configured x264 fallback..."
+    x264_ok, x264_info, x264_exit = run_command commands.x264_probe
+    add_log "x264 capability check", x264_info, x264_exit
+    return fail("Neither FFmpeg/libx264 nor the configured x264 fallback is usable. Check Utilities/Trim Settings.", x264_info) unless x264_ok
+    use_lossless = tostring(x264_info or "")\find("lavf support (yes)", 1, true) != nil
+    extraction = use_lossless and commands.lossless or commands.y4m
+    intermediate = use_lossless and paths.source_mkv or paths.source_y4m
+    encoder = use_lossless and commands.x264_lossless or commands.x264_y4m
+    aegisub.progress.task "Extracting #{window.frame_count} source frames from #{commands.start_seconds} s..."
+    extracted, extract_output, extract_exit = run_command extraction
+    add_log use_lossless and "FFmpeg lossless extraction" or "FFmpeg Y4M extraction", extract_output, extract_exit
+    return fail("Video clip creation was cancelled.", extract_output) if cancelled extract_exit, extract_output
+    return fail("FFmpeg could not extract the selected frame range. The selection may extend beyond the video or the source may be undecodable.", extract_output) unless extracted and (Media.fileSize(intermediate) or 0) > 0
+    aegisub.progress.task "Encoding the extracted frames with x264..."
+    encoded, last_output, last_exit = run_command encoder
+    add_log "External x264", last_output, last_exit
+    PyBridge.removeFile paths.source_mkv
+    PyBridge.removeFile paths.source_y4m
+    return fail("Video clip creation was cancelled.", last_output) if cancelled last_exit, last_output
+    encoded = encoded and (Media.fileSize(paths.temp_mkv) or 0) > 0
+    used_mode = "external x264 fallback" if encoded
+  return fail("Both H.264 encoding routes failed.", last_output) unless encoded
+
+  aegisub.progress.task "Verifying the encoded frame count..."
+  exact_mkv, mkv_count, verify_output, verify_exit = verify_frames paths.temp_mkv
+  add_log "Intermediate frame verification", verify_output, verify_exit
+  unless exact_mkv
+    received = mkv_count and tostring(mkv_count) or "unknown"
+    return fail("The encoder produced #{received} frames instead of #{window.frame_count}; the incomplete clip was not published.", verify_output, true)
+  aegisub.progress.task "Remuxing the frame-exact clip..."
+  remuxed, remux_output, remux_exit = run_command commands.remux
+  add_log "MP4 remux", remux_output, remux_exit
+  return fail("Video clip creation was cancelled.", remux_output, true) if cancelled remux_exit, remux_output
+  return fail("FFmpeg could not create the final MP4.", remux_output, true) unless remuxed and (Media.fileSize(paths.partial_output) or 0) > 0
+  aegisub.progress.task "Verifying the final MP4..."
+  exact_mp4, mp4_count, mp4_verify_output, mp4_verify_exit = verify_frames paths.partial_output
+  add_log "Final frame verification", mp4_verify_output, mp4_verify_exit
+  unless exact_mp4
+    received = mp4_count and tostring(mp4_count) or "unknown"
+    return fail("The final MP4 contains #{received} frames instead of #{window.frame_count}; it was not published.", mp4_verify_output, true)
+  published, publish_error = PyBridge.replaceFile paths.partial_output, paths.output
+  unless published
+    add_log "Publish output", publish_error
+    return fail("The verified MP4 could not be moved into the source directory.", publish_error, true)
+  PyBridge.removeFile paths.temp_mkv
+  PyBridge.removeFile paths.log
+  timing_note = commands.constant_fps and "" or " Irregular source timecodes were normalized to CFR #{commands.fps}."
+  show_message script_name, "Created and verified #{window.frame_count}-frame MP4 for source frames #{window.start_frame}..#{window.end_frame - 1} with #{used_mode}.#{timing_note}\n#{paths.output}", 8
   sel
 
 exact_png_main = (subs, sel, active) ->
@@ -3038,6 +3592,11 @@ exact_png_main = (subs, sel, active) ->
   unless source
     show_message script_name, "Aegisub has no readable local video path."
     return sel
+  start_ms = Media.msFromFrame window.start_frame
+  unless finite(start_ms) and start_ms >= 0
+    show_message script_name, "The start time for frame #{window.start_frame} is unavailable."
+    return sel
+  start_seconds = string.format("%.6f", start_ms / 1000)\gsub("0+$", "")\gsub("%.$", "")
   destination = aegisub.dialog.save "Choose a name for the PNG sequence", "", "moka_sequence.png", "PNG (*.png)|*.png", false
   return sel unless destination and destination != ""
   directory, stem = path_parts destination
@@ -3049,14 +3608,14 @@ exact_png_main = (subs, sel, active) ->
   output = PyBridge.joinPath folder, "frame_%08d.png"
   for frame = window.start_frame, window.end_frame - 1
     PyBridge.removeFile PyBridge.joinPath(folder, string.format("frame_%08d.png", frame))
-  filter = "trim=start_frame=#{window.start_frame}:end_frame=#{window.end_frame},setpts=PTS-STARTPTS"
   ffmpeg_args = {
-    "-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-i", source, "-map", "0:v:0", "-an"
-    "-vf", filter, "-fps_mode", "passthrough", "-start_number", tostring(window.start_frame), "-compression_level", "3", output
+    "-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-ss", start_seconds, "-i", source, "-map", "0:v:0", "-an"
+    "-frames:v", tostring(window.frame_count), "-fps_mode", "passthrough", "-start_number", tostring(window.start_frame), "-compression_level", "3", output
   }
   aegisub.progress.task "Decoding #{window.frame_count} exact frames..."
-  ok, diagnostic = PyBridge.run PyBridge.commandLine(encoder_command(encoder_settings!.ffmpeg, "ffmpeg"), ffmpeg_args)
+  ok, diagnostic, exit_code = run_hidden_command {executable: encoder_command(encoder_settings!.ffmpeg, "ffmpeg"), args: ffmpeg_args}
   unless ok
+    aegisub.cancel! if exit_code == 130 and aegisub and aegisub.cancel
     show_message script_name, "FFmpeg failed. The partial folder was kept for inspection.\n\n#{diagnostic or ''}\n#{folder}", 12
     return sel
   count, missing, invalid = 0, {}, {}
@@ -3092,15 +3651,17 @@ macros = {
   {menu_path("Shapes/Create Vector Drawing"), "Convert Mocha mask or shape data to animated ASS vector drawings.", shape_main("shape"), validate_selection}
   {menu_path("Perspective/Apply Power Pin"), "Apply Mocha CC Power Pin or Corner Pin data to selected lines and clips.", powerpin_main, validate_selection}
   {menu_path("Track Refinery"), "Analyze, denoise, repair duplicate frames, or retarget selected FBF tracks.", refinery_main, validate_selection}
+  {menu_path("Utilities/Optimizer"), "Merge consecutive compatible FBF states without accumulating positional drift.", FBFOptimizer.main, FBFOptimizer.canRun}
   {menu_path("Utilities/Inspect Mocha Data"), "Identify supported Mocha export data and inspect continuity problems.", inspect_main}
-  {menu_path("Utilities/Create Video Clip"), "Create a frame-exact H.264 MP4 through x264 and FFmpeg.", video_trim_main, validate_selection}
+  {menu_path("Utilities/Create Video Clip"), "Create and verify a frame-exact H.264 MP4 with adaptive FFmpeg/libx264 and external x264 fallback.", video_trim_main, validate_selection}
   {menu_path("Utilities/Create Exact PNG Sequence"), "Create a frame-indexed PNG sequence for Mocha without an H.264 trim.", exact_png_main, validate_selection}
-  {menu_path("Utilities/Trim Settings"), "Configure x264 and FFmpeg paths; blank fields use PATH.", trim_settings_main}
+  {menu_path("Utilities/Trim Settings"), "Configure FFmpeg and the optional external x264 fallback; blank fields use PATH.", trim_settings_main}
 }
 for macro in *macros
   depctrl\registerMacro macro[1], macro[2], macro[3], macro[4], nil, false
 
 Core.DEFAULTS = DEFAULTS
+Core.motion_dialog = motion_dialog
 Core.parse_input = parse_input
 Core.motion_main = motion_main
 Core.shape_main = shape_main
@@ -3111,5 +3672,10 @@ Core.encoder_command = encoder_command
 Core.trim_paths = trim_paths
 Core.build_trim_commands = build_trim_commands
 Core.build_trim_powershell = build_trim_powershell
+Core.FBFOptimizer = FBFOptimizer
+Core.optimizer_main = FBFOptimizer.main
+Core.windows_quote_argument = ProcessRunner.quoteArgument
+Core.managed_process_script = ProcessRunner.buildScript
+Core.run_hidden_command = run_hidden_command
 
 return Core

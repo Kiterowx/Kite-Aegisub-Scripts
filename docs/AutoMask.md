@@ -1,4 +1,4 @@
-# AutoMask 2.4.6
+# AutoMask 2.4.7
 
 AutoMask detects, cleans, and reconstructs guided surfaces from the current video frame through the `kite-automask` 0.4.1 backend.
 

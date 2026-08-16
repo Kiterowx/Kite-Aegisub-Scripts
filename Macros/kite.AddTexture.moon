@@ -1,7 +1,7 @@
 export script_name        = "AddTexture"
 export script_description = "Apply pasted ASS drawing textures clipped to selected text outlines"
 export script_author      = "Kiterow"
-export script_version     = "2.0.11"
+export script_version     = "2.0.13"
 export script_namespace   = "kite.AddTexture"
 
 CONFIG_FILE = "kite-addtexture.json"
@@ -12,7 +12,8 @@ MIN_TOLERANCE = 1
 MAX_TOLERANCE = 50
 MIN_LAYER_OFFSET = 0
 MAX_LAYER_OFFSET = 100
-MAX_GENERATED_LINES = 20000
+LARGE_OUTPUT_WARNING_LINES = 20000
+DIALOG_INPUT_PREVIEW_CHARS = 12000
 
 local ZF, ASS, KiteUI, LineOps, depctrl
 DependencyControl = require "l0.DependencyControl"
@@ -372,6 +373,37 @@ extract_ass_drawings = (input) ->
   extract_from_text input, records, 1 if #records == 0
   records
 
+normalize_input_newlines = (value) ->
+  normalized = tostring(value or "")\gsub "\r\n", "\n"
+  normalized = normalized\gsub "\r", "\n"
+  normalized
+
+resolve_dialog_input = (dialog_input, presented_input, clipboard_inputs = {}) ->
+  dialog_input = tostring dialog_input or ""
+  dialog_normalized = normalize_input_newlines dialog_input
+  presented_normalized = normalize_input_newlines presented_input
+  valid_clipboards = {}
+
+  for candidate in *clipboard_inputs
+    candidate = tostring candidate or ""
+    if trim(candidate) != "" and #extract_ass_drawings(candidate) > 0
+      valid_clipboards[#valid_clipboards + 1] = {
+        text: candidate
+        normalized: normalize_input_newlines candidate
+      }
+
+  ui_returned_presented = dialog_normalized == presented_normalized or dialog_normalized == ""
+  if not ui_returned_presented and #dialog_normalized < #presented_normalized
+    ui_returned_presented = presented_normalized\sub(1, #dialog_normalized) == dialog_normalized
+
+  for candidate in *valid_clipboards
+    is_candidate_prefix = #dialog_normalized < #candidate.normalized and candidate.normalized\sub(1, #dialog_normalized) == dialog_normalized
+    return candidate.text, true if ui_returned_presented or is_candidate_prefix
+
+  return dialog_input, false if #extract_ass_drawings(dialog_input) > 0
+  return valid_clipboards[1].text, true if valid_clipboards[1]
+  dialog_input, false
+
 shape_info = (drawing) ->
   ok, shape = pcall -> ZF.shape drawing
   return nil, "Invalid ASS shape." unless ok and shape
@@ -525,7 +557,7 @@ cut_fitted_texture_to_clip = (fitted, clip_drawing, tolerance) ->
     ZF.clipper(absolute, clip_drawing, true)\clip(false)\build "line", tol
   return nil, "Could not cut texture shape to text outline: #{clipped}" unless ok
   clipped = trim clipped
-  return nil, "Cut texture shape is empty." if clipped == ""
+  return "" if clipped == ""
   local_drawing, local_err = move_drawing clipped, -fitted.x, -fitted.y
   return nil, local_err unless local_drawing
   local_drawing
@@ -650,6 +682,18 @@ show_message = (title, msg) ->
     { class: "textbox", value: msg, x: 0, y: 1, width: 42, height: 8 }
   }, { "OK" }
 
+confirm_large_output = (estimated_lines) ->
+  return true if estimated_lines <= LARGE_OUTPUT_WARNING_LINES
+  btn = aegisub.dialog.display {
+    { class: "label", label: "AddTexture - large output warning", x: 0, y: 0, width: 42 }
+    { class: "textbox", value: "This operation can generate up to #{estimated_lines} lines. The warning threshold is #{LARGE_OUTPUT_WARNING_LINES}; processing may take longer and use more memory, but AddTexture can continue.", x: 0, y: 1, width: 42, height: 8 }
+  }, { "Continue", "Cancel" }, { ok: "Continue", close: "Cancel" }
+  btn == "Continue"
+
+cancel_requested = ->
+  return false unless aegisub.progress and aegisub.progress.is_cancelled
+  aegisub.progress.is_cancelled!
+
 build_interface = ->
   {
     main: {
@@ -662,9 +706,10 @@ build_interface = ->
         width: 7
       }
       shape_label: { class: "label", label: "ASS drawings / Dialogue lines:", x: 0, y: 2, width: 7 }
-      shape_input: { class: "textbox", value: "", config: false, x: 0, y: 3, width: 7, height: 9 }
+      shape_input: { class: "textbox", name: "shape_input", text: "", config: false, x: 0, y: 3, width: 7, height: 9 }
       preserve_colors: {
         class: "checkbox"
+        name: "preserve_colors"
         label: "Preserve colors"
         value: DEFAULTS.preserve_colors
         config: true
@@ -674,6 +719,7 @@ build_interface = ->
       }
       cut_to_text_shape: {
         class: "checkbox"
+        name: "cut_to_text_shape"
         label: "Clip to text"
         value: DEFAULTS.cut_to_text_shape
         config: true
@@ -683,6 +729,7 @@ build_interface = ->
       }
       copy_visibility_tags: {
         class: "checkbox"
+        name: "copy_visibility_tags"
         label: "Copy alpha/fad"
         value: DEFAULTS.copy_visibility_tags
         config: true
@@ -693,6 +740,7 @@ build_interface = ->
       user_tags_label: { class: "label", label: "Extra tags:", x: 0, y: 14, width: 2 }
       user_tags: {
         class: "edit"
+        name: "user_tags"
         value: DEFAULTS.user_tags
         config: true
         x: 2
@@ -702,6 +750,7 @@ build_interface = ->
       clip_tolerance_label: { class: "label", label: "Text simplify:", x: 0, y: 15, width: 4 }
       clip_tolerance: {
         class: "floatedit"
+        name: "clip_tolerance"
         value: DEFAULTS.clip_tolerance
         config: true
         min: 1
@@ -713,6 +762,7 @@ build_interface = ->
       shape_tolerance_label: { class: "label", label: "Shape simplify:", x: 0, y: 16, width: 4 }
       shape_tolerance: {
         class: "floatedit"
+        name: "shape_tolerance"
         value: DEFAULTS.shape_tolerance
         config: true
         min: 1
@@ -724,6 +774,7 @@ build_interface = ->
       layer_offset_label: { class: "label", label: "Layer offset:", x: 0, y: 17, width: 4 }
       layer_offset: {
         class: "intedit"
+        name: "layer_offset"
         value: DEFAULTS.layer_offset
         config: true
         min: MIN_LAYER_OFFSET
@@ -743,9 +794,16 @@ show_dialog = ->
     options\read!
     options\updateInterface "main"
 
-  interface.main.shape_input.value = read_clipboard!
+  clipboard_before = read_clipboard!
+  presented_input = clipboard_before
+  if #presented_input > DIALOG_INPUT_PREVIEW_CHARS
+    presented_input = presented_input\sub 1, DIALOG_INPUT_PREVIEW_CHARS
+    interface.main.shape_label.label = "ASS drawings / Dialogue lines (#{#clipboard_before} clipboard chars loaded; preview shown):"
+  interface.main.shape_input.text = presented_input
   btn, res = aegisub.dialog.display interface.main, { "Execute", "Cancel" }, { ok: "Execute", close: "Cancel" }
   aegisub.cancel! if btn != "Execute"
+  clipboard_after = read_clipboard!
+  res.shape_input = resolve_dialog_input res.shape_input, presented_input, { clipboard_after, clipboard_before }
   if options
     options\updateConfiguration res, "main"
     options\write!
@@ -772,27 +830,30 @@ main = (subs, sel, active) ->
     show_message "AddTexture - invalid drawing input", err
     aegisub.cancel!
   estimated_lines = #sel * #texture_groups
-  if estimated_lines > MAX_GENERATED_LINES
-    show_message "AddTexture - output limit", "This operation would generate #{estimated_lines} lines; reduce the selection or texture groups (maximum #{MAX_GENERATED_LINES})."
-    aegisub.cancel!
+  aegisub.cancel! unless confirm_large_output estimated_lines
 
   aegisub.progress.title "AddTexture"
   dlg = ZF.dialog subs, sel, active, false
   processed = 0
   plans = {}
+  skipped_empty_groups = 0
+  skipped_empty_lines = 0
 
   for l, line, sel_idx, _, n in dlg\iterSelected!
+    aegisub.cancel! if cancel_requested!
     processed += 1
     aegisub.progress.set processed * 100 / n
     aegisub.progress.task ("Texturing line %d / %d")\format processed, n
 
     unless l.comment
+      empty_groups_before_line = skipped_empty_groups
       text_box = build_text_clip dlg, line, opts.clip_tolerance
       clip_inner = trim text_box.clip
       fallback_color = text_primary_color l, line
       visibility_tags = if opts.copy_visibility_tags then collect_visibility_tags l.text else ""
 
       for group in *texture_groups
+        aegisub.cancel! if cancel_requested!
         fitted, fit_err = fit_texture_to_box group, text_box.l, text_box.t, text_box.w, text_box.h
         unless fitted
           show_message "AddTexture - fit failed", fit_err
@@ -802,9 +863,12 @@ main = (subs, sel, active) ->
         clip_tag = "\\clip(#{clip_inner})"
         if opts.cut_to_text_shape
           cut, cut_err = cut_fitted_texture_to_clip fitted, clip_inner, opts.shape_tolerance
-          unless cut
+          if cut == nil
             show_message "AddTexture - shape cut failed", cut_err
             aegisub.cancel!
+          if cut == ""
+            skipped_empty_groups += 1
+            continue
           drawing = cut
           clip_tag = ""
 
@@ -820,13 +884,21 @@ main = (subs, sel, active) ->
           clip_tag,
           drawing
         plans[#plans + 1] = {line: new_line, selection_index: sel_idx}
-        error "AddTexture output exceeded the validated line budget." if #plans > MAX_GENERATED_LINES
+      skipped_empty_lines += 1 if skipped_empty_groups > empty_groups_before_line
 
   aegisub.progress.set 100
-  LineOps.transaction subs, script_name, ->
+  if #plans == 0
+    show_message "AddTexture - no intersections", "No texture group intersected the selected text outlines. Nothing was inserted; empty intersections are valid and were skipped."
+    return sel
+
+  new_selection = LineOps.transaction subs, script_name, ->
     for plan in *plans
       dlg\insertLine plan.line, plan.selection_index
     dlg\getSelection!
+
+  if skipped_empty_groups > 0
+    show_message "AddTexture - completed with warnings", "Inserted #{#plans} texture lines. Skipped #{skipped_empty_groups} empty texture/text intersections across #{skipped_empty_lines} selected lines."
+  new_selection
 
 validate = valid_selection
 if depctrl and depctrl.registerMacro

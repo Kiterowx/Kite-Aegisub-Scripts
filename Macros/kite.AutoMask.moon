@@ -1,7 +1,7 @@
 export script_name        = "AutoMask"
 export script_description = "Detect, clean and reconstruct guided surfaces through the kite-automask backend."
 export script_author      = "Kiterow"
-export script_version     = "2.4.6"
+export script_version     = "2.4.7"
 export script_namespace   = "kite.AutoMask"
 
 MENU_PATH = script_name
@@ -805,15 +805,15 @@ always_available = -> true
 if aegisub and aegisub.register_macro
   entries = {
     {MENU_PATH, script_description, main, validate}
-    {MENU_PATH .. "/Find surface inside clip", "Detect the surface contained inside each clip instead of using the whole clip.", main_inside, validate_clip}
-    {MENU_PATH .. "/Classic AutoGrask", "Run the original clip-guided AutoGrask profile without the editor.", main_classic, validate_clip}
-    {MENU_PATH .. "/Backend/Check", "Check installation, dependencies and available updates.", check_backend, always_available}
-    {MENU_PATH .. "/Backend/Install or Update", "Install or update kite-automask from the configured repository.", install_backend, always_available}
-    {MENU_PATH .. "/Backend/Configure", "Set the Python interpreter and the install source.", configure_backend, always_available}
-    {MENU_PATH .. "/Backend/Install Models", "Download and verify the official EfficientSAM and LaMa models.", install_models_main, always_available}
+    {"Find surface inside clip", "Detect the surface contained inside each clip instead of using the whole clip.", main_inside, validate_clip}
+    {"Classic AutoGrask", "Run the original clip-guided AutoGrask profile without the editor.", main_classic, validate_clip}
+    {"Backend/Check", "Check installation, dependencies and available updates.", check_backend, always_available}
+    {"Backend/Install or Update", "Install or update kite-automask from the configured repository.", install_backend, always_available}
+    {"Backend/Configure", "Set the Python interpreter and the install source.", configure_backend, always_available}
+    {"Backend/Install Models", "Download and verify the official EfficientSAM and LaMa models.", install_models_main, always_available}
   }
   if depctrl and depctrl.registerMacros
     depctrl\registerMacros entries
   else
     for entry in *entries
-      aegisub.register_macro entry[1], entry[2], entry[3], entry[4]
+      aegisub.register_macro MENU_PATH .. "/" .. entry[1], entry[2], entry[3], entry[4]

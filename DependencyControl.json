@@ -26,15 +26,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.0.11",
-          "released": "2026-08-08",
+          "version": "2.0.13",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AddTexture.moon",
               "localFilePath": "Macros/kite.AddTexture.moon",
-              "sha1": "D513CC08296979DC239FB70A7A09C7A03F585E45"
+              "sha1": "1ED95918D43B03B0DCFA3D454C9B2294F03202F5"
             }
           ],
           "requiredModules": [
@@ -131,15 +131,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.4.6",
-          "released": "2026-08-08",
+          "version": "2.4.7",
+          "released": "2026-08-13",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AutoMask.moon",
               "localFilePath": "Macros/kite.AutoMask.moon",
-              "sha1": "996052F279AFBD21CBB8B974E855A4C18764A539"
+              "sha1": "34DDBE7FCD026EEFCA9EE26C361D71ED6E6FB5B1"
             }
           ],
           "requiredModules": [
@@ -240,15 +240,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "0.3.3",
-          "released": "2026-08-08",
+          "version": "0.3.8",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Cliptomaniac.moon",
               "localFilePath": "Macros/kite.Cliptomaniac.moon",
-              "sha1": "FE0886538C16D1FE1335E28673BBFA7CCBD3D974"
+              "sha1": "90E1D50BB7D602539E94FB9F1C8C63A2B9D78931"
             }
           ],
           "requiredModules": [
@@ -411,6 +411,56 @@
         }
       }
     },
+    "kite.MakeupnPosing": {
+      "name": "MakeupnPosing",
+      "description": "Reusable ASS styling and rigid sign posing",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.0.0",
+          "released": "2026-08-16",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.MakeupnPosing.lua",
+              "localFilePath": "Macros/kite.MakeupnPosing.lua",
+              "sha1": "5BA9C4E4A41F38CF748C17A59D59F505D69790F4"
+            }
+          ],
+          "requiredModules": [
+            {
+              "moduleName": "kite.LineOps",
+              "version": "1.5.3",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "moduleName": "kite.PyBridge",
+              "version": "1.4.5",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "moduleName": "l0.dkjson",
+              "version": "0.8.0",
+              "url": "https://github.com/TypesettingTools/DependencyControl",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/DependencyControl/master/DependencyControl.json"
+            },
+            {
+              "moduleName": "aegisub.re"
+            },
+            {
+              "moduleName": "kite.UI",
+              "version": "1.1.2",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
     "kite.MokaMotion": {
       "name": "Moka Motion",
       "description": "Unified Mocha motion, shape, clip, perspective and FBF track tools",
@@ -418,15 +468,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "3.4.2",
-          "released": "2026-08-08",
+          "version": "3.6.1",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.MokaMotion.moon",
               "localFilePath": "Macros/kite.MokaMotion.moon",
-              "sha1": "424A27A034B29372BACA786EC260A5B445DC444F"
+              "sha1": "70D25BEA031473D64854E401013DED92F7F9B482"
             }
           ],
           "requiredModules": [
@@ -480,7 +530,7 @@
             },
             {
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
+              "version": "1.5.0",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
@@ -510,15 +560,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "0.3.4",
-          "released": "2026-08-08",
+          "version": "0.3.5",
+          "released": "2026-08-12",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Obake.moon",
               "localFilePath": "Macros/kite.Obake.moon",
-              "sha1": "3A411D5D3CBEE41916CF2206DA06D8735BEFF7CD"
+              "sha1": "FA84A4B9C3C31A5EBCBC17CC48C0B52544DEC13F"
             }
           ],
           "requiredModules": [
@@ -557,15 +607,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.4.3",
-          "released": "2026-08-08",
+          "version": "1.5.0",
+          "released": "2026-08-15",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.PNG2ASS.lua",
               "localFilePath": "Macros/kite.PNG2ASS.lua",
-              "sha1": "DD8C032EB90A45A61B2E0FB8CC627A989A3D83FF"
+              "sha1": "4DE1ECD95C8A39E61DD77A93F99B7F48E8C4BDB8"
             }
           ],
           "requiredModules": [
@@ -583,7 +633,7 @@
             },
             {
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
+              "version": "1.5.0",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
@@ -639,15 +689,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.7.3",
-          "released": "2026-08-08",
+          "version": "1.8.5",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.RheaSigns.lua",
               "localFilePath": "Macros/kite.RheaSigns.lua",
-              "sha1": "874F649CBC004D983CE1F6F3BDA2C9A5373C2461"
+              "sha1": "27A44CDA9A83B8CF5ABEF5BC15B63BB4ABC87E65"
             }
           ],
           "requiredModules": [
@@ -701,13 +751,13 @@
             },
             {
               "moduleName": "kite.EventOps",
-              "version": "1.0.2",
+              "version": "1.0.3",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
               "moduleName": "kite.ShapeOptimizer",
-              "version": "1.0.2",
+              "version": "1.1.0",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -928,15 +978,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "4.5.2",
-          "released": "2026-08-08",
+          "version": "4.5.3",
+          "released": "2026-08-14",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Zheus.lua",
               "localFilePath": "Macros/kite.Zheus.lua",
-              "sha1": "77B64A0A36BEFB4D109FA7F5D28204DA6DAA5943"
+              "sha1": "27DA83E24DDB33010566536336021629AF224079"
             }
           ],
           "requiredModules": [
@@ -959,15 +1009,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.0.2",
-          "released": "2026-08-08",
+          "version": "1.0.3",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/EventOps.lua",
               "localFilePath": "Modules/kite/EventOps.lua",
-              "sha1": "5ECBF963755A9CFC5D0F751DD5156EB87FF3CE1C"
+              "sha1": "0A1975EC0A6FC213E056F56DB383721A9BF83C2F"
             }
           ],
           "requiredModules": [
@@ -986,15 +1036,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.5.2",
-          "released": "2026-08-08",
+          "version": "1.5.3",
+          "released": "2026-08-10",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/LineOps.lua",
               "localFilePath": "Modules/kite/LineOps.lua",
-              "sha1": "E397874D78276E9CF9907C828CD3A61964A9764E"
+              "sha1": "E3D88E49A90C4927924E0E9D1C5FEDC2CD9940E4"
             }
           ]
         }
@@ -1038,15 +1088,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.4.4",
-          "released": "2026-08-08",
+          "version": "1.5.0",
+          "released": "2026-08-15",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/PyBridge.lua",
               "localFilePath": "Modules/kite/PyBridge.lua",
-              "sha1": "E9183ACE69E2BDCA0013D96E80C18073B29BCD22"
+              "sha1": "4C82B3349A050809999B45694B35AA8366AA0B17"
             }
           ],
           "requiredModules": [
@@ -1065,15 +1115,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.0.2",
-          "released": "2026-08-08",
+          "version": "1.1.0",
+          "released": "2026-08-16",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/ShapeOptimizer.lua",
               "localFilePath": "Modules/kite/ShapeOptimizer.lua",
-              "sha1": "C478C858AC4C9CB17BD3182CAB547DCB1F503460"
+              "sha1": "E4F1F17C0F0EF228D9AC85965AFB9A76CC836D44"
             }
           ],
           "requiredModules": [

@@ -1,4 +1,4 @@
-local MODULE_VERSION = "1.5.2"
+local MODULE_VERSION = "1.5.3"
 local LineOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 local unpack = table.unpack or unpack
 local MAX_ROUND_DECIMALS = 12
@@ -27,6 +27,193 @@ end
 
 local function trim(value)
     return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
+end
+
+local VIRAMA = {
+    [0x094D] = true, [0x09CD] = true, [0x0A4D] = true, [0x0ACD] = true,
+    [0x0B4D] = true, [0x0BCD] = true, [0x0C4D] = true, [0x0CCD] = true,
+    [0x0D3B] = true, [0x0D3C] = true, [0x0D4D] = true, [0x0DCA] = true,
+    [0x0E3A] = true, [0x0EBA] = true, [0x0F84] = true, [0x1039] = true,
+    [0x103A] = true, [0x1714] = true, [0x1734] = true, [0x17D2] = true,
+    [0x1A60] = true, [0x1B44] = true, [0x1BAA] = true, [0x1BAB] = true,
+    [0x1BF2] = true, [0x1BF3] = true, [0x2D7F] = true, [0xA806] = true,
+    [0xA82C] = true, [0xA8C4] = true, [0xA953] = true, [0xA9C0] = true,
+    [0xAAF6] = true, [0xABED] = true, [0x10A3F] = true, [0x11046] = true,
+    [0x11070] = true, [0x11133] = true, [0x11134] = true, [0x111C0] = true,
+    [0x11235] = true, [0x112EA] = true, [0x1134D] = true, [0x11442] = true,
+    [0x11446] = true, [0x114C2] = true, [0x115BF] = true, [0x1163F] = true,
+    [0x116B6] = true, [0x1172B] = true, [0x11839] = true, [0x1193D] = true,
+    [0x1193E] = true, [0x119E0] = true, [0x11A34] = true, [0x11A47] = true,
+    [0x11A99] = true, [0x11C3F] = true, [0x11D44] = true, [0x11D45] = true,
+    [0x11D97] = true, [0x11F41] = true, [0x11F42] = true,
+}
+
+local PREPEND_RANGES = {
+    {0x0600, 0x0605}, {0x06DD, 0x06DD}, {0x070F, 0x070F}, {0x0890, 0x0891},
+    {0x08E2, 0x08E2}, {0x0D4E, 0x0D4E}, {0x110BD, 0x110BD}, {0x110CD, 0x110CD},
+    {0x111C2, 0x111C3}, {0x113D1, 0x113D1}, {0x1193F, 0x1193F}, {0x11941, 0x11941},
+    {0x11A3A, 0x11A3A}, {0x11A84, 0x11A89}, {0x11D46, 0x11D46}, {0x11F02, 0x11F02},
+}
+
+local SENTENCE_TERMINAL_RANGES = {
+    0x0021,0x0021, 0x002E,0x002E, 0x003F,0x003F, 0x0589,0x0589, 0x061D,0x061F,
+    0x06D4,0x06D4, 0x0700,0x0702, 0x07F9,0x07F9, 0x0837,0x0837, 0x0839,0x0839,
+    0x083D,0x083E, 0x0964,0x0965, 0x104A,0x104B, 0x1362,0x1362, 0x1367,0x1368,
+    0x166E,0x166E, 0x1735,0x1736, 0x17D4,0x17D5, 0x1803,0x1803, 0x1809,0x1809,
+    0x1944,0x1945, 0x1AA8,0x1AAB, 0x1B4E,0x1B4F, 0x1B5A,0x1B5B, 0x1B5E,0x1B5F,
+    0x1B7D,0x1B7F, 0x1C3B,0x1C3C, 0x1C7E,0x1C7F, 0x2024,0x2024, 0x203C,0x203D,
+    0x2047,0x2049, 0x2CF9,0x2CFB, 0x2E2E,0x2E2E, 0x2E3C,0x2E3C, 0x2E53,0x2E54,
+    0x3002,0x3002, 0xA4FF,0xA4FF, 0xA60E,0xA60F, 0xA6F3,0xA6F3, 0xA6F7,0xA6F7,
+    0xA876,0xA877, 0xA8CE,0xA8CF, 0xA92F,0xA92F, 0xA9C8,0xA9C9, 0xAA5D,0xAA5F,
+    0xAAF0,0xAAF1, 0xABEB,0xABEB, 0xFE12,0xFE12, 0xFE15,0xFE16, 0xFE52,0xFE52,
+    0xFE56,0xFE57, 0xFF01,0xFF01, 0xFF0E,0xFF0E, 0xFF1F,0xFF1F, 0xFF61,0xFF61,
+    0x10A56,0x10A57, 0x10F55,0x10F59, 0x10F86,0x10F89, 0x11047,0x11048,
+    0x110BE,0x110C1, 0x11141,0x11143, 0x111C5,0x111C6, 0x111CD,0x111CD,
+    0x111DE,0x111DF, 0x11238,0x11239, 0x1123B,0x1123C, 0x112A9,0x112A9,
+    0x113D4,0x113D5, 0x1144B,0x1144C, 0x115C2,0x115C3, 0x115C9,0x115D7,
+    0x11641,0x11642, 0x1173C,0x1173E, 0x11944,0x11944, 0x11946,0x11946,
+    0x11A42,0x11A43, 0x11A9B,0x11A9C, 0x11C41,0x11C42, 0x11EF7,0x11EF8,
+    0x11F43,0x11F44, 0x16A6E,0x16A6F, 0x16AF5,0x16AF5, 0x16B37,0x16B38,
+    0x16B44,0x16B44, 0x16D6E,0x16D6F, 0x16E98,0x16E98, 0x1BC9F,0x1BC9F,
+    0x1DA88,0x1DA88,
+}
+
+local function inRanges(codepoint, ranges)
+    for _, range in ipairs(ranges) do
+        if codepoint >= range[1] and codepoint <= range[2] then return true end
+    end
+    return false
+end
+
+local function utf8Next(text, position)
+    local first = text:byte(position)
+    if not first then return nil, position end
+    if first < 0x80 then return first, position + 1 end
+    local second = text:byte(position + 1)
+    if first >= 0xC2 and first <= 0xDF and second and second >= 0x80 and second <= 0xBF then
+        return (first - 0xC0) * 0x40 + second - 0x80, position + 2
+    end
+    local third = text:byte(position + 2)
+    if first >= 0xE0 and first <= 0xEF and second and third
+        and second >= (first == 0xE0 and 0xA0 or 0x80)
+        and second <= (first == 0xED and 0x9F or 0xBF)
+        and third >= 0x80 and third <= 0xBF then
+        return (first - 0xE0) * 0x1000 + (second - 0x80) * 0x40 + third - 0x80, position + 3
+    end
+    local fourth = text:byte(position + 3)
+    if first >= 0xF0 and first <= 0xF4 and second and third and fourth
+        and second >= (first == 0xF0 and 0x90 or 0x80)
+        and second <= (first == 0xF4 and 0x8F or 0xBF)
+        and third >= 0x80 and third <= 0xBF
+        and fourth >= 0x80 and fourth <= 0xBF then
+        return (first - 0xF0) * 0x40000 + (second - 0x80) * 0x1000
+            + (third - 0x80) * 0x40 + fourth - 0x80, position + 4
+    end
+    return first, position + 1
+end
+
+local function firstCodepoint(text)
+    return utf8Next(tostring(text or ""), 1)
+end
+
+local function isSentenceTerminal(text)
+    local codepoint = firstCodepoint(text)
+    if not codepoint then return false end
+    for index = 1, #SENTENCE_TERMINAL_RANGES, 2 do
+        if codepoint >= SENTENCE_TERMINAL_RANGES[index]
+            and codepoint <= SENTENCE_TERMINAL_RANGES[index + 1] then return true end
+    end
+    return false
+end
+
+local function lastCodepoint(text)
+    local codepoint, position = nil, 1
+    while position <= #text do codepoint, position = utf8Next(text, position) end
+    return codepoint
+end
+
+local function isFallbackMark(codepoint)
+    return (codepoint >= 0x0300 and codepoint <= 0x036F)
+        or (codepoint >= 0x1AB0 and codepoint <= 0x1AFF)
+        or (codepoint >= 0x1DC0 and codepoint <= 0x1DFF)
+        or (codepoint >= 0x20D0 and codepoint <= 0x20FF)
+        or (codepoint >= 0xFE00 and codepoint <= 0xFE0F)
+        or (codepoint >= 0xE0100 and codepoint <= 0xE01EF)
+end
+
+local function hangulType(codepoint)
+    if (codepoint >= 0x1100 and codepoint <= 0x115F)
+        or (codepoint >= 0xA960 and codepoint <= 0xA97C) then return "L" end
+    if (codepoint >= 0x1160 and codepoint <= 0x11A7)
+        or (codepoint >= 0xD7B0 and codepoint <= 0xD7C6) then return "V" end
+    if (codepoint >= 0x11A8 and codepoint <= 0x11FF)
+        or (codepoint >= 0xD7CB and codepoint <= 0xD7FB) then return "T" end
+    if codepoint >= 0xAC00 and codepoint <= 0xD7A3 then
+        return (codepoint - 0xAC00) % 28 == 0 and "LV" or "LVT"
+    end
+end
+
+local function joinsHangul(left, right)
+    local leftType, rightType = hangulType(left), hangulType(right)
+    return leftType == "L" and (rightType == "L" or rightType == "V"
+            or rightType == "LV" or rightType == "LVT")
+        or (leftType == "LV" or leftType == "V") and (rightType == "V" or rightType == "T")
+        or (leftType == "LVT" or leftType == "T") and rightType == "T"
+end
+
+local function regexHas(regex, text, pattern)
+    if not regex or type(regex.find) ~= "function" then return false end
+    local ok, matches = pcall(regex.find, text, pattern)
+    return ok and type(matches) == "table" and #matches > 0
+end
+
+local function rawGraphemes(text, regex)
+    if regex and type(regex.find) == "function" then
+        local ok, matches = pcall(regex.find, text, "\\\\[Nnh]|\\X")
+        if ok and type(matches) == "table" then
+            local units = {}
+            for _, match in ipairs(matches) do units[#units + 1] = match.str end
+            if table.concat(units) == text then return units end
+        end
+    end
+    local units, position = {}, 1
+    while position <= #text do
+        local escape = text:sub(position, position + 1)
+        if escape == "\\N" or escape == "\\n" or escape == "\\h" then
+            units[#units + 1], position = escape, position + 2
+        else
+            local start = position
+            _, position = utf8Next(text, position)
+            units[#units + 1] = text:sub(start, position - 1)
+        end
+    end
+    return units
+end
+
+local function graphemes(text, regex)
+    text = tostring(text or "")
+    local result, regionalRun = {}, 0
+    for _, unit in ipairs(rawGraphemes(text, regex)) do
+        local isEscape = unit == "\\N" or unit == "\\n" or unit == "\\h"
+        local first = not isEscape and utf8Next(unit, 1) or nil
+        local previous = result[#result]
+        local previousEscape = previous == "\\N" or previous == "\\n" or previous == "\\h"
+        local last = previous and not previousEscape and lastCodepoint(previous) or nil
+        local regional = first and first >= 0x1F1E6 and first <= 0x1F1FF
+        local join = previous and not isEscape and not previousEscape and (
+            (last == 0x0D and first == 0x0A)
+            or first == 0x200C or first == 0x200D or last == 0x200D
+            or isFallbackMark(first) or regexHas(regex, unit, "^\\p{M}+$")
+            or (first >= 0x1F3FB and first <= 0x1F3FF)
+            or (first >= 0xE0020 and first <= 0xE007F)
+            or VIRAMA[last] or inRanges(last, PREPEND_RANGES)
+            or joinsHangul(last, first)
+            or (regional and regionalRun % 2 == 1)
+        )
+        if join then result[#result] = previous .. unit else result[#result + 1] = unit end
+        regionalRun = regional and regionalRun + 1 or 0
+    end
+    return result
 end
 
 local function copy(value)
@@ -264,16 +451,15 @@ end
 
 local function identifyTag(block, index)
     local tail = block:sub(index)
-    local numeric, letters = tail:match("^(%d?)([%a]+)")
-    if not letters then return nil end
-    local lower = letters:lower()
+    local numeric, identifier = tail:match("^(%d?)([_%a][_%w]*)")
+    if not identifier then return nil end
     for _, name in ipairs(knownTags) do
         local prefix = numeric .. name
         if tail:sub(1, #prefix):lower() == prefix:lower() then
             return prefix, (numeric .. name):lower(), index + #prefix
         end
     end
-    return numeric .. letters, (numeric .. letters):lower(), index + #numeric + #letters
+    return numeric .. identifier, (numeric .. identifier):lower(), index + #numeric + #identifier
 end
 
 local function tagCalls(text, wanted)
@@ -355,6 +541,24 @@ local function tagCalls(text, wanted)
         cursor = closeStart + 1
     end
     return calls
+end
+
+local function overrideTokens(content)
+    content = tostring(content or "")
+    local tokens = {}
+    for _, call in ipairs(tagCalls("{" .. content .. "}")) do
+        if call.top_level then
+            tokens[#tokens + 1] = {
+                name = call.name,
+                raw_name = call.raw_name,
+                raw = call.raw,
+                value = call.value,
+                start_position = call.start - 1,
+                end_position = call.finish - 1,
+            }
+        end
+    end
+    return tokens
 end
 
 local function splitArguments(value)
@@ -752,6 +956,9 @@ local function transaction(subtitles, undoName, callback)
 end
 
 LineOps.trim = trim
+LineOps.graphemes = graphemes
+LineOps.firstCodepoint = firstCodepoint
+LineOps.isSentenceTerminal = isSentenceTerminal
 LineOps.copy = copy
 LineOps.deepCopy = deepCopy
 LineOps.round = round
@@ -772,6 +979,7 @@ LineOps.visibleText = visibleText
 LineOps.visibleLines = visibleLines
 LineOps.hasDrawing = hasDrawing
 LineOps.tagCalls = tagCalls
+LineOps.overrideTokens = overrideTokens
 LineOps.splitArguments = splitArguments
 LineOps.lastTagCall = lastTagCall
 LineOps.tagArguments = tagArguments

@@ -1,4 +1,4 @@
-local MODULE_VERSION = "1.0.2"
+local MODULE_VERSION = "1.0.3"
 local EventOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safeRequire(name)
@@ -208,6 +208,52 @@ local function adjustFade(text, removeIn, removeOut)
     return result, changed
 end
 
+local function setFadeComponent(text, component, duration)
+    if not LineOps or not LineOps.mapTagCalls or not LineOps.splitArguments or not LineOps.prependTag then
+        return nil, "line_ops_unavailable"
+    end
+    component = tostring(component or ""):lower()
+    if component == "intro" then component = "in" end
+    if component == "outro" then component = "out" end
+    if component ~= "in" and component ~= "out" then return nil, "invalid_component" end
+    duration = tonumber(duration)
+    if not duration or duration ~= duration or math.abs(duration) == math.huge or duration < 0 then
+        return nil, "invalid_duration"
+    end
+    local durationText
+    if duration == math.floor(duration) then
+        durationText = tostring(math.floor(duration))
+    else
+        durationText = tostring(duration):gsub("0+$", ""):gsub("%.$", "")
+    end
+    local invalid, found = false, false
+    local result, changed = LineOps.mapTagCalls(text, "fad", function(call)
+        found = true
+        local value = trim(call.value)
+        local args = LineOps.splitArguments(value)
+        local first, second = trim(args[1]), trim(args[2])
+        local firstNumber, secondNumber = tonumber(first), tonumber(second)
+        if value:sub(1, 1) ~= "(" or value:sub(-1) ~= ")" or #args ~= 2
+            or not firstNumber or not secondNumber
+            or firstNumber ~= firstNumber or secondNumber ~= secondNumber
+            or math.abs(firstNumber) == math.huge or math.abs(secondNumber) == math.huge
+            or firstNumber < 0 or secondNumber < 0 then
+            invalid = true
+            return nil
+        end
+        if component == "in" then first = durationText else second = durationText end
+        return "\\fad(" .. first .. "," .. second .. ")"
+    end, { top_level_only = true })
+    if invalid then return nil, "invalid_fad" end
+    if not found then
+        local first = component == "in" and durationText or "0"
+        local second = component == "out" and durationText or "0"
+        result = LineOps.prependTag(text, "\\fad(" .. first .. "," .. second .. ")")
+        changed = 1
+    end
+    return result, nil, changed
+end
+
 local function continuousFadeCleanup(subtitles, selection)
     local groups, byTime = {}, {}
     for _, index in ipairs(dialogueIndices(subtitles, selection)) do
@@ -320,6 +366,7 @@ EventOps.hasStutter = hasStutter
 EventOps.addEffectMarker = addEffectMarker
 EventOps.markStutter = markStutter
 EventOps.adjustFade = adjustFade
+EventOps.setFadeComponent = setFadeComponent
 EventOps.continuousFadeCleanup = continuousFadeCleanup
 EventOps.shuffleLineText = shuffleLineText
 

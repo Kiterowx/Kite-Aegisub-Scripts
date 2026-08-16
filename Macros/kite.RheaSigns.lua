@@ -1,7 +1,7 @@
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "1.7.3"
+script_version     = "1.8.5"
 script_namespace   = "kite.RheaSigns"
 
 local MAX_MARKER_ID = 9999
@@ -42,15 +42,15 @@ local depRec = DependencyControl{
         { "kite.PyBridge", version = "1.4.4",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.EventOps", version = "1.0.2",
+        { "kite.EventOps", version = "1.0.3",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.ShapeOptimizer", version = "1.0.2",
+        { "kite.ShapeOptimizer", version = "1.1.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
     },
 }
-local ASS, Functional, ArchPersp, LineCollection, AMLine, KiteUI, LineOps, PyBridge = depRec:requireModules()
+local ASS, Functional, ArchPersp, LineCollection, AMLine, KiteUI, LineOps, PyBridge, _, SharedShapeOptimizer = depRec:requireModules()
 
 local function ConfigHandler(interface, file_name, _, version)
     return KiteUI.dialogHandler(interface, script_namespace, version, {
@@ -94,6 +94,7 @@ local LANG = {
         lbl_rot = "Rot:",
         lbl_radius = "Radius:",
         lbl_track = "Track:",
+        lbl_vertical_gap = "Y spacing:",
         lbl_mask = "Mask:",
         lbl_source = "Source:",
         lbl_tag = "Tag:",
@@ -102,7 +103,6 @@ local LANG = {
         btn_mass_signs = "Signs Editor",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
-        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Help",
         btn_save = "Execute",
@@ -111,13 +111,10 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "No selection.",
         err_tool_load = "Could not load %s:\n\n%s",
-        tool_shape_optimizer = "Shape color optimizer",
         tool_font_manager = "Font and style manager",
-        tool_continuous_fades = "Continuous fade cleanup",
+        tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Shuffle line text",
-        tool_err_fade_groups = "Select at least two timing groups.",
         tool_err_shuffle_lines = "Select at least two dialogue lines.",
-        tool_undo_continuous_fades = "Rhea Signs: continuous fade cleanup",
         tool_undo_shuffle_line_text = "Rhea Signs: shuffle line text",
         lbl_initial = "Initial",
         lbl_final = "Final",
@@ -193,6 +190,7 @@ local LANG = {
         lbl_rot = "Rot:",
         lbl_radius = "Radio:",
         lbl_track = "Track:",
+        lbl_vertical_gap = "Espacio Y:",
         lbl_mask = "Mascara:",
         lbl_source = "Fuente:",
         lbl_tag = "Tag:",
@@ -201,7 +199,6 @@ local LANG = {
         btn_mass_signs = "Editor de carteles",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
-        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Ayuda",
         btn_save = "Execute",
@@ -210,13 +207,10 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sin seleccion.",
         err_tool_load = "No se pudo cargar %s:\n\n%s",
-        tool_shape_optimizer = "Optimizar color de shapes",
         tool_font_manager = "Gestor de fuentes y estilos",
-        tool_continuous_fades = "Limpiar fades continuos",
+        tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Mezclar texto de líneas",
-        tool_err_fade_groups = "Selecciona al menos dos grupos de tiempos.",
         tool_err_shuffle_lines = "Selecciona al menos dos líneas de diálogo.",
-        tool_undo_continuous_fades = "Rhea Signs: limpiar fades continuos",
         tool_undo_shuffle_line_text = "Rhea Signs: mezclar texto de líneas",
         lbl_initial = "Inicial",
         lbl_final = "Final",
@@ -292,6 +286,7 @@ local LANG = {
         lbl_rot = "Rot:",
         lbl_radius = "Raio:",
         lbl_track = "Track:",
+        lbl_vertical_gap = "Espaço Y:",
         lbl_mask = "Mascara:",
         lbl_source = "Fonte:",
         lbl_tag = "Tag:",
@@ -300,7 +295,6 @@ local LANG = {
         btn_mass_signs = "Editor de placas",
         btn_fastsigns = "FastSigns",
         btn_tagops = "TagOps",
-        btn_makeup = "Makeup",
         btn_config = "Config",
         btn_help = "Ajuda",
         btn_save = "Execute",
@@ -309,13 +303,10 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sem selecao.",
         err_tool_load = "Nao foi possivel carregar %s:\n\n%s",
-        tool_shape_optimizer = "Otimizar cores de formas",
         tool_font_manager = "Gerenciador de fontes e estilos",
-        tool_continuous_fades = "Limpar fades contínuos",
+        tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Embaralhar texto das linhas",
-        tool_err_fade_groups = "Selecione ao menos dois grupos de tempos.",
         tool_err_shuffle_lines = "Selecione ao menos duas falas.",
-        tool_undo_continuous_fades = "Rhea Signs: limpar fades contínuos",
         tool_undo_shuffle_line_text = "Rhea Signs: embaralhar texto das linhas",
         lbl_initial = "Inicial",
         lbl_final = "Final",
@@ -394,9 +385,10 @@ local EXTRA_LANG = {
         fx_shake_v = "Shake V", fx_shake_h = "Shake H", fx_shake_xy = "Shake XY", fx_wobble = "Wobble (frz)",
         fx_glitch = "Glitch", fx_dramatic_pulse = "Dramatic pulse", fx_flashback = "Flashback (fad)", fx_split_line = "Split line",
         fx_split_line_fad = "Split line fad", fx_split_title = "Split title",
-        tagops_adjust = "Adjust tags",
+        tagops_adjust = "Resize / transform",
+        tagops_transform = "Transform",
         tagops_copy_no_change = "Copy Tags: no target lines changed.",
-        tagops_adjust_no_change = "Adjust tags: no values changed.",
+        tagops_adjust_no_change = "Resize / transform: no values changed.",
         tagops_keep_only_changed = "Keep Only changed %d line(s).",
         tagops_keep_only_no_change = "Keep Only: no tags were removed.",
         tagops_pos_align = "Pos align", tagops_add = "Add", tagops_percent = "Percent",
@@ -439,6 +431,50 @@ local EXTRA_LANG = {
         signs_skipped_vectors = " Skipped %d vectors.",
         signs_skipped_over_limit = " Skipped %d over limit.",
         signs_line_mismatch = "Line count mismatch: expected %d, got %d.\nNo changes applied.",
+        fade_prompt = "Choose a fade operation:", fade_action_intro = "In", fade_action_outro = "Out",
+        fade_action_cleanup = "Clean", fade_cancel = "Cancel", fade_err_selection = "Select at least one dialogue line.",
+        fade_err_frame_read = "The current video frame could not be read.", fade_err_no_frame = "There is no active video frame.",
+        fade_err_frame_ms = "The current frame could not be converted to milliseconds.", fade_err_frame_inside = "The current frame must be inside every selected line.",
+        fade_err_line = "Line %d contains an invalid \\fad tag.", fade_err_cleanup_groups = "Select at least two timing groups.",
+        fade_undo_intro = "Rhea Signs: fade in from current frame", fade_undo_outro = "Rhea Signs: fade out from current frame",
+        fade_undo_cleanup = "Rhea Signs: continuous fade cleanup",
+        title_shapes = "SHAPES", lbl_perimeter = "Perimeter:", lbl_intensity = "Intensity:", lbl_threshold = "Threshold:", lbl_bands = "Bands:",
+        sh_action_unify = "Unify positions", sh_action_perimeter = "Place on perimeter", sh_action_optimizer = "Shape color optimizer",
+        sh_perimeter_exterior = "Exterior contours only", sh_perimeter_holes = "Exterior contours and holes",
+        sh_mode_auto = "Auto", sh_mode_similar = "Similar colors", sh_mode_gradient = "Full gradient",
+        sh_intensity_balanced = "Balanced", sh_intensity_fidelity = "Fidelity", sh_intensity_aggressive = "Aggressive",
+        sh_show_summary = "Show summary", sh_hint_action = "Choose one shape operation.", sh_hint_perimeter_mode = "Used only when placing units on a perimeter.",
+        sh_hint_optimizer_mode = "Color reduction strategy.", sh_hint_intensity = "Preset error tolerance.", sh_hint_threshold = "OKLab threshold; 0 uses the intensity preset.", sh_hint_bands = "Maximum bands for full-gradient mode.",
+        sh_apply = "Apply", sh_cancel = "Cancel", sh_no_reduction = "No safe reduction was found with these parameters.", sh_confirm_apply = "Apply direct replacement?",
+        sh_undo_unify = "Rhea Signs: unify shape positions", sh_undo_perimeter = "Rhea Signs: place shapes on perimeter", sh_undo_optimizer = "Rhea Signs: shape color optimizer",
+        sh_err_open_block = "The leading override block is not closed.", sh_err_initial_tags = "The drawing needs leading tags with \\pos and \\pN.",
+        sh_err_static_drawing = "Only one static drawing and an optional final {\\p0} are supported.", sh_err_empty_drawing = "The line contains no drawing data.",
+        sh_err_exact_pos = "Each line must have exactly one \\pos(x,y).", sh_err_path_command = "The drawing contains the unsupported command '%s'.",
+        sh_err_path_data = "The drawing contains data that could not be parsed.", sh_err_coordinates = "The drawing has an invalid coordinate count.",
+        sh_err_drawing_scale = "Drawing mode must be \\p1 or higher.", sh_err_positive_scale = "\\fscx and \\fscy must be greater than zero.",
+        sh_err_style = "Line %d: style '%s' was not found.", sh_err_line = "Line %d: %s",
+        sh_unify_err_selection = "Select at least two drawing lines.", sh_unify_err_tag = "\\%s is not supported because the compensation would not have one static pivot.",
+        sh_unify_err_style_rotation = "The style has rotation; use an unrotated drawing first.", sh_unify_err_replace_pos = "The line's \\pos could not be replaced.",
+        sh_perimeter_err_before_command = "Coordinates appear before the first drawing command.", sh_perimeter_err_move_pair = "Each %s command must contain exactly one coordinate pair.",
+        sh_perimeter_err_line_start = "An l command appears before the initial m command.", sh_perimeter_err_line_pairs = "The l command requires coordinate pairs.",
+        sh_perimeter_err_bezier_start = "A b command appears before the initial m command.", sh_perimeter_err_bezier_groups = "The b command requires groups of six coordinates.",
+        sh_perimeter_err_spline = "Spline commands s/p/c must first be converted to lines or b Beziers.", sh_perimeter_err_no_contour = "No valid contour was found.",
+        sh_perimeter_err_tag = "\\%s is not supported in input geometry.", sh_perimeter_err_style_rotation = "The style has rotation; use unrotated geometry.",
+        sh_perimeter_err_alignment = "An effective \\an1..\\an9 could not be determined.", sh_perimeter_err_extent = "The drawing has no geometric extent.",
+        sh_perimeter_err_closed = "The perimeter contour must be closed.", sh_perimeter_err_segments = "The perimeter contour has no segments.",
+        sh_perimeter_err_zero_length = "The perimeter contour has zero length.", sh_perimeter_err_base_closed = "The base shape contains no usable closed contour.",
+        sh_perimeter_err_visible = "The base shape contains no usable visible perimeter.", sh_perimeter_err_selection = "Select the base shape first, followed by at least one unit.",
+        sh_perimeter_err_base_line = "Base line %d: %s", sh_perimeter_err_base_exterior = "Base line %d contains no usable exterior contour.",
+        sh_perimeter_err_shared_pos = "All layers in a unit must share exactly the same \\pos.", sh_perimeter_err_no_units = "No units were detected after the base shape.",
+        sh_perimeter_err_zero_width = "A unit has zero visible width.", sh_perimeter_err_empty_period = "The period cannot be empty.", sh_perimeter_err_invalid_unit = "The period contains an invalid unit.",
+        sh_perimeter_custom = "Custom...", sh_perimeter_unit = "Unit %d", sh_perimeter_period_length = "Period length:", sh_perimeter_period_hint = "Only the first steps selected by the length are used.",
+        sh_perimeter_step = "Step %d:", sh_perimeter_err_period_length = "The period length is invalid.", sh_perimeter_err_step = "Step %d does not contain a valid unit.",
+        sh_perimeter_err_cycles = "The repetition count for contour %d is invalid.", sh_perimeter_err_tangent = "A tangent could not be calculated for contour %d.",
+        sh_perimeter_err_advance = "Contour %d has too many repetitions: the advance between units is no longer positive.", sh_perimeter_err_closure = "Pattern closure does not match contour %d.",
+        sh_perimeter_err_replace_pos = "A layer's \\pos could not be replaced.", sh_perimeter_err_rotation = "A layer's rotation could not be inserted.",
+        sh_perimeter_err_output_limit = "The output would contain %d lines; the safe limit is %d.", sh_perimeter_err_template = "Template line %d: %s",
+        sh_perimeter_detected = "Detected units: %d", sh_perimeter_summary = "Exteriors: %d (%s px) | Holes: %d (%s px)", sh_perimeter_pattern = "Periodic pattern:",
+        sh_perimeter_close_hint = "Each contour closes its period independently.", sh_perimeter_order_hint = "Order: units 1, 2, 3... by their first \\pos in the selection.", sh_perimeter_err_pattern = "Choose a valid periodic pattern.",
     },
     es = {
         lang_en = "Ingles", lang_es = "Espanol", lang_pt = "Portugues",
@@ -467,9 +503,10 @@ local EXTRA_LANG = {
         fx_shake_v = "Sacudir V", fx_shake_h = "Sacudir H", fx_shake_xy = "Sacudir XY", fx_wobble = "Tambaleo (frz)",
         fx_glitch = "Glitch", fx_dramatic_pulse = "Pulso dramatico", fx_flashback = "Flashback (fad)", fx_split_line = "Dividir linea",
         fx_split_line_fad = "Dividir linea con fad", fx_split_title = "Dividir titulo",
-        tagops_adjust = "Ajustar tags",
+        tagops_adjust = "Redimensionar / transformar",
+        tagops_transform = "Transformar",
         tagops_copy_no_change = "Copiar tags: no cambio ninguna linea destino.",
-        tagops_adjust_no_change = "Ajustar tags: no cambio ningun valor.",
+        tagops_adjust_no_change = "Redimensionar / transformar: no cambio ningun valor.",
         tagops_keep_only_changed = "Keep Only cambio %d linea(s).",
         tagops_keep_only_no_change = "Keep Only: no se quitaron tags.",
         tagops_pos_align = "Alinear pos", tagops_add = "Sumar", tagops_percent = "Porcentaje",
@@ -512,6 +549,50 @@ local EXTRA_LANG = {
         signs_skipped_vectors = " %d vectores omitidos.",
         signs_skipped_over_limit = " %d omitidas por limite.",
         signs_line_mismatch = "Cantidad de lineas incorrecta: se esperaban %d, hay %d.\nNo se aplicaron cambios.",
+        fade_prompt = "Elige una operacion de fade:", fade_action_intro = "Entrada", fade_action_outro = "Salida",
+        fade_action_cleanup = "Limpiar", fade_cancel = "Cancelar", fade_err_selection = "Selecciona al menos una linea de dialogo.",
+        fade_err_frame_read = "No se pudo leer el frame de video actual.", fade_err_no_frame = "No hay un frame de video activo.",
+        fade_err_frame_ms = "No se pudo convertir el frame actual a milisegundos.", fade_err_frame_inside = "El frame actual debe estar dentro de todas las lineas seleccionadas.",
+        fade_err_line = "La linea %d contiene un tag \\fad invalido.", fade_err_cleanup_groups = "Selecciona al menos dos grupos de tiempos.",
+        fade_undo_intro = "Rhea Signs: fade de entrada desde el frame actual", fade_undo_outro = "Rhea Signs: fade de salida desde el frame actual",
+        fade_undo_cleanup = "Rhea Signs: limpiar fades continuos",
+        title_shapes = "SHAPES", lbl_perimeter = "Perimetro:", lbl_intensity = "Intensidad:", lbl_threshold = "Umbral:", lbl_bands = "Bandas:",
+        sh_action_unify = "Unificar posiciones", sh_action_perimeter = "Pegar al perimetro", sh_action_optimizer = "Optimizar color de shapes",
+        sh_perimeter_exterior = "Solo contornos exteriores", sh_perimeter_holes = "Contornos exteriores y huecos",
+        sh_mode_auto = "Auto", sh_mode_similar = "Colores similares", sh_mode_gradient = "Gradiente completo",
+        sh_intensity_balanced = "Equilibrado", sh_intensity_fidelity = "Fidelidad", sh_intensity_aggressive = "Agresivo",
+        sh_show_summary = "Mostrar resumen", sh_hint_action = "Elige una operacion de shapes.", sh_hint_perimeter_mode = "Se usa solo al colocar unidades en un perimetro.",
+        sh_hint_optimizer_mode = "Estrategia de reduccion de colores.", sh_hint_intensity = "Tolerancia de error predefinida.", sh_hint_threshold = "Umbral OKLab; 0 usa la intensidad.", sh_hint_bands = "Maximo de bandas para gradiente completo.",
+        sh_apply = "Aplicar", sh_cancel = "Cancelar", sh_no_reduction = "No se encontro una reduccion segura con estos parametros.", sh_confirm_apply = "Aplicar el reemplazo directo?",
+        sh_undo_unify = "Rhea Signs: unificar posiciones de shapes", sh_undo_perimeter = "Rhea Signs: pegar shapes al perimetro", sh_undo_optimizer = "Rhea Signs: optimizar color de shapes",
+        sh_err_open_block = "El bloque inicial de tags no esta cerrado.", sh_err_initial_tags = "El dibujo necesita tags iniciales con \\pos y \\pN.",
+        sh_err_static_drawing = "Solo se admite un dibujo estatico y un {\\p0} final opcional.", sh_err_empty_drawing = "La linea no contiene datos de dibujo.",
+        sh_err_exact_pos = "Cada linea debe tener exactamente un \\pos(x,y).", sh_err_path_command = "El dibujo contiene el comando no compatible '%s'.",
+        sh_err_path_data = "El dibujo contiene datos que no se pudieron interpretar.", sh_err_coordinates = "El dibujo tiene una cantidad invalida de coordenadas.",
+        sh_err_drawing_scale = "El modo de dibujo debe ser \\p1 o superior.", sh_err_positive_scale = "\\fscx y \\fscy deben ser mayores que cero.",
+        sh_err_style = "Linea %d: no se encontro el estilo '%s'.", sh_err_line = "Linea %d: %s",
+        sh_unify_err_selection = "Selecciona al menos dos lineas de dibujo.", sh_unify_err_tag = "No se admite \\%s porque la compensacion no tendria un unico pivote estatico.",
+        sh_unify_err_style_rotation = "El estilo tiene rotacion; usa primero un dibujo sin rotacion.", sh_unify_err_replace_pos = "No se pudo reemplazar el \\pos de la linea.",
+        sh_perimeter_err_before_command = "Hay coordenadas antes del primer comando del dibujo.", sh_perimeter_err_move_pair = "Cada comando %s debe tener exactamente un par de coordenadas.",
+        sh_perimeter_err_line_start = "Hay un comando l sin un m inicial.", sh_perimeter_err_line_pairs = "El comando l necesita pares de coordenadas.",
+        sh_perimeter_err_bezier_start = "Hay un comando b sin un m inicial.", sh_perimeter_err_bezier_groups = "El comando b necesita grupos de seis coordenadas.",
+        sh_perimeter_err_spline = "Los comandos spline s/p/c deben convertirse primero a lineas o Bezier b.", sh_perimeter_err_no_contour = "No se encontro ningun contorno valido.",
+        sh_perimeter_err_tag = "No se admite \\%s en la geometria de entrada.", sh_perimeter_err_style_rotation = "El estilo tiene rotacion; usa una geometria sin rotacion.",
+        sh_perimeter_err_alignment = "No se pudo determinar un \\an1..\\an9 efectivo.", sh_perimeter_err_extent = "El dibujo no tiene extension geometrica.",
+        sh_perimeter_err_closed = "El contorno del perimetro debe estar cerrado.", sh_perimeter_err_segments = "El contorno del perimetro no tiene segmentos.",
+        sh_perimeter_err_zero_length = "El contorno del perimetro tiene longitud cero.", sh_perimeter_err_base_closed = "La shape base no contiene un contorno cerrado utilizable.",
+        sh_perimeter_err_visible = "La shape base no contiene un perimetro visible utilizable.", sh_perimeter_err_selection = "Selecciona primero la shape base y despues al menos una unidad.",
+        sh_perimeter_err_base_line = "Linea base %d: %s", sh_perimeter_err_base_exterior = "Linea base %d: no contiene un contorno exterior utilizable.",
+        sh_perimeter_err_shared_pos = "Las capas de una unidad deben compartir exactamente el mismo \\pos.", sh_perimeter_err_no_units = "No se detectaron unidades despues de la shape base.",
+        sh_perimeter_err_zero_width = "Una unidad tiene ancho visible cero.", sh_perimeter_err_empty_period = "El periodo no puede estar vacio.", sh_perimeter_err_invalid_unit = "El periodo contiene una unidad invalida.",
+        sh_perimeter_custom = "Personalizado...", sh_perimeter_unit = "Unidad %d", sh_perimeter_period_length = "Longitud del periodo:", sh_perimeter_period_hint = "Solo se usan los primeros pasos indicados por la longitud.",
+        sh_perimeter_step = "Paso %d:", sh_perimeter_err_period_length = "La longitud del periodo no es valida.", sh_perimeter_err_step = "El paso %d no contiene una unidad valida.",
+        sh_perimeter_err_cycles = "La cantidad de repeticiones del contorno %d no es valida.", sh_perimeter_err_tangent = "No se pudo calcular una tangente del contorno %d.",
+        sh_perimeter_err_advance = "Demasiadas repeticiones en el contorno %d: el avance entre unidades deja de ser positivo.", sh_perimeter_err_closure = "El cierre del patron no coincide con el contorno %d.",
+        sh_perimeter_err_replace_pos = "No se pudo reemplazar el \\pos de una capa.", sh_perimeter_err_rotation = "No se pudo insertar la rotacion de una capa.",
+        sh_perimeter_err_output_limit = "La salida tendria %d lineas; el limite seguro es %d.", sh_perimeter_err_template = "Linea plantilla %d: %s",
+        sh_perimeter_detected = "Unidades detectadas: %d", sh_perimeter_summary = "Exteriores: %d (%s px) | Huecos: %d (%s px)", sh_perimeter_pattern = "Patron periodico:",
+        sh_perimeter_close_hint = "Cada contorno cierra su periodo de forma independiente.", sh_perimeter_order_hint = "Orden: unidades 1, 2, 3... segun su primer \\pos en la seleccion.", sh_perimeter_err_pattern = "Elige un patron periodico valido.",
     },
     pt = {
         lang_en = "Ingles", lang_es = "Espanhol", lang_pt = "Portugues",
@@ -540,9 +621,10 @@ local EXTRA_LANG = {
         fx_shake_v = "Tremer V", fx_shake_h = "Tremer H", fx_shake_xy = "Tremer XY", fx_wobble = "Oscilar (frz)",
         fx_glitch = "Glitch", fx_dramatic_pulse = "Pulso dramatico", fx_flashback = "Flashback (fad)", fx_split_line = "Dividir linha",
         fx_split_line_fad = "Dividir linha com fad", fx_split_title = "Dividir titulo",
-        tagops_adjust = "Ajustar tags",
+        tagops_adjust = "Redimensionar / transformar",
+        tagops_transform = "Transformar",
         tagops_copy_no_change = "Copiar tags: nenhuma linha destino foi alterada.",
-        tagops_adjust_no_change = "Ajustar tags: nenhum valor foi alterado.",
+        tagops_adjust_no_change = "Redimensionar / transformar: nenhum valor foi alterado.",
         tagops_keep_only_changed = "Keep Only alterou %d linha(s).",
         tagops_keep_only_no_change = "Keep Only: nenhuma tag foi removida.",
         tagops_pos_align = "Alinhar pos", tagops_add = "Somar", tagops_percent = "Porcentagem",
@@ -585,6 +667,50 @@ local EXTRA_LANG = {
         signs_skipped_vectors = " %d vetores ignorados.",
         signs_skipped_over_limit = " %d ignoradas por limite.",
         signs_line_mismatch = "Quantidade de linhas incorreta: esperadas %d, recebidas %d.\nNenhuma alteracao aplicada.",
+        fade_prompt = "Escolha uma operacao de fade:", fade_action_intro = "Entrada", fade_action_outro = "Saida",
+        fade_action_cleanup = "Limpar", fade_cancel = "Cancelar", fade_err_selection = "Selecione ao menos uma linha de dialogo.",
+        fade_err_frame_read = "Nao foi possivel ler o frame de video atual.", fade_err_no_frame = "Nao ha um frame de video ativo.",
+        fade_err_frame_ms = "Nao foi possivel converter o frame atual em milissegundos.", fade_err_frame_inside = "O frame atual deve estar dentro de todas as linhas selecionadas.",
+        fade_err_line = "A linha %d contem uma tag \\fad invalida.", fade_err_cleanup_groups = "Selecione ao menos dois grupos de tempos.",
+        fade_undo_intro = "Rhea Signs: fade de entrada desde o frame atual", fade_undo_outro = "Rhea Signs: fade de saida desde o frame atual",
+        fade_undo_cleanup = "Rhea Signs: limpar fades continuos",
+        title_shapes = "FORMAS", lbl_perimeter = "Perimetro:", lbl_intensity = "Intensidade:", lbl_threshold = "Limiar:", lbl_bands = "Faixas:",
+        sh_action_unify = "Unificar posicoes", sh_action_perimeter = "Colocar no perimetro", sh_action_optimizer = "Otimizar cores de formas",
+        sh_perimeter_exterior = "Somente contornos exteriores", sh_perimeter_holes = "Contornos exteriores e furos",
+        sh_mode_auto = "Auto", sh_mode_similar = "Cores semelhantes", sh_mode_gradient = "Gradiente completo",
+        sh_intensity_balanced = "Equilibrado", sh_intensity_fidelity = "Fidelidade", sh_intensity_aggressive = "Agressivo",
+        sh_show_summary = "Mostrar resumo", sh_hint_action = "Escolha uma operacao de formas.", sh_hint_perimeter_mode = "Usado somente ao colocar unidades em um perimetro.",
+        sh_hint_optimizer_mode = "Estrategia de reducao de cores.", sh_hint_intensity = "Tolerancia de erro predefinida.", sh_hint_threshold = "Limiar OKLab; 0 usa a intensidade.", sh_hint_bands = "Maximo de faixas para gradiente completo.",
+        sh_apply = "Aplicar", sh_cancel = "Cancelar", sh_no_reduction = "Nenhuma reducao segura foi encontrada com estes parametros.", sh_confirm_apply = "Aplicar a substituicao direta?",
+        sh_undo_unify = "Rhea Signs: unificar posicoes de formas", sh_undo_perimeter = "Rhea Signs: colocar formas no perimetro", sh_undo_optimizer = "Rhea Signs: otimizar cores de formas",
+        sh_err_open_block = "O bloco inicial de tags nao esta fechado.", sh_err_initial_tags = "O desenho precisa de tags iniciais com \\pos e \\pN.",
+        sh_err_static_drawing = "Somente um desenho estatico e um {\\p0} final opcional sao aceitos.", sh_err_empty_drawing = "A linha nao contem dados de desenho.",
+        sh_err_exact_pos = "Cada linha deve ter exatamente um \\pos(x,y).", sh_err_path_command = "O desenho contem o comando incompativel '%s'.",
+        sh_err_path_data = "O desenho contem dados que nao puderam ser interpretados.", sh_err_coordinates = "O desenho tem uma quantidade invalida de coordenadas.",
+        sh_err_drawing_scale = "O modo de desenho deve ser \\p1 ou superior.", sh_err_positive_scale = "\\fscx e \\fscy devem ser maiores que zero.",
+        sh_err_style = "Linha %d: o estilo '%s' nao foi encontrado.", sh_err_line = "Linha %d: %s",
+        sh_unify_err_selection = "Selecione ao menos duas linhas de desenho.", sh_unify_err_tag = "\\%s nao e aceito porque a compensacao nao teria um unico pivo estatico.",
+        sh_unify_err_style_rotation = "O estilo tem rotacao; use primeiro um desenho sem rotacao.", sh_unify_err_replace_pos = "Nao foi possivel substituir o \\pos da linha.",
+        sh_perimeter_err_before_command = "Ha coordenadas antes do primeiro comando do desenho.", sh_perimeter_err_move_pair = "Cada comando %s deve ter exatamente um par de coordenadas.",
+        sh_perimeter_err_line_start = "Ha um comando l sem um m inicial.", sh_perimeter_err_line_pairs = "O comando l precisa de pares de coordenadas.",
+        sh_perimeter_err_bezier_start = "Ha um comando b sem um m inicial.", sh_perimeter_err_bezier_groups = "O comando b precisa de grupos de seis coordenadas.",
+        sh_perimeter_err_spline = "Os comandos spline s/p/c devem ser convertidos primeiro em linhas ou Bezier b.", sh_perimeter_err_no_contour = "Nenhum contorno valido foi encontrado.",
+        sh_perimeter_err_tag = "\\%s nao e aceito na geometria de entrada.", sh_perimeter_err_style_rotation = "O estilo tem rotacao; use uma geometria sem rotacao.",
+        sh_perimeter_err_alignment = "Nao foi possivel determinar um \\an1..\\an9 efetivo.", sh_perimeter_err_extent = "O desenho nao tem extensao geometrica.",
+        sh_perimeter_err_closed = "O contorno do perimetro deve estar fechado.", sh_perimeter_err_segments = "O contorno do perimetro nao tem segmentos.",
+        sh_perimeter_err_zero_length = "O contorno do perimetro tem comprimento zero.", sh_perimeter_err_base_closed = "A forma base nao contem um contorno fechado utilizavel.",
+        sh_perimeter_err_visible = "A forma base nao contem um perimetro visivel utilizavel.", sh_perimeter_err_selection = "Selecione primeiro a forma base e depois ao menos uma unidade.",
+        sh_perimeter_err_base_line = "Linha base %d: %s", sh_perimeter_err_base_exterior = "A linha base %d nao contem um contorno exterior utilizavel.",
+        sh_perimeter_err_shared_pos = "As camadas de uma unidade devem compartilhar exatamente o mesmo \\pos.", sh_perimeter_err_no_units = "Nenhuma unidade foi detectada depois da forma base.",
+        sh_perimeter_err_zero_width = "Uma unidade tem largura visivel zero.", sh_perimeter_err_empty_period = "O periodo nao pode estar vazio.", sh_perimeter_err_invalid_unit = "O periodo contem uma unidade invalida.",
+        sh_perimeter_custom = "Personalizado...", sh_perimeter_unit = "Unidade %d", sh_perimeter_period_length = "Comprimento do periodo:", sh_perimeter_period_hint = "Somente os primeiros passos indicados pelo comprimento sao usados.",
+        sh_perimeter_step = "Passo %d:", sh_perimeter_err_period_length = "O comprimento do periodo e invalido.", sh_perimeter_err_step = "O passo %d nao contem uma unidade valida.",
+        sh_perimeter_err_cycles = "A quantidade de repeticoes do contorno %d e invalida.", sh_perimeter_err_tangent = "Nao foi possivel calcular uma tangente para o contorno %d.",
+        sh_perimeter_err_advance = "O contorno %d tem repeticoes demais: o avanco entre unidades deixa de ser positivo.", sh_perimeter_err_closure = "O fechamento do padrao nao coincide com o contorno %d.",
+        sh_perimeter_err_replace_pos = "Nao foi possivel substituir o \\pos de uma camada.", sh_perimeter_err_rotation = "Nao foi possivel inserir a rotacao de uma camada.",
+        sh_perimeter_err_output_limit = "A saida teria %d linhas; o limite seguro e %d.", sh_perimeter_err_template = "Linha modelo %d: %s",
+        sh_perimeter_detected = "Unidades detectadas: %d", sh_perimeter_summary = "Exteriores: %d (%s px) | Furos: %d (%s px)", sh_perimeter_pattern = "Padrao periodico:",
+        sh_perimeter_close_hint = "Cada contorno fecha seu periodo de forma independente.", sh_perimeter_order_hint = "Ordem: unidades 1, 2, 3... conforme o primeiro \\pos na selecao.", sh_perimeter_err_pattern = "Escolha um padrao periodico valido.",
     },
 }
 for code, tbl in pairs(EXTRA_LANG) do
@@ -614,7 +740,7 @@ local DEFAULT_CONFIG = {
     fastsign_max_width = 95, fastsign_box_blur = 1.5,
     fastsign_glow_border = 2.5, fastsign_glow_blur = 3,
     fastsign_text_blur = 0.2,
-    tagops_action = "Adjust tags", tagops_amount = 0, tagops_mode = "Add",
+    tagops_action = "Resize / transform", tagops_amount = 0, tagops_mode = "Add",
     tagops_align_org = "Keep org",
     tagops_replace = true, tagops_all_blocks = false, tagops_append = false, tagops_info = false,
     tagops_pos = false, tagops_move = false, tagops_org = false, tagops_clip = false, tagops_iclip = false,
@@ -1425,6 +1551,24 @@ function RheaFoundation.selectionDialogueIndices(subs, sel)
     return indices
 end
 
+function RheaFoundation.currentFrameMs()
+    if not aegisub or type(aegisub.project_properties) ~= "function" or type(aegisub.ms_from_frame) ~= "function" then
+        return nil, "fade_err_frame_read"
+    end
+    local okProperties, properties = pcall(aegisub.project_properties)
+    if not okProperties then return nil, "fade_err_frame_read" end
+    local frame = properties and tonumber(properties.video_position)
+    if not frame then return nil, "fade_err_no_frame" end
+    local okMilliseconds, milliseconds = pcall(aegisub.ms_from_frame, frame)
+    milliseconds = tonumber(milliseconds)
+    if not okMilliseconds or not milliseconds or milliseconds ~= milliseconds or math.abs(milliseconds) == math.huge then
+        return nil, "fade_err_frame_ms"
+    end
+    return milliseconds
+end
+
+local ShapeCore = assert(SharedShapeOptimizer and SharedShapeOptimizer.geometry)
+RheaFoundation.Shapes = ShapeCore
 function RheaFoundation.selectionCopyGroups(subs, sel)
     local runGroups, skipped = {}, 0
     for _, group in ipairs(RheaFoundation.selectionEffectGroups(subs, sel)) do
@@ -2817,6 +2961,7 @@ local function applyMask(subs, sel, opts)
             end
             if sourceIsClip then
                 mask_line.text = RheaFoundation.removeTags(mask_line.text or "", {"clip", "iclip"})
+                line.text = RheaFoundation.removeTags(line.text or "", {"clip", "iclip"})
             end
             additions[line] = mask_line
             changed = true
@@ -2950,6 +3095,7 @@ end
 
 local DEFAULTS = {
     type_mode = "Frame",
+    vertical_gap = 0,
     circ_rot = "Normal",
     circ_radio = 0,
     circ_track = 0,
@@ -2966,6 +3112,7 @@ local function normalizeSignConfig(cfg)
     cfg = FunctionalTable.union(cfg or {}, DEFAULTS)
     cfg.type_mode = RheaFoundation.chooseAlias(cfg.type_mode, SIGN_TYPE_ALIASES, SIGN_TYPE_ITEMS, DEFAULTS.type_mode)
     cfg.circ_rot = RheaFoundation.chooseAlias(cfg.circ_rot, SIGN_ROT_ALIASES, SIGN_ROT_ITEMS, DEFAULTS.circ_rot)
+    cfg.vertical_gap = tonumber(cfg.vertical_gap) or DEFAULTS.vertical_gap
     return cfg
 end
 
@@ -3055,6 +3202,7 @@ local function applyVertical(subs, sel, cfg)
     end)
     local replacements = {}
     local cnt = 0
+    local verticalGap = tonumber(cfg.vertical_gap) or 0
     lines:runCallback(function(_, line)
         local markerID = generateMarkerID(usedMarkers)
         if not prepareSignLine(subs, meta, styles, line) then return end
@@ -3084,7 +3232,7 @@ local function applyVertical(subs, sel, cfg)
             local geom = string.format("\\an5\\pos(%.1f,%.1f)", px, py + cy)
             nline.text = tagsWithGeometry(char.tags, geom) .. char.content
             stampEffect(nline, markerID)
-            cy = cy + chh
+            cy = cy + chh + verticalGap
             new_lines[#new_lines + 1] = nline
         end
         if #new_lines > 0 then
@@ -4140,6 +4288,47 @@ local function tagopsInjectStyleAdjustments(text, selected, amount, mode, style)
     return tagopsAppendLeadingTags(text, table.concat(payload)), #payload
 end
 
+local function tagopsTransformKeyForName(name, selected)
+    for _, key in ipairs(TAGOPS_NAME_TO_KEYS[name] or {}) do
+        local def = TAGOPS_BY_KEY[key]
+        if selected[key] and def and def.animatable then return key end
+    end
+    return nil
+end
+
+local function tagopsTransformText(text, selected, amount, style)
+    local targets = {}
+    for _, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
+        for _, tag in ipairs(RheaFoundation.parseTagBlock(block.content)) do
+            if tag.name ~= "t" then
+                local key = tagopsTransformKeyForName(tag.name, selected)
+                if key and tostring(tag.value or ""):match(TAGOPS_NUM_VALUE_PATTERN) then
+                    local adjusted = tagopsAdjustToken(tag.raw, amount, "Add")
+                    if adjusted ~= tag.raw then targets[key] = adjusted end
+                end
+            end
+        end
+    end
+    for _, key in ipairs(TAGOPS_STYLE_ADJUST_ORDER) do
+        if selected[key] and not targets[key] then
+            local spec = TAGOPS_STYLE_ADJUST[key]
+            local base = tagopsStyleDefaultValue(style, spec)
+            if base then
+                local adjusted = tagopsAdjustNumber(tostring(base), amount, "Add")
+                if tonumber(adjusted) and math.abs(tonumber(adjusted) - base) > RHEA_ZERO_EPSILON then
+                    targets[key] = "\\" .. spec.tag .. adjusted
+                end
+            end
+        end
+    end
+    local payload = {}
+    for _, def in ipairs(TAGOPS_DEFS) do
+        if targets[def.key] then payload[#payload + 1] = targets[def.key] end
+    end
+    if #payload == 0 then return text, 0 end
+    return tagopsAppendLeadingTags(text, "\\t(" .. table.concat(payload) .. ")"), #payload
+end
+
 function TagOps.opAdjust(subs, sel, opts)
     if not sel or #sel == 0 then TagOps.U.alert(L("tagops_err_adjust_select")); return false end
     opts = opts or {}
@@ -4148,7 +4337,8 @@ function TagOps.opAdjust(subs, sel, opts)
     local styles = Rhea.styleMap(subs)
     local selected = tagopsResolveAdjustSelected(tagopsAutoAdjustSelected(subs, sel, styles), opts.selected)
     if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_no_adjust_tags")); return false end
-    local perspectiveAware = tagopsAdjustNeedsPerspectiveReproject(selected)
+    local transformMode = opts.mode == "Transform"
+    local perspectiveAware = not transformMode and tagopsAdjustNeedsPerspectiveReproject(selected)
     local perspectiveMeta, perspectiveStyles, perspectiveContextLoaded
     local function getPerspectiveContext()
         if not perspectiveContextLoaded then
@@ -4175,9 +4365,14 @@ function TagOps.opAdjust(subs, sel, opts)
                 perspectiveQuad = RheaOps.Perspective.captureQuad(line, perspectiveStyle, perspectiveMetaForLine, perspectiveStylesForLine)
             end
         end
-        local nt, c = tagopsAdjustText(line.text or "", selected, amount, opts.mode)
-        local injected, injectedCount = tagopsInjectStyleAdjustments(nt, selected, amount, opts.mode, style)
-        nt, c = injected, c + injectedCount
+        local nt, c
+        if transformMode then
+            nt, c = tagopsTransformText(line.text or "", selected, amount, style)
+        else
+            nt, c = tagopsAdjustText(line.text or "", selected, amount, opts.mode)
+            local injected, injectedCount = tagopsInjectStyleAdjustments(nt, selected, amount, opts.mode, style)
+            nt, c = injected, c + injectedCount
+        end
         if c > 0 and nt ~= line.text then
             line.text = nt
             if perspectiveQuad and RheaOps.Perspective.reprojectLineToQuad then
@@ -4192,7 +4387,7 @@ function TagOps.opAdjust(subs, sel, opts)
         end
     end
     if linesChanged == 0 then TagOps.U.alert(L("tagops_adjust_no_change")); return false end
-    aegisub.set_undo_point("TagOps - Adjust")
+    aegisub.set_undo_point("TagOps - Resize/Transform")
     if opts.info then
         TagOps.U.alert(string.format("%s: %d\n%s: %d", L("tagops_lines_changed"), linesChanged, L("tagops_tags_changed"), tagsChanged))
     end
@@ -4317,13 +4512,13 @@ function TagOps.opPosAlign(subs, sel, opts)
 end
 
 TagOps.defs = TAGOPS_DEFS
-TagOps.actions = {"Adjust tags", "Pos Align"}
+TagOps.actions = {"Resize / transform", "Pos Align"}
 
 local function tagopsNormalizeAction(action)
     action = tostring(action or "")
-    if action == "Copy tags" or action == "Copy Tags" then return "Adjust tags" end
+    if action == "Adjust tags" or action == "Copy tags" or action == "Copy Tags" then return "Resize / transform" end
     if action == "" then return "" end
-    return RheaFoundation.choose(action, TagOps.actions, "Adjust tags")
+    return RheaFoundation.choose(action, TagOps.actions, "Resize / transform")
 end
 
 
@@ -4332,8 +4527,8 @@ en = [[
 RHEA SIGNS - USER GUIDE
 
 Main panel:
-Mask is on the left, Perspective is in the middle, and Sign is on the right.
-Each section has an Action field. Leave Action empty to skip that section.
+Mask and Perspective are on the top row; Shapes and Sign are below them.
+Each module has an Action field. Leave Action empty to skip that module.
 
 Mask:
 Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape, and Clean DR.
@@ -4346,22 +4541,32 @@ Map controls corner order. Org controls the destination origin. X, Y, and Quad
 drive the scale operations.
 
 Sign:
-Typewriter reveals characters. Vertical Drop distributes text vertically.
+Typewriter reveals characters. Vertical Drop distributes text vertically; Y
+spacing adjusts the distance between generated elements and accepts negatives.
 Circle Text creates character lines on a circle. Curve Text places character
 lines along a vector clip. Clean SiO removes Sign output.
 
+Shapes:
+Unify Positions gives selected ASS drawings one shared pivot without moving
+their rendered geometry. Place on Perimeter repeats multilayer units along all
+visible exterior contours, with an optional mode for real nonzero-winding holes.
+Shape Color Optimizer merges nearby colors or reduces reliable gradients. Its
+mode, intensity, OKLab threshold, band limit, and summary option are editable in
+the main panel and saved in Config.
+
 Auxiliary buttons:
 Signs Editor edits repeated sign text in bulk. FastSigns creates box, glow, and
-front text layers. TagOps handles tag copy, keep-only, numeric adjustment, and
-position alignment. Makeup opens the reusable style and layer memory. Config
-stores language, mask color, and FastSigns settings.
+front text layers. TagOps handles tag copy, keep-only, numeric recalculation,
+untimed transforms, and position alignment. Config stores language, mask color,
+FastSigns settings, and the Shapes controls.
 
 Toolbox:
-Shape Color Optimizer merges nearby colors or reduces reliable gradients in
-selected ASS vector shapes. Font and Style Manager replaces fonts in styles and
-optional \fn tags, batch-edits style fields and colors, clones styles, and
-refreshes the detected font and style lists. Continuous Fade Cleanup removes the
-fade-out and fade-in at exact shared timing boundaries between selected groups.
+Font and Style Manager replaces fonts in styles and optional \fn tags,
+batch-edits style fields and colors, clones styles, and
+refreshes the detected font and style lists. In Fast Fades, In sets fade-in from
+the current video frame, Out sets fade-out, and Clean removes internal fade edges at
+exact shared timing boundaries between selected groups. Fade-in and fade-out
+preserve the other duration and unrelated tags.
 Shuffle Line Text redistributes text among selected dialogue rows without moving
 their timing or metadata. Leave the dropdown empty to skip it.
 
@@ -4372,8 +4577,8 @@ es = [[
 RHEA SIGNS - GUIA DE USO
 
 Panel principal:
-Mask esta a la izquierda, Perspective al centro y Sign a la derecha. Cada
-seccion tiene un campo Accion. Deja Accion vacia para omitir esa seccion.
+Mask y Perspective estan arriba; Shapes y Sign estan debajo. Cada modulo tiene
+un campo Accion. Deja Accion vacia para omitir ese modulo.
 
 Mask:
 Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape y Clean DR.
@@ -4386,22 +4591,32 @@ Map controla el orden de esquinas. Org controla el origen destino. X, Y y Quad
 controlan las operaciones de escala.
 
 Sign:
-Typewriter revela caracteres. Vertical Drop distribuye texto en vertical.
+Typewriter revela caracteres. Vertical Drop distribuye texto en vertical;
+Espacio Y ajusta la distancia entre elementos y acepta valores negativos.
 Circle Text genera lineas por caracter en circulo. Curve Text coloca lineas por
 caracter sobre un clip vectorial. Clean SiO elimina la salida de Sign.
 
+Shapes:
+Unificar posiciones da a los dibujos ASS seleccionados un pivote compartido sin
+mover su geometria renderizada. Pegar al perimetro repite unidades multicapa por
+todos los contornos exteriores visibles, con un modo opcional para huecos reales
+segun nonzero winding. Optimizar color de shapes fusiona colores cercanos o
+reduce gradientes fiables. Modo, intensidad, umbral OKLab, limite de bandas y
+resumen se editan en el panel principal y se guardan en Config.
+
 Botones auxiliares:
 Editor de carteles edita texto repetido en lote. FastSigns crea capas de caja,
-glow y texto frontal. TagOps maneja copiar tags, Keep Only, ajuste numerico y
-alineacion de posicion. Makeup abre la memoria reutilizable de estilos y capas.
-Config guarda idioma, color de mascara y ajustes de FastSigns.
+glow y texto frontal. TagOps maneja copiar tags, Keep Only, recalculo numerico,
+transformaciones sin tiempos y alineacion de posicion. Config guarda idioma,
+color de mascara, ajustes de FastSigns y controles de Shapes.
 
 Herramientas:
-Optimizar color de shapes fusiona colores cercanos o reduce gradientes fiables
-en shapes vectoriales ASS seleccionados. El gestor de fuentes y estilos cambia
-fuentes en estilos y tags \fn opcionales, edita campos y colores en lote, clona
-estilos y actualiza las listas detectadas. Limpiar fades continuos elimina el
-fade-out y fade-in del limite temporal exacto entre grupos seleccionados. Mezclar
+El gestor de fuentes y estilos cambia fuentes en estilos y tags \fn opcionales,
+edita campos y colores en lote, clona
+estilos y actualiza las listas detectadas. En Fast Fades, Entrada fija la entrada
+desde el frame actual, Salida fija la salida y Limpiar elimina los bordes internos del
+limite temporal exacto entre grupos seleccionados. La entrada y la salida no
+alteran la otra duracion ni los demas tags. Mezclar
 texto de lineas redistribuye el texto sin mover tiempos ni metadatos. Deja el
 dropdown vacio para omitirlo.
 
@@ -4412,8 +4627,8 @@ pt = [[
 RHEA SIGNS - GUIA DE USO
 
 Painel principal:
-Mask fica a esquerda, Perspective no centro e Sign a direita. Cada secao tem um
-campo Acao. Deixe Acao vazia para ignorar essa secao.
+Mask e Perspective ficam acima; Formas e Sign ficam abaixo. Cada modulo tem um
+campo Acao. Deixe Acao vazio para ignorar esse modulo.
 
 Mask:
 Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape e Clean DR.
@@ -4426,22 +4641,32 @@ Map controla a ordem dos cantos. Org controla a origem de destino. X, Y e Quad
 controlam as operacoes de escala.
 
 Sign:
-Typewriter revela caracteres. Vertical Drop distribui texto na vertical.
+Typewriter revela caracteres. Vertical Drop distribui texto na vertical; Espaço
+Y ajusta a distância entre elementos e aceita valores negativos.
 Circle Text gera linhas por caractere em circulo. Curve Text coloca linhas por
 caractere sobre um clip vetorial. Clean SiO remove a saida de Sign.
 
+Formas:
+Unificar posicoes fornece aos desenhos ASS selecionados um pivo compartilhado
+sem mover a geometria renderizada. Colocar no perimetro repete unidades em
+camadas por todos os contornos exteriores visiveis, com um modo opcional para
+furos reais segundo nonzero winding. Otimizar cores combina cores proximas ou
+reduz gradientes confiaveis. Modo, intensidade, limiar OKLab, limite de faixas e
+resumo sao editados no painel principal e salvos em Config.
+
 Botoes auxiliares:
 Editor de placas edita texto repetido em lote. FastSigns cria camadas de caixa,
-glow e texto frontal. TagOps cuida de copiar tags, Keep Only, ajuste numerico e
-alinhamento de posicao. Makeup abre a memoria reutilizavel de estilos e camadas.
-Config guarda idioma, cor da mascara e ajustes de FastSigns.
+glow e texto frontal. TagOps cuida de copiar tags, Keep Only, recalculo numerico,
+transformacoes sem tempos e alinhamento de posicao. Config guarda idioma, cor da
+mascara, ajustes de FastSigns e controles de Formas.
 
 Ferramentas:
-O otimizador de cores combina cores proximas ou reduz gradientes confiaveis nas
-formas vetoriais ASS selecionadas. O gerenciador de fontes e estilos troca fontes
-em estilos e etiquetas \fn opcionais, edita campos e cores em lote, clona estilos
-e atualiza as listas detectadas. Limpar fades continuos remove o fade-out e
-fade-in do limite de tempo exato entre grupos selecionados. Embaralhar texto das
+O gerenciador de fontes e estilos troca fontes em estilos e etiquetas \fn
+opcionais, edita campos e cores em lote, clona estilos
+e atualiza as listas detectadas. Em Fast Fades, Entrada define a entrada desde o
+frame atual, Saida define a saida e Limpar remove as bordas internas no limite de tempo
+exato entre grupos selecionados. A entrada e a saida nao alteram a outra duracao
+nem as demais tags. Embaralhar texto das
 linhas redistribui o texto sem mover tempos nem metadados. Deixe o dropdown vazio
 para ignora-lo.
 
@@ -4469,12 +4694,23 @@ local CHOICE_KEYS = {
     ["DABC (rot 90 CCW)"] = "map_dabc", ["ABDC (swap CD)"] = "map_abdc", ["BACD (swap AB)"] = "map_bacd",
     ["AB src + CD dst"] = "map_ab_cd", ["CD src + AB dst"] = "map_cd_ab", ["AC src + BD dst"] = "map_ac_bd",
     ["BD src + AC dst"] = "map_bd_ac", ["1 keep dst org"] = "org_keep", ["2 quad center"] = "org_center", ["3 minimize fax"] = "org_min_fax",
-    ["Adjust tags"] = "tagops_adjust",
+    ["Resize / transform"] = "tagops_adjust", ["Adjust tags"] = "tagops_adjust",
     ["Pos Align"] = "tagops_pos_align",
-    ["Add"] = "tagops_add", ["Percent"] = "tagops_percent", ["Keep org"] = "tagops_keep_org", ["Move org"] = "tagops_move_org",
-    ["Shape Color Optimizer"] = "tool_shape_optimizer",
+    ["Add"] = "tagops_add", ["Percent"] = "tagops_percent", ["Transform"] = "tagops_transform",
+    ["Keep org"] = "tagops_keep_org", ["Move org"] = "tagops_move_org",
+    ["Unify Positions"] = "sh_action_unify",
+    ["Place on Perimeter"] = "sh_action_perimeter",
+    ["Shape Color Optimizer"] = "sh_action_optimizer",
+    ["Exterior contours only"] = "sh_perimeter_exterior",
+    ["Exterior contours and holes"] = "sh_perimeter_holes",
+    ["Auto"] = "sh_mode_auto",
+    ["Similar colors"] = "sh_mode_similar",
+    ["Full gradient"] = "sh_mode_gradient",
+    ["Balanced"] = "sh_intensity_balanced",
+    ["Fidelity"] = "sh_intensity_fidelity",
+    ["Aggressive"] = "sh_intensity_aggressive",
     ["Font and Style Manager"] = "tool_font_manager",
-    ["Continuous Fade Cleanup"] = "tool_continuous_fades",
+    ["Fast Fades"] = "tool_fade_suite",
     ["Shuffle Line Text"] = "tool_shuffle_line_text",
 }
 
@@ -4512,1340 +4748,1848 @@ local function rawChoice(toRaw, shown)
 end
 
 local INTEGRATED_TOOL_SOURCES = {
-    ["Shape Color Optimizer"] = [====[
+    ["Shapes"] = [====[
 local SharedShapeOptimizer = require("kite.ShapeOptimizer")
-return {
-    main = function(subs, sel, active, context)
-        context = context or {}
-        context.settings_namespace = context.settings_namespace or "kite.RheaSigns.ShapeColorOptimizer"
-        context.settings_version = context.settings_version or "1.1.0"
-        context.title = context.title or "Shape Color Optimizer"
-        context.undo_name = context.undo_name or "Rhea Signs: shape color optimizer"
-        return SharedShapeOptimizer.main(subs, sel, active, context)
-    end,
-    validate = SharedShapeOptimizer.validate,
-}
-]====],
-    ["Makeup"] = [====[
-local Makeup = { version = "0.1.2" }
-local LineOps = require("kite.LineOps")
-local PyBridge = require("kite.PyBridge")
-local RHEA_NUMERIC_EPSILON = 0.0000001
-local RHEA_COMPARISON_EPSILON = 0.000001
-
-local MEMORY_FILE_NAME = "Memory Styles.txt"
-local MEMORY_HEADER = "MAKEUP_MEMORY_STYLES\t1"
-local PATH_SEP = package.config:sub(1, 1)
-
-local STYLE_FIELDS = {
-    "fontname", "fontsize",
-    "color1", "color2", "color3", "color4",
-    "bold", "italic", "underline", "strikeout",
-    "scale_x", "scale_y", "spacing", "angle",
-    "borderstyle", "outline", "shadow", "align",
-    "margin_l", "margin_r", "margin_t", "encoding", "relative_to",
-}
-
-local NUMERIC_STYLE_FIELDS = {
-    fontsize = true, scale_x = true, scale_y = true, spacing = true, angle = true,
-    borderstyle = true, outline = true, shadow = true, align = true,
-    margin_l = true, margin_r = true, margin_t = true, encoding = true,
-    relative_to = true,
-}
-
-local BOOLEAN_STYLE_FIELDS = {
-    bold = true, italic = true, underline = true, strikeout = true,
-}
-
-local KNOWN_TAG_NAMES = {
-    "_persp",
-    "alpha", "xbord", "ybord", "xshad", "yshad",
-    "iclip", "clip", "move", "fade",
-    "fscx", "fscy", "fsp", "fax", "fay",
-    "frx", "fry", "frz", "bord", "shad", "blur",
-    "pos", "org", "fad", "be", "fn", "fs", "fe",
-    "an", "q", "pbo", "p",
-    "karaoke", "kf", "ko", "kt", "K", "k",
-    "1c", "2c", "3c", "4c", "c",
-    "1a", "2a", "3a", "4a",
-    "b", "i", "u", "s", "r", "t", "a", "fr",
-}
-
-table.sort(KNOWN_TAG_NAMES, function(left, right)
-    return #left > #right
-end)
-
-local PROTECTED_GEOMETRY = {
-    pos = true, move = true, org = true,
-    clip = true, iclip = true,
-    an = true, _persp = true,
-}
-
-local NUM_PATTERN = "([%+%-]?%d*%.?%d+)"
-
-local function trim(value)
-    value = tostring(value or "")
-    return (value:gsub("^%s+", ""):gsub("%s+$", ""))
+local Unify = (function()
+local script_name = "Unify Shape Positions"
+local script_description = "Unifies ASS drawing pivots without changing visible placement"
+local script_author = "Kiter"
+local script_version = "1.0.0"
+local ShapeCore = assert(RheaFoundation and RheaFoundation.Shapes)
+local EPSILON = ShapeCore.epsilon
+local current_context = nil
+local tr
+tr = function(key, fallback, ...)
+  return ShapeCore.translate(current_context, key, fallback, ...)
 end
-
-local function is_dialogue(line)
-    return type(line) == "table" and (line.class == nil or line.class == "dialogue")
+local set_context
+set_context = function(context)
+  current_context = context or { }
 end
-
-local function clone_table(source)
-    local result = {}
-    for key, value in pairs(source or {}) do
-        if type(value) == "table" then
-            result[key] = clone_table(value)
-        else
-            result[key] = value
-        end
+local finite = ShapeCore.finite
+local format_number = ShapeCore.formatNumber
+local copy_line = Rhea.cloneLine
+local split_shape_text
+split_shape_text = function(text)
+  return ShapeCore.splitText(text, tr, "The drawing needs leading tags, including \\pos and \\pN.")
+end
+local has_plain_tag = ShapeCore.hasPlainTag
+local last_numeric_tag = ShapeCore.lastNumericTag
+local parse_position
+parse_position = function(prefix)
+  return ShapeCore.parsePosition(prefix, tr, "Each line must have exactly one leading \\pos(x,y).")
+end
+local tokenize_path
+tokenize_path = function(path)
+  return ShapeCore.tokenizePath(path, tr)
+end
+local validate_path_tokens
+validate_path_tokens = function(tokens)
+  local command, count = nil, 0
+  local valid_group
+  valid_group = function()
+    if not (command) then
+      return true
     end
-    return result
-end
-
-local function clone_line(line)
-    if type(line) == "table" and type(line.copy) == "function" then
-        return line:copy()
+    if command == "c" then
+      return count == 0
     end
-    local result = clone_table(line)
-    setmetatable(result, getmetatable(line))
-    return result
-end
-
-local function format_number(value)
-    local number = tonumber(value) or 0
-    if math.abs(number) < RHEA_NUMERIC_EPSILON then number = 0 end
-    if number == math.floor(number) then return string.format("%d", number) end
-    return string.format("%.3f", number):gsub("0+$", ""):gsub("%.$", "")
-end
-
-local function value_type(value)
-    local kind = type(value)
-    if kind == "boolean" then return "b", value and "1" or "0" end
-    if kind == "number" then return "n", tostring(value) end
-    return "s", tostring(value or "")
-end
-
-local function typed_value(kind, value)
-    if kind == "b" then return value == "1" or value == "true" end
-    if kind == "n" then return tonumber(value) or 0 end
-    return tostring(value or "")
-end
-
-local function encode_field(value)
-    return tostring(value or "")
-        :gsub("%%", "%%25")
-        :gsub("\t", "%%09")
-        :gsub("\r", "%%0D")
-        :gsub("\n", "%%0A")
-end
-
-local function decode_field(value)
-    return (tostring(value or ""):gsub("%%(%x%x)", function(hex)
-        return string.char(tonumber(hex, 16))
-    end))
-end
-
-local function split_tabs(line)
-    local fields = {}
-    for field in (tostring(line or "") .. "\t"):gmatch("(.-)\t") do
-        fields[#fields + 1] = field
+    if command == "b" then
+      return count >= 6 and count % 6 == 0
     end
-    return fields
-end
-
-local function memory_path()
-    local folder = LineOps.subtitleFolder(true)
-    if not folder then return nil, "Guarda primero el archivo de subtítulos para ubicar su memoria." end
-    return PyBridge.joinPath(folder, MEMORY_FILE_NAME)
-end
-
-local function utf8_char_size(byte)
-    if not byte or byte < 0x80 then return 1 end
-    if byte < 0xE0 then return 2 end
-    if byte < 0xF0 then return 3 end
-    return 4
-end
-
-local function visible_units(text)
-    text = tostring(text or "")
-    local units, position = {}, 1
-    while position <= #text do
-        if text:sub(position, position) == "\\" then
-            local next_char = text:sub(position + 1, position + 1)
-            if next_char == "N" or next_char == "n" or next_char == "h" then
-                units[#units + 1] = text:sub(position, position + 1)
-                position = position + 2
-            else
-                units[#units + 1] = "\\"
-                position = position + 1
-            end
-        else
-            local size = utf8_char_size(text:byte(position))
-            units[#units + 1] = text:sub(position, position + size - 1)
-            position = position + size
-        end
+    if command == "s" then
+      return count >= 6 and count % 2 == 0
     end
-    return units
-end
-
-local function split_tag_program(text)
-    text = tostring(text or "")
-    local program, plain = {}, {}
-    local position, visible_count = 1, 0
-
-    while position <= #text do
-        local open_pos = text:find("{", position, true)
-        if not open_pos then
-            local tail = text:sub(position)
-            plain[#plain + 1] = tail
-            visible_count = visible_count + #visible_units(tail)
-            break
-        end
-
-        local before = text:sub(position, open_pos - 1)
-        plain[#plain + 1] = before
-        visible_count = visible_count + #visible_units(before)
-
-        local close_pos = text:find("}", open_pos + 1, true)
-        if not close_pos then
-            local tail = text:sub(open_pos)
-            plain[#plain + 1] = tail
-            visible_count = visible_count + #visible_units(tail)
-            break
-        end
-
-        local content = text:sub(open_pos + 1, close_pos - 1)
-        if content:find("\\", 1, true) then
-            program[#program + 1] = { offset = visible_count, content = content }
-        end
-        position = close_pos + 1
-    end
-
-    return program, visible_count, table.concat(plain)
-end
-
-local function balanced_parenthesis_end(text, start_position)
-    local depth = 0
-    for position = start_position, #text do
-        local char = text:sub(position, position)
-        if char == "(" then
-            depth = depth + 1
-        elseif char == ")" then
-            depth = depth - 1
-            if depth == 0 then return position end
-        end
-    end
-    return #text
-end
-
-local function parse_tag_tokens(content)
-    content = tostring(content or "")
-    local tokens, position = {}, 1
-    while position <= #content do
-        local start_position = content:find("\\", position, true)
-        if not start_position then break end
-
-        local name_start = start_position + 1
-        local name
-        for _, known in ipairs(KNOWN_TAG_NAMES) do
-            if content:sub(name_start, name_start + #known - 1) == known then
-                name = known
-                break
-            end
-        end
-        if not name then
-            name = content:sub(name_start):match("^[_%a][_%w]*") or ""
-        end
-
-        if name == "" then
-            position = start_position + 1
-        else
-            local value_start = name_start + #name
-            local end_position = value_start - 1
-            if content:sub(value_start, value_start) == "(" then
-                end_position = balanced_parenthesis_end(content, value_start)
-            else
-                while end_position + 1 <= #content
-                    and content:sub(end_position + 1, end_position + 1) ~= "\\" do
-                    end_position = end_position + 1
-                end
-            end
-            tokens[#tokens + 1] = {
-                name = name,
-                raw = content:sub(start_position, end_position),
-                value = content:sub(value_start, end_position),
-                start_position = start_position,
-                end_position = end_position,
-            }
-            position = end_position + 1
-        end
-    end
-    return tokens
-end
-
-local function remove_program_names(program, names)
-    local result = {}
-    for _, block in ipairs(program or {}) do
-        local pieces, cursor = {}, 1
-        for _, token in ipairs(parse_tag_tokens(block.content)) do
-            if names[token.name] then
-                pieces[#pieces + 1] = block.content:sub(cursor, token.start_position - 1)
-                cursor = token.end_position + 1
-            end
-        end
-        pieces[#pieces + 1] = block.content:sub(cursor)
-        local content = table.concat(pieces)
-        if content:find("\\", 1, true) then
-            result[#result + 1] = { offset = block.offset, content = content }
-        end
-    end
-    return result
-end
-
-local function collect_protected(program)
-    local result = { present = {}, tokens = {} }
-    for _, block in ipairs(program or {}) do
-        for _, token in ipairs(parse_tag_tokens(block.content)) do
-            if PROTECTED_GEOMETRY[token.name] then
-                result.present[token.name] = true
-                result.tokens[#result.tokens + 1] = token.raw
-            end
-        end
-    end
-    return result
-end
-
-local function program_has_name(program, name)
-    for _, block in ipairs(program or {}) do
-        for _, token in ipairs(parse_tag_tokens(block.content)) do
-            if token.name == name then return true end
-        end
-    end
-    return false
-end
-
-local function inject_program_prefix(program, payload)
-    if not payload or payload == "" then return program end
-    local result = clone_table(program or {})
-    for _, block in ipairs(result) do
-        if tonumber(block.offset) == 0 then
-            block.content = payload .. block.content
-            return result
-        end
-    end
-    table.insert(result, 1, { offset = 0, content = payload })
-    return result
-end
-
-local function overlay_target_geometry(source_program, target_program)
-    local target = collect_protected(target_program)
-    if #target.tokens == 0 then return source_program end
-
-    local remove = {}
-    for name in pairs(target.present) do remove[name] = true end
-    if target.present.pos or target.present.move then
-        remove.pos, remove.move = true, true
-    end
-    local result = remove_program_names(source_program, remove)
-    return inject_program_prefix(result, table.concat(target.tokens))
-end
-
-local function inherit_missing_geometry(source_program, target_program, inherit_alignment)
-    local target = collect_protected(target_program)
-    local payload = {}
-    if inherit_alignment and target.present.an then
-        source_program = remove_program_names(source_program, { an = true })
-    end
-    local source_has_position = program_has_name(source_program, "pos")
-        or program_has_name(source_program, "move")
-
-    for _, raw in ipairs(target.tokens) do
-        local token = parse_tag_tokens(raw)[1]
-        if token then
-            local missing
-            if token.name == "pos" or token.name == "move" then
-                missing = not source_has_position
-            else
-                missing = not program_has_name(source_program, token.name)
-            end
-            if missing then payload[#payload + 1] = raw end
-        end
-    end
-    return inject_program_prefix(source_program, table.concat(payload))
-end
-
-local function shift_pair(x, y, dx, dy, scale)
-    scale = scale or 1
-    return format_number((tonumber(x) or 0) + dx * scale),
-        format_number((tonumber(y) or 0) + dy * scale)
-end
-
-local function shift_path(path, dx, dy, scale)
-    return tostring(path or ""):gsub(NUM_PATTERN .. "%s+" .. NUM_PATTERN, function(x, y)
-        local next_x, next_y = shift_pair(x, y, dx, dy, scale)
-        return next_x .. " " .. next_y
-    end)
-end
-
-local function translate_geometry(content, dx, dy)
-    content = tostring(content or "")
-    if dx == 0 and dy == 0 then return content end
-
-    content = content:gsub("\\pos%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)", function(x, y)
-        local next_x, next_y = shift_pair(x, y, dx, dy)
-        return "\\pos(" .. next_x .. "," .. next_y .. ")"
-    end)
-    content = content:gsub("\\move%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
-        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "(.-)%)",
-        function(x1, y1, x2, y2, rest)
-            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
-            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
-            return "\\move(" .. next_x1 .. "," .. next_y1 .. ","
-                .. next_x2 .. "," .. next_y2 .. rest .. ")"
-        end)
-    content = content:gsub("\\org%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)", function(x, y)
-        local next_x, next_y = shift_pair(x, y, dx, dy)
-        return "\\org(" .. next_x .. "," .. next_y .. ")"
-    end)
-    content = content:gsub("(\\i?clip)%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
-        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)",
-        function(tag, x1, y1, x2, y2)
-            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
-            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
-            return tag .. "(" .. next_x1 .. "," .. next_y1 .. ","
-                .. next_x2 .. "," .. next_y2 .. ")"
-        end)
-    content = content:gsub("(\\i?clip)%(%s*(%d+)%s*,%s*m%s+([^%)]+)%)", function(tag, scale_text, path)
-        local factor = 2 ^ ((tonumber(scale_text) or 1) - 1)
-        return tag .. "(" .. scale_text .. ",m " .. shift_path(path, dx, dy, factor) .. ")"
-    end)
-    content = content:gsub("(\\i?clip)%(%s*m%s+([^%)]+)%)", function(tag, path)
-        return tag .. "(m " .. shift_path(path, dx, dy) .. ")"
-    end)
-    content = content:gsub("\\_persp%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
-        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
-        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN
-        .. "%s*,%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)",
-        function(x1, y1, x2, y2, x3, y3, x4, y4)
-            local next_x1, next_y1 = shift_pair(x1, y1, dx, dy)
-            local next_x2, next_y2 = shift_pair(x2, y2, dx, dy)
-            local next_x3, next_y3 = shift_pair(x3, y3, dx, dy)
-            local next_x4, next_y4 = shift_pair(x4, y4, dx, dy)
-            return "\\_persp(" .. table.concat({
-                next_x1, next_y1, next_x2, next_y2,
-                next_x3, next_y3, next_x4, next_y4,
-            }, ",") .. ")"
-        end)
-    return content
-end
-
-local function translate_program(program, dx, dy)
-    local result = {}
-    for _, block in ipairs(program or {}) do
-        result[#result + 1] = {
-            offset = block.offset,
-            content = translate_geometry(block.content, dx, dy),
-        }
-    end
-    return result
-end
-
-local function first_program_point(program)
-    for _, block in ipairs(program or {}) do
-        local x, y = block.content:match("\\pos%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN .. "%s*%)")
-        if x and y then return tonumber(x), tonumber(y) end
-    end
-    for _, block in ipairs(program or {}) do
-        local x, y = block.content:match("\\move%(%s*" .. NUM_PATTERN .. "%s*,%s*" .. NUM_PATTERN)
-        if x and y then return tonumber(x), tonumber(y) end
-    end
-    return nil, nil
-end
-
-local function first_program_tag_value(program, name)
-    for _, block in ipairs(program or {}) do
-        for _, token in ipairs(parse_tag_tokens(block.content)) do
-            if token.name == name then return trim(token.value) end
-        end
-    end
-    return nil
-end
-
-local function rewrite_style_resets(program, resolved_styles)
-    local result = {}
-    for _, block in ipairs(program or {}) do
-        local content = block.content
-        local pieces, cursor = {}, 1
-        for _, token in ipairs(parse_tag_tokens(content)) do
-            if token.name == "r" then
-                local source_name = trim(token.value)
-                local target_name = resolved_styles[source_name]
-                if source_name ~= "" and target_name and target_name ~= source_name then
-                    pieces[#pieces + 1] = content:sub(cursor, token.start_position - 1)
-                    pieces[#pieces + 1] = "\\r" .. target_name
-                    cursor = token.end_position + 1
-                end
-            end
-        end
-        pieces[#pieces + 1] = content:sub(cursor)
-        result[#result + 1] = { offset = block.offset, content = table.concat(pieces) }
-    end
-    return result
-end
-
-local function render_program(program, source_length, target_plain)
-    local units = visible_units(target_plain)
-    local insertions = {}
-    source_length = tonumber(source_length) or 0
-
-    for _, block in ipairs(program or {}) do
-        if block.content and block.content:find("\\", 1, true) then
-            local offset = tonumber(block.offset) or 0
-            local mapped = 0
-            if source_length > 0 then
-                mapped = math.floor((offset / source_length) * #units + 0.5)
-            end
-            if mapped < 0 then mapped = 0 end
-            if mapped > #units then mapped = #units end
-            insertions[mapped] = insertions[mapped] or {}
-            insertions[mapped][#insertions[mapped] + 1] = "{" .. block.content .. "}"
-        end
-    end
-
-    local result = {}
-    for position = 0, #units do
-        if insertions[position] then
-            for _, block in ipairs(insertions[position]) do result[#result + 1] = block end
-        end
-        if position < #units then result[#result + 1] = units[position + 1] end
-    end
-    return table.concat(result)
-end
-
-local function is_drawing_program(program)
-    for _, block in ipairs(program or {}) do
-        for _, token in ipairs(parse_tag_tokens(block.content)) do
-            if token.name == "p" and (tonumber(token.value) or 0) > 0 then return true end
-        end
-    end
-    return false
-end
-
-local function visible_key(plain)
-    return trim(tostring(plain or ""):gsub("\\[Nnh]", " "):gsub("%s+", " "))
-end
-
-local function collect_styles(subs)
-    local styles, indices = {}, {}
-    for index = 1, #subs do
-        local line = subs[index]
-        if type(line) == "table" and line.class == "style" then
-            styles[line.name] = line
-            indices[line.name] = index
-        end
-    end
-    return styles, indices
-end
-
-local function snapshot_style(style)
-    local snapshot = { name = tostring(style and style.name or ""), fields = {} }
-    for _, field in ipairs(STYLE_FIELDS) do
-        if style and style[field] ~= nil then snapshot.fields[field] = style[field] end
-    end
-    return snapshot
-end
-
-local function capture_safe_extra(line)
-    local extra = {}
-    if type(line.extra) == "table" then
-        local value = line.extra["_aegi_perspective_ambient_plane"]
-        if type(value) == "string" or type(value) == "number" or type(value) == "boolean" then
-            extra["_aegi_perspective_ambient_plane"] = value
-        end
-    end
-    return extra
-end
-
-local function capture_preset(subs, selection, active, name)
-    local indices = {}
-    for _, index in ipairs(selection or {}) do
-        if is_dialogue(subs[index]) then indices[#indices + 1] = index end
-    end
-    table.sort(indices)
-    if #indices == 0 then return nil, "Selecciona al menos una línea de diálogo estilizada." end
-
-    local anchor = 1
-    for ordinal, index in ipairs(indices) do
-        if index == active then anchor = ordinal break end
-    end
-
-    local styles = collect_styles(subs)
-    local preset = {
-        name = trim(name),
-        anchor = anchor,
-        slot_count = 0,
-        styles = {},
-        styles_by_name = {},
-        lines = {},
-    }
-    local slot_by_text = {}
-    local anchor_line = subs[indices[anchor]]
-    local anchor_layer = tonumber(anchor_line.layer) or 0
-    local anchor_start = tonumber(anchor_line.start_time) or 0
-    local anchor_end = tonumber(anchor_line.end_time) or 0
-
-    for ordinal, index in ipairs(indices) do
-        local line = subs[index]
-        local program, source_length, plain = split_tag_program(line.text)
-        local drawing = is_drawing_program(program)
-        local slot = 0
-        if not drawing then
-            local key = visible_key(plain)
-            if key ~= "" then
-                if not slot_by_text[key] then
-                    preset.slot_count = preset.slot_count + 1
-                    slot_by_text[key] = preset.slot_count
-                end
-                slot = slot_by_text[key]
-            end
-        end
-
-        local style_name = tostring(line.style or "Default")
-        if not preset.styles_by_name[style_name] then
-            local snapshot = snapshot_style(styles[style_name])
-            snapshot.name = style_name
-            preset.styles[#preset.styles + 1] = snapshot
-            preset.styles_by_name[style_name] = snapshot
-        end
-
-        preset.lines[#preset.lines + 1] = {
-            ordinal = ordinal,
-            source_line = index,
-            style = style_name,
-            layer = tonumber(line.layer) or 0,
-            layer_delta = (tonumber(line.layer) or 0) - anchor_layer,
-            start_delta = (tonumber(line.start_time) or 0) - anchor_start,
-            end_delta = (tonumber(line.end_time) or 0) - anchor_end,
-            margin_l = tonumber(line.margin_l) or 0,
-            margin_r = tonumber(line.margin_r) or 0,
-            margin_t = tonumber(line.margin_t) or 0,
-            slot = slot,
-            source_length = source_length,
-            drawing = drawing,
-            drawing_text = drawing and plain or "",
-            program = program,
-            extra = capture_safe_extra(line),
-        }
-    end
-
-    if preset.slot_count == 0 then
-        return nil, "La selección no contiene ninguna capa de texto reutilizable."
-    end
-    return preset
-end
-
-local function serialize_memory(presets)
-    local output = {
-        "# Makeup Memory Styles - UTF-8",
-        MEMORY_HEADER,
-    }
-
-    for _, preset in ipairs(presets or {}) do
-        output[#output + 1] = table.concat({
-            "PRESET", encode_field(preset.name), tostring(preset.anchor or 1),
-            tostring(preset.slot_count or 1),
-        }, "\t")
-
-        for _, style in ipairs(preset.styles or {}) do
-            output[#output + 1] = "STYLE\t" .. encode_field(style.name)
-            for _, field in ipairs(STYLE_FIELDS) do
-                local value = style.fields and style.fields[field]
-                if value ~= nil then
-                    local kind, raw = value_type(value)
-                    output[#output + 1] = table.concat({
-                        "STYLE_FIELD", field, kind, encode_field(raw),
-                    }, "\t")
-                end
-            end
-            output[#output + 1] = "ENDSTYLE"
-        end
-
-        for _, line in ipairs(preset.lines or {}) do
-            output[#output + 1] = table.concat({
-                "LINE",
-                tostring(line.ordinal or 0),
-                tostring(line.source_line or 0),
-                encode_field(line.style),
-                tostring(line.layer or 0),
-                tostring(line.layer_delta or 0),
-                tostring(line.start_delta or 0),
-                tostring(line.end_delta or 0),
-                tostring(line.margin_l or 0),
-                tostring(line.margin_r or 0),
-                tostring(line.margin_t or 0),
-                tostring(line.slot or 0),
-                tostring(line.source_length or 0),
-                line.drawing and "1" or "0",
-            }, "\t")
-            for _, block in ipairs(line.program or {}) do
-                output[#output + 1] = table.concat({
-                    "TAG", tostring(block.offset or 0), encode_field(block.content),
-                }, "\t")
-            end
-            if line.drawing then
-                output[#output + 1] = "DRAW\t" .. encode_field(line.drawing_text)
-            end
-            for key, value in pairs(line.extra or {}) do
-                local kind, raw = value_type(value)
-                output[#output + 1] = table.concat({
-                    "EXTRA", encode_field(key), kind, encode_field(raw),
-                }, "\t")
-            end
-            output[#output + 1] = "ENDLINE"
-        end
-        output[#output + 1] = "ENDPRESET"
-    end
-    return table.concat(output, "\r\n") .. "\r\n"
-end
-
-local function parse_memory(content)
-    content = tostring(content or ""):gsub("^\239\187\191", "")
-    local presets = {}
-    local current_preset, current_style, current_line
-    local saw_header = false
-
-    for raw_line in (content .. "\n"):gmatch("(.-)\r?\n") do
-        if raw_line ~= "" and raw_line:sub(1, 1) ~= "#" then
-            local fields = split_tabs(raw_line)
-            local record = fields[1]
-            if record == "MAKEUP_MEMORY_STYLES" then
-                if tonumber(fields[2]) ~= 1 then return nil, "Versión de memoria no compatible." end
-                saw_header = true
-            elseif record == "PRESET" then
-                if not saw_header then return nil, "Cabecera de memoria inválida." end
-                current_preset = {
-                    name = decode_field(fields[2]),
-                    anchor = tonumber(fields[3]) or 1,
-                    slot_count = tonumber(fields[4]) or 1,
-                    styles = {},
-                    styles_by_name = {},
-                    lines = {},
-                }
-                presets[#presets + 1] = current_preset
-                current_style, current_line = nil, nil
-            elseif record == "STYLE" and current_preset then
-                current_style = { name = decode_field(fields[2]), fields = {} }
-                current_preset.styles[#current_preset.styles + 1] = current_style
-                current_preset.styles_by_name[current_style.name] = current_style
-            elseif record == "STYLE_FIELD" and current_style then
-                current_style.fields[fields[2]] = typed_value(fields[3], decode_field(fields[4]))
-            elseif record == "ENDSTYLE" then
-                current_style = nil
-            elseif record == "LINE" and current_preset then
-                current_line = {
-                    ordinal = tonumber(fields[2]) or (#current_preset.lines + 1),
-                    source_line = tonumber(fields[3]) or 0,
-                    style = decode_field(fields[4]),
-                    layer = tonumber(fields[5]) or 0,
-                    layer_delta = tonumber(fields[6]) or 0,
-                    start_delta = tonumber(fields[7]) or 0,
-                    end_delta = tonumber(fields[8]) or 0,
-                    margin_l = tonumber(fields[9]) or 0,
-                    margin_r = tonumber(fields[10]) or 0,
-                    margin_t = tonumber(fields[11]) or 0,
-                    slot = tonumber(fields[12]) or 0,
-                    source_length = tonumber(fields[13]) or 0,
-                    drawing = fields[14] == "1",
-                    drawing_text = "",
-                    program = {},
-                    extra = {},
-                }
-                current_preset.lines[#current_preset.lines + 1] = current_line
-            elseif record == "TAG" and current_line then
-                current_line.program[#current_line.program + 1] = {
-                    offset = tonumber(fields[2]) or 0,
-                    content = decode_field(fields[3]),
-                }
-            elseif record == "DRAW" and current_line then
-                current_line.drawing_text = decode_field(fields[2])
-            elseif record == "EXTRA" and current_line then
-                current_line.extra[decode_field(fields[2])] =
-                    typed_value(fields[3], decode_field(fields[4]))
-            elseif record == "ENDLINE" then
-                current_line = nil
-            elseif record == "ENDPRESET" then
-                current_preset, current_style, current_line = nil, nil, nil
-            end
-        end
-    end
-
-    if not saw_header then return nil, "El TXT no es una memoria de Makeup válida." end
-    for _, preset in ipairs(presets) do
-        if preset.name == "" or #preset.lines == 0 then
-            return nil, "La memoria contiene un preset incompleto."
-        end
-        if preset.anchor < 1 or preset.anchor > #preset.lines then preset.anchor = 1 end
-    end
-    return presets
-end
-
-local function load_memory(path)
-    if not PyBridge.fileExists(path) then return {} end
-    local content, err = PyBridge.readFile(path)
-    if not content then return nil, err end
-    return parse_memory(content)
-end
-
-local function style_values_equal(field, left, right)
-    if BOOLEAN_STYLE_FIELDS[field] then
-        local function boolean_value(value)
-            if type(value) == "boolean" then return value end
-            local number = tonumber(value)
-            if number ~= nil then return number ~= 0 end
-            return tostring(value or ""):lower() == "true"
-        end
-        return boolean_value(left) == boolean_value(right)
-    end
-    if NUMERIC_STYLE_FIELDS[field] then
-        local left_number, right_number = tonumber(left), tonumber(right)
-        return left_number and right_number and math.abs(left_number - right_number) < RHEA_COMPARISON_EPSILON
-    end
-    return tostring(left or "") == tostring(right or "")
-end
-
-local function styles_equal(existing, snapshot)
-    if not existing or not snapshot then return false end
-    for field, value in pairs(snapshot.fields or {}) do
-        if not style_values_equal(field, existing[field], value) then return false end
-    end
-    return next(snapshot.fields or {}) ~= nil
-end
-
-local function style_from_snapshot(snapshot, name)
-    local style = { class = "style", name = name }
-    for field, value in pairs(snapshot.fields or {}) do style[field] = value end
-    return style
-end
-
-local function safe_suffix(value)
-    value = trim(value):gsub("[%c,]", " "):gsub("%s+", " ")
-    if value == "" then return "Preset" end
-    if #value > 40 then value = value:sub(1, 40) end
-    return value
-end
-
-local function ensure_preset_styles(subs, preset)
-    local styles = collect_styles(subs)
-    local resolved, additions = {}, {}
-    local reserved = {}
-    for name in pairs(styles) do reserved[name] = true end
-
-    for _, snapshot in ipairs(preset.styles or {}) do
-        local original = snapshot.name
-        if styles_equal(styles[original], snapshot) then
-            resolved[original] = original
-        elseif next(snapshot.fields or {}) == nil then
-            resolved[original] = styles[original] and original or nil
-        elseif not styles[original] then
-            resolved[original] = original
-            additions[#additions + 1] = style_from_snapshot(snapshot, original)
-            styles[original] = additions[#additions]
-            reserved[original] = true
-        else
-            local stem = original .. " [Makeup - " .. safe_suffix(preset.name) .. "]"
-            local candidate, number = stem, 2
-            while reserved[candidate] and not styles_equal(styles[candidate], snapshot) do
-                candidate = stem .. " " .. tostring(number)
-                number = number + 1
-            end
-            resolved[original] = candidate
-            if not reserved[candidate] then
-                additions[#additions + 1] = style_from_snapshot(snapshot, candidate)
-                styles[candidate] = additions[#additions]
-                reserved[candidate] = true
-            end
-        end
-    end
-
-    if #additions == 0 then return resolved, nil, 0 end
-
-    local insert_position, last_non_dialogue = 1, 0
-    for index = 1, #subs do
-        local class = subs[index] and subs[index].class
-        if class == "style" then
-            insert_position = index + 1
-        elseif class ~= "dialogue" then
-            last_non_dialogue = index
-        end
-    end
-    if insert_position == 1 and last_non_dialogue > 0 then
-        insert_position = last_non_dialogue + 1
-    end
-    for offset, style in ipairs(additions) do
-        subs.insert(insert_position + offset - 1, style)
-    end
-    return resolved, insert_position, #additions
-end
-
-local function shift_plane_extra(value, dx, dy)
-    local count = 0
-    local shifted = tostring(value or ""):gsub(NUM_PATTERN .. "%s*;%s*" .. NUM_PATTERN, function(x, y)
-        count = count + 1
-        local next_x, next_y = shift_pair(x, y, dx, dy)
-        return next_x .. ";" .. next_y
-    end)
-    if count >= 4 then return shifted end
-    return value
-end
-
-local function line_plain(line)
-    local program, length, plain = split_tag_program(line and line.text or "")
-    return program, length, plain
-end
-
-local function slot_anchor_ordinals(preset)
-    local result = {}
-    local anchor_line = preset.lines[preset.anchor]
-    if anchor_line and anchor_line.slot and anchor_line.slot > 0 then
-        result[anchor_line.slot] = preset.anchor
-    end
-    for ordinal, line in ipairs(preset.lines) do
-        if line.slot and line.slot > 0 and not result[line.slot] then result[line.slot] = ordinal end
-    end
-    return result
-end
-
-local function source_reference_line(preset, slot, slot_anchors)
-    local ordinal = slot and slot > 0 and slot_anchors[slot] or preset.anchor
-    return preset.lines[ordinal] or preset.lines[preset.anchor] or preset.lines[1]
-end
-
-local function source_geometry_reference(preset, slot, slot_anchors)
-    local preferred = source_reference_line(preset, slot, slot_anchors)
-    local x = preferred and first_program_point(preferred.program)
-    if x then return preferred end
-    if slot and slot > 0 then
-        for _, line in ipairs(preset.lines) do
-            if line.slot == slot and first_program_point(line.program) then return line end
-        end
-    end
-    for _, line in ipairs(preset.lines) do
-        if first_program_point(line.program) then return line end
-    end
-    return preferred
-end
-
-local function relative_margin(template_value, source_reference_value, target_value)
-    return (tonumber(target_value) or 0)
-        + (tonumber(template_value) or 0)
-        - (tonumber(source_reference_value) or 0)
-end
-
-local function apply_template_to_line(template, target, options)
-    local out = clone_line(target)
-    local _, _, target_plain = line_plain(target)
-    local program = translate_program(template.program, options.dx or 0, options.dy or 0)
-    program = rewrite_style_resets(program, options.resolved_styles or {})
-
-    local target_program = line_plain(target)
-    if options.overlay_geometry then
-        program = overlay_target_geometry(program, target_program)
+    return count >= 2 and count % 2 == 0
+  end
+  for _index_0 = 1, #tokens do
+    local token = tokens[_index_0]
+    if token.kind == "command" then
+      if not (valid_group()) then
+        return false
+      end
+      command, count = token.value, 0
     else
-        program = inherit_missing_geometry(
-            program,
-            options.inherit_geometry_program or target_program,
-            options.inherit_alignment)
+      if not (command) then
+        return false
+      end
+      count = count + 1
     end
-
-    out.style = options.resolved_styles[template.style] or template.style or target.style
-    if options.generated then
-        out.layer = options.layer
-        out.start_time = options.start_time
-        out.end_time = options.end_time
-        out.margin_l = options.margin_l
-        out.margin_r = options.margin_r
-        out.margin_t = options.margin_t
-    end
-
-    local plain = template.drawing and template.drawing_text or target_plain
-    out.text = render_program(program, template.source_length, plain)
-
-    out.extra = clone_table(target.extra or {})
-    local target_plane = out.extra["_aegi_perspective_ambient_plane"]
-    local source_plane = template.extra and template.extra["_aegi_perspective_ambient_plane"]
-    if not (options.overlay_geometry and target_plane ~= nil) and source_plane ~= nil then
-        out.extra["_aegi_perspective_ambient_plane"] =
-            shift_plane_extra(source_plane, options.dx or 0, options.dy or 0)
-    end
-    return out
+  end
+  return valid_group()
 end
-
-local function build_generated_outputs(preset, targets, resolved_styles)
-    local outputs = {}
-    local slot_anchors = slot_anchor_ordinals(preset)
-    local preset_anchor = preset.lines[preset.anchor] or preset.lines[1]
-    local overall_target = targets[preset_anchor.slot] or targets[1]
-    local overall_target_program = line_plain(overall_target)
-    local overall_source_reference = source_reference_line(preset, preset_anchor.slot, slot_anchors)
-    local overall_geometry_reference =
-        source_geometry_reference(preset, preset_anchor.slot, slot_anchors)
-    local overall_source_x, overall_source_y =
-        first_program_point(overall_geometry_reference.program)
-    local overall_target_x, overall_target_y = first_program_point(overall_target_program)
-    local overall_dx, overall_dy = 0, 0
-    if overall_source_x and overall_target_x then
-        overall_dx, overall_dy = overall_target_x - overall_source_x, overall_target_y - overall_source_y
+local map_path
+map_path = function(path, map_x, map_y)
+  local tokens, err = tokenize_path(path)
+  if not (tokens) then
+    return nil, err
+  end
+  if not (validate_path_tokens(tokens)) then
+    return nil, tr("sh_err_coordinates", "The drawing has an invalid coordinate count.")
+  end
+  local output, coordinate = { }, 0
+  for _index_0 = 1, #tokens do
+    local token = tokens[_index_0]
+    if token.kind == "command" then
+      output[#output + 1] = token.value
+      coordinate = 0
+    else
+      coordinate = coordinate + 1
+      local mapper
+      if coordinate % 2 == 1 then
+        mapper = map_x
+      else
+        mapper = map_y
+      end
+      output[#output + 1] = format_number(mapper(token.value))
     end
-
-    for ordinal, template in ipairs(preset.lines) do
-        local target = targets[template.slot] or overall_target
-        local target_program = line_plain(target)
-        local source_reference = source_reference_line(preset, template.slot, slot_anchors)
-        local geometry_reference = source_geometry_reference(preset, template.slot, slot_anchors)
-        local source_x, source_y = first_program_point(geometry_reference.program)
-        local target_x, target_y = first_program_point(target_program)
-        local dx, dy = overall_dx, overall_dy
-        if source_x and target_x then dx, dy = target_x - source_x, target_y - source_y end
-
-        local overlay = template.slot > 0 and slot_anchors[template.slot] == ordinal
-        local template_alignment = first_program_tag_value(template.program, "an")
-        local reference_alignment = first_program_tag_value(source_reference.program, "an")
-        outputs[#outputs + 1] = apply_template_to_line(template, target, {
-            resolved_styles = resolved_styles,
-            dx = dx, dy = dy,
-            overlay_geometry = overlay,
-            inherit_geometry_program = template.slot > 0 and target_program or overall_target_program,
-            inherit_alignment = template.slot > 0
-                and template_alignment == reference_alignment,
-            generated = true,
-            layer = (tonumber(overall_target.layer) or 0) + (tonumber(template.layer_delta) or 0),
-            start_time = math.max(0, (tonumber(overall_target.start_time) or 0)
-                + (tonumber(template.start_delta) or 0)),
-            end_time = math.max(0, (tonumber(overall_target.end_time) or 0)
-                + (tonumber(template.end_delta) or 0)),
-            margin_l = relative_margin(template.margin_l, source_reference.margin_l, target.margin_l),
-            margin_r = relative_margin(template.margin_r, source_reference.margin_r, target.margin_r),
-            margin_t = relative_margin(template.margin_t, source_reference.margin_t, target.margin_t),
-        })
-    end
-    return outputs
+  end
+  return table.concat(output, " ")
 end
-
-local function build_existing_outputs(preset, targets, resolved_styles)
-    local outputs = {}
-    local preset_anchor = preset.lines[preset.anchor] or preset.lines[1]
-    local target_anchor = targets[preset.anchor] or targets[1]
-    local source_anchor_x, source_anchor_y = first_program_point(preset_anchor.program)
-    local target_anchor_program = line_plain(target_anchor)
-    local target_anchor_x, target_anchor_y = first_program_point(target_anchor_program)
-    local fallback_dx, fallback_dy = 0, 0
-    if source_anchor_x and target_anchor_x then
-        fallback_dx = target_anchor_x - source_anchor_x
-        fallback_dy = target_anchor_y - source_anchor_y
-    end
-
-    for ordinal, template in ipairs(preset.lines) do
-        local target = targets[ordinal]
-        local target_program = line_plain(target)
-        local source_x, source_y = first_program_point(template.program)
-        local target_x, target_y = first_program_point(target_program)
-        local dx, dy = fallback_dx, fallback_dy
-        if source_x and target_x then dx, dy = target_x - source_x, target_y - source_y end
-        outputs[#outputs + 1] = apply_template_to_line(template, target, {
-            resolved_styles = resolved_styles,
-            dx = dx, dy = dy,
-            overlay_geometry = true,
-            generated = false,
-        })
-    end
-    return outputs
+local shift_path
+shift_path = function(path, dx, dy)
+  return map_path(path, (function(value)
+    return value + dx
+  end), (function(value)
+    return value + dy
+  end))
 end
-
-local function contiguous(indices)
-    for position = 2, #indices do
-        if indices[position] ~= indices[position - 1] + 1 then return false end
-    end
-    return true
+local round_fixed
+round_fixed = function(value)
+  return math.floor(value * 64 + 0.5)
 end
-
-local function looks_like_existing_group(subs, indices, preset)
-    if #indices ~= #preset.lines or not contiguous(indices) then return false end
-    local first = subs[indices[1]]
-    if not first then return false end
-    local start_time, end_time = first.start_time, first.end_time
-    local keys = {}
-    for _, index in ipairs(indices) do
-        local line = subs[index]
-        if not is_dialogue(line) or line.start_time ~= start_time or line.end_time ~= end_time then
-            return false
-        end
-        local program, _, plain = line_plain(line)
-        if not is_drawing_program(program) then
-            local key = visible_key(plain)
-            if key ~= "" then keys[key] = true end
-        end
-    end
-    local key_count = 0
-    for _ in pairs(keys) do key_count = key_count + 1 end
-    return key_count <= math.max(1, preset.slot_count or 1)
+local rebase_path
+rebase_path = function(prepared, pivot)
+  local factor = 2 ^ (prepared.drawing_scale - 1)
+  local screen_scale_x = prepared.scale_x / (100 * factor)
+  local screen_scale_y = prepared.scale_y / (100 * factor)
+  local delta_x = round_fixed(prepared.position.x) - round_fixed(pivot.x)
+  local delta_y = round_fixed(prepared.position.y) - round_fixed(pivot.y)
+  local map_x
+  map_x = function(value)
+    return (round_fixed(value * screen_scale_x) + delta_x) / (64 * screen_scale_x)
+  end
+  local map_y
+  map_y = function(value)
+    return (round_fixed(value * screen_scale_y) + delta_y) / (64 * screen_scale_y)
+  end
+  return map_path(prepared.drawing, map_x, map_y)
 end
-
-local function chunk_indices(indices, size)
-    local chunks = {}
-    for start = 1, #indices, size do
-        local chunk = {}
-        for position = start, math.min(start + size - 1, #indices) do
-            chunk[#chunk + 1] = indices[position]
-        end
-        chunks[#chunks + 1] = chunk
+local prepare_text
+prepare_text = function(text, style)
+  if style == nil then
+    style = { }
+  end
+  local parts, err = split_shape_text(text)
+  if not (parts) then
+    return nil, err
+  end
+  local prefix = parts.prefix
+  local _list_0 = {
+    "move",
+    "org",
+    "clip",
+    "iclip",
+    "t",
+    "fr",
+    "fax",
+    "fay",
+    "r"
+  }
+  for _index_0 = 1, #_list_0 do
+    local tag = _list_0[_index_0]
+    if has_plain_tag(prefix, tag) then
+      return nil, tr("sh_unify_err_tag", "\\%s is not supported because the compensation would not have one static pivot.", tag)
     end
-    return chunks
+  end
+  local position, pos_err = parse_position(prefix)
+  if not (position) then
+    return nil, pos_err
+  end
+  local drawing_scale = last_numeric_tag(prefix, "p")
+  if not (drawing_scale and drawing_scale == math.floor(drawing_scale) and drawing_scale >= 1 and drawing_scale <= 10) then
+    return nil, tr("sh_err_drawing_scale", "Drawing mode must be \\p1 or higher.")
+  end
+  local style_angle = finite(style.angle) or 0
+  if math.abs(style_angle) >= EPSILON then
+    return nil, tr("sh_unify_err_style_rotation", "The style has rotation; use an unrotated drawing first.")
+  end
+  local scale_x = last_numeric_tag(prefix, "fscx") or finite(style.scale_x) or 100
+  local scale_y = last_numeric_tag(prefix, "fscy") or finite(style.scale_y) or 100
+  if not (scale_x > 0 and scale_y > 0) then
+    return nil, tr("sh_err_positive_scale", "\\fscx and \\fscy must be greater than zero.")
+  end
+  local tokens, token_err = tokenize_path(parts.drawing)
+  if not (tokens) then
+    return nil, token_err
+  end
+  if not (validate_path_tokens(tokens)) then
+    return nil, tr("sh_err_coordinates", "The drawing has an invalid coordinate count.")
+  end
+  return {
+    text = tostring(text),
+    prefix = prefix,
+    drawing = parts.drawing,
+    suffix = parts.suffix,
+    position = position,
+    drawing_scale = drawing_scale,
+    scale_x = scale_x,
+    scale_y = scale_y
+  }
 end
-
-local function classify_units(subs, selection, preset, mode)
-    local indices = {}
-    for _, index in ipairs(selection or {}) do
-        if is_dialogue(subs[index]) then indices[#indices + 1] = index end
-    end
-    table.sort(indices)
-    if #indices == 0 then return nil, "Selecciona al menos una línea de diálogo de destino." end
-
-    local line_count = #preset.lines
-    local slot_count = math.max(1, tonumber(preset.slot_count) or 1)
-    local units = {}
-
-    if mode == "each" then
-        if slot_count ~= 1 then
-            return nil, "Este preset contiene varios textos; usa Automático o Selección = un cartel."
-        end
-        for _, index in ipairs(indices) do
-            units[#units + 1] = { kind = "generated", indices = {index} }
-        end
-        return units
-    end
-
-    if mode == "selection" then
-        if #indices == line_count and looks_like_existing_group(subs, indices, preset) then
-            return {{ kind = "existing", indices = indices }}
-        end
-        if #indices == slot_count and contiguous(indices) then
-            return {{ kind = "generated", indices = indices }}
-        end
-        return nil, string.format(
-            "Para un cartel selecciona %d línea(s) virgen(es) o sus %d capas ya existentes.",
-            slot_count, line_count)
-    end
-
-    if line_count > 0 and #indices % line_count == 0 then
-        local chunks = chunk_indices(indices, line_count)
-        local all_existing = true
-        for _, chunk in ipairs(chunks) do
-            if not looks_like_existing_group(subs, chunk, preset) then
-                all_existing = false
-                break
-            end
-        end
-        if all_existing then
-            for _, chunk in ipairs(chunks) do
-                units[#units + 1] = { kind = "existing", indices = chunk }
-            end
-            return units
-        end
-    end
-
-    if slot_count == 1 then
-        for _, index in ipairs(indices) do
-            units[#units + 1] = { kind = "generated", indices = {index} }
-        end
-        return units
-    end
-
-    if #indices % slot_count ~= 0 then
-        return nil, string.format("Este preset necesita %d textos de destino por cartel.", slot_count)
-    end
-    for _, chunk in ipairs(chunk_indices(indices, slot_count)) do
-        if not contiguous(chunk) then
-            return nil, "Las líneas de cada cartel deben ser contiguas."
-        end
-        units[#units + 1] = { kind = "generated", indices = chunk }
-    end
-    return units
+local replace_position
+replace_position = function(prefix, position, pattern)
+  local replacement = "\\pos(" .. tostring(format_number(position.x)) .. "," .. tostring(format_number(position.y)) .. ")"
+  local mapped, count = prefix:gsub(pattern, replacement)
+  if not (count == 1) then
+    return nil, tr("sh_unify_err_replace_pos", "The line's \\pos could not be replaced.")
+  end
+  return mapped
 end
-
-local function apply_preset(subs, selection, active, preset, mode)
-    if not preset or #preset.lines == 0 then return nil, "El preset está vacío." end
-    local units, classify_err = classify_units(subs, selection, preset, mode or "auto")
-    if not units then return nil, classify_err end
-
-    local resolved_styles, insert_position, added_styles = ensure_preset_styles(subs, preset)
-    if added_styles > 0 then
-        for _, unit in ipairs(units) do
-            for position, index in ipairs(unit.indices) do
-                if index >= insert_position then unit.indices[position] = index + added_styles end
-            end
-        end
-        if active and active >= insert_position then active = active + added_styles end
+local unify_prepared
+unify_prepared = function(prepared, pivot)
+  local factor = 2 ^ (prepared.drawing_scale - 1)
+  local dx = (prepared.position.x - pivot.x) * factor * 100 / prepared.scale_x
+  local dy = (prepared.position.y - pivot.y) * factor * 100 / prepared.scale_y
+  local drawing = prepared.drawing
+  if math.abs(dx) >= EPSILON or math.abs(dy) >= EPSILON then
+    local err
+    drawing, err = rebase_path(prepared, pivot)
+    if not (drawing) then
+      return nil, err
     end
-
-    local new_selection, cumulative_shift = {}, 0
-    for _, unit in ipairs(units) do
-        local current_indices, targets = {}, {}
-        for position, index in ipairs(unit.indices) do
-            current_indices[position] = index + cumulative_shift
-            targets[position] = subs[current_indices[position]]
-        end
-
-        local outputs
-        if unit.kind == "existing" then
-            outputs = build_existing_outputs(preset, targets, resolved_styles)
-            for position, index in ipairs(current_indices) do
-                subs[index] = outputs[position]
-                new_selection[#new_selection + 1] = index
-            end
-        else
-            local slot_targets = {}
-            for slot, target in ipairs(targets) do slot_targets[slot] = target end
-            outputs = build_generated_outputs(preset, slot_targets, resolved_styles)
-            local first_index = current_indices[1]
-            for position = #current_indices, 1, -1 do subs.delete(current_indices[position]) end
-            for position, output in ipairs(outputs) do
-                subs.insert(first_index + position - 1, output)
-                new_selection[#new_selection + 1] = first_index + position - 1
-            end
-            cumulative_shift = cumulative_shift + #outputs - #current_indices
-        end
+  end
+  local prefix, err = replace_position(prepared.prefix, pivot, prepared.position.pattern)
+  if not (prefix) then
+    return nil, err
+  end
+  return prefix .. drawing .. prepared.suffix
+end
+local style_map = ShapeCore.styleMaps
+local selection_indices = ShapeCore.selectionIndices
+local unify_selection
+unify_selection = function(subs, sel, active_line)
+  local indices = selection_indices(subs, sel)
+  if #indices < 2 then
+    return nil, tr("sh_unify_err_selection", "Select at least two drawing lines.")
+  end
+  local styles, styles_folded = style_map(subs)
+  local prepared = { }
+  for _index_0 = 1, #indices do
+    local index = indices[_index_0]
+    local line = subs[index]
+    local style_name = tostring(line.style or "")
+    local style = ShapeCore.styleFor(styles, styles_folded, style_name)
+    if not (style) then
+      return nil, tr("sh_err_style", "Line %d: style '%s' was not found.", index, style_name)
     end
-
-    return new_selection, nil, {
-        styles_added = added_styles,
-        lines_selected = #new_selection,
-        groups = #units,
+    local data, err = prepare_text(line.text, style)
+    if not (data) then
+      return nil, tr("sh_err_line", "Line %d: %s", index, err)
+    end
+    prepared[#prepared + 1] = {
+      index = index,
+      line = line,
+      data = data
     }
-end
-
-local function find_preset(presets, name)
-    for index, preset in ipairs(presets or {}) do
-        if preset.name == name then return preset, index end
+  end
+  local reference = prepared[1]
+  active_line = tonumber(active_line)
+  if active_line then
+    for _index_0 = 1, #prepared do
+      local item = prepared[_index_0]
+      if item.index == active_line then
+        reference = item
+        break
+      end
     end
-    return nil, nil
+  end
+  local pivot = {
+    x = reference.data.position.x,
+    y = reference.data.position.y
+  }
+  local updates = { }
+  for _index_0 = 1, #prepared do
+    local item = prepared[_index_0]
+    local new_text, err = unify_prepared(item.data, pivot)
+    if not (new_text) then
+      return nil, tr("sh_err_line", "Line %d: %s", item.index, err)
+    end
+    local line = copy_line(item.line)
+    line.text = new_text
+    updates[#updates + 1] = {
+      index = item.index,
+      line = line
+    }
+  end
+  for _index_0 = 1, #updates do
+    local update = updates[_index_0]
+    subs[update.index] = update.line
+  end
+  return {
+    selection = sel,
+    pivot = pivot,
+    count = #updates
+  }
+end
+local main
+main = function(subs, sel, active_line, context)
+  set_context(context)
+  local result, err = unify_selection(subs, sel, active_line)
+  if not (result) then
+    return sel, false, err
+  end
+  if context and context.undo then
+    context.undo("sh_undo_unify", "Rhea Signs: unify shape positions")
+  elseif aegisub and aegisub.set_undo_point then
+    aegisub.set_undo_point(script_name)
+  end
+  return result.selection, true, result
+end
+return {
+  name = script_name,
+  description = script_description,
+  version = script_version,
+  set_context = set_context,
+  prepare_text = prepare_text,
+  shift_path = shift_path,
+  unify_prepared = unify_prepared,
+  unify_selection = unify_selection,
+  main = main
+}
+end)()
+local Perimeter = (function()
+local script_name = "Place Shapes on Perimeter"
+local script_description = "Repeats multilayer units along the true contour of an ASS drawing"
+local script_author = "Kiter"
+local script_version = "1.3.0"
+local ShapeCore = assert(RheaFoundation and RheaFoundation.Shapes)
+local EPSILON = ShapeCore.epsilon
+local CURVE_TOLERANCE = 0.01
+local MAX_CURVE_DEPTH = 18
+local MAX_OUTPUT_LINES = 4000
+local CORNER_EPSILON = 0.00001
+local MAX_CUSTOM_PERIOD = 16
+local current_context = nil
+local tr
+tr = function(key, fallback, ...)
+  return ShapeCore.translate(current_context, key, fallback, ...)
+end
+local set_context
+set_context = function(context)
+  current_context = context or { }
+end
+local finite = ShapeCore.finite
+local format_number = ShapeCore.formatNumber
+local copy_line = Rhea.cloneLine
+local point
+point = function(x, y)
+  return {
+    x = x,
+    y = y
+  }
+end
+local same_point
+same_point = function(a, b, epsilon)
+  if epsilon == nil then
+    epsilon = EPSILON
+  end
+  return a and b and math.abs(a.x - b.x) <= epsilon and math.abs(a.y - b.y) <= epsilon
+end
+local distance
+distance = function(a, b)
+  local dx, dy = b.x - a.x, b.y - a.y
+  return math.sqrt(dx * dx + dy * dy)
+end
+local normalize
+normalize = function(x, y)
+  local length = math.sqrt(x * x + y * y)
+  if not (length > EPSILON) then
+    return nil
+  end
+  return {
+    x = x / length,
+    y = y / length
+  }
+end
+local atan2 = RheaFoundation.atan2
+local split_shape_text
+split_shape_text = function(text)
+  return ShapeCore.splitText(text, tr, "The drawing needs leading tags with \\pos and \\pN.")
+end
+local has_plain_tag = ShapeCore.hasPlainTag
+local last_numeric_tag = ShapeCore.lastNumericTag
+local parse_position
+parse_position = function(prefix)
+  return ShapeCore.parsePosition(prefix, tr)
+end
+local tokenize_path
+tokenize_path = function(path)
+  return ShapeCore.tokenizePath(path, tr)
+end
+local command_groups
+command_groups = function(tokens)
+  local groups, current = { }, nil
+  for _index_0 = 1, #tokens do
+    local token = tokens[_index_0]
+    if token.kind == "command" then
+      current = {
+        command = token.value,
+        values = { }
+      }
+      groups[#groups + 1] = current
+    else
+      if not (current) then
+        return nil, tr("sh_perimeter_err_before_command", "Coordinates appear before the first drawing command.")
+      end
+      current.values[#current.values + 1] = token.value
+    end
+  end
+  return groups
+end
+local line_segment
+line_segment = function(a, b)
+  return {
+    kind = "line",
+    p0 = a,
+    p1 = b
+  }
+end
+local cubic_segment
+cubic_segment = function(a, b, c, d)
+  return {
+    kind = "cubic",
+    p0 = a,
+    p1 = b,
+    p2 = c,
+    p3 = d
+  }
+end
+local parse_contours
+parse_contours = function(path)
+  local tokens, token_err = tokenize_path(path)
+  if not (tokens) then
+    return nil, token_err
+  end
+  local groups, group_err = command_groups(tokens)
+  if not (groups) then
+    return nil, group_err
+  end
+  local contours, current, current_point = { }, nil, nil
+  local finish_contour
+  finish_contour = function()
+    if not (current) then
+      return
+    end
+    if current.closed and current_point and not same_point(current_point, current.start) then
+      current.segments[#current.segments + 1] = line_segment(current_point, current.start)
+    end
+    contours[#contours + 1] = current
+    current, current_point = nil, nil
+  end
+  for _index_0 = 1, #groups do
+    local group = groups[_index_0]
+    local command, values = group.command, group.values
+    if command == "m" or command == "n" then
+      if not (#values == 2) then
+        return nil, tr("sh_perimeter_err_move_pair", "Each %s command must contain exactly one coordinate pair.", command)
+      end
+      finish_contour()
+      current_point = point(values[1], values[2])
+      current = {
+        start = current_point,
+        segments = { },
+        closed = command == "m"
+      }
+    elseif command == "l" then
+      if not (current and current_point) then
+        return nil, tr("sh_perimeter_err_line_start", "An l command appears before the initial m command.")
+      end
+      if not (#values >= 2 and #values % 2 == 0) then
+        return nil, tr("sh_perimeter_err_line_pairs", "The l command requires coordinate pairs.")
+      end
+      for index = 1, #values, 2 do
+        local next_point = point(values[index], values[index + 1])
+        if not (same_point(current_point, next_point)) then
+          current.segments[#current.segments + 1] = line_segment(current_point, next_point)
+        end
+        current_point = next_point
+      end
+    elseif command == "b" then
+      if not (current and current_point) then
+        return nil, tr("sh_perimeter_err_bezier_start", "A b command appears before the initial m command.")
+      end
+      if not (#values >= 6 and #values % 6 == 0) then
+        return nil, tr("sh_perimeter_err_bezier_groups", "The b command requires groups of six coordinates.")
+      end
+      for index = 1, #values, 6 do
+        local control_a = point(values[index], values[index + 1])
+        local control_b = point(values[index + 2], values[index + 3])
+        local next_point = point(values[index + 4], values[index + 5])
+        current.segments[#current.segments + 1] = cubic_segment(current_point, control_a, control_b, next_point)
+        current_point = next_point
+      end
+    else
+      return nil, tr("sh_perimeter_err_spline", "Spline commands s/p/c must first be converted to lines or b Beziers.")
+    end
+  end
+  finish_contour()
+  if #contours == 0 then
+    return nil, tr("sh_perimeter_err_no_contour", "No valid contour was found.")
+  end
+  return contours
+end
+local new_bounds
+new_bounds = function()
+  return {
+    l = math.huge,
+    t = math.huge,
+    r = -math.huge,
+    b = -math.huge
+  }
+end
+local include_point
+include_point = function(bounds, p)
+  bounds.l = math.min(bounds.l, p.x)
+  bounds.t = math.min(bounds.t, p.y)
+  bounds.r = math.max(bounds.r, p.x)
+  bounds.b = math.max(bounds.b, p.y)
+end
+local cubic_point
+cubic_point = function(segment, t)
+  return RheaFoundation.bezierPoint(t, segment.p0, segment.p1, segment.p2, segment.p3)
+end
+local cubic_derivative
+cubic_derivative = function(segment, t)
+  return RheaFoundation.bezierDerivative(t, segment.p0, segment.p1, segment.p2, segment.p3)
+end
+local quadratic_roots
+quadratic_roots = function(a, b, c)
+  local roots = { }
+  if math.abs(a) < EPSILON then
+    if math.abs(b) >= EPSILON then
+      roots[1] = -c / b
+    end
+    return roots
+  end
+  local discriminant = b * b - 4 * a * c
+  if discriminant < 0 then
+    return roots
+  end
+  local root = math.sqrt(math.max(0, discriminant))
+  roots[#roots + 1] = (-b - root) / (2 * a)
+  if root > EPSILON then
+    roots[#roots + 1] = (-b + root) / (2 * a)
+  end
+  return roots
+end
+local cubic_extrema
+cubic_extrema = function(p0, p1, p2, p3)
+  local a = -p0 + 3 * p1 - 3 * p2 + p3
+  local b = 3 * p0 - 6 * p1 + 3 * p2
+  local c = -3 * p0 + 3 * p1
+  return quadratic_roots(3 * a, 2 * b, c)
+end
+local include_segment_bounds
+include_segment_bounds = function(bounds, segment)
+  include_point(bounds, segment.p0)
+  if segment.kind == "line" then
+    include_point(bounds, segment.p1)
+    return
+  end
+  include_point(bounds, segment.p3)
+  local _list_0 = cubic_extrema(segment.p0.x, segment.p1.x, segment.p2.x, segment.p3.x)
+  for _index_0 = 1, #_list_0 do
+    local t = _list_0[_index_0]
+    if t > EPSILON and t < 1 - EPSILON then
+      include_point(bounds, cubic_point(segment, t))
+    end
+  end
+  local _list_1 = cubic_extrema(segment.p0.y, segment.p1.y, segment.p2.y, segment.p3.y)
+  for _index_0 = 1, #_list_1 do
+    local t = _list_1[_index_0]
+    if t > EPSILON and t < 1 - EPSILON then
+      include_point(bounds, cubic_point(segment, t))
+    end
+  end
+end
+local path_bounds
+path_bounds = function(contours)
+  local bounds = new_bounds()
+  for _index_0 = 1, #contours do
+    local contour = contours[_index_0]
+    local _list_0 = contour.segments
+    for _index_1 = 1, #_list_0 do
+      local segment = _list_0[_index_1]
+      include_segment_bounds(bounds, segment)
+    end
+  end
+  if bounds.l == math.huge then
+    return nil
+  end
+  bounds.width = bounds.r - bounds.l
+  bounds.height = bounds.b - bounds.t
+  return bounds
+end
+local alignment_factors
+alignment_factors = function(alignment)
+  alignment = tonumber(alignment)
+  if not (alignment and alignment >= 1 and alignment <= 9) then
+    return nil
+  end
+  local ax
+  if alignment == 1 or alignment == 4 or alignment == 7 then
+    ax = 0
+  elseif alignment == 2 or alignment == 5 or alignment == 8 then
+    ax = 0.5
+  else
+    ax = 1
+  end
+  local ay
+  if alignment >= 7 then
+    ay = 0
+  elseif alignment >= 4 then
+    ay = 0.5
+  else
+    ay = 1
+  end
+  return ax, ay
+end
+local transform_segment
+transform_segment = function(segment, transform)
+  local map
+  map = function(p)
+    return point(transform.ox + p.x * transform.sx, transform.oy + p.y * transform.sy)
+  end
+  if segment.kind == "line" then
+    return line_segment(map(segment.p0), map(segment.p1))
+  else
+    return cubic_segment(map(segment.p0), map(segment.p1), map(segment.p2), map(segment.p3))
+  end
+end
+local transform_contours
+transform_contours = function(contours, transform)
+  local output = { }
+  for _index_0 = 1, #contours do
+    local contour = contours[_index_0]
+    local mapped = {
+      start = point(transform.ox + contour.start.x * transform.sx, transform.oy + contour.start.y * transform.sy),
+      closed = contour.closed,
+      segments = { }
+    }
+    local _list_0 = contour.segments
+    for _index_1 = 1, #_list_0 do
+      local segment = _list_0[_index_1]
+      mapped.segments[#mapped.segments + 1] = transform_segment(segment, transform)
+    end
+    output[#output + 1] = mapped
+  end
+  return output
+end
+local prepare_shape
+prepare_shape = function(text, style)
+  if style == nil then
+    style = { }
+  end
+  local parts, parts_err = split_shape_text(text)
+  if not (parts) then
+    return nil, parts_err
+  end
+  local prefix = parts.prefix
+  local _list_0 = {
+    "move",
+    "org",
+    "clip",
+    "iclip",
+    "t",
+    "fr",
+    "fax",
+    "fay",
+    "r",
+    "pbo"
+  }
+  for _index_0 = 1, #_list_0 do
+    local tag = _list_0[_index_0]
+    if has_plain_tag(prefix, tag) then
+      return nil, tr("sh_perimeter_err_tag", "\\%s is not supported in input geometry.", tag)
+    end
+  end
+  local position, pos_err = parse_position(prefix)
+  if not (position) then
+    return nil, pos_err
+  end
+  local drawing_scale = last_numeric_tag(prefix, "p")
+  if not (drawing_scale and drawing_scale == math.floor(drawing_scale) and drawing_scale >= 1 and drawing_scale <= 10) then
+    return nil, tr("sh_err_drawing_scale", "Drawing mode must be \\p1 or higher.")
+  end
+  local scale_x = last_numeric_tag(prefix, "fscx") or finite(style.scale_x) or 100
+  local scale_y = last_numeric_tag(prefix, "fscy") or finite(style.scale_y) or 100
+  if not (scale_x > 0 and scale_y > 0) then
+    return nil, tr("sh_err_positive_scale", "\\fscx and \\fscy must be greater than zero.")
+  end
+  if math.abs(finite(style.angle) or 0) >= EPSILON then
+    return nil, tr("sh_perimeter_err_style_rotation", "The style has rotation; use unrotated geometry.")
+  end
+  local alignment = last_numeric_tag(prefix, "an") or finite(style.align)
+  local ax, ay = alignment_factors(alignment)
+  if not (ax and ay) then
+    return nil, tr("sh_perimeter_err_alignment", "An effective \\an1..\\an9 could not be determined.")
+  end
+  local contours, contour_err = parse_contours(parts.drawing)
+  if not (contours) then
+    return nil, contour_err
+  end
+  local raw_bounds = path_bounds(contours)
+  if not (raw_bounds and raw_bounds.width > EPSILON and raw_bounds.height > EPSILON) then
+    return nil, tr("sh_perimeter_err_extent", "The drawing has no geometric extent.")
+  end
+  local factor = 2 ^ (drawing_scale - 1)
+  local sx, sy = scale_x / (100 * factor), scale_y / (100 * factor)
+  local transform = {
+    sx = sx,
+    sy = sy,
+    ox = position.x - raw_bounds.width * sx * ax,
+    oy = position.y - raw_bounds.height * sy * ay
+  }
+  local screen_contours = transform_contours(contours, transform)
+  local screen_bounds = path_bounds(screen_contours)
+  return {
+    text = tostring(text),
+    prefix = prefix,
+    drawing = parts.drawing,
+    suffix = parts.suffix,
+    position = position,
+    alignment = alignment,
+    drawing_scale = drawing_scale,
+    scale_x = scale_x,
+    scale_y = scale_y,
+    contours = contours,
+    raw_bounds = raw_bounds,
+    screen_contours = screen_contours,
+    screen_bounds = screen_bounds
+  }
+end
+local lerp_point
+lerp_point = function(a, b, t)
+  return point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+end
+local split_cubic
+split_cubic = function(segment)
+  local p01 = lerp_point(segment.p0, segment.p1, 0.5)
+  local p12 = lerp_point(segment.p1, segment.p2, 0.5)
+  local p23 = lerp_point(segment.p2, segment.p3, 0.5)
+  local p012 = lerp_point(p01, p12, 0.5)
+  local p123 = lerp_point(p12, p23, 0.5)
+  local middle = lerp_point(p012, p123, 0.5)
+  return cubic_segment(segment.p0, p01, p012, middle), cubic_segment(middle, p123, p23, segment.p3)
+end
+local flatten_cubic
+flatten_cubic = function(segment, tolerance)
+  if tolerance == nil then
+    tolerance = CURVE_TOLERANCE
+  end
+  local samples = {
+    {
+      t = 0,
+      p = segment.p0
+    }
+  }
+  local recurse
+  recurse = function(curve, t0, t1, depth)
+    local chord = distance(curve.p0, curve.p3)
+    local polygon = distance(curve.p0, curve.p1) + distance(curve.p1, curve.p2) + distance(curve.p2, curve.p3)
+    if depth >= MAX_CURVE_DEPTH or polygon - chord <= tolerance then
+      samples[#samples + 1] = {
+        t = t1,
+        p = curve.p3
+      }
+      return
+    end
+    local left, right = split_cubic(curve)
+    local middle = (t0 + t1) * 0.5
+    recurse(left, t0, middle, depth + 1)
+    return recurse(right, middle, t1, depth + 1)
+  end
+  recurse(segment, 0, 1, 0)
+  return samples
+end
+local segment_start_tangent
+segment_start_tangent = function(segment)
+  if segment.kind == "line" then
+    return normalize(segment.p1.x - segment.p0.x, segment.p1.y - segment.p0.y)
+  end
+  local tangent = cubic_derivative(segment, 0)
+  return normalize(tangent.x, tangent.y) or normalize(segment.p3.x - segment.p0.x, segment.p3.y - segment.p0.y)
+end
+local segment_end_tangent
+segment_end_tangent = function(segment)
+  if segment.kind == "line" then
+    return normalize(segment.p1.x - segment.p0.x, segment.p1.y - segment.p0.y)
+  end
+  local tangent = cubic_derivative(segment, 1)
+  return normalize(tangent.x, tangent.y) or normalize(segment.p3.x - segment.p0.x, segment.p3.y - segment.p0.y)
+end
+local build_arc
+build_arc = function(contour)
+  if not (contour.closed) then
+    return nil, tr("sh_perimeter_err_closed", "The perimeter contour must be closed.")
+  end
+  if #contour.segments == 0 then
+    return nil, tr("sh_perimeter_err_segments", "The perimeter contour has no segments.")
+  end
+  local pieces, starts, total = { }, { }, 0
+  for index, segment in ipairs(contour.segments) do
+    starts[index] = total
+    if segment.kind == "line" then
+      local length = distance(segment.p0, segment.p1)
+      if length > EPSILON then
+        pieces[#pieces + 1] = {
+          kind = "line",
+          segment = segment,
+          start = total,
+          length = length,
+          p0 = segment.p0,
+          p1 = segment.p1
+        }
+        total = total + length
+      end
+    else
+      local samples = flatten_cubic(segment)
+      for sample_index = 2, #samples do
+        local a, b = samples[sample_index - 1], samples[sample_index]
+        local length = distance(a.p, b.p)
+        if length > EPSILON then
+          pieces[#pieces + 1] = {
+            kind = "cubic",
+            segment = segment,
+            t0 = a.t,
+            t1 = b.t,
+            start = total,
+            length = length,
+            p0 = a.p,
+            p1 = b.p
+          }
+          total = total + length
+        end
+      end
+    end
+  end
+  if not (total > EPSILON) then
+    return nil, tr("sh_perimeter_err_zero_length", "The perimeter contour has zero length.")
+  end
+  local boundaries = { }
+  local count = #contour.segments
+  for index, segment in ipairs(contour.segments) do
+    local previous = contour.segments[((index - 2) % count) + 1]
+    local incoming = segment_end_tangent(previous)
+    local outgoing = segment_start_tangent(segment)
+    boundaries[#boundaries + 1] = {
+      distance = starts[index],
+      point = segment.p0,
+      incoming = incoming,
+      outgoing = outgoing
+    }
+  end
+  return {
+    contour = contour,
+    pieces = pieces,
+    boundaries = boundaries,
+    length = total
+  }
+end
+local arc_area
+arc_area = function(arc)
+  local points = { }
+  points[#points + 1] = arc.pieces[1].p0
+  local _list_0 = arc.pieces
+  for _index_0 = 1, #_list_0 do
+    local piece = _list_0[_index_0]
+    points[#points + 1] = piece.p1
+  end
+  local area = 0
+  for index, a in ipairs(points) do
+    local b = points[(index % #points) + 1]
+    area = area + (a.x * b.y - b.x * a.y)
+  end
+  return area * 0.5
+end
+local arc_points
+arc_points = function(arc)
+  local points = {
+    arc.pieces[1].p0
+  }
+  local _list_0 = arc.pieces
+  for _index_0 = 1, #_list_0 do
+    local piece = _list_0[_index_0]
+    points[#points + 1] = piece.p1
+  end
+  return points
+end
+local arc_bounds
+arc_bounds = function(arc)
+  local bounds = new_bounds()
+  local _list_0 = arc_points(arc)
+  for _index_0 = 1, #_list_0 do
+    local p = _list_0[_index_0]
+    include_point(bounds, p)
+  end
+  return bounds
+end
+local point_on_segment
+point_on_segment = function(p, a, b)
+  local dx, dy = b.x - a.x, b.y - a.y
+  local cross = dx * (p.y - a.y) - dy * (p.x - a.x)
+  if math.abs(cross) > CORNER_EPSILON * math.max(1, math.abs(dx) + math.abs(dy)) then
+    return false
+  end
+  local dot = (p.x - a.x) * dx + (p.y - a.y) * dy
+  return dot >= -CORNER_EPSILON and dot <= dx * dx + dy * dy + CORNER_EPSILON
+end
+local point_in_arc
+point_in_arc = function(p, arc)
+  local points = arc_points(arc)
+  local inside = false
+  for index = 1, #points - 1 do
+    local a, b = points[index], points[index + 1]
+    if point_on_segment(p, a, b) then
+      return -1
+    end
+    if (a.y > p.y) ~= (b.y > p.y) then
+      local crossing_x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+      if crossing_x > p.x then
+        inside = not inside
+      end
+    end
+  end
+  if not same_point(points[#points], points[1]) then
+    local a, b = points[#points], points[1]
+    if point_on_segment(p, a, b) then
+      return -1
+    end
+    if (a.y > p.y) ~= (b.y > p.y) then
+      local crossing_x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+      if crossing_x > p.x then
+        inside = not inside
+      end
+    end
+  end
+  if inside then
+    return 1
+  else
+    return 0
+  end
+end
+local arc_contains
+arc_contains = function(outer, inner)
+  if not (math.abs(outer.area) > math.abs(inner.area) + EPSILON) then
+    return false
+  end
+  if inner.bounds.l < outer.bounds.l - CORNER_EPSILON or inner.bounds.t < outer.bounds.t - CORNER_EPSILON then
+    return false
+  end
+  if inner.bounds.r > outer.bounds.r + CORNER_EPSILON or inner.bounds.b > outer.bounds.b + CORNER_EPSILON then
+    return false
+  end
+  local strictly_inside = false
+  local _list_0 = arc_points(inner)
+  for _index_0 = 1, #_list_0 do
+    local p = _list_0[_index_0]
+    local state = point_in_arc(p, outer)
+    if state == 0 then
+      return false
+    end
+    if state == 1 then
+      strictly_inside = true
+    end
+  end
+  return strictly_inside
+end
+local outer_arcs
+outer_arcs = function(contours, include_holes)
+  if include_holes == nil then
+    include_holes = false
+  end
+  local arcs = { }
+  for source_index, contour in ipairs(contours) do
+    if contour.closed then
+      local arc = build_arc(contour)
+      if arc then
+        arc.area = arc_area(arc)
+        arc.bounds = arc_bounds(arc)
+        arc.source_index = source_index
+        arcs[#arcs + 1] = arc
+      end
+    end
+  end
+  if #arcs == 0 then
+    return nil, tr("sh_perimeter_err_base_closed", "The base shape contains no usable closed contour.")
+  end
+  local selected = { }
+  for _index_0 = 1, #arcs do
+    local candidate = arcs[_index_0]
+    local containers, outside_winding = 0, 0
+    for _index_1 = 1, #arcs do
+      local container = arcs[_index_1]
+      if container ~= candidate and arc_contains(container, candidate) then
+        containers = containers + 1
+        outside_winding = outside_winding + (function()
+          if container.area > 0 then
+            return 1
+          else
+            return -1
+          end
+        end)()
+      end
+    end
+    local own_winding
+    if candidate.area > 0 then
+      own_winding = 1
+    else
+      own_winding = -1
+    end
+    local inside_winding = outside_winding + own_winding
+    candidate.depth = containers
+    candidate.visible_boundary = (outside_winding == 0) ~= (inside_winding == 0)
+    candidate.is_hole = candidate.visible_boundary and outside_winding ~= 0 and inside_winding == 0
+    if candidate.visible_boundary and (include_holes or not candidate.is_hole) then
+      selected[#selected + 1] = candidate
+    end
+  end
+  if #selected == 0 then
+    return nil, tr("sh_perimeter_err_visible", "The base shape contains no usable visible perimeter.")
+  end
+  return selected
+end
+local outer_arc
+outer_arc = function(contours)
+  local arcs, arcs_err = outer_arcs(contours)
+  if not (arcs) then
+    return nil, arcs_err
+  end
+  local best, best_area = nil, -math.huge
+  for _index_0 = 1, #arcs do
+    local arc = arcs[_index_0]
+    local area = math.abs(arc.area)
+    if area > best_area then
+      best, best_area = arc, area
+    end
+  end
+  return best
+end
+local corner_tangent
+corner_tangent = function(incoming, outgoing)
+  if not (incoming and outgoing) then
+    return outgoing or incoming
+  end
+  local bisector = normalize(incoming.x + outgoing.x, incoming.y + outgoing.y)
+  return bisector or outgoing
+end
+local arc_point
+arc_point = function(arc, target)
+  local length = arc.length
+  target = target % length
+  if target < 0 then
+    target = target + length
+  end
+  local _list_0 = arc.boundaries
+  for _index_0 = 1, #_list_0 do
+    local boundary = _list_0[_index_0]
+    local delta = math.abs(target - boundary.distance)
+    delta = math.min(delta, length - delta)
+    if delta <= CORNER_EPSILON then
+      return {
+        point = boundary.point,
+        tangent = corner_tangent(boundary.incoming, boundary.outgoing),
+        distance = target,
+        corner = true
+      }
+    end
+  end
+  local low, high = 1, #arc.pieces
+  while low < high do
+    local middle = math.floor((low + high) * 0.5)
+    local piece = arc.pieces[middle]
+    if target >= piece.start + piece.length then
+      low = middle + 1
+    else
+      high = middle
+    end
+  end
+  local piece = arc.pieces[low]
+  local ratio = math.max(0, math.min(1, (target - piece.start) / piece.length))
+  if piece.kind == "line" then
+    local tangent = normalize(piece.p1.x - piece.p0.x, piece.p1.y - piece.p0.y)
+    return {
+      point = lerp_point(piece.p0, piece.p1, ratio),
+      tangent = tangent,
+      distance = target,
+      corner = false
+    }
+  end
+  local t = piece.t0 + (piece.t1 - piece.t0) * ratio
+  local position = cubic_point(piece.segment, t)
+  local derivative = cubic_derivative(piece.segment, t)
+  local tangent = normalize(derivative.x, derivative.y) or normalize(piece.p1.x - piece.p0.x, piece.p1.y - piece.p0.y)
+  return {
+    point = position,
+    tangent = tangent,
+    distance = target,
+    corner = false,
+    t = t
+  }
+end
+local style_map = ShapeCore.styleMaps
+local selection_indices = ShapeCore.selectionIndices
+local prepare_line
+prepare_line = function(line, index, styles, folded)
+  local style_name = tostring(line.style or "")
+  local style = ShapeCore.styleFor(styles, folded, style_name)
+  if not (style) then
+    return nil, tr("sh_err_style", "Line %d: style '%s' was not found.", index, style_name)
+  end
+  local shape, err = prepare_shape(line.text, style)
+  if not (shape) then
+    return nil, tr("sh_err_line", "Line %d: %s", index, err)
+  end
+  return {
+    index = index,
+    line = line,
+    shape = shape
+  }
+end
+local extend_bounds
+extend_bounds = function(target, source)
+  target.l = math.min(target.l, source.l)
+  target.t = math.min(target.t, source.t)
+  target.r = math.max(target.r, source.r)
+  target.b = math.max(target.b, source.b)
+end
+local analyze_selection
+analyze_selection = function(subs, sel)
+  local indices = selection_indices(subs, sel)
+  if #indices < 2 then
+    return nil, tr("sh_perimeter_err_selection", "Select the base shape first, followed by at least one unit.")
+  end
+  local styles, folded = style_map(subs)
+  local base, base_err = prepare_line(subs[indices[1]], indices[1], styles, folded)
+  if not (base) then
+    return nil, base_err
+  end
+  local all_arcs, arcs_err = outer_arcs(base.shape.screen_contours, true)
+  if not (all_arcs) then
+    return nil, tr("sh_perimeter_err_base_line", "Base line %d: %s", indices[1], arcs_err)
+  end
+  local arcs, holes = { }, { }
+  for _index_0 = 1, #all_arcs do
+    local arc = all_arcs[_index_0]
+    if arc.is_hole then
+      holes[#holes + 1] = arc
+    else
+      arcs[#arcs + 1] = arc
+    end
+  end
+  if #arcs == 0 then
+    return nil, tr("sh_perimeter_err_base_exterior", "Base line %d contains no usable exterior contour.", indices[1])
+  end
+  local groups, order = { }, { }
+  for offset = 2, #indices do
+    local index = indices[offset]
+    local item, item_err = prepare_line(subs[index], index, styles, folded)
+    if not (item) then
+      return nil, item_err
+    end
+    local position = item.shape.position
+    local key = tostring(format_number(position.x)) .. ":" .. tostring(format_number(position.y))
+    local group = groups[key]
+    if not (group) then
+      group = {
+        key = key,
+        position = {
+          x = position.x,
+          y = position.y
+        },
+        lines = { },
+        bounds = new_bounds()
+      }
+      groups[key] = group
+      order[#order + 1] = group
+    end
+    if not (math.abs(position.x - group.position.x) <= EPSILON and math.abs(position.y - group.position.y) <= EPSILON) then
+      return nil, tr("sh_perimeter_err_shared_pos", "All layers in a unit must share exactly the same \\pos.")
+    end
+    group.lines[#group.lines + 1] = item
+    extend_bounds(group.bounds, item.shape.screen_bounds)
+  end
+  if #order == 0 then
+    return nil, tr("sh_perimeter_err_no_units", "No units were detected after the base shape.")
+  end
+  local pattern_width = 0
+  for _index_0 = 1, #order do
+    local group = order[_index_0]
+    group.min_x = group.bounds.l - group.position.x
+    group.max_x = group.bounds.r - group.position.x
+    group.width = group.max_x - group.min_x
+    group.height = group.bounds.b - group.bounds.t
+    if not (group.width > EPSILON) then
+      return nil, tr("sh_perimeter_err_zero_width", "A unit has zero visible width.")
+    end
+    pattern_width = pattern_width + group.width
+  end
+  local perimeter_length, all_perimeter_length = 0, 0
+  for _index_0 = 1, #arcs do
+    local arc = arcs[_index_0]
+    perimeter_length = perimeter_length + arc.length
+  end
+  for _index_0 = 1, #all_arcs do
+    local arc = all_arcs[_index_0]
+    all_perimeter_length = all_perimeter_length + arc.length
+  end
+  return {
+    indices = indices,
+    base = base,
+    arc = arcs[1],
+    arcs = arcs,
+    all_arcs = all_arcs,
+    holes = holes,
+    perimeter_length = perimeter_length,
+    all_perimeter_length = all_perimeter_length,
+    units = order,
+    pattern_width = pattern_width,
+    template_indices = (function()
+      local _accum_0 = { }
+      local _len_0 = 1
+      for index = 2, #indices do
+        _accum_0[_len_0] = indices[index]
+        _len_0 = _len_0 + 1
+      end
+      return _accum_0
+    end)()
+  }
+end
+local default_pattern
+default_pattern = function(analysis)
+  local pattern = { }
+  for index = 1, #analysis.units do
+    pattern[#pattern + 1] = index
+  end
+  return pattern
+end
+local copy_pattern
+copy_pattern = function(source)
+  local _accum_0 = { }
+  local _len_0 = 1
+  for _index_0 = 1, #source do
+    local value = source[_index_0]
+    _accum_0[_len_0] = value
+    _len_0 = _len_0 + 1
+  end
+  return _accum_0
+end
+local pattern_label
+pattern_label = function(pattern)
+  return table.concat(pattern, " -> ")
+end
+local pattern_width
+pattern_width = function(analysis, pattern)
+  if not (pattern and #pattern > 0) then
+    return nil, tr("sh_perimeter_err_empty_period", "The period cannot be empty.")
+  end
+  local width = 0
+  for _index_0 = 1, #pattern do
+    local unit_index = pattern[_index_0]
+    if not (unit_index == math.floor(unit_index) and analysis.units[unit_index]) then
+      return nil, tr("sh_perimeter_err_invalid_unit", "The period contains an invalid unit.")
+    end
+    width = width + analysis.units[unit_index].width
+  end
+  return width
+end
+local perimeter_arcs
+perimeter_arcs = function(analysis, include_holes)
+  if include_holes == nil then
+    include_holes = false
+  end
+  if include_holes and analysis.all_arcs then
+    return analysis.all_arcs
+  else
+    return analysis.arcs or {
+      analysis.arc
+    }
+  end
+end
+local automatic_cycles
+automatic_cycles = function(analysis, pattern, include_holes)
+  if pattern == nil then
+    pattern = nil
+  end
+  if include_holes == nil then
+    include_holes = false
+  end
+  if not (pattern) then
+    pattern = default_pattern(analysis)
+  end
+  local width, width_err = pattern_width(analysis, pattern)
+  if not (width) then
+    return nil, width_err
+  end
+  local arcs = perimeter_arcs(analysis, include_holes)
+  local cycles
+  do
+    local _accum_0 = { }
+    local _len_0 = 1
+    for _index_0 = 1, #arcs do
+      local arc = arcs[_index_0]
+      _accum_0[_len_0] = math.max(1, math.floor(arc.length / width + 0.5))
+      _len_0 = _len_0 + 1
+    end
+    cycles = _accum_0
+  end
+  if #cycles == 1 then
+    return cycles[1]
+  else
+    return cycles
+  end
+end
+local build_pattern_options
+build_pattern_options = function(analysis)
+  local count = #analysis.units
+  local items, patterns, seen = { }, { }, { }
+  local add_pattern
+  add_pattern = function(pattern)
+    local key = table.concat(pattern, ",")
+    if seen[key] then
+      return
+    end
+    seen[key] = true
+    local label = pattern_label(pattern)
+    items[#items + 1] = label
+    patterns[label] = copy_pattern(pattern)
+  end
+  for shift = 0, count - 1 do
+    local pattern = { }
+    for offset = 0, count - 1 do
+      pattern[#pattern + 1] = ((shift + offset) % count) + 1
+    end
+    add_pattern(pattern)
+  end
+  for shift = 0, count - 1 do
+    local pattern = { }
+    for offset = 0, count - 1 do
+      pattern[#pattern + 1] = ((shift - offset) % count) + 1
+    end
+    add_pattern(pattern)
+  end
+  if count > 2 then
+    local pattern = default_pattern(analysis)
+    for index = count - 1, 2, -1 do
+      pattern[#pattern + 1] = index
+    end
+    add_pattern(pattern)
+  end
+  for unit_index = 1, count do
+    add_pattern({
+      unit_index
+    })
+  end
+  local custom_label = tr("sh_perimeter_custom", "Custom...")
+  items[#items + 1] = custom_label
+  return items, patterns, custom_label
+end
+local custom_pattern_dialog
+custom_pattern_dialog = function(analysis)
+  local unit_items
+  do
+    local _accum_0 = { }
+    local _len_0 = 1
+    for index = 1, #analysis.units do
+      _accum_0[_len_0] = tr("sh_perimeter_unit", "Unit %d", index)
+      _len_0 = _len_0 + 1
+    end
+    unit_items = _accum_0
+  end
+  local length_items
+  do
+    local _accum_0 = { }
+    local _len_0 = 1
+    for index = 1, MAX_CUSTOM_PERIOD do
+      _accum_0[_len_0] = tostring(index)
+      _len_0 = _len_0 + 1
+    end
+    length_items = _accum_0
+  end
+  local default_length = math.min(#analysis.units, MAX_CUSTOM_PERIOD)
+  local gui = {
+    {
+      class = "label",
+      label = tr("sh_perimeter_period_length", "Period length:"),
+      x = 0,
+      y = 0,
+      width = 1,
+      height = 1
+    },
+    {
+      class = "dropdown",
+      name = "period_length",
+      items = length_items,
+      value = tostring(default_length),
+      x = 1,
+      y = 0,
+      width = 1,
+      height = 1
+    },
+    {
+      class = "label",
+      label = tr("sh_perimeter_period_hint", "Only the first steps selected by the length are used."),
+      x = 0,
+      y = 1,
+      width = 4,
+      height = 1
+    }
+  }
+  local half = math.ceil(MAX_CUSTOM_PERIOD / 2)
+  for step = 1, MAX_CUSTOM_PERIOD do
+    local column
+    if step <= half then
+      column = 0
+    else
+      column = 2
+    end
+    local row = 2 + ((step - 1) % half)
+    local default_unit = ((step - 1) % #analysis.units) + 1
+    gui[#gui + 1] = {
+      class = "label",
+      label = tr("sh_perimeter_step", "Step %d:", step),
+      x = column,
+      y = row,
+      width = 1,
+      height = 1
+    }
+    gui[#gui + 1] = {
+      class = "dropdown",
+      name = "step_" .. tostring(step),
+      items = unit_items,
+      value = unit_items[default_unit],
+      x = column + 1,
+      y = row,
+      width = 1,
+      height = 1
+    }
+  end
+  local apply, cancel = tr("sh_apply", "Apply"), tr("sh_cancel", "Cancel")
+  local button, values = aegisub.dialog.display(gui, {
+    apply,
+    cancel
+  }, {
+    ok = apply,
+    cancel = cancel
+  })
+  if button ~= apply then
+    return nil
+  end
+  local length = tonumber(values.period_length)
+  if not (length and length == math.floor(length) and length >= 1 and length <= MAX_CUSTOM_PERIOD) then
+    return nil, tr("sh_perimeter_err_period_length", "The period length is invalid.")
+  end
+  local pattern = { }
+  for step = 1, length do
+    local unit_index = tonumber(tostring(values["step_" .. tostring(step)] or ""):match("(%d+)$"))
+    if not (unit_index and analysis.units[unit_index]) then
+      return nil, tr("sh_perimeter_err_step", "Step %d does not contain a valid unit.", step)
+    end
+    pattern[#pattern + 1] = unit_index
+  end
+  return pattern
+end
+local build_layout
+build_layout = function(analysis, cycles, pattern, include_holes)
+  if pattern == nil then
+    pattern = nil
+  end
+  if include_holes == nil then
+    include_holes = false
+  end
+  if not (pattern) then
+    pattern = default_pattern(analysis)
+  end
+  local width, width_err = pattern_width(analysis, pattern)
+  if not (width) then
+    return nil, width_err
+  end
+  local units = analysis.units
+  local arcs = perimeter_arcs(analysis, include_holes)
+  local placements, gaps, cycle_counts, total_count = { }, { }, { }, 0
+  for arc_index, arc in ipairs(arcs) do
+    local arc_cycles
+    if type(cycles) == "table" then
+      arc_cycles = tonumber(cycles[arc_index])
+    else
+      arc_cycles = tonumber(cycles)
+    end
+    if not (arc_cycles and arc_cycles == math.floor(arc_cycles) and arc_cycles >= 1) then
+      return nil, tr("sh_perimeter_err_cycles", "The repetition count for contour %d is invalid.", arc_index)
+    end
+    local count = #pattern * arc_cycles
+    local gap = (arc.length - width * arc_cycles) / count
+    local first = units[pattern[1]]
+    local start_distance = -first.min_x + gap * 0.5
+    local cursor = start_distance
+    for placement_index = 1, count do
+      local pattern_index = ((placement_index - 1) % #pattern) + 1
+      local next_pattern_index = (pattern_index % #pattern) + 1
+      local unit_index = pattern[pattern_index]
+      local next_index = pattern[next_pattern_index]
+      local unit, next_unit = units[unit_index], units[next_index]
+      local sample = arc_point(arc, cursor)
+      if not (sample and sample.tangent) then
+        return nil, tr("sh_perimeter_err_tangent", "A tangent could not be calculated for contour %d.", arc_index)
+      end
+      local angle = -atan2(sample.tangent.y, sample.tangent.x) * 180 / math.pi
+      placements[#placements + 1] = {
+        unit = unit,
+        unit_index = unit_index,
+        point = sample.point,
+        tangent = sample.tangent,
+        angle = angle,
+        distance = sample.distance,
+        corner = sample.corner,
+        arc_index = arc_index
+      }
+      local advance = unit.max_x - next_unit.min_x + gap
+      if not (advance > EPSILON) then
+        return nil, tr("sh_perimeter_err_advance", "Contour %d has too many repetitions: the advance between units is no longer positive.", arc_index)
+      end
+      cursor = cursor + advance
+    end
+    local expected = start_distance + arc.length
+    if math.abs(cursor - expected) > 0.001 then
+      return nil, tr("sh_perimeter_err_closure", "Pattern closure does not match contour %d.", arc_index)
+    end
+    gaps[arc_index] = gap
+    cycle_counts[arc_index] = arc_cycles
+    total_count = total_count + count
+  end
+  local gap
+  if #gaps == 1 then
+    gap = gaps[1]
+  else
+    gap = nil
+  end
+  local normalized_cycles
+  if #cycle_counts == 1 then
+    normalized_cycles = cycle_counts[1]
+  else
+    normalized_cycles = cycle_counts
+  end
+  return {
+    placements = placements,
+    gap = gap,
+    gaps = gaps,
+    cycles = normalized_cycles,
+    count = total_count,
+    pattern = copy_pattern(pattern),
+    pattern_width = width
+  }
+end
+local replace_position
+replace_position = function(prefix, shape, position)
+  local replacement = "\\pos(" .. tostring(format_number(position.x)) .. "," .. tostring(format_number(position.y)) .. ")"
+  local mapped, count = prefix:gsub(shape.position.pattern, replacement)
+  if not (count == 1) then
+    return nil, tr("sh_perimeter_err_replace_pos", "A layer's \\pos could not be replaced.")
+  end
+  return mapped
+end
+local place_text
+place_text = function(shape, placement)
+  local prefix, err = replace_position(shape.prefix, shape, placement.point)
+  if not (prefix) then
+    return nil, err
+  end
+  local angle = placement.angle % 360
+  if angle > 180 then
+    angle = angle - 360
+  end
+  local rotation = "\\frz" .. tostring(format_number(angle))
+  local count
+  prefix, count = prefix:gsub("^{", "{" .. tostring(rotation), 1)
+  if not (count == 1) then
+    return nil, tr("sh_perimeter_err_rotation", "A layer's rotation could not be inserted.")
+  end
+  return prefix .. shape.drawing .. shape.suffix
+end
+local build_output
+build_output = function(analysis, cycles, pattern, include_holes)
+  if pattern == nil then
+    pattern = nil
+  end
+  if include_holes == nil then
+    include_holes = false
+  end
+  local layout, layout_err = build_layout(analysis, cycles, pattern, include_holes)
+  if not (layout) then
+    return nil, layout_err
+  end
+  local line_count = 0
+  local _list_0 = layout.placements
+  for _index_0 = 1, #_list_0 do
+    local placement = _list_0[_index_0]
+    line_count = line_count + #placement.unit.lines
+  end
+  if line_count > MAX_OUTPUT_LINES then
+    return nil, tr("sh_perimeter_err_output_limit", "The output would contain %d lines; the safe limit is %d.", line_count, MAX_OUTPUT_LINES)
+  end
+  local lines = { }
+  local _list_1 = layout.placements
+  for _index_0 = 1, #_list_1 do
+    local placement = _list_1[_index_0]
+    local _list_2 = placement.unit.lines
+    for _index_1 = 1, #_list_2 do
+      local item = _list_2[_index_1]
+      local text, text_err = place_text(item.shape, placement)
+      if not (text) then
+        return nil, tr("sh_perimeter_err_template", "Template line %d: %s", item.index, text_err)
+      end
+      local line = copy_line(item.line)
+      line.text = text
+      lines[#lines + 1] = line
+    end
+  end
+  return {
+    lines = lines,
+    layout = layout
+  }
+end
+local options_dialog
+options_dialog = function(analysis, include_holes)
+  if include_holes == nil then
+    include_holes = false
+  end
+  local pattern_items, patterns, custom_label = build_pattern_options(analysis)
+  local default_choice = pattern_items[1]
+  local arcs = analysis.arcs or {
+    analysis.arc
+  }
+  local holes = analysis.holes or { }
+  local perimeter_length = analysis.perimeter_length or analysis.arc.length
+  local hole_length = (analysis.all_perimeter_length or perimeter_length) - perimeter_length
+  local gui = {
+    {
+      class = "label",
+      label = tr("sh_perimeter_detected", "Detected units: %d", #analysis.units),
+      x = 0,
+      y = 0,
+      width = 2,
+      height = 1
+    },
+    {
+      class = "label",
+      label = tr("sh_perimeter_summary", "Exteriors: %d (%s px) | Holes: %d (%s px)", #arcs, format_number(perimeter_length, 2), #holes, format_number(hole_length, 2)),
+      x = 0,
+      y = 1,
+      width = 2,
+      height = 1
+    },
+    {
+      class = "label",
+      label = tr("sh_perimeter_pattern", "Periodic pattern:"),
+      x = 0,
+      y = 2,
+      width = 1,
+      height = 1
+    },
+    {
+      class = "dropdown",
+      name = "pattern",
+      items = pattern_items,
+      value = default_choice,
+      x = 1,
+      y = 2,
+      width = 1,
+      height = 1
+    },
+    {
+      class = "label",
+      label = tr("sh_perimeter_close_hint", "Each contour closes its period independently."),
+      x = 0,
+      y = 3,
+      width = 2,
+      height = 1
+    },
+    {
+      class = "label",
+      label = tr("sh_perimeter_order_hint", "Order: units 1, 2, 3... by their first \\pos in the selection."),
+      x = 0,
+      y = 4,
+      width = 2,
+      height = 1
+    }
+  }
+  local apply, cancel = tr("sh_apply", "Apply"), tr("sh_cancel", "Cancel")
+  local button, values = aegisub.dialog.display(gui, {
+    apply,
+    cancel
+  }, {
+    ok = apply,
+    cancel = cancel
+  })
+  if button ~= apply then
+    return nil
+  end
+  local choice = values.pattern
+  local pattern = nil
+  if choice == custom_label then
+    local pattern_err
+    pattern, pattern_err = custom_pattern_dialog(analysis)
+    if pattern_err then
+      return nil, pattern_err
+    end
+    if not (pattern) then
+      return nil
+    end
+  else
+    pattern = patterns[choice]
+  end
+  if not (pattern) then
+    return nil, tr("sh_perimeter_err_pattern", "Choose a valid periodic pattern.")
+  end
+  local cycles, cycles_err = automatic_cycles(analysis, pattern, include_holes)
+  if not (cycles) then
+    return nil, cycles_err
+  end
+  return {
+    cycles = cycles,
+    pattern = pattern,
+    include_holes = include_holes
+  }
+end
+local apply_output
+apply_output = function(subs, analysis, output)
+  for offset = #analysis.template_indices, 1, -1 do
+    subs.delete(analysis.template_indices[offset])
+  end
+  local selection = { }
+  local insert_at = analysis.base.index + 1
+  local _list_0 = output.lines
+  for _index_0 = 1, #_list_0 do
+    local line = _list_0[_index_0]
+    subs.insert(insert_at, line)
+    selection[#selection + 1] = insert_at
+    insert_at = insert_at + 1
+  end
+  return selection
+end
+local main
+main = function(subs, sel, active_line, context, settings)
+  if settings == nil then
+    settings = { }
+  end
+  set_context(context)
+  local analysis, analysis_err = analyze_selection(subs, sel)
+  if not (analysis) then
+    return sel, false, analysis_err
+  end
+  local options, options_err = options_dialog(analysis, settings.include_holes == true)
+  if options_err then
+    return sel, false, options_err
+  end
+  if not (options) then
+    return sel, false
+  end
+  local output, output_err = build_output(analysis, options.cycles, options.pattern, options.include_holes)
+  if not (output) then
+    return sel, false, output_err
+  end
+  local new_selection = apply_output(subs, analysis, output)
+  if context and context.undo then
+    context.undo("sh_undo_perimeter", "Rhea Signs: place shapes on perimeter")
+  elseif aegisub and aegisub.set_undo_point then
+    aegisub.set_undo_point(script_name)
+  end
+  return new_selection, true, output
+end
+return {
+  name = script_name,
+  description = script_description,
+  version = script_version,
+  set_context = set_context,
+  prepare_shape = prepare_shape,
+  parse_contours = parse_contours,
+  path_bounds = path_bounds,
+  build_arc = build_arc,
+  outer_arcs = outer_arcs,
+  outer_arc = outer_arc,
+  arc_point = arc_point,
+  analyze_selection = analyze_selection,
+  default_pattern = default_pattern,
+  pattern_width = pattern_width,
+  perimeter_arcs = perimeter_arcs,
+  automatic_cycles = automatic_cycles,
+  build_pattern_options = build_pattern_options,
+  build_layout = build_layout,
+  build_output = build_output,
+  options_dialog = options_dialog,
+  apply_output = apply_output,
+  main = main
+}
+end)()
+
+local function translated(context, key, fallback)
+    if context and type(context.translate) == "function" then
+        local value = context.translate(key)
+        if value and value ~= key then return value end
+    end
+    return fallback
 end
 
-local function show_message(message, buttons)
-    if not (aegisub and aegisub.dialog and aegisub.dialog.display) then return nil end
-    return aegisub.dialog.display({
-        { class = "label", label = tostring(message or ""), x = 0, y = 0, width = 40, height = 4 },
-    }, buttons or {"Aceptar"})
+local function optimize(subs, sel, options, context)
+    SharedShapeOptimizer.setLanguage(context and context.language or "en")
+    local normalized = SharedShapeOptimizer.normalizeOptions(options or {})
+    local report, err = SharedShapeOptimizer.analyzeSelection(subs, sel, normalized)
+    if not report then return sel, false, err end
+    local summary = SharedShapeOptimizer.summaryText(report)
+    if not report.changed then
+        if context and context.show then context.show(translated(context, "sh_no_reduction", "No safe reduction was found with these parameters.") .. "\n\n" .. summary) end
+        return sel, false, report
+    end
+    if normalized.show_summary and context and context.confirm then
+        local prompt = summary .. "\n\n" .. translated(context, "sh_confirm_apply", "Apply direct replacement?")
+        if not context.confirm(prompt) then return sel, false, report end
+    end
+    local newSelection = LineOps.transaction(subs, "", function()
+        return SharedShapeOptimizer.applyReport(subs, report)
+    end)
+    if context and context.undo then context.undo("sh_undo_optimizer", "Rhea Signs: shape color optimizer") end
+    if context and context.show and not context.silent then context.show(summary) end
+    return newSelection, true, report
 end
 
-local function confirm(message)
-    local button = show_message(message, {"Sí", "No"})
-    return button == "Sí"
+local function main(subs, sel, active, options, context)
+    options = options or {}
+    context = context or {}
+    local result, changed, payload
+    if options.action == "Unify Positions" then
+        result, changed, payload = Unify.main(subs, sel, active, context)
+    elseif options.action == "Place on Perimeter" then
+        result, changed, payload = Perimeter.main(subs, sel, active, context, {
+            include_holes = options.perimeter_mode == "Exterior contours and holes"
+        })
+    elseif options.action == "Shape Color Optimizer" then
+        result, changed, payload = optimize(subs, sel, options, context)
+    else
+        return sel, false
+    end
+    if type(payload) == "string" and context.show then context.show(payload) end
+    return result, changed, payload
 end
 
-local MODE_ITEMS = {
-    "Automático",
-    "Cada línea = un cartel",
-    "Selección = un cartel",
+return {
+    main = main,
+    optimize = optimize,
+    unify = Unify,
+    perimeter = Perimeter,
+    colorOptimizer = SharedShapeOptimizer,
 }
 
-local MODE_VALUES = {
-    ["Automático"] = "auto",
-    ["Cada línea = un cartel"] = "each",
-    ["Selección = un cartel"] = "selection",
-}
-
-local function main(subs, selection, active)
-    local path, path_err = memory_path()
-    if not path then show_message(path_err); return selection end
-
-    local presets, load_err = load_memory(path)
-    if not presets then
-        show_message("No se pudo leer " .. MEMORY_FILE_NAME .. ":\n\n" .. tostring(load_err))
-        return selection
-    end
-
-    local preset_items, preset_by_label = {}, {}
-    for index, preset in ipairs(presets) do
-        local label = string.format("%d. %s  —  %d capa(s), %d texto(s)",
-            index, preset.name, #preset.lines, preset.slot_count or 1)
-        preset_items[#preset_items + 1] = label
-        preset_by_label[label] = preset
-    end
-    if #preset_items == 0 then preset_items[1] = "(sin presets guardados)" end
-
-    local dialog = {
-        { class = "label", label = "MAKEUP — MEMORY STYLES", x = 0, y = 0, width = 12, height = 1 },
-        { class = "label", label = "Preset:", x = 0, y = 1, width = 2, height = 1 },
-        { class = "dropdown", name = "preset", items = preset_items, value = preset_items[1],
-            x = 2, y = 1, width = 10, height = 1 },
-        { class = "label", label = "Nombre al guardar:", x = 0, y = 2, width = 3, height = 1 },
-        { class = "edit", name = "name", value = "", x = 3, y = 2, width = 9, height = 1 },
-        { class = "label", label = "Destino:", x = 0, y = 3, width = 2, height = 1 },
-        { class = "dropdown", name = "mode", items = MODE_ITEMS, value = MODE_ITEMS[1],
-            x = 2, y = 3, width = 5, height = 1 },
-        { class = "label",
-            label = "La línea activa se guarda como ancla. Makeup conserva la geometría existente del destino.",
-            x = 0, y = 4, width = 12, height = 2 },
-        { class = "label", label = path, x = 0, y = 6, width = 12, height = 2 },
-    }
-    local button, result = aegisub.dialog.display(dialog,
-        {"Aplicar", "Guardar selección", "Eliminar preset", "Cancelar"})
-    if not button or button == "Cancelar" then return selection end
-
-    if button == "Guardar selección" then
-        local name = trim(result.name)
-        if name == "" then
-            show_message("Escribe un nombre para el preset.")
-            return selection
-        end
-        local preset, capture_err = capture_preset(subs, selection, active, name)
-        if not preset then show_message(capture_err); return selection end
-
-        local _, existing_index = find_preset(presets, name)
-        if existing_index and not confirm("Ya existe el preset \"" .. name .. "\".\n\n¿Reemplazarlo?") then
-            return selection
-        end
-        if existing_index then presets[existing_index] = preset else presets[#presets + 1] = preset end
-
-        local ok, save_err = PyBridge.writeFile(path, serialize_memory(presets))
-        if not ok then
-            show_message("No se pudo guardar la memoria:\n\n" .. tostring(save_err))
-            return selection
-        end
-        show_message(string.format("Preset \"%s\" guardado con %d capa(s).", name, #preset.lines))
-        return selection
-    end
-
-    local preset = preset_by_label[result.preset]
-    if not preset then
-        show_message("No hay ningún preset disponible.")
-        return selection
-    end
-
-    if button == "Eliminar preset" then
-        if not confirm("¿Eliminar el preset \"" .. preset.name .. "\"?") then return selection end
-        local _, index = find_preset(presets, preset.name)
-        if index then table.remove(presets, index) end
-        local ok, save_err = PyBridge.writeFile(path, serialize_memory(presets))
-        if not ok then show_message("No se pudo actualizar la memoria:\n\n" .. tostring(save_err)) end
-        return selection
-    end
-
-    local new_selection, apply_err = apply_preset(
-        subs, selection, active, preset, MODE_VALUES[result.mode] or "auto")
-    if not new_selection then
-        show_message(apply_err)
-        return selection
-    end
-    aegisub.set_undo_point("Makeup - " .. preset.name)
-    return new_selection
-end
-
-Makeup.main = main
-
-return Makeup
 ]====],
     ["Font and Style Manager"] = [====[
 local FontSwap = { version = "1.3.0" }
@@ -6781,34 +7525,261 @@ FontSwap.main = main
 
 return FontSwap
 ]====],
-    ["Continuous Fade Cleanup"] = [====[
-local SharedEventOps = require("kite.EventOps")
-local SharedLineOps = require("kite.LineOps")
-local function main(subs, sel, active, context)
-    context = context or {}
-    local indices = SharedEventOps.dialogueIndices(subs, sel)
-    local groups = {}
-    for _, index in ipairs(indices) do
-        local line = subs[index]
-        groups[tostring(line.start_time) .. "\31" .. tostring(line.end_time)] = true
+    ["Fast Fades"] = [====[
+local script_name = "Fast Fades"
+local script_description = "Frame-based fades and continuous fade cleanup"
+local script_author = "Kiterow"
+local script_version = "1.2.0"
+local EventOps = require("kite.EventOps")
+local LineOps = require("kite.LineOps")
+local translate
+translate = function(context, key, fallback, ...)
+  local value = fallback
+  if context and type(context.translate) == "function" then
+    local translated = context.translate(key)
+    if translated and translated ~= key then
+      value = translated
     end
-    local count = 0
-    for _ in pairs(groups) do count = count + 1 end
-    if count < 2 then
-        if type(context.notify) == "function" then
-            context.notify("tool_err_fade_groups", "Select at least two timing groups.")
-        end
-        return sel
-    end
-    local result, changed = SharedLineOps.transaction(subs, "", function()
-        return SharedEventOps.continuousFadeCleanup(subs, indices)
-    end)
-    if changed > 0 and type(context.undo) == "function" then
-        context.undo("tool_undo_continuous_fades", "Rhea Signs: continuous fade cleanup")
-    end
-    return result
+  end
+  if select("#", ...) == 0 then
+    return value
+  end
+  return string.format(value, ...)
 end
-return { main = main }
+local notify
+notify = function(context, key, fallback, ...)
+  local message = translate(context, key, fallback, ...)
+  if context and type(context.show) == "function" then
+    context.show(message)
+  elseif context and type(context.notify_message) == "function" then
+    context.notify_message(message)
+  elseif context and type(context.notify) == "function" then
+    context.notify(key, message)
+  elseif aegisub and aegisub.dialog and aegisub.dialog.display then
+    aegisub.dialog.display({
+      {
+        class = "label",
+        label = message,
+        x = 0,
+        y = 0,
+        width = 45,
+        height = 2
+      }
+    }, {
+      translate(context, "btn_ok", "OK")
+    })
+  end
+  return message
+end
+local dialog
+dialog = function(context, spec, buttons, options)
+  if context and type(context.dialog) == "function" then
+    return context.dialog(spec, buttons, options)
+  end
+  return aegisub.dialog.display(spec, buttons, options)
+end
+local editable_indices
+editable_indices = function(subs, sel)
+  local indices = { }
+  local _list_0 = EventOps.dialogueIndices(subs, sel)
+  for _index_0 = 1, #_list_0 do
+    local index = _list_0[_index_0]
+    local line = subs[index]
+    if line and not line.comment then
+      table.insert(indices, index)
+    end
+  end
+  return indices
+end
+local current_frame_ms
+current_frame_ms = function(context)
+  if context and type(context.current_frame_ms) == "function" then
+    return context.current_frame_ms()
+  end
+  if not (aegisub and aegisub.project_properties and aegisub.ms_from_frame) then
+    return nil, "fade_err_frame_read"
+  end
+  local ok_props, props = pcall(aegisub.project_properties)
+  if not (ok_props) then
+    return nil, "fade_err_frame_read"
+  end
+  local frame = props and tonumber(props.video_position)
+  if not (frame) then
+    return nil, "fade_err_no_frame"
+  end
+  local ok_ms, ms = pcall(aegisub.ms_from_frame, frame)
+  ms = tonumber(ms)
+  if not (ok_ms and ms and ms == ms and ms ~= math.huge and ms ~= -math.huge) then
+    return nil, "fade_err_frame_ms"
+  end
+  return ms
+end
+local apply_frame_fade
+apply_frame_fade = function(subs, sel, mode, context)
+  local indices = editable_indices(subs, sel)
+  if #indices == 0 then
+    notify(context, "fade_err_selection", "Select at least one dialogue line.")
+    return sel, false
+  end
+  local frame_ms, frame_error = current_frame_ms(context)
+  if not (frame_ms) then
+    local messages = {
+      fade_err_frame_read = "The current video frame could not be read.",
+      fade_err_no_frame = "There is no active video frame.",
+      fade_err_frame_ms = "The current frame could not be converted to milliseconds."
+    }
+    notify(context, frame_error, messages[frame_error] or messages.fade_err_frame_read)
+    return sel, false
+  end
+  local updates = { }
+  for _index_0 = 1, #indices do
+    local index = indices[_index_0]
+    local line = subs[index]
+    local start_time = tonumber(line.start_time)
+    local end_time = tonumber(line.end_time)
+    if not (start_time and end_time and frame_ms >= start_time and frame_ms < end_time) then
+      notify(context, "fade_err_frame_inside", "The current frame must be inside every selected line.")
+      return sel, false
+    end
+    local duration
+    if mode == "in" then
+      duration = frame_ms - start_time
+    else
+      duration = end_time - frame_ms
+    end
+    duration = math.floor(duration + 0.5)
+    local text, update_error = EventOps.setFadeComponent(line.text, mode, duration)
+    if not (text) then
+      local fallback
+      if update_error == "invalid_fad" then
+        fallback = "Line %d contains an invalid \\fad tag."
+      else
+        fallback = "Line %d could not be updated."
+      end
+      notify(context, "fade_err_line", fallback, index)
+      return sel, false
+    end
+    table.insert(updates, {
+      index = index,
+      text = text
+    })
+  end
+  for _index_0 = 1, #updates do
+    local update = updates[_index_0]
+    local line = subs[update.index]
+    line.text = update.text
+    subs[update.index] = line
+  end
+  if context and type(context.undo) == "function" then
+    local key
+    if mode == "in" then
+      key = "fade_undo_intro"
+    else
+      key = "fade_undo_outro"
+    end
+    local fallback
+    if mode == "in" then
+      fallback = "Rhea Signs: fade in from current frame"
+    else
+      fallback = "Rhea Signs: fade out from current frame"
+    end
+    context.undo(key, fallback)
+  elseif aegisub and aegisub.set_undo_point then
+    aegisub.set_undo_point((function()
+      if mode == "in" then
+        return "Fast Fades - fade in"
+      else
+        return "Fast Fades - fade out"
+      end
+    end)())
+  end
+  return sel, true
+end
+local cleanup
+cleanup = function(subs, sel, context)
+  local indices = EventOps.dialogueIndices(subs, sel)
+  local groups = { }
+  for _index_0 = 1, #indices do
+    local index = indices[_index_0]
+    local line = subs[index]
+    groups[tostring(line.start_time) .. "\31" .. tostring(line.end_time)] = true
+  end
+  local count = 0
+  for _ in pairs(groups) do
+    count = count + 1
+  end
+  if count < 2 then
+    notify(context, "fade_err_cleanup_groups", "Select at least two timing groups.")
+    return sel, false
+  end
+  local result, changed = LineOps.transaction(subs, "", function()
+    return EventOps.continuousFadeCleanup(subs, indices)
+  end)
+  if changed > 0 then
+    if context and type(context.undo) == "function" then
+      context.undo("fade_undo_cleanup", "Rhea Signs: continuous fade cleanup")
+    elseif aegisub and aegisub.set_undo_point then
+      aegisub.set_undo_point("Fast Fades - continuous cleanup")
+    end
+  end
+  return result, changed > 0
+end
+local run
+run = function(subs, sel, action, context)
+  if action == "Fade In from Current Frame" then
+    return apply_frame_fade(subs, sel, "in", context)
+  end
+  if action == "Fade Out from Current Frame" then
+    return apply_frame_fade(subs, sel, "out", context)
+  end
+  if action == "Continuous Fade Cleanup" then
+    return cleanup(subs, sel, context)
+  end
+  return sel, false
+end
+local main
+main = function(subs, sel, active, context)
+  local fade_in = translate(context, "fade_action_intro", "In")
+  local fade_out = translate(context, "fade_action_outro", "Out")
+  local continuous = translate(context, "fade_action_cleanup", "Clean")
+  local cancel = translate(context, "fade_cancel", "Cancel")
+  local button = dialog(context, {
+    {
+      class = "label",
+      label = translate(context, "fade_prompt", "Choose a fade operation:"),
+      x = 0,
+      y = 0,
+      width = 22,
+      height = 1
+    }
+  }, {
+    fade_in,
+    fade_out,
+    continuous,
+    cancel
+  }, {
+    close = cancel
+  })
+  if not (button and button ~= cancel) then
+    return sel, false
+  end
+  if button == fade_in then
+    return run(subs, sel, "Fade In from Current Frame", context)
+  end
+  if button == fade_out then
+    return run(subs, sel, "Fade Out from Current Frame", context)
+  end
+  return run(subs, sel, "Continuous Fade Cleanup", context)
+end
+return {
+  name = script_name,
+  version = script_version,
+  main = main,
+  run = run,
+  applyFrameFade = apply_frame_fade,
+  cleanup = cleanup
+}
+
 ]====],
     ["Shuffle Line Text"] = [====[
 local SharedEventOps = require("kite.EventOps")
@@ -6834,9 +7805,8 @@ return { main = main }
 ]====],
 }
 local TOOLBOX_ACTIONS = {
-    "Shape Color Optimizer",
     "Font and Style Manager",
-    "Continuous Fade Cleanup",
+    "Fast Fades",
     "Shuffle Line Text",
 }
 local integratedToolCache = {}
@@ -6849,7 +7819,11 @@ local function loadIntegratedTool(name)
     local chunk, err = loadstring(source, "@Rhea Signs/" .. name)
     if not chunk then return nil, err end
 
-    local environment = setmetatable({}, {__index = _G})
+    local environment = setmetatable({
+        Rhea = Rhea,
+        RheaFoundation = RheaFoundation,
+        LineOps = LineOps,
+    }, {__index = _G})
     setfenv(chunk, environment)
     local ok, tool = pcall(chunk)
     if not ok then return nil, tool end
@@ -6871,9 +7845,16 @@ local function integratedToolContext()
     return {
         language = current_lang,
         translate = L,
+        current_frame_ms = RheaFoundation.currentFrameMs,
+        dialog = function(spec, buttons, options)
+            return aegisub.dialog.display(spec, buttons, options)
+        end,
         notify = function(key, fallback)
             local message = L(key)
             if message == key then message = fallback end
+            if aegisub and aegisub.log then pcall(aegisub.log, tostring(message or "") .. "\n") end
+        end,
+        notify_message = function(message)
             if aegisub and aegisub.log then pcall(aegisub.log, tostring(message or "") .. "\n") end
         end,
         undo = function(key, fallback)
@@ -6881,17 +7862,38 @@ local function integratedToolContext()
             if label == key then label = fallback end
             if aegisub and aegisub.set_undo_point then aegisub.set_undo_point(label) end
         end,
+        show = function(message)
+            return showMsg(tostring(message or ""), nil, {width=60, height=8})
+        end,
+        confirm = function(message)
+            local apply, cancel = L("sh_apply"), L("sh_cancel")
+            local button = aegisub.dialog.display({
+                {class="textbox", value=tostring(message or ""), x=0, y=0, width=56, height=10}
+            }, {apply, cancel}, {ok=apply, close=cancel})
+            return button == apply
+        end,
     }
 end
 
+local SHAPE_DEFAULTS = {
+    perimeter_mode = "Exterior contours only",
+    optimizer_mode = "Auto",
+    intensity = "Balanced",
+    threshold = 0,
+    max_bands = 8,
+    show_summary = false,
+}
+local SHAPE_CONFIG = RheaConfig.section("sh", SHAPE_DEFAULTS)
+
 local tagops_gui, config_gui
-local function row_master_gui(subs, sel)
+local function row_master_gui(subs, sel, active)
     resolveConfig()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
 
     local pkc = RheaOps.Perspective.loadConfig()
     local drc = FunctionalTable.union(RheaOps.Masks.loadConfig() or {}, RheaOps.Masks.defaults or {})
     local soc = RheaOps.Sign.loadConfig()
+    local shc = SHAPE_CONFIG.read()
 
     local state = {
         pk_action = "", pk_map = pkc.map or "ABCD (exact copy)", pk_orgm = pkc.orgm or "3 minimize fax",
@@ -6906,9 +7908,18 @@ local function row_master_gui(subs, sel)
         dr_use_color = drc.use_color ~= false, dr_mask_color = drc.color_value or "#000000", dr_save_name = "",
 
         so_action = "", so_type_mode = soc.type_mode or "Frame",
+        so_vertical_gap = tonumber(soc.vertical_gap) or 0,
         so_circ_rot = soc.circ_rot or "Normal", so_circ_radio = soc.circ_radio or 0,
         so_circ_track = soc.circ_track or 0, so_circ_invert = soc.circ_invert or false,
         so_circ_delete = soc.circ_delete or false,
+
+        shape_action = "",
+        shape_perimeter_mode = RheaFoundation.choose(shc.perimeter_mode, {"Exterior contours only", "Exterior contours and holes"}, SHAPE_DEFAULTS.perimeter_mode),
+        shape_optimizer_mode = RheaFoundation.choose(shc.optimizer_mode, SharedShapeOptimizer.modes, SHAPE_DEFAULTS.optimizer_mode),
+        shape_intensity = RheaFoundation.choose(shc.intensity, SharedShapeOptimizer.intensities, SHAPE_DEFAULTS.intensity),
+        shape_threshold = RheaFoundation.configNumber(shc.threshold, SHAPE_DEFAULTS.threshold, 0, 0.25),
+        shape_max_bands = RheaFoundation.configNumber(shc.max_bands, SHAPE_DEFAULTS.max_bands, 2, 64),
+        shape_show_summary = shc.show_summary == true,
 
         tool_action = "",
     }
@@ -6928,64 +7939,88 @@ local function row_master_gui(subs, sel)
         local drMaskItems, drMaskMap, drMaskShown = dropdownData(RheaOps.Masks.maskNames())
         local drAlignItems, drAlignMap, drAlignShown = dropdownData({"an1", "an2", "an3", "an4", "an5", "an6", "an7", "an8", "an9"})
         local drAlphaItems, drAlphaMap, drAlphaShown = dropdownData({"00", "20", "40", "60", "80", "A0", "C0", "E0", "FF"})
+        local shapeActionItems, shapeActionMap, shapeActionShown = dropdownData({"Unify Positions", "Place on Perimeter", "Shape Color Optimizer"})
+        local shapePerimeterItems, shapePerimeterMap, shapePerimeterShown = dropdownData({"Exterior contours only", "Exterior contours and holes"})
+        local shapeModeItems, shapeModeMap, shapeModeShown = dropdownData(SharedShapeOptimizer.modes)
+        local shapeIntensityItems, shapeIntensityMap, shapeIntensityShown = dropdownData(SharedShapeOptimizer.intensities)
         local toolItems, toolMap, toolShown = dropdownData(TOOLBOX_ACTIONS)
         local dropdownMaps = {
             pk_action = pkMap, pk_map = pkMapMap, pk_orgm = pkOrgMap,
             so_action = soActionMap, so_type_mode = soTypeMap, so_circ_rot = soRotMap,
             dr_action = drActionMap, dr_mask_source = drMaskMap, dr_alignment = drAlignMap, dr_alpha_value = drAlphaMap,
+            shape_action = shapeActionMap, shape_perimeter_mode = shapePerimeterMap,
+            shape_optimizer_mode = shapeModeMap, shape_intensity = shapeIntensityMap,
             tool_action = toolMap,
         }
-        local maskX, perspX, signX = 0, 4, 7
+        local maskX, perspX, shapeX, signX = 0, 5, 0, 5
         local d = {
-            { class="label", label=sectionTitle("title_masks"), x=maskX, y=0, width=4, height=1 },
+            { class="label", label=sectionTitle("title_masks"), x=maskX, y=0, width=5, height=1 },
             { class="label", label=L("lbl_mask"), x=maskX, y=1, width=1, height=1 },
-            { class="dropdown", name="dr_action", items=drActionItems, value=shownChoice(drActionShown, state.dr_action), x=maskX + 1, y=1, width=3, height=1 },
+            { class="dropdown", name="dr_action", items=drActionItems, value=shownChoice(drActionShown, state.dr_action), x=maskX + 1, y=1, width=4, height=1 },
             { class="label", label=L("lbl_source"), x=maskX, y=2, width=1, height=1 },
-            { class="dropdown", name="dr_mask_source", items=drMaskItems, value=shownChoice(drMaskShown, state.dr_mask_source), x=maskX + 1, y=2, width=3, height=1 },
+            { class="dropdown", name="dr_mask_source", items=drMaskItems, value=shownChoice(drMaskShown, state.dr_mask_source), x=maskX + 1, y=2, width=4, height=1 },
             { class="label", label=L("lbl_align"), x=maskX, y=3, width=1, height=1 },
             { class="dropdown", name="dr_alignment", items=drAlignItems, value=shownChoice(drAlignShown, state.dr_alignment), x=maskX + 1, y=3, width=1, height=1 },
             { class="label", label=L("lbl_alpha"), x=maskX + 2, y=3, width=1, height=1 },
-            { class="dropdown", name="dr_alpha_value", items=drAlphaItems, value=shownChoice(drAlphaShown, state.dr_alpha_value), x=maskX + 3, y=3, width=1, height=1 },
+            { class="dropdown", name="dr_alpha_value", items=drAlphaItems, value=shownChoice(drAlphaShown, state.dr_alpha_value), x=maskX + 3, y=3, width=2, height=1 },
             { class="checkbox", name="dr_create_layer", label=L("lbl_layer"), value=state.dr_create_layer, x=maskX, y=4, width=2, height=1 },
-            { class="checkbox", name="dr_replace_mask", label=L("lbl_replace"), value=state.dr_replace_mask, x=maskX + 2, y=4, width=2, height=1 },
+            { class="checkbox", name="dr_replace_mask", label=L("lbl_replace"), value=state.dr_replace_mask, x=maskX + 2, y=4, width=3, height=1 },
             { class="checkbox", name="dr_bicubic", label="q2", value=state.dr_bicubic, x=maskX, y=5, width=1, height=1 },
             { class="checkbox", name="dr_use_color", label=L("lbl_color"), value=state.dr_use_color, x=maskX + 1, y=5, width=1, height=1 },
-            { class="coloralpha", name="dr_mask_color", value=state.dr_mask_color, x=maskX + 2, y=5, width=1, height=1 },
-            { class="checkbox", name="dr_use_alpha", label="A", value=state.dr_use_alpha, x=maskX + 3, y=5, width=1, height=1 },
+            { class="coloralpha", name="dr_mask_color", value=state.dr_mask_color, x=maskX + 2, y=5, width=2, height=1 },
+            { class="checkbox", name="dr_use_alpha", label="A", value=state.dr_use_alpha, x=maskX + 4, y=5, width=1, height=1 },
             { class="label", label=L("lbl_name"), x=maskX, y=6, width=1, height=1 },
-            { class="edit", name="dr_save_name", value=state.dr_save_name, x=maskX + 1, y=6, width=3, height=1 },
+            { class="edit", name="dr_save_name", value=state.dr_save_name, x=maskX + 1, y=6, width=4, height=1 },
 
-            { class="label", label=sectionTitle("title_perspectiva"), x=perspX, y=0, width=3, height=1 },
+            { class="label", label=sectionTitle("title_perspectiva"), x=perspX, y=0, width=5, height=1 },
             { class="label", label=L("lbl_mode"), x=perspX, y=1, width=1, height=1 },
-            { class="dropdown", name="pk_action", items=pkItems, value=shownChoice(pkShown, state.pk_action), x=perspX + 1, y=1, width=2, height=1 },
+            { class="dropdown", name="pk_action", items=pkItems, value=shownChoice(pkShown, state.pk_action), x=perspX + 1, y=1, width=4, height=1 },
             { class="label", label=L("lbl_map"), x=perspX, y=2, width=1, height=1 },
-            { class="dropdown", name="pk_map", items=pkMapItems, value=shownChoice(pkMapShown, state.pk_map), x=perspX + 1, y=2, width=2, height=1 },
+            { class="dropdown", name="pk_map", items=pkMapItems, value=shownChoice(pkMapShown, state.pk_map), x=perspX + 1, y=2, width=4, height=1 },
             { class="label", label=L("lbl_org"), x=perspX, y=3, width=1, height=1 },
-            { class="dropdown", name="pk_orgm", items=pkOrgItems, value=shownChoice(pkOrgShown, state.pk_orgm), x=perspX + 1, y=3, width=2, height=1 },
+            { class="dropdown", name="pk_orgm", items=pkOrgItems, value=shownChoice(pkOrgShown, state.pk_orgm), x=perspX + 1, y=3, width=4, height=1 },
             { class="checkbox", name="pk_set_sx", label=L("lbl_x"), value=state.pk_set_sx, x=perspX, y=4, width=1, height=1 },
-            { class="floatedit", name="pk_sx", value=state.pk_sx, min=1, x=perspX + 1, y=4, width=1, height=1 },
+            { class="floatedit", name="pk_sx", value=state.pk_sx, min=1, x=perspX + 1, y=4, width=2, height=1 },
             { class="checkbox", name="pk_set_sy", label=L("lbl_y"), value=state.pk_set_sy, x=perspX, y=5, width=1, height=1 },
-            { class="floatedit", name="pk_sy", value=state.pk_sy, min=1, x=perspX + 1, y=5, width=1, height=1 },
+            { class="floatedit", name="pk_sy", value=state.pk_sy, min=1, x=perspX + 1, y=5, width=2, height=1 },
             { class="label", label=L("lbl_quad"), x=perspX, y=6, width=1, height=1 },
-            { class="floatedit", name="pk_qscale", value=state.pk_qscale, min=1, x=perspX + 1, y=6, width=1, height=1 },
+            { class="floatedit", name="pk_qscale", value=state.pk_qscale, min=1, x=perspX + 1, y=6, width=2, height=1 },
 
-            { class="label", label=sectionTitle("title_signlayout"), x=signX, y=0, width=3, height=1 },
-            { class="label", label=L("lbl_sign"), x=signX, y=1, width=1, height=1 },
-            { class="dropdown", name="so_action", items=soActionItems, value=shownChoice(soActionShown, state.so_action), x=signX + 1, y=1, width=2, height=1 },
-            { class="label", label=L("lbl_type"), x=signX, y=2, width=1, height=1 },
-            { class="dropdown", name="so_type_mode", items=soTypeItems, value=shownChoice(soTypeShown, state.so_type_mode), x=signX + 1, y=2, width=2, height=1 },
-            { class="label", label=L("lbl_rot"), x=signX, y=3, width=1, height=1 },
-            { class="dropdown", name="so_circ_rot", items=soRotItems, value=shownChoice(soRotShown, state.so_circ_rot), x=signX + 1, y=3, width=2, height=1 },
-            { class="label", label=L("lbl_radius"), x=signX, y=4, width=1, height=1 },
-            { class="floatedit", name="so_circ_radio", value=state.so_circ_radio, x=signX + 1, y=4, width=1, height=1 },
-            { class="checkbox", name="so_circ_invert", label=L("lbl_inv"), value=state.so_circ_invert, x=signX + 2, y=4, width=1, height=1 },
-            { class="label", label=L("lbl_track"), x=signX, y=5, width=1, height=1 },
-            { class="floatedit", name="so_circ_track", value=state.so_circ_track, x=signX + 1, y=5, width=1, height=1 },
-            { class="checkbox", name="so_circ_delete", label=L("lbl_del"), value=state.so_circ_delete, x=signX + 2, y=5, width=1, height=1 },
-            { class="label", label=sectionTitle("title_toolbox"), x=0, y=7, width=3, height=1 },
-            { class="dropdown", name="tool_action", items=toolItems, value=shownChoice(toolShown, state.tool_action), x=3, y=7, width=7, height=1 },
+            { class="label", label=sectionTitle("title_shapes"), x=shapeX, y=7, width=5, height=1 },
+            { class="label", label=L("lbl_action"), x=shapeX, y=8, width=1, height=1 },
+            { class="dropdown", name="shape_action", items=shapeActionItems, value=shownChoice(shapeActionShown, state.shape_action), hint=L("sh_hint_action"), x=shapeX + 1, y=8, width=4, height=1 },
+            { class="label", label=L("lbl_perimeter"), x=shapeX, y=9, width=1, height=1 },
+            { class="dropdown", name="shape_perimeter_mode", items=shapePerimeterItems, value=shownChoice(shapePerimeterShown, state.shape_perimeter_mode), hint=L("sh_hint_perimeter_mode"), x=shapeX + 1, y=9, width=4, height=1 },
+            { class="label", label=L("lbl_mode"), x=shapeX, y=10, width=1, height=1 },
+            { class="dropdown", name="shape_optimizer_mode", items=shapeModeItems, value=shownChoice(shapeModeShown, state.shape_optimizer_mode), hint=L("sh_hint_optimizer_mode"), x=shapeX + 1, y=10, width=4, height=1 },
+            { class="label", label=L("lbl_intensity"), x=shapeX, y=11, width=1, height=1 },
+            { class="dropdown", name="shape_intensity", items=shapeIntensityItems, value=shownChoice(shapeIntensityShown, state.shape_intensity), hint=L("sh_hint_intensity"), x=shapeX + 1, y=11, width=4, height=1 },
+            { class="label", label=L("lbl_threshold"), x=shapeX, y=12, width=1, height=1 },
+            { class="floatedit", name="shape_threshold", value=state.shape_threshold, min=0, max=0.25, step=0.005, hint=L("sh_hint_threshold"), x=shapeX + 1, y=12, width=1, height=1 },
+            { class="label", label=L("lbl_bands"), x=shapeX + 2, y=12, width=1, height=1 },
+            { class="intedit", name="shape_max_bands", value=state.shape_max_bands, min=2, max=64, hint=L("sh_hint_bands"), x=shapeX + 3, y=12, width=2, height=1 },
+            { class="checkbox", name="shape_show_summary", label=L("sh_show_summary"), value=state.shape_show_summary, x=shapeX, y=13, width=5, height=1 },
+
+            { class="label", label=sectionTitle("title_signlayout"), x=signX, y=7, width=5, height=1 },
+            { class="label", label=L("lbl_sign"), x=signX, y=8, width=1, height=1 },
+            { class="dropdown", name="so_action", items=soActionItems, value=shownChoice(soActionShown, state.so_action), x=signX + 1, y=8, width=4, height=1 },
+            { class="label", label=L("lbl_type"), x=signX, y=9, width=1, height=1 },
+            { class="dropdown", name="so_type_mode", items=soTypeItems, value=shownChoice(soTypeShown, state.so_type_mode), x=signX + 1, y=9, width=4, height=1 },
+            { class="label", label=L("lbl_rot"), x=signX, y=10, width=1, height=1 },
+            { class="dropdown", name="so_circ_rot", items=soRotItems, value=shownChoice(soRotShown, state.so_circ_rot), x=signX + 1, y=10, width=4, height=1 },
+            { class="label", label=L("lbl_radius"), x=signX, y=11, width=1, height=1 },
+            { class="floatedit", name="so_circ_radio", value=state.so_circ_radio, x=signX + 1, y=11, width=2, height=1 },
+            { class="checkbox", name="so_circ_invert", label=L("lbl_inv"), value=state.so_circ_invert, x=signX + 3, y=11, width=2, height=1 },
+            { class="label", label=L("lbl_track"), x=signX, y=12, width=1, height=1 },
+            { class="floatedit", name="so_circ_track", value=state.so_circ_track, x=signX + 1, y=12, width=2, height=1 },
+            { class="checkbox", name="so_circ_delete", label=L("lbl_del"), value=state.so_circ_delete, x=signX + 3, y=12, width=2, height=1 },
+            { class="label", label=L("lbl_vertical_gap"), x=signX, y=13, width=2, height=1 },
+            { class="floatedit", name="so_vertical_gap", value=state.so_vertical_gap, min=-10000, max=10000, step=0.1, x=signX + 2, y=13, width=3, height=1 },
+
+            { class="label", label=sectionTitle("title_toolbox"), x=0, y=14, width=2, height=1 },
+            { class="dropdown", name="tool_action", items=toolItems, value=shownChoice(toolShown, state.tool_action), x=2, y=14, width=8, height=1 },
         }
-        local buttons = { L("btn_execute"), L("btn_mass_signs"), L("btn_fastsigns"), L("btn_tagops"), L("btn_makeup"), L("btn_config"), L("btn_help"), L("btn_cancel") }
+        local buttons = { L("btn_execute"), L("btn_mass_signs"), L("btn_fastsigns"), L("btn_tagops"), L("btn_config"), L("btn_help"), L("btn_cancel") }
         local b, r = aegisub.dialog.display(d, buttons)
         if not b or b == L("btn_cancel") then return end
 
@@ -6997,7 +8032,7 @@ local function row_master_gui(subs, sel)
 
         if b == L("btn_help") then
             aegisub.dialog.display({
-                { class="textbox", text=helpText(), x=0, y=0, width=70, height=22 }
+                { class="textbox", text=helpText(), x=0, y=0, width=50, height=22 }
             }, { L("btn_ok") })
 
         elseif b == L("btn_mass_signs") then
@@ -7010,16 +8045,12 @@ local function row_master_gui(subs, sel)
         elseif b == L("btn_tagops") then
             if tagops_gui(subs, sel) then return end
 
-        elseif b == L("btn_makeup") then
-            local tool = integratedTool("Makeup")
-            if tool then return tool.main(subs, sel, nil, integratedToolContext()) end
-
         elseif b == L("btn_config") then
             if config_gui() then syncMainGlobalColors() end
 
         elseif b == L("btn_execute") then
             local tsel = sel
-            local any_run = (r.pk_action ~= "" or r.dr_action ~= "" or r.so_action ~= "" or r.tool_action ~= "")
+            local any_run = (r.pk_action ~= "" or r.dr_action ~= "" or r.shape_action ~= "" or r.so_action ~= "" or r.tool_action ~= "")
             if not any_run then return end
             local function updateChainSelection(result, changed)
                 if changed ~= false and type(result) == "table" then tsel = result end
@@ -7070,6 +8101,34 @@ local function row_master_gui(subs, sel)
                 end
             end
 
+            if r.shape_action ~= "" then
+                SHAPE_CONFIG.write({
+                    perimeter_mode = r.shape_perimeter_mode,
+                    optimizer_mode = r.shape_optimizer_mode,
+                    intensity = r.shape_intensity,
+                    threshold = tonumber(r.shape_threshold) or SHAPE_DEFAULTS.threshold,
+                    max_bands = tonumber(r.shape_max_bands) or SHAPE_DEFAULTS.max_bands,
+                    show_summary = r.shape_show_summary == true,
+                })
+                local shapeActive, activeSelected = tonumber(active), false
+                for _, index in ipairs(tsel or {}) do
+                    if index == shapeActive then activeSelected = true; break end
+                end
+                if not activeSelected then shapeActive = tsel and tsel[1] end
+                local tool = integratedTool("Shapes")
+                if not tool then return end
+                local result, changed = tool.main(subs, tsel, shapeActive, {
+                    action = r.shape_action,
+                    perimeter_mode = r.shape_perimeter_mode,
+                    mode = r.shape_optimizer_mode,
+                    intensity = r.shape_intensity,
+                    threshold = tonumber(r.shape_threshold) or 0,
+                    max_bands = tonumber(r.shape_max_bands) or 8,
+                    show_summary = r.shape_show_summary == true,
+                }, integratedToolContext())
+                updateChainSelection(result, changed)
+            end
+
             if r.so_action ~= "" then
                 local sop = ({
                     ["Typewriter"] = "typewriter", ["Vertical Drop"] = "vertical_drop",
@@ -7078,6 +8137,7 @@ local function row_master_gui(subs, sel)
                 })[r.so_action]
                 local result, changed = RheaOps.Sign.run(subs, tsel, {
                     op = sop, type_mode = r.so_type_mode,
+                    vertical_gap = tonumber(r.so_vertical_gap) or 0,
                     circ_rot = r.so_circ_rot,
                     circ_radio = tonumber(r.so_circ_radio) or 0,
                     circ_track = tonumber(r.so_circ_track) or 0,
@@ -7102,9 +8162,9 @@ tagops_gui = function(subs, sel)
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return false end
 
     local actionItems, actionMap, actionShown = dropdownData(TagOps.actions)
-    local modeItems, modeMap, modeShown = dropdownData({"Add", "Percent"})
+    local modeItems, modeMap, modeShown = dropdownData({"Add", "Percent", "Transform"})
     local alignOrgItems, alignOrgMap, alignOrgShown = dropdownData({"Keep org", "Move org"})
-    local savedAction = tagopsNormalizeAction(current_config.tagops_action or "Adjust tags")
+    local savedAction = tagopsNormalizeAction(current_config.tagops_action or "Resize / transform")
     local state = {
         tagops_action = savedAction,
         tagops_amount = current_config.tagops_amount or 0,
@@ -7177,7 +8237,7 @@ tagops_gui = function(subs, sel)
         applied = TagOps.opCopy(subs, sel, opts)
     elseif b == L("btn_keep_only") then
         applied = TagOps.opKeepOnly(subs, sel, opts)
-    elseif r.tagops_action == "Adjust tags" then
+    elseif r.tagops_action == "Resize / transform" then
         applied = TagOps.opAdjust(subs, sel, opts)
     elseif r.tagops_action == "Pos Align" then
         applied = TagOps.opPosAlign(subs, sel, opts)
@@ -7272,14 +8332,48 @@ local function integrated_tool_macro(name)
     end
 end
 
+local function fade_macro(action)
+    return function(subs, sel)
+        resolveConfig()
+        if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
+        local tool = integratedTool("Fast Fades")
+        if tool and type(tool.run) == "function" then
+            return tool.run(subs, sel, action, integratedToolContext())
+        end
+    end
+end
+
+local function shapes_macro(action)
+    return function(subs, sel, active)
+        resolveConfig()
+        if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
+        local cfg = SHAPE_CONFIG.read()
+        local tool = integratedTool("Shapes")
+        if not tool then return end
+        return tool.main(subs, sel, active, {
+            action = action,
+            perimeter_mode = RheaFoundation.choose(cfg.perimeter_mode, {"Exterior contours only", "Exterior contours and holes"}, SHAPE_DEFAULTS.perimeter_mode),
+            mode = RheaFoundation.choose(cfg.optimizer_mode, SharedShapeOptimizer.modes, SHAPE_DEFAULTS.optimizer_mode),
+            intensity = RheaFoundation.choose(cfg.intensity, SharedShapeOptimizer.intensities, SHAPE_DEFAULTS.intensity),
+            threshold = RheaFoundation.configNumber(cfg.threshold, SHAPE_DEFAULTS.threshold, 0, 0.25),
+            max_bands = RheaFoundation.configNumber(cfg.max_bands, SHAPE_DEFAULTS.max_bands, 2, 64),
+            show_summary = cfg.show_summary == true,
+        }, integratedToolContext())
+    end
+end
+
 depRec:registerMacros({
     { macroPath(""), script_description, row_master_gui },
     { hotkeyPath("TagOps"), "Tag operations", tagops_gui },
     { hotkeyPath("Fast Signs"), "Generate fast signs", fastsigns_macro },
     { hotkeyPath("Signs Editor"), "Edit repeated sign text", signs_editor_macro },
-    { hotkeyPath("Makeup"), "Open Makeup", integrated_tool_macro("Makeup") },
-    { hotkeyPath("Shape Color Optimizer"), "Optimize drawing colors", integrated_tool_macro("Shape Color Optimizer") },
+    { hotkeyPath("Shapes/Unify Positions"), "Unify ASS drawing pivots", shapes_macro("Unify Positions") },
+    { hotkeyPath("Shapes/Place on Perimeter"), "Repeat multilayer shapes along a perimeter", shapes_macro("Place on Perimeter") },
+    { hotkeyPath("Shapes/Shape Color Optimizer"), "Optimize drawing colors", shapes_macro("Shape Color Optimizer") },
     { hotkeyPath("Font and Style Manager"), "Manage fonts and styles", integrated_tool_macro("Font and Style Manager") },
-    { hotkeyPath("Continuous Fade Cleanup"), "Clean continuous fades", integrated_tool_macro("Continuous Fade Cleanup") },
+    { hotkeyPath("Fast Fades"), "Open frame fades and continuous cleanup", integrated_tool_macro("Fast Fades") },
+    { hotkeyPath("Fast Fades/In"), "Set fade in from the current frame", fade_macro("Fade In from Current Frame") },
+    { hotkeyPath("Fast Fades/Out"), "Set fade out from the current frame", fade_macro("Fade Out from Current Frame") },
+    { hotkeyPath("Fast Fades/Clean"), "Clean continuous fades", fade_macro("Continuous Fade Cleanup") },
     { hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", integrated_tool_macro("Shuffle Line Text") },
 }, false)

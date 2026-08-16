@@ -1,4 +1,4 @@
-local MODULE_VERSION = "1.4.4"
+local MODULE_VERSION = "1.5.0"
 local PyBridge = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 local unpack = table.unpack or unpack
 
@@ -11,6 +11,7 @@ end
 local DependencyControl = safeRequire("l0.DependencyControl")
 local command = safeRequire("aka.command")
 local lfs = safeRequire("lfs")
+local ffi = safeRequire("ffi")
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
@@ -30,6 +31,39 @@ end
 PyBridge.isWindows = package.config:sub(1, 1) == "\\"
 PyBridge.separator = PyBridge.isWindows and "\\" or "/"
 PyBridge.available = command ~= nil and type(command.run_cmd_c) == "function"
+
+local nativeSleep
+local nativeProcessExists
+if ffi then
+    if PyBridge.isWindows then
+        pcall(ffi.cdef, "void Sleep(unsigned long dwMilliseconds);")
+        pcall(ffi.cdef, [[
+            void *OpenProcess(unsigned long desiredAccess, int inheritHandle, unsigned long processId);
+            int GetExitCodeProcess(void *process, unsigned long *exitCode);
+            int CloseHandle(void *object);
+        ]])
+        local ok, kernel32 = pcall(ffi.load, "kernel32")
+        if ok and kernel32 then
+            nativeSleep = function(milliseconds) kernel32.Sleep(milliseconds) end
+            local processApiAvailable = pcall(function()
+                return kernel32.OpenProcess, kernel32.GetExitCodeProcess, kernel32.CloseHandle
+            end)
+            if processApiAvailable then
+                nativeProcessExists = function(pid)
+                    local process = kernel32.OpenProcess(0x1000, 0, pid)
+                    if process == nil or process == ffi.NULL then return false end
+                    local exitCode = ffi.new("unsigned long[1]")
+                    local queried = kernel32.GetExitCodeProcess(process, exitCode) ~= 0
+                    kernel32.CloseHandle(process)
+                    return queried and tonumber(exitCode[0]) == 259
+                end
+            end
+        end
+    else
+        pcall(ffi.cdef, "int usleep(unsigned int usec);")
+        nativeSleep = function(milliseconds) ffi.C.usleep(milliseconds * 1000) end
+    end
+end
 
 local counter = 0
 local CLOCK_SUBSECOND_SCALE = 1000000
@@ -66,8 +100,8 @@ end
 local function fileExists(path)
     if type(path) ~= "string" or trim(path) == "" then return false end
     if lfs then
-        local attributes = lfs.attributes(path)
-        if attributes then return attributes.mode == "file" end
+        local mode = lfs.attributes(path, "mode")
+        if mode then return mode == "file" end
     end
     local handle = io.open(path, "rb")
     if not handle then return false end
@@ -79,8 +113,7 @@ end
 local function directoryExists(path)
     if type(path) ~= "string" or trim(path) == "" then return false end
     if lfs then
-        local attributes = lfs.attributes(path)
-        return attributes and attributes.mode == "directory" or false
+        return lfs.attributes(path, "mode") == "directory"
     end
     local ok, _, code = os.rename(path, path)
     if not ok and code ~= 13 then return false end
@@ -323,6 +356,21 @@ local function run(commandText, quiet)
     return false, ending .. (output and output ~= "" and ("\n" .. tostring(output)) or ""), tonumber(exitCode)
 end
 
+local function sleep(milliseconds)
+    milliseconds = math.max(1, math.min(60000, math.floor(tonumber(milliseconds) or 100)))
+    if nativeSleep then
+        local ok = pcall(nativeSleep, milliseconds)
+        if ok then return true end
+    end
+    if PyBridge.isWindows then
+        local ok, message = run("Start-Sleep -Milliseconds " .. tostring(milliseconds), true)
+        return ok, message
+    end
+    local seconds = string.format("%.3f", milliseconds / 1000)
+    local ok, _, code = os.execute("sleep " .. seconds)
+    return ok == true or code == 0
+end
+
 local function chain(...)
     local parts = {}
     local values = pack(...)
@@ -480,6 +528,41 @@ local function runDetachedScript(path)
     return run(text .. " >/dev/null 2>&1 &", true)
 end
 
+local function startDetachedScript(path)
+    path = tostring(path or "")
+    if trim(path) == "" then return false, "script path is required" end
+    if not fileExists(path) then return false, "script was not found: " .. path end
+    local launch
+    if PyBridge.isWindows then
+        local arguments = '-NoProfile -ExecutionPolicy Bypass -File "' .. path .. '"'
+        launch = "Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' -ArgumentList "
+            .. quote(arguments) .. " -PassThru | Select-Object -ExpandProperty Id"
+    else
+        local text, message = scriptCommand(path)
+        if not text then return false, message end
+        launch = "sh -c " .. quote(text .. " >/dev/null 2>&1 & echo $!")
+    end
+    local ok, output = run(launch, true)
+    if not ok then return false, output end
+    local pid = tonumber(tostring(output or ""):match("(%d+)"))
+    if not pid or pid < 1 then return false, "detached process did not report a PID" end
+    return true, pid
+end
+
+local function processExists(pid)
+    pid = tonumber(pid)
+    if not pid or pid < 1 or pid ~= math.floor(pid) then return false end
+    if nativeProcessExists then return nativeProcessExists(pid) end
+    if PyBridge.isWindows then
+        local script = "if (Get-Process -Id " .. tostring(pid)
+            .. " -ErrorAction SilentlyContinue) { [Console]::Out.Write('" .. tostring(pid) .. "') }"
+        local _, output = run("powershell.exe -NoProfile -Command " .. quote(script), true)
+        return tonumber(tostring(output or ""):match("(%d+)")) == pid
+    end
+    local ok = os.execute("kill -0 " .. tostring(pid) .. " >/dev/null 2>&1")
+    return ok == true or ok == 0
+end
+
 PyBridge.trim = trim
 PyBridge.decodedPath = decodedPath
 PyBridge.joinPath = joinPath
@@ -498,6 +581,7 @@ PyBridge.program = program
 PyBridge.raw = raw
 PyBridge.commandLine = commandLine
 PyBridge.run = run
+PyBridge.sleep = sleep
 PyBridge.chain = chain
 PyBridge.uniqueSuffix = uniqueSuffix
 PyBridge.tempRoot = tempRoot
@@ -511,6 +595,8 @@ PyBridge.runModule = runModule
 PyBridge.scriptCommand = scriptCommand
 PyBridge.runScript = runScript
 PyBridge.runDetachedScript = runDetachedScript
+PyBridge.startDetachedScript = startDetachedScript
+PyBridge.processExists = processExists
 
 if depctrl then
     PyBridge.version = depctrl

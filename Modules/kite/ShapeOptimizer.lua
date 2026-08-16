@@ -1,4 +1,4 @@
-local MODULE_VERSION = "1.0.2"
+local MODULE_VERSION = "1.1.0"
 local ShapeOptimizer = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
 
 local function safeRequire(name)
@@ -66,8 +66,6 @@ local LANG = {
     err_transform = "Animated transforms are not supported.",
     err_move = "\\move is not supported.",
     err_clip = "Clips are not supported.",
-    err_alpha_tags = "Per-channel alpha tags are not supported.",
-    err_alpha = "\\alpha is not supported.",
     err_extra_tags = "Extra override blocks inside the drawing are not supported.",
     err_empty_path = "The drawing path is empty.",
     err_unsupported_tags = "Unsupported tag block content: %s",
@@ -80,7 +78,7 @@ local LANG = {
     err_contiguous = "The selection must be contiguous for direct replacement.",
     err_not_dialogue = "Selected row %d is not a dialogue line.",
     err_line = "Line %d: %s",
-    err_mixed = "The selection mixes timing, style, layer, margins, or visual tags.",
+    err_mixed = "The selection mixes timing, style, layer, margins, or metadata.",
     err_no_output = "The shape optimizer produced no output.",
     no_reduction = "No safe reduction was found with these parameters.",
     confirm_apply = "Apply direct replacement?"
@@ -120,8 +118,6 @@ local LANG = {
     err_transform = "No se admiten transformaciones animadas.",
     err_move = "No se admite \\move.",
     err_clip = "No se admiten clips.",
-    err_alpha_tags = "No se admiten tags de alfa por canal.",
-    err_alpha = "No se admite \\alpha.",
     err_extra_tags = "No se admiten bloques de tags adicionales dentro del dibujo.",
     err_empty_path = "El trazado del dibujo está vacío.",
     err_unsupported_tags = "Contenido no admitido en el bloque de tags: %s",
@@ -134,7 +130,7 @@ local LANG = {
     err_contiguous = "La selección debe ser contigua para el reemplazo directo.",
     err_not_dialogue = "La fila seleccionada %d no es una línea de diálogo.",
     err_line = "Línea %d: %s",
-    err_mixed = "La selección mezcla tiempos, estilos, capas, márgenes o tags visuales.",
+    err_mixed = "La selección mezcla tiempos, estilos, capas, márgenes o metadatos.",
     err_no_output = "El optimizador de shapes no produjo ningún resultado.",
     no_reduction = "No se encontró una reducción segura con estos parámetros.",
     confirm_apply = "¿Aplicar el reemplazo directo?"
@@ -174,8 +170,6 @@ local LANG = {
     err_transform = "Transformações animadas não são compatíveis.",
     err_move = "\\move não é compatível.",
     err_clip = "Clipes não são compatíveis.",
-    err_alpha_tags = "Etiquetas de alfa por canal não são compatíveis.",
-    err_alpha = "\\alpha não é compatível.",
     err_extra_tags = "Blocos de etiquetas adicionais dentro do desenho não são compatíveis.",
     err_empty_path = "O traçado do desenho está vazio.",
     err_unsupported_tags = "Conteúdo incompatível no bloco de etiquetas: %s",
@@ -188,7 +182,7 @@ local LANG = {
     err_contiguous = "A seleção deve ser contígua para a substituição direta.",
     err_not_dialogue = "A linha selecionada %d não é uma fala.",
     err_line = "Linha %d: %s",
-    err_mixed = "A seleção combina tempos, estilos, camadas, margens ou etiquetas visuais diferentes.",
+    err_mixed = "A seleção combina tempos, estilos, camadas, margens ou metadados.",
     err_no_output = "O otimizador de formas não produziu nenhum resultado.",
     no_reduction = "Nenhuma redução segura foi encontrada com estes parâmetros.",
     confirm_apply = "Aplicar a substituição direta?"
@@ -294,6 +288,131 @@ format_number = function(value)
   text = text:gsub("0+$", "")
   text = text:gsub("%.$", "")
   return text
+end
+local Geometry = {
+  numberPattern = "[%+%-]?%d*%.?%d+",
+  epsilon = 0.0000001
+}
+Geometry.translate = function(context, key, fallback, ...)
+  local value = fallback
+  if context and type(context.translate) == "function" then
+    local translated = context.translate(key)
+    if translated and translated ~= key then value = translated end
+  end
+  if select("#", ...) == 0 then return value end
+  return string.format(value, ...)
+end
+Geometry.finite = finite_number
+Geometry.cloneLine = copy_line
+Geometry.formatNumber = function(value, precision)
+  value = finite_number(value) or 0
+  precision = tonumber(precision) or 6
+  if math.abs(value) < Geometry.epsilon then value = 0 end
+  local text = string.format("%." .. tostring(precision) .. "f", value)
+  text = text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+  if text == "-0" then text = "0" end
+  return text
+end
+Geometry.splitText = function(text, translate, requiredTags)
+  translate = translate or function(_, fallback) return fallback end
+  text = tostring(text or "")
+  local cursor, prefixEnd = 1, 0
+  while text:sub(cursor, cursor) == "{" do
+    local close = text:find("}", cursor, true)
+    if not close then return nil, translate("sh_err_open_block", "The leading override block is not closed.") end
+    local inner = text:sub(cursor + 1, close - 1)
+    if not inner:match("^%s*\\") then break end
+    prefixEnd = close
+    cursor = close + 1
+  end
+  if prefixEnd == 0 then
+    return nil, translate("sh_err_initial_tags", requiredTags or "The drawing needs leading tags with \\pos and \\pN.")
+  end
+  local prefix = text:sub(1, prefixEnd)
+  local body = text:sub(prefixEnd + 1)
+  local drawing, suffix = body:match("^(.-)(%s*{\\p0}%s*)$")
+  if not drawing then
+    if body:find("{", 1, true) then
+      return nil, translate("sh_err_static_drawing", "Only one static drawing and an optional final {\\p0} are supported.")
+    end
+    drawing, suffix = body, ""
+  end
+  if drawing:match("^%s*$") then
+    return nil, translate("sh_err_empty_drawing", "The line contains no drawing data.")
+  end
+  return {prefix = prefix, drawing = drawing, suffix = suffix}
+end
+Geometry.hasPlainTag = function(text, tag)
+  return tostring(text or ""):find("\\" .. tostring(tag), 1, true) ~= nil
+end
+Geometry.lastNumericTag = function(text, name)
+  local value
+  local pattern = "\\" .. tostring(name) .. "%s*(" .. Geometry.numberPattern .. ")"
+  for number in tostring(text or ""):gmatch(pattern) do value = tonumber(number) end
+  return value
+end
+Geometry.parsePosition = function(prefix, translate, qualifier)
+  translate = translate or function(_, fallback) return fallback end
+  local pattern = "\\pos%s*%(%s*(" .. Geometry.numberPattern .. ")%s*,%s*(" .. Geometry.numberPattern .. ")%s*%)"
+  local count, x, y = 0
+  tostring(prefix or ""):gsub(pattern, function(px, py)
+    count, x, y = count + 1, tonumber(px), tonumber(py)
+    return ""
+  end)
+  if count ~= 1 or not finite_number(x) or not finite_number(y) then
+    return nil, translate("sh_err_exact_pos", qualifier or "Each line must have exactly one \\pos(x,y).")
+  end
+  return {x = x, y = y, pattern = pattern}
+end
+Geometry.tokenizePath = function(path, translate)
+  translate = translate or function(_, fallback) return fallback end
+  local tokens, index = {}, 1
+  local commands = {m=true, n=true, l=true, b=true, s=true, p=true, c=true}
+  path = tostring(path or "")
+  while index <= #path do
+    local char = path:sub(index, index)
+    if char:match("[%s,]") then
+      index = index + 1
+    elseif char:match("%a") then
+      local command = char:lower()
+      if not commands[command] then
+        return nil, translate("sh_err_path_command", "The drawing contains the unsupported command '%s'.", char)
+      end
+      tokens[#tokens + 1] = {kind = "command", value = command}
+      index = index + 1
+    else
+      local number = path:sub(index):match("^(" .. Geometry.numberPattern .. ")")
+      if not number then
+        return nil, translate("sh_err_path_data", "The drawing contains data that could not be parsed.")
+      end
+      tokens[#tokens + 1] = {kind = "number", value = tonumber(number)}
+      index = index + #number
+    end
+  end
+  return tokens
+end
+Geometry.styleMaps = function(subs)
+  local exact, folded = {}, {}
+  for index = 1, #subs do
+    local item = subs[index]
+    if type(item) == "table" and item.class == "style" then
+      local name = tostring(item.name or item.style or "")
+      if name ~= "" then
+        exact[name] = item
+        folded[name:lower()] = item
+      end
+    end
+  end
+  return exact, folded
+end
+Geometry.styleFor = function(exact, folded, name)
+  name = tostring(name or "")
+  return exact[name] or folded[name:lower()]
+end
+Geometry.selectionIndices = function(subs, sel)
+  return LineOps.normalizeIndices(subs, sel, function(line)
+    return line and line.class == "dialogue" and not line.comment
+  end)
 end
 local show_message
 show_message = function(message)
@@ -465,6 +584,30 @@ local extract_tag
 extract_tag = function(tags, name)
   return last_match(tags, "\\" .. tostring(name) .. "([%-%d%.]+)")
 end
+local extract_alpha_tags
+extract_alpha_tags = function(tags)
+  local values, explicit = { }, { }
+  for name, hex in tostring(tags or ""):gmatch("\\([%a%d]+)&[Hh](%x+)&?") do
+    local alpha = ("00" .. tostring(hex):upper()):sub(-2)
+    if name == "alpha" then
+      for channel = 1, 4 do
+        values[channel], explicit[channel] = alpha, true
+      end
+    else
+      local channel = tonumber(name:match("^([1234])a$"))
+      if channel then
+        values[channel], explicit[channel] = alpha, true
+      end
+    end
+  end
+  local out = { }
+  for channel = 1, 4 do
+    if explicit[channel] then
+      out[#out + 1] = "\\" .. tostring(channel) .. "a&H" .. tostring(values[channel]) .. "&"
+    end
+  end
+  return table.concat(out)
+end
 local parse_drawing_bounds
 parse_drawing_bounds = function(drawing, pos_x, pos_y, scale, alignment, scale_x, scale_y)
   local nums = { }
@@ -502,8 +645,9 @@ parse_drawing_bounds = function(drawing, pos_x, pos_y, scale, alignment, scale_x
   alignment = math.max(1, math.min(9, math.floor((tonumber(alignment) or 2) + 0.5)))
   local column = ((alignment - 1) % 3) + 1
   local row = math.floor((alignment - 1) / 3) + 1
-  local anchor_x = column == 1 and left or (column == 2 and (left + right) / 2 or right)
-  local anchor_y = row == 1 and bottom or (row == 2 and (top + bottom) / 2 or top)
+  local width, height = right - left, bottom - top
+  local anchor_x = column == 1 and 0 or (column == 2 and width / 2 or width)
+  local anchor_y = row == 1 and height or (row == 2 and height / 2 or 0)
   local origin_x, origin_y = pos_x - anchor_x, pos_y - anchor_y
   return {
     left = origin_x + left,
@@ -534,13 +678,10 @@ parse_shape_line = function(text, style)
   if text:find("\\i?clip%(") then
     return nil, L("err_clip")
   end
-  if text:find("\\[1234]?a&[Hh]") then
-    return nil, L("err_alpha_tags")
-  end
-  if text:find("\\alpha&[Hh]") then
-    return nil, L("err_alpha")
-  end
   local tags, drawing = text:match("^%s*{([^}]*)}(.-){\\p0}%s*$")
+  if not tags then
+    tags, drawing = text:match("^%s*{([^}]*)}([^{}]-)%s*$")
+  end
   if not (tags and drawing) then
     return nil, L("err_simple_shape")
   end
@@ -550,14 +691,29 @@ parse_shape_line = function(text, style)
   if drawing:match("^%s*$") then
     return nil, L("err_empty_path")
   end
+  local visual_tags = tags
+  visual_tags = visual_tags:gsub("\\an%d+", "")
+  visual_tags = visual_tags:gsub("\\pos%([^)]*%)", "")
+  visual_tags = visual_tags:gsub("\\p%d+", "")
+  visual_tags = visual_tags:gsub("\\1?c&[Hh]%x+&?", "")
+  visual_tags = visual_tags:match("^%s*(.-)%s*$")
   local residue = tags
   residue = residue:gsub("\\an%d+", "")
   residue = residue:gsub("\\pos%([^)]*%)", "")
   residue = residue:gsub("\\bord[%-%d%.]+", "")
+  residue = residue:gsub("\\[xy]bord[%-%d%.]+", "")
   residue = residue:gsub("\\shad[%-%d%.]+", "")
+  residue = residue:gsub("\\[xy]shad[%-%d%.]+", "")
   residue = residue:gsub("\\blur[%-%d%.]+", "")
+  residue = residue:gsub("\\be[%-%d%.]+", "")
+  residue = residue:gsub("\\fsc[xy][%-%d%.]+", "")
   residue = residue:gsub("\\p%d+", "")
   residue = residue:gsub("\\1?c&[Hh]%x+&?", "")
+  residue = residue:gsub("\\[234]c&[Hh]%x+&?", "")
+  residue = residue:gsub("\\alpha&[Hh]%x+&?", "")
+  residue = residue:gsub("\\[1234]a&[Hh]%x+&?", "")
+  residue = residue:gsub("\\fad%b()", "")
+  residue = residue:gsub("\\fade%b()", "")
   residue = residue:gsub("%s+", "")
   if residue ~= "" then
     return nil, L("err_unsupported_tags", residue)
@@ -597,10 +753,18 @@ parse_shape_line = function(text, style)
   local an = finite_number(last_match(tags, "\\an(%d+)")) or finite_number(style.align) or finite_number(style.alignment) or 2
   an = math.floor(an + 0.5)
   if an < 1 or an > 9 then an = 2 end
-  local scale_x = finite_number(style.scale_x) or finite_number(style.scalex) or 100
-  local scale_y = finite_number(style.scale_y) or finite_number(style.scaley) or 100
+  local scale_x_raw = extract_tag(tags, "fscx")
+  local scale_y_raw = extract_tag(tags, "fscy")
+  if (scale_x_raw ~= nil and not finite_number(scale_x_raw))
+    or (scale_y_raw ~= nil and not finite_number(scale_y_raw)) then
+    return nil, L("err_unsupported_tags", "invalid scale")
+  end
+  local scale_x = scale_x_raw ~= nil and finite_number(scale_x_raw)
+    or finite_number(style.scale_x) or finite_number(style.scalex) or 100
+  local scale_y = scale_y_raw ~= nil and finite_number(scale_y_raw)
+    or finite_number(style.scale_y) or finite_number(style.scaley) or 100
   if scale_x <= 0 or scale_y <= 0 then
-    return nil, L("err_unsupported_tags", "invalid style scale")
+    return nil, L("err_unsupported_tags", "invalid scale")
   end
   local scale = 2 ^ (p_scale - 1)
   local bounds, bounds_err = parse_drawing_bounds(drawing, pos_x, pos_y, scale, an, scale_x, scale_y)
@@ -619,6 +783,9 @@ parse_shape_line = function(text, style)
   bord = format_number(bord)
   shad = format_number(shad)
   if blur ~= nil then blur = format_number(blur) end
+  local scale_x_tag = scale_x_raw ~= nil and format_number(scale_x) or nil
+  local scale_y_tag = scale_y_raw ~= nil and format_number(scale_y) or nil
+  local alpha_tags = extract_alpha_tags(tags)
   return {
     tags = tags,
     drawing = drawing:match("^%s*(.-)%s*$"),
@@ -635,6 +802,10 @@ parse_shape_line = function(text, style)
     bord = bord,
     shad = shad,
     blur = blur,
+    scale_x_tag = scale_x_tag,
+    scale_y_tag = scale_y_tag,
+    alpha_tags = alpha_tags,
+    visual_tags = visual_tags,
     bounds = bounds,
     visual_key = table.concat({
       tostring(p_scale),
@@ -643,12 +814,14 @@ parse_shape_line = function(text, style)
       shad,
       blur or "",
       format_number(scale_x),
-      format_number(scale_y)
+      format_number(scale_y),
+      alpha_tags,
+      visual_tags
     }, "|")
   }
 end
 local line_key
-line_key = function(line, parsed)
+line_key = function(line)
   local fields = {
     line.start_time or "",
     line.end_time or "",
@@ -659,8 +832,7 @@ line_key = function(line, parsed)
     line.margin_l or "",
     line.margin_r or "",
     line.margin_t or line.margin_v or "",
-    line.comment and "1" or "0",
-    parsed.visual_key
+    line.comment and "1" or "0"
   }
   for index = 1, #fields do fields[index] = tostring(fields[index]) end
   return table.concat(fields, "\31")
@@ -696,7 +868,7 @@ collect_items = function(subs, sel)
     if not (parsed) then
       return nil, L("err_line", index, err)
     end
-    local key = line_key(line, parsed)
+    local key = line_key(line)
     if not (common_key) then
       common_key = key
     end
@@ -715,8 +887,9 @@ unique_color_count = function(items)
   local seen, count = { }, 0
   for _index_0 = 1, #items do
     local item = items[_index_0]
-    if not (seen[item.color]) then
-      seen[item.color] = true
+    local key = tostring(item.color) .. "\31" .. tostring(item.visual_key)
+    if not (seen[key]) then
+      seen[key] = true
       count = count + 1
     end
   end
@@ -773,11 +946,7 @@ merged_text = function(items, color)
     local dy = (item.bounds.origin_y - base_y) * item.coord_scale_y
     drawings[#drawings + 1] = offset_drawing(item.drawing, dx, dy)
   end
-  local blur_tag = ""
-  if first.blur and math.abs(tonumber(first.blur) or 0) > EPSILON then
-    blur_tag = "\\blur" .. tostring(first.blur)
-  end
-  return "{\\an7\\pos(" .. tostring(format_number(base_x)) .. "," .. tostring(format_number(base_y)) .. ")\\bord" .. tostring(first.bord) .. "\\shad" .. tostring(first.shad) .. tostring(blur_tag) .. "\\p" .. tostring(first.p_scale) .. "\\1c" .. tostring(color) .. "}" .. tostring(table.concat(drawings, " ")) .. "{\\p0}"
+  return "{\\an7\\pos(" .. tostring(format_number(base_x)) .. "," .. tostring(format_number(base_y)) .. ")\\p" .. tostring(first.p_scale) .. "\\1c" .. tostring(color) .. tostring(first.visual_tags or "") .. "}" .. tostring(table.concat(drawings, " ")) .. "{\\p0}"
 end
 local new_cluster
 new_cluster = function(item)
@@ -788,6 +957,7 @@ new_cluster = function(item)
     g = 0,
     b = 0,
     first_index = item.index or 0,
+    visual_key = item.visual_key,
     color = item.color,
     lab = item.lab
   }
@@ -809,6 +979,7 @@ add_to_cluster = function(cluster, item)
 end
 local cluster_accepts
 cluster_accepts = function(cluster, item, threshold)
+  if cluster.visual_key ~= item.visual_key then return false end
   local weight = item.weight or 1
   local total = cluster.total + weight
   if total <= 0 then return false end
@@ -833,7 +1004,7 @@ similar_optimize = function(items, opts)
     for _index_1 = 1, #clusters do
       local cluster = clusters[_index_1]
       local delta = delta_lab(item.lab, cluster.lab)
-      if delta < best_delta and delta <= opts.threshold and cluster_accepts(cluster, item, opts.threshold) then
+      if cluster.visual_key == item.visual_key and delta < best_delta and delta <= opts.threshold and cluster_accepts(cluster, item, opts.threshold) then
         best, best_delta = cluster, delta
       end
     end
@@ -956,6 +1127,12 @@ detect_gradient = function(items, opts)
 end
 local gradient_optimize
 gradient_optimize = function(items, opts)
+  local visual_key = items[1] and items[1].visual_key
+  for index = 2, #items do
+    if items[index].visual_key ~= visual_key then
+      return nil, L("no_gradient")
+    end
+  end
   local score = detect_gradient(items, opts)
   if not (score) then
     return nil, L("no_gradient")
@@ -1298,6 +1475,7 @@ ShapeOptimizer.applyReport = apply_report
 ShapeOptimizer.summaryText = summary_text
 ShapeOptimizer.main = main
 ShapeOptimizer.validate = validate
+ShapeOptimizer.geometry = Geometry
 
 if depctrl then
   ShapeOptimizer.version = depctrl

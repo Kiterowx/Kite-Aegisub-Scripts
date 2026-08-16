@@ -1,7 +1,7 @@
 script_name        = "Zheus Colormanager"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.5.2"
+script_version     = "4.5.3"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -133,6 +133,7 @@ function ColorUtil.normalizeStrict(c)
         return "&H" .. hex:upper() .. "&"
     end
     local r, g, b = c:match("^#?(%x%x)(%x%x)(%x%x)$")
+    if not r then r, g, b = c:match("^#(%x%x)(%x%x)(%x%x)%x%x$") end
     if r then
         return string.format("&H%s%s%s&", b:upper(), g:upper(), r:upper())
     end
@@ -215,11 +216,11 @@ function ColorUtil.interpolate(c1, c2, factor)
         b1 + (b2 - b1) * factor)
 end
 
-local PAT_COLOR_ANY  = "\\[1-4]?c&H%x+&?"
+local PAT_COLOR_ANY  = "\\[1-4]?c&[Hh]%x+&?"
 local PAT_VC_ANY     = "\\[1-4]?vc%b()"
-local PAT_COLOR_CAP  = "\\([1-4]?)c(&H%x+&?)"
+local PAT_COLOR_CAP  = "\\([1-4]?)c(&[Hh]%x+&?)"
 local PAT_VC_CAP     = "\\([1-4]?)vc(%b())"
-local PAT_HEX_TOKEN  = "&H%x+&?"
+local PAT_HEX_TOKEN  = "&[Hh]%x+&?"
 
 local SLOT_KEYS = { "1", "2", "3", "4" }
 local SLOT_LABELS = { ["1"] = "\\c", ["2"] = "\\2c", ["3"] = "\\3c", ["4"] = "\\4c" }
@@ -351,9 +352,9 @@ local function stripSolidSlotsFromFirstBlock(text)
     local head = text:match("^({[^}]*})")
     if not head then return text end
     local body = head:sub(2, -2)
-    body = body:gsub("\\1?c&H%x+&?", "")
-    body = body:gsub("\\3c&H%x+&?", "")
-    body = body:gsub("\\4c&H%x+&?", "")
+    body = body:gsub("\\1?c&[Hh]%x+&?", "")
+    body = body:gsub("\\3c&[Hh]%x+&?", "")
+    body = body:gsub("\\4c&[Hh]%x+&?", "")
     body = body:gsub("\\1?vc%b()", "")
     body = body:gsub("\\3vc%b()", "")
     body = body:gsub("\\4vc%b()", "")
@@ -366,7 +367,7 @@ end
 
 local function stripSpecificColor(text, n)
     local vcPat = (n == "1") and "\\1?vc%b()"      or ("\\" .. n .. "vc%b()")
-    local cPat  = (n == "1") and "\\1?c&H%x+&?"    or ("\\" .. n .. "c&H%x+&?")
+    local cPat  = (n == "1") and "\\1?c&[Hh]%x+&?" or ("\\" .. n .. "c&[Hh]%x+&?")
     text = text:gsub(vcPat, "")
     text = text:gsub(cPat, "")
     text = cleanupTransforms(text)
@@ -386,7 +387,7 @@ function TagStripper.dedupeColors(text)
         end)
 
         local lastC, lastV = {}, {}
-        for n, raw in protected:gmatch("\\([1-4]?)c(&H%x+&?)") do
+        for n, raw in protected:gmatch("\\([1-4]?)c(&[Hh]%x+&?)") do
             if n == "" then n = "1" end
             lastC[n] = raw
         end
@@ -400,7 +401,7 @@ function TagStripper.dedupeColors(text)
         end
 
         protected = protected:gsub("\\[1-4]?vc%b()", "")
-        protected = protected:gsub("\\[1-4]?c&H%x+&?", "")
+        protected = protected:gsub("\\[1-4]?c&[Hh]%x+&?", "")
 
         protected = protected:gsub("\1T(%d+)\1", function(idx)
             return placeholders[tonumber(idx)] or ""
@@ -431,7 +432,7 @@ function TagStripper.harmonizeColors(text, newFill, newOutline, newShadow)
     local nO = ColorUtil.normalize(newOutline)
     local nS = ColorUtil.normalize(newShadow)
     local hasC, has3, has4 = false, false, false
-    text = text:gsub("(\\)([1-4]?)c(&H%x+&?)", function(slash, n, raw)
+    text = text:gsub("(\\)([1-4]?)c(&[Hh]%x+&?)", function(slash, n, raw)
         if n == "" then n = "1" end
         if n == "1" then hasC = true; return slash .. "c" .. nF end
         if n == "3" then has3 = true; return slash .. "3c" .. nO end
@@ -879,7 +880,8 @@ function ColorRelay.promptControls(defaultFrames, intervals, state)
             { class = "checkbox", name = "slot4", label = "Sombra \\4c", value = slotFilter[4], x = 37, y = 13, width = 10 },
         }, { "Siguiente", "Cancel" })
 
-        if btn == "Cancel" then return nil end
+        if not btn or btn == "Cancel" then return nil end
+        res = res or {}
         frameValue = res.frames or ""
         fadeValue = res.fade or "0"
         slotFilter = {
@@ -940,8 +942,8 @@ function ColorRelay.promptReplacements(event, colors, slotFilter, index, total)
         { class = "label", label = "Canales activos: " .. ColorRelay.slotFilterLabel(slotFilter), x = 0, y = 1, width = 28 },
             { class = "label", label = "No hay colores activos para esos canales en este fotograma.", x = 0, y = 2, width = 28 },
         }, { "Volver", "Omitir", "Cancel" })
+        if not btn or btn == "Cancel" then return "cancel" end
         if btn == "Volver" then return "back" end
-        if btn == "Cancel" then return "cancel" end
         return "skip"
     end
     local ui = {
@@ -949,21 +951,22 @@ function ColorRelay.promptReplacements(event, colors, slotFilter, index, total)
         { class = "label", label = "Fundido (ms o Nf):", x = 10, y = 0, width = 8 },
         { class = "edit", name = "fade", text = event.fade_label or "0", x = 18, y = 0, width = 6 },
         { class = "label", label = "Canales activos: " .. ColorRelay.slotFilterLabel(slotFilter), x = 0, y = 1, width = 24 },
-        { class = "label", label = "Activo", x = 0, y = 2, width = 4 },
+        { class = "label", label = "Actual", x = 0, y = 2, width = 4 },
         { class = "label", label = "Nuevo", x = 5, y = 2, width = 4 },
     }
     for i, color in ipairs(colors) do
         local y = i + 2
         local current = event.replacements and event.replacements[color] or color
-        ui[#ui + 1] = { class = "coloralpha", name = "old" .. i, value = color, x = 0, y = y, width = 4 }
+        ui[#ui + 1] = { class = "label", label = ColorUtil.toHex(color), x = 0, y = y, width = 4 }
         ui[#ui + 1] = { class = "label", label = ">", x = 4, y = y, width = 1 }
-        ui[#ui + 1] = { class = "coloralpha", name = "new" .. i, value = current, x = 5, y = y, width = 4 }
+        ui[#ui + 1] = { class = "color", name = "new" .. i, value = ColorUtil.toHex(current), x = 5, y = y, width = 4 }
     end
 
     local btn, res = aegisub.dialog.display(ui, { "Execute", "Volver", "Omitir", "Cancel" })
+    if not btn or btn == "Cancel" then return "cancel" end
     if btn == "Volver" then return "back" end
-    if btn == "Cancel" then return "cancel" end
     if btn == "Omitir" then return "skip" end
+    res = res or {}
 
     local fadeMs, fadeLabel = ColorRelay.parseFadeToMs(res.fade or event.fade_label or "0", event.frame)
     if not fadeMs then
@@ -975,7 +978,11 @@ function ColorRelay.promptReplacements(event, colors, slotFilter, index, total)
 
     local replacements, any = {}, false
     for i, oldColor in ipairs(colors) do
-        local newColor = ColorRelay.normalizeColor(res["new" .. i], oldColor)
+        local newColor = ColorUtil.normalizeStrict(res["new" .. i])
+        if not newColor then
+            ColorRelay.showMessage(ColorRelay.name, "Color inválido: " .. tostring(res["new" .. i]))
+            return "retry"
+        end
         if newColor ~= oldColor then
             replacements[oldColor] = newColor
             any = true
@@ -1644,10 +1651,10 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
             local info = data[a]
             local vc = info.vsf_corners[activeTag]
             table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.vsf_actor_label_chars), x = 0, y = r, hint = actorLabel(a) })
-            table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_1", value = vc[1], x = 1, y = r })
-            table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_2", value = vc[2], x = 2, y = r })
-            table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_3", value = vc[3], x = 3, y = r })
-            table.insert(g, { class = "coloralpha", name = "V_" .. k .. "_4", value = vc[4], x = 4, y = r })
+            table.insert(g, { class = "color", name = "V_" .. k .. "_1", value = ColorUtil.toHex(vc[1]), x = 1, y = r })
+            table.insert(g, { class = "color", name = "V_" .. k .. "_2", value = ColorUtil.toHex(vc[2]), x = 2, y = r })
+            table.insert(g, { class = "color", name = "V_" .. k .. "_3", value = ColorUtil.toHex(vc[3]), x = 3, y = r })
+            table.insert(g, { class = "color", name = "V_" .. k .. "_4", value = ColorUtil.toHex(vc[4]), x = 4, y = r })
             table.insert(g, { class = "label",      label = info.has_vsf and "VSF" or "", x = 5, y = r })
         end
         return g, e - s + 1
@@ -1668,9 +1675,9 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
         local r = k - s + 3
         local info = data[a]
         table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.actor_label_chars), x = 0, y = r, hint = actorLabel(a) .. " (" .. info.line_count .. " líneas)" })
-        table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_c",  value = info.colors.c,    x = 1, y = r })
-        table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_3c", value = info.colors["3c"], x = 2, y = r })
-        table.insert(g, { class = "coloralpha", name = "C_" .. k .. "_4c", value = info.colors["4c"], x = 3, y = r })
+        table.insert(g, { class = "color", name = "C_" .. k .. "_c",  value = ColorUtil.toHex(info.colors.c),     x = 1, y = r })
+        table.insert(g, { class = "color", name = "C_" .. k .. "_3c", value = ColorUtil.toHex(info.colors["3c"]), x = 2, y = r })
+        table.insert(g, { class = "color", name = "C_" .. k .. "_4c", value = ColorUtil.toHex(info.colors["4c"]), x = 3, y = r })
         local ratio = ColorUtil.contrastRatio(info.colors.c, info.colors["3c"])
         local status = info.has_mixed and "MIXTO " or ""
         if info.has_vsf then status = status .. "VSF " end
@@ -2161,6 +2168,7 @@ end
 function ColorReplacer.run(subs, sel, cfg)
     local slots = slotFilterFromConfig(cfg)
     local status = ""
+    local pending = {}
     while true do
         local found = anySlotSelected(slots) and ColorReplacer.collect(subs, sel, slots) or {}
         local g = {
@@ -2191,71 +2199,84 @@ function ColorReplacer.run(subs, sel, cfg)
             table.insert(g, { class = "label", label = "Nuevo",  x = 4, y = baseY, width = 3 })
             for i, v in ipairs(found) do
                 local y = baseY + i
-                table.insert(g, { class = "coloralpha", name = "o" .. i, value = v, x = 0, y = y, width = 3 })
+                table.insert(g, { class = "label", label = ColorUtil.toHex(v), x = 0, y = y, width = 3 })
                 table.insert(g, { class = "label",      label = ">", x = 3, y = y, width = 1 })
-                table.insert(g, { class = "coloralpha", name = "n" .. i, value = v, x = 4, y = y, width = 3 })
+                table.insert(g, { class = "color", name = "n" .. i, value = ColorUtil.toHex(pending[v] or v), x = 4, y = y, width = 3 })
             end
             local btn, res = aegisub.dialog.display(g, { "Execute", "Actualizar", "Volver", "Cancel" })
             res = res or {}
             local nextSlots = slotFilterFromConfig(res)
             if btn == "Volver" then return 0, nil, "back", writeSlotFilterToTable({}, nextSlots) end
             if btn == "Cancel" or not btn then return 0, nil, "cancel", writeSlotFilterToTable({}, nextSlots) end
-            if btn == "Actualizar" or not sameSlotFilter(slots, nextSlots) then
-                slots = nextSlots
-                status = "Filtros actualizados."
+            local parsed, invalid = {}, nil
+            for i, v in ipairs(found) do
+                local nv = ColorUtil.normalizeStrict(res["n" .. i])
+                if not nv then
+                    invalid = "Color inválido: " .. tostring(res["n" .. i])
+                    break
+                end
+                parsed[v] = nv
+            end
+            if invalid then
+                status = invalid
             else
-                local replacements, anyChange = {}, false
-                for i, v in ipairs(found) do
-                    local nv = ColorUtil.normalizeStrict(res["n" .. i])
-                    if not nv then
-                        return nil, "Color inválido: " .. tostring(res["n" .. i]), "error", writeSlotFilterToTable({}, slots)
+                for v, nv in pairs(parsed) do pending[v] = nv end
+                if btn == "Actualizar" or not sameSlotFilter(slots, nextSlots) then
+                    slots = nextSlots
+                    status = "Filtros actualizados; revisa los colores y ejecuta de nuevo."
+                else
+                    local replacements, anyChange = {}, false
+                    for _, v in ipairs(found) do
+                        local nv = pending[v] or v
+                        if v ~= nv then replacements[v] = nv; anyChange = true end
                     end
-                    if v ~= nv then replacements[v] = nv; anyChange = true end
-                end
-                if not anyChange then return 0, nil, "nochange", writeSlotFilterToTable({}, slots) end
-
-                local count = 0
-                local function replaceToken(color)
-                    local rep = replacements[ColorUtil.normalize(color)]
-                    if not rep then return nil end
-                    local hex = tostring(color):match("&[Hh](%x+)&?")
-                    if hex and #hex > 6 then
-                        local alpha = hex:sub(1, #hex - 6):upper()
-                        local rgb = rep:match("&H(%x+)&")
-                        return "&H" .. alpha .. rgb .. "&"
-                    end
-                    return rep
-                end
-                for _, i in ipairs(sel) do
-                    local l = subs[i]
-                    if isDialogueLine(l) then
-                        l.text = tostring(l.text or "")
-                        local changed = false
-                        l.text = l.text:gsub("(\\)([1-4]?)c(&H%x+&?)", function(slash, rawSlot, color)
-                            local slot = rawSlot == "" and "1" or rawSlot
-                            if not slots[slot] then return slash .. rawSlot .. "c" .. color end
-                            local rep = replaceToken(color)
-                            if rep then changed = true; return slash .. rawSlot .. "c" .. rep end
-                            return slash .. rawSlot .. "c" .. color
-                        end)
-                        l.text = l.text:gsub("\\([1-4]?)vc(%b())", function(rawSlot, parens)
-                            local slot = rawSlot == "" and "1" or rawSlot
-                            if not slots[slot] then return "\\" .. rawSlot .. "vc" .. parens end
-                            local newParens = parens:gsub(PAT_HEX_TOKEN, function(color)
-                                local rep = replaceToken(color)
-                                if rep then changed = true; return rep end
-                                return color
-                            end)
-                            return "\\" .. rawSlot .. "vc" .. newParens
-                        end)
-                        if changed then
-                            l.text = TagStripper.dedupeColors(l.text)
-                            subs[i] = l
-                            count = count + 1
+                    if not anyChange then
+                        status = "No hay cambios de color por aplicar."
+                    else
+                        local count = 0
+                        local function replaceToken(color)
+                            local rep = replacements[ColorUtil.normalize(color)]
+                            if not rep then return nil end
+                            local hex = tostring(color):match("&[Hh](%x+)&?")
+                            if hex and #hex > 6 then
+                                local alpha = hex:sub(1, #hex - 6):upper()
+                                local rgb = rep:match("&H(%x+)&")
+                                return "&H" .. alpha .. rgb .. "&"
+                            end
+                            return rep
                         end
+                        for _, i in ipairs(sel) do
+                            local l = subs[i]
+                            if isDialogueLine(l) then
+                                l.text = tostring(l.text or "")
+                                local changed = false
+                                l.text = l.text:gsub("(\\)([1-4]?)c(&[Hh]%x+&?)", function(slash, rawSlot, color)
+                                    local slot = rawSlot == "" and "1" or rawSlot
+                                    if not slots[slot] then return slash .. rawSlot .. "c" .. color end
+                                    local rep = replaceToken(color)
+                                    if rep then changed = true; return slash .. rawSlot .. "c" .. rep end
+                                    return slash .. rawSlot .. "c" .. color
+                                end)
+                                l.text = l.text:gsub("\\([1-4]?)vc(%b())", function(rawSlot, parens)
+                                    local slot = rawSlot == "" and "1" or rawSlot
+                                    if not slots[slot] then return "\\" .. rawSlot .. "vc" .. parens end
+                                    local newParens = parens:gsub(PAT_HEX_TOKEN, function(color)
+                                        local rep = replaceToken(color)
+                                        if rep then changed = true; return rep end
+                                        return color
+                                    end)
+                                    return "\\" .. rawSlot .. "vc" .. newParens
+                                end)
+                                if changed then
+                                    l.text = TagStripper.dedupeColors(l.text)
+                                    subs[i] = l
+                                    count = count + 1
+                                end
+                            end
+                        end
+                        return count, nil, "applied", writeSlotFilterToTable({}, slots)
                     end
                 end
-                return count, nil, "applied", writeSlotFilterToTable({}, slots)
             end
         end
     end
@@ -2795,9 +2816,9 @@ end
 local function _hasAlphaTag(text)
     if not text then return false end
     text = tostring(text)
-    if text:find("{[^}]*\\[1-4]?a&H%x+&") then return true end
-    if text:find("\\alpha&H%x+&") then return true end
-    for slot in text:gmatch("\\[1-4]?c(&H%x+)") do
+    if text:find("{[^}]*\\[1-4]?a&[Hh]%x+&") then return true end
+    if text:find("\\alpha&[Hh]%x+&") then return true end
+    for slot in text:gmatch("\\[1-4]?c(&[Hh]%x+)") do
         if #slot > 8 then return true end
     end
     return false
@@ -3360,8 +3381,8 @@ end
 local function _stripAlphaTags(text)
     if not text then return "" end
     return (tostring(text):gsub("{([^}]*)}", function(block)
-        block = block:gsub("\\alpha&H%x+&", "")
-        block = block:gsub("\\[1-4]a&H%x+&", "")
+        block = block:gsub("\\alpha&[Hh]%x+&", "")
+        block = block:gsub("\\[1-4]a&[Hh]%x+&", "")
         block = cleanupTransforms(block)
         block = trim(block)
         if block == "" then return "" end
@@ -4017,8 +4038,8 @@ function CalibrationWizard.run()
     local y = 4
     for _, q in ipairs(CalibrationWizard.questions) do
         table.insert(ui, { class = "label",      label = q.label, x = 0, y = y, width = 2, hint = q.id })
-        table.insert(ui, { class = "coloralpha", name = "_ref_" .. q.id .. "_a", value = q.left,  x = 2, y = y, hint = "Referencia visual" })
-        table.insert(ui, { class = "coloralpha", name = "_ref_" .. q.id .. "_b", value = q.right, x = 3, y = y, hint = "Referencia visual" })
+        table.insert(ui, { class = "color", name = "_ref_" .. q.id .. "_a", value = ColorUtil.toHex(q.left),  x = 2, y = y, hint = "Referencia visual" })
+        table.insert(ui, { class = "color", name = "_ref_" .. q.id .. "_b", value = ColorUtil.toHex(q.right), x = 3, y = y, hint = "Referencia visual" })
         table.insert(ui, { class = "dropdown",   name = q.id, items = CalibrationWizard.answers, value = "diferentes", x = 4, y = y, width = 2 })
         y = y + 1
     end
@@ -4106,8 +4127,7 @@ function Config.save(t)
     return writeConfigFile(current)
 end
 
-local HELP_TEXT = [[
-ZHEUS COLORMANAGER 4.5.0
+local HELP_TEXT = "ZHEUS COLORMANAGER " .. script_version .. [[
 
 Panel principal
 Gestores:
@@ -4158,7 +4178,7 @@ local function gestorDeActores(subs, sel)
     local dlg = {
         { class = "label",   label = "Original",                  x = 0,  y = 0, width = 15, height = 1 },
         { class = "label",   label = "Nuevo (vacío = conservar)", x = 15, y = 0, width = 15, height = 1 },
-        { class = "textbox", name = "src",  text = originalText,  x = 0,  y = 1, width = 15, height = 20 },
+        { class = "textbox", name = "src",  text = originalText,  x = 0,  y = 1, width = 15, height = 20, readonly = true },
         { class = "textbox", name = "dest", text = originalText,  x = 15, y = 1, width = 15, height = 20 },
     }
     local btn, res = aegisub.dialog.display(dlg, { "Execute", "Cancel" })
@@ -4193,10 +4213,15 @@ local function gestorDeActores(subs, sel)
 end
 
 local function ejecutarGestorDeActores(subs, sel)
-    local action = gestorDeActores(subs, sel)
-    if action ~= "done" then return false end
+    if not sel or #sel == 0 then
+        showMsg("Selecciona líneas para editar actores.")
+        return false, "empty"
+    end
+    local action, changed = gestorDeActores(subs, sel)
+    if action ~= "done" then return false, action end
+    if not changed or changed == 0 then return false, "nochange" end
     aegisub.set_undo_point("Zheus Colormanager - Actores")
-    return true
+    return true, "done"
 end
 
 local SelectionReport = {}
@@ -4313,11 +4338,11 @@ local function addVSFBlock(ui, cfg, tagName, label, x, baseY)
     local enabledName = prefix .. "_use"
     table.insert(ui, { class = "checkbox", name = enabledName, label = label, value = cfg[enabledName], x = x, y = baseY, width = 3 })
     table.insert(ui, { class = "label", label = "Sup:", x = x, y = baseY + 1, width = 1 })
-    table.insert(ui, { class = "coloralpha", name = prefix .. "_1", value = cfg[prefix .. "_1"], x = x + 1, y = baseY + 1, hint = "\\" .. tagName .. " superior izq" })
-    table.insert(ui, { class = "coloralpha", name = prefix .. "_2", value = cfg[prefix .. "_2"], x = x + 2, y = baseY + 1, hint = "\\" .. tagName .. " superior der" })
+    table.insert(ui, { class = "color", name = prefix .. "_1", value = ColorUtil.toHex(cfg[prefix .. "_1"]), x = x + 1, y = baseY + 1, hint = "\\" .. tagName .. " superior izq" })
+    table.insert(ui, { class = "color", name = prefix .. "_2", value = ColorUtil.toHex(cfg[prefix .. "_2"]), x = x + 2, y = baseY + 1, hint = "\\" .. tagName .. " superior der" })
     table.insert(ui, { class = "label", label = "Inf:", x = x, y = baseY + 2, width = 1 })
-    table.insert(ui, { class = "coloralpha", name = prefix .. "_3", value = cfg[prefix .. "_3"], x = x + 1, y = baseY + 2, hint = "\\" .. tagName .. " inferior izq" })
-    table.insert(ui, { class = "coloralpha", name = prefix .. "_4", value = cfg[prefix .. "_4"], x = x + 2, y = baseY + 2, hint = "\\" .. tagName .. " inferior der" })
+    table.insert(ui, { class = "color", name = prefix .. "_3", value = ColorUtil.toHex(cfg[prefix .. "_3"]), x = x + 1, y = baseY + 2, hint = "\\" .. tagName .. " inferior izq" })
+    table.insert(ui, { class = "color", name = prefix .. "_4", value = ColorUtil.toHex(cfg[prefix .. "_4"]), x = x + 2, y = baseY + 2, hint = "\\" .. tagName .. " inferior der" })
 end
 
 local function addReplaceSlotControls(ui, cfg, baseY)
@@ -4431,10 +4456,11 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
             status = "Editando \\" .. vsfTag .. "."
         elseif btn == "Gestor" then
             if res.gestores == "Actores" then
-                if ejecutarGestorDeActores(subs, sel) then
+                local applied, actorAction = ejecutarGestorDeActores(subs, sel)
+                if applied then
                     return
                 end
-                status = "Actores: cancelado."
+                status = actorAction == "nochange" and "Actores: sin cambios." or "Actores: cancelado."
             end
             if res.gestores ~= "Actores" then
                 rescan()
@@ -4716,6 +4742,15 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
 
         local chosenProfileId = AccessibilityProfiles.idFromChoice(res.profile)
         local chosenApplyMode = res.apply_mode == "Estilos" and "Styles" or "Tags"
+        cfg.active_profile = chosenProfileId
+        cfg.apply_mode = chosenApplyMode
+        cfg.preserve_alpha = res.preserve_alpha == true
+        cfg.add_bord_shad = res.add_bord_shad == true
+        cfg.include_drawings = res.include_drawings == true
+        local configSaved, configError = AccessibilityConfig.save(cfg)
+        if not configSaved then
+            showMsg("No se pudo guardar la configuración de Daltonismo: " .. tostring(configError))
+        end
 
         if btn == "Calibrar" then
             openCalibrationWizard()

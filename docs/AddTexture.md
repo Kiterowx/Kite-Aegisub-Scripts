@@ -1,4 +1,4 @@
-# AddTexture 2.0.11
+# AddTexture 2.0.13
 
 AddTexture applies pasted ASS drawing textures to selected text outlines.
 
@@ -13,6 +13,8 @@ Namespace: `kite.AddTexture`
 - Paste or prepare ASS drawing texture data.
 - Select dialogue lines with text outlines.
 - Run `AddTexture` to clip the texture to the selected text shape.
+
+Large output is confirmed with a warning instead of being rejected. Empty texture/text intersections are skipped and reported without inserting invalid lines.
 
 ## Configuration
 

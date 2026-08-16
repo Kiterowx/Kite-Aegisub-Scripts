@@ -2,7 +2,7 @@ export script_name = "Obake"
 export script_description = "Build and maintain ASS transform/tag effects."
 export script_author = "Kiterow"
 export script_namespace = "kite.Obake"
-export script_version = "0.3.4"
+export script_version = "0.3.5"
 
 Core = {}
 local ASS, AMLine, LineOps
@@ -93,7 +93,7 @@ ACTION_HELP = {
   en: {
     ["Apply chain"]: "Builds one or more transform segments and injects them in the first override block. Add+ and Rem- control the number of keyframes. In manual mode, the first row is the initial state and each later row becomes one timed \\t()."
     ["Retime transforms"]: "Directly scales every timed \\t(t1,t2,...) in each selected line. Source duration is inferred from the largest existing transform time; target duration is the current line duration."
-    ["In-Out tags"]: "With exactly two selected dialogue lines, creates one line spanning both timings, comments the originals, and turns differing leading tags into \\t() transitions."
+    ["In-Out tags"]: "Groups selected dialogue lines by matching Effect in pairs of two. Each pair creates one line spanning both timings, comments the originals, and turns differing leading tags into \\t() transitions."
     ["Gunfight of Tags"]: "Randomizes selected numeric/hex ASS override tags. With one source line it splits the line into FBF chunks using the frame period. With multiple selected lines, Count selection as FBF unit treats the selection itself as the tag-change sequence; disabling it splits each line into its own FBF chunks."
     ["ZigZag lines"]: "Uses the selected lines as visual states and emits FBF chunks that alternate through them every N frames. If their times differ, the generated range covers the combined min start to max end."
     ["Animation FX"]: "Applies ready-made animation presets. Color and frame-driven presets use the selected lines, the active frame when needed, and the current line duration."
@@ -103,7 +103,7 @@ ACTION_HELP = {
   es: {
     ["Apply chain"]: "Crea uno o varios tramos de transform y los inserta en el primer bloque de tags. Add+ y Rem- controlan la cantidad de keyframes. En modo manual, la primera fila es el estado inicial y las siguientes filas generan \\t() cronometrados."
     ["Retime transforms"]: "Escala directamente cada \\t(t1,t2,...) de las líneas seleccionadas. La duración origen sale del mayor tiempo existente y la duración destino sale de la línea actual."
-    ["In-Out tags"]: "Con exactamente dos líneas de diálogo seleccionadas, crea una línea que cubre ambos tiempos, comenta los originales y convierte los tags iniciales distintos en transiciones \\t()."
+    ["In-Out tags"]: "Agrupa las líneas de diálogo seleccionadas por Effect en pares de dos. Cada par crea una línea que cubre ambos tiempos, comenta los originales y convierte los tags iniciales distintos en transiciones \\t()."
     ["Gunfight of Tags"]: "Randomiza valores numéricos y hexadecimales en tags ASS. Puede usar la selección como secuencia FBF o dividir cada línea por fotogramas sin alterar el generador aleatorio global."
     ["ZigZag lines"]: "Usa las líneas seleccionadas como estados y crea segmentos FBF que alternan cada N fotogramas sobre el intervalo combinado."
     ["Animation FX"]: "Aplica presets de animación. Los presets de color y de frame usan las líneas seleccionadas, el frame activo cuando corresponde y la duración actual de cada línea."
@@ -178,8 +178,9 @@ LANG = {
     use_line1: "Use line 1"
     use_line2: "Use line 2"
     choose_text: "The two lines have different text. Which text should be kept?"
-    in_out_need_two: "In-Out tags needs exactly two selected dialogue lines."
-    in_out_created: "In-Out tags created one line."
+    in_out_need_pairs: "In-Out tags needs selected dialogue lines grouped into pairs with the same Effect."
+    in_out_bad_pairs: "Each Effect must identify exactly two selected dialogue lines. Invalid groups: %s."
+    in_out_created: "In-Out tags created %d output line(s)."
     line: "Line"
     zero_duration: "zero duration."
     transform_s: "transform(s)."
@@ -257,8 +258,9 @@ LANG = {
     use_line1: "Usar línea 1"
     use_line2: "Usar línea 2"
     choose_text: "Las dos líneas tienen texto distinto. ¿Cuál texto quieres conservar?"
-    in_out_need_two: "In-Out tags necesita exactamente dos líneas de diálogo seleccionadas."
-    in_out_created: "In-Out tags creó una línea."
+    in_out_need_pairs: "In-Out tags necesita líneas de diálogo seleccionadas agrupadas en pares con el mismo Effect."
+    in_out_bad_pairs: "Cada Effect debe identificar exactamente dos líneas de diálogo seleccionadas. Grupos inválidos: %s."
+    in_out_created: "In-Out tags creó %d línea(s) de salida."
     line: "Línea"
     zero_duration: "duración cero."
     transform_s: "transform(s)."
@@ -770,6 +772,14 @@ inject_first = (text, payload) ->
   fb = first_block text
   if fb != ""
     return "{" .. payload .. fb\sub(2, -2) .. "}" .. text\sub(#fb + 1)
+  "{" .. payload .. "}" .. text
+
+inject_transform_first = (text, payload) ->
+  return text unless payload and payload != ""
+  text = tostring(text or "")
+  fb = first_block text
+  if fb != ""
+    return fb\sub(1, -2) .. payload .. "}" .. text\sub(#fb + 1)
   "{" .. payload .. "}" .. text
 
 remove_simple_tag = (text, tag) ->
@@ -1447,19 +1457,36 @@ choose_transition_body = (body1, body2) ->
   }, {b1, b2, bc}, {cancel: bc, close: bc}
   if button == b2 then body2 elseif button == b1 then body1 else nil
 
-apply_in_out_tags = (subs, sel, cfg = {}) ->
-  indices = [i for i in *(sel or {})]
-  unless #indices == 2
-    show_message Core.L("in_out_need_two")
-    return false
-  records = [{index: index, line: clone_line(subs[index])} for index in *indices]
-  table.sort records, (a, b) ->
-    if a.line.start_time == b.line.start_time then a.index < b.index else a.line.start_time < b.line.start_time
+Core.collect_in_out_pairs = (subs, sel) ->
+  return nil unless subs and sel and #sel >= 2
+  groups, effect_order = {}, {}
+  for index in *sel
+    line = subs[index]
+    return nil unless is_dialogue line
+    effect = tostring line.effect or ""
+    unless groups[effect]
+      groups[effect] = {}
+      effect_order[#effect_order + 1] = effect
+    groups[effect][#groups[effect] + 1] = {index: index, line: line}
+  pairs, invalid_effects = {}, {}
+  for effect in *effect_order
+    records = groups[effect]
+    if #records != 2
+      invalid_effects[#invalid_effects + 1] = effect
+    else
+      table.sort records, (a, b) ->
+        at, bt = tonumber(a.line.start_time) or 0, tonumber(b.line.start_time) or 0
+        if at == bt then a.index < b.index else at < bt
+      pairs[#pairs + 1] = records
+  return nil, invalid_effects if #invalid_effects > 0
+  pairs
+
+Core.build_in_out_pair = (records) ->
   idx1, idx2 = records[1].index, records[2].index
-  line1, line2 = records[1].line, records[2].line
+  line1, line2 = clone_line(records[1].line), clone_line(records[2].line)
   unless is_dialogue(line1) and is_dialogue(line2)
-    show_message Core.L("in_out_need_two")
-    return false
+    show_message Core.L("in_out_need_pairs")
+    return nil
   visual_fields = {"style", "effect", "layer", "margin_l", "margin_r", "margin_t", "margin_b", "margin_v"}
   exact_visual_fields = {style: true, effect: true}
   differing_fields = {}
@@ -1562,15 +1589,40 @@ apply_in_out_tags = (subs, sel, cfg = {}) ->
   new_line.text = (if #parts > 0 then "{" .. table.concat(parts) .. "}" else "") .. final_text
   line1.comment = true
   line2.comment = true
+  {
+    idx1: idx1
+    idx2: idx2
+    insert_after: math.max(idx1, idx2)
+    line1: line1
+    line2: line2
+    new_line: new_line
+  }
+
+apply_in_out_tags = (subs, sel, cfg = {}) ->
+  pairs, invalid_effects = Core.collect_in_out_pairs subs, sel
+  unless pairs
+    if invalid_effects and #invalid_effects > 0
+      labels = [(if effect == "" then "<empty>" else effect) for effect in *invalid_effects]
+      show_message string.format Core.L("in_out_bad_pairs"), table.concat(labels, ", ")
+    else
+      show_message Core.L("in_out_need_pairs")
+    return false
+  plans = {}
+  for records in *pairs
+    plan = Core.build_in_out_pair records
+    return false unless plan
+    plans[#plans + 1] = plan
+  table.sort plans, (a, b) -> a.insert_after > b.insert_after
   ok_apply, apply_error = pcall ->
     LineOps.transaction subs, "Obake - In-Out tags", ->
-      subs[idx1] = line1
-      subs[idx2] = line2
-      subs.insert math.max(idx1, idx2) + 1, new_line
+      for plan in *plans
+        subs[plan.idx1] = plan.line1
+        subs[plan.idx2] = plan.line2
+        subs.insert plan.insert_after + 1, plan.new_line
   unless ok_apply
     show_message "In-Out could not apply output atomically: #{apply_error}"
     return false
-  show_message Core.L("in_out_created") unless cfg.quiet
+  show_message string.format(Core.L("in_out_created"), #plans) unless cfg.quiet
   true
 
 html_to_ass = (value) ->
@@ -1794,7 +1846,7 @@ apply_chain = (subs, sel, state) ->
         if payload != ""
           text = line.text or ""
           text = strip_transforms text if state.strip_existing
-          line.text = inject_first text, payload
+          line.text = inject_transform_first text, payload
           subs[i] = line
           count += 1
   if count > 0
@@ -2639,7 +2691,7 @@ fx_text = (line, uses_karaoke) ->
 
 inject_fx = (line, payload, strip) ->
   line.text = strip_transforms line.text if strip
-  line.text = inject_first line.text, payload
+  line.text = inject_transform_first line.text, payload
   line
 
 fx_from_ini_fin = (ini, fin) ->
@@ -2990,7 +3042,9 @@ Core.validate_any = ->
   true
 
 Core.validate_in_out = (subs, sel) ->
-  Core.validate(subs, sel) and #sel == 2
+  return false unless Core.validate subs, sel
+  pairs = Core.collect_in_out_pairs subs, sel
+  pairs != nil
 
 Core.validate_zigzag = (subs, sel) ->
   Core.validate(subs, sel) and #sel >= 2

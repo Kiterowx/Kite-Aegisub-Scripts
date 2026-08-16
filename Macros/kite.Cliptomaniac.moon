@@ -2,7 +2,7 @@ export script_name = "Cliptomaniac"
 export script_description = "Clip toolbox for measuring, transforming, reshaping, fitting, and projecting ASS clips."
 export script_author = "Kiterow"
 export script_namespace = "kite.Cliptomaniac"
-export script_version = "0.3.3"
+export script_version = "0.3.8"
 
 
 local ZF, ASS, ArchPerspective, LineCollection, Functional, Util, AMLine, LineOps, depctrl, logger
@@ -57,12 +57,14 @@ current_language = DEFAULT_LANGUAGE
 language_config_handler = nil
 AVERAGE_GLYPH_WIDTH_EM = 0.4042
 BEZIER_ARCLENGTH_SEGMENTS = 80
+SAME_LINE_CURVE_COMPENSATION = 0.62
 GEOMETRY_EPSILON = 0.0005
 NUMERIC_EPSILON = 0.0000005
 PARAMETRIC_EPSILON = 0.000001
 MIN_FBF_FRAME_BUDGET = 1
 DEFAULT_FBF_FRAME_BUDGET = 400
 MAX_FBF_FRAME_BUDGET = 5000
+TRACKING_FALLBACK_FPS = 24000 / 1001
 
 OPERATIONS = {
   "Autofit clip to text"
@@ -94,6 +96,7 @@ OPERATIONS = {
   "Complete quadrilateral"
   "Create strip clips"
   "Animated clip to FBF"
+  "Export clip track to AE"
   "Calibrate clip X"
   "Calibrate clip Y"
   "Rectangle from diagonal"
@@ -101,7 +104,7 @@ OPERATIONS = {
   "New clip shape"
   "Add clip points"
   "Remove clip points"
-  "FRZ stops for LerpByChar"
+  "Bezier clip to curved text"
   "Clip diagnostics"
 }
 
@@ -122,7 +125,7 @@ OPERATION_LABELS = {
     ["Extract clip as mask line"]: "extract clip as mask line"
     ["Position at clip midpoint"]: "pos to clip center"
     ["Align to clip"]: "align pos to clip path"
-    ["Clip to reposition"]: "clip to reposition"
+    ["Clip to reposition"]: "reposition selection from clip"
     ["Clip to move"]: "clip to move"
     ["Clip to FRZ"]: "clip to frz"
     ["Clip to FAX"]: "clip to fax"
@@ -136,6 +139,7 @@ OPERATION_LABELS = {
     ["Complete quadrilateral"]: "complete quadrilateral"
     ["Create strip clips"]: "create strip clips"
     ["Animated clip to FBF"]: "animated clip to FBF"
+    ["Export clip track to AE"]: "export clip track to AE"
     ["Calibrate clip X"]: "calibrate clip X"
     ["Calibrate clip Y"]: "calibrate clip Y"
     ["Rectangle from diagonal"]: "rectangle from diagonal"
@@ -143,7 +147,7 @@ OPERATION_LABELS = {
     ["New clip shape"]: "new clip shape"
     ["Add clip points"]: "add clip points"
     ["Remove clip points"]: "remove clip points"
-    ["FRZ stops for LerpByChar"]: "frz stops along path"
+    ["Bezier clip to curved text"]: "curve text from Bézier clip"
     ["Clip diagnostics"]: "clip diagnostics"
   }
   es: {
@@ -162,7 +166,7 @@ OPERATION_LABELS = {
     ["Extract clip as mask line"]: "extraer clip como máscara"
     ["Position at clip midpoint"]: "pos al centro del clip"
     ["Align to clip"]: "alinear pos a la ruta del clip"
-    ["Clip to reposition"]: "clip para mover línea"
+    ["Clip to reposition"]: "mover selección desde clip"
     ["Clip to move"]: "clip a move"
     ["Clip to FRZ"]: "clip a frz"
     ["Clip to FAX"]: "clip a fax"
@@ -176,6 +180,7 @@ OPERATION_LABELS = {
     ["Complete quadrilateral"]: "completar cuadrilátero"
     ["Create strip clips"]: "crear franjas de clip"
     ["Animated clip to FBF"]: "clip animado a FBF"
+    ["Export clip track to AE"]: "exportar tracking de clips a AE"
     ["Calibrate clip X"]: "enderezar guía clip en X"
     ["Calibrate clip Y"]: "enderezar guía clip en Y"
     ["Rectangle from diagonal"]: "crear rectángulo desde diagonal"
@@ -183,14 +188,13 @@ OPERATION_LABELS = {
     ["New clip shape"]: "continuar forma de clip"
     ["Add clip points"]: "anadir puntos de clip"
     ["Remove clip points"]: "quitar puntos de clip"
-    ["FRZ stops for LerpByChar"]: "crear marcas frz sobre ruta"
+    ["Bezier clip to curved text"]: "curvar texto desde clip Bézier"
     ["Clip diagnostics"]: "diagnóstico de clip"
   }
 }
 
 AXES = {"x", "y", "both"}
 ANGLE_MODES = {"none", "first angle", "transform angle"}
-CURVE_SOURCES = {"Auto", "Two guide strokes", "Path tangents"}
 AUTOFIT_MODES = {
   "Whole text"
   "Auto by position"
@@ -285,8 +289,8 @@ UI_LANG = {
     scale: "Scale:"
     center: "Center"
     remove_guide_clip: "Remove guide clip"
-    curve_source: "Curve source:"
-    tangent_stops: "Tangent stops:"
+    curve_depth: "Curve depth (%):"
+    curve_spacing: "Extra \\fsp (px):"
     corner_order: "Corner order:"
     origin: "Origin:"
     section_axis: "Section axis:"
@@ -314,6 +318,13 @@ UI_LANG = {
     boolean_mode: "Boolean mode:"
     select_one: "Select at least one dialogue line."
     line: "Line"
+    track_failed: "Clip tracking export failed:"
+    track_no_clip: "has no primary clip"
+    track_transform: "uses a clip inside \\t(...); bake it to FBF first"
+    track_segment: "must use exactly one m-l or m-b vector segment"
+    track_zero: "has a zero-length clip segment"
+    track_duration: "has an empty or invalid duration"
+    track_sample: "Selected sample"
   }
   es: {
     run: "Execute"
@@ -345,8 +356,8 @@ UI_LANG = {
     scale: "Escala:"
     center: "Centrar"
     remove_guide_clip: "Quitar clip guía"
-    curve_source: "Fuente:"
-    tangent_stops: "Marcas:"
+    curve_depth: "Profundidad (%):"
+    curve_spacing: "\\fsp adicional (px):"
     corner_order: "Esquinas:"
     origin: "Origen:"
     section_axis: "Eje:"
@@ -374,6 +385,13 @@ UI_LANG = {
     boolean_mode: "Booleano:"
     select_one: "Selecciona al menos una línea de diálogo."
     line: "Línea"
+    track_failed: "Falló la exportación del tracking de clips:"
+    track_no_clip: "no contiene un clip primario"
+    track_transform: "usa un clip dentro de \\t(...); hornéalo primero a FBF"
+    track_segment: "debe usar exactamente un segmento vectorial m-l o m-b"
+    track_zero: "tiene un segmento de clip de longitud cero"
+    track_duration: "tiene una duración vacía o inválida"
+    track_sample: "Muestra seleccionada"
     ["both"]: "ambos"
     ["none"]: "ninguno"
     ["first angle"]: "primer ángulo"
@@ -410,8 +428,8 @@ DEFAULTS = {
   operation: OPERATIONS[1]
   axis: "x"
   angle_mode: "none"
-  curve_source: "Auto"
-  tangent_stops: 0
+  curve_depth: 100
+  curve_spacing: 0
   margin: 8
   tolerance: 1
   strip: 24
@@ -551,6 +569,7 @@ Core.normalize_perspective_org = (value) ->
   DEFAULTS.perspective_org_mode
 
 Core.normalize_operation = (operation) ->
+  return "Bezier clip to curved text" if operation == "FRZ stops for LerpByChar"
   return "Clip to perspective" if operation == "Clip to Persp"
   Core.enum_option operation, OPERATIONS, DEFAULTS.operation
 
@@ -623,7 +642,11 @@ MESSAGE_ES = {
   ["Could not prepare text bounds."]: "No se pudo preparar el área del texto."
   ["Text bounds could not be measured."]: "No se pudo medir el área del texto."
   ["No rectangular clip was found."]: "No se encontró un clip rectangular."
-  ["No line received FRZ stops."]: "Ninguna línea recibió marcas de rotación."
+  ["Curved text must stay on one visual line."]: "El texto curvo debe permanecer en una sola línea visual."
+  ["Curved text only accepts text, not \\p drawings."]: "El texto curvo solo acepta texto, no dibujos \\p."
+  ["Remove animated \\fr/\\frz/\\fsp transforms before curving the text."]: "Quita las transformaciones animadas de \\fr/\\frz/\\fsp antes de curvar el texto."
+  ["No visible text was found to curve."]: "No se encontró texto visible para curvar."
+  ["Use exactly one cubic Bezier clip: \\clip(m x y b x1 y1 x2 y2 x3 y3)."]: "Usa exactamente un clip Bézier cúbico: \\clip(m x y b x1 y1 x2 y2 x3 y3)."
   ["No usable clip midpoint found."]: "No se encontró un centro de clip usable."
   ["No line position changed."]: "No cambió ninguna posición."
   ["No usable vector clip found."]: "No se encontró un clip vectorial usable."
@@ -672,11 +695,13 @@ Core.show_message = (message, title = "Cliptomaniac") ->
 Core.is_dialogue = (line) ->
   line and line.class == "dialogue" and not line.comment
 
-Core.dialogue_indices = (subs, sel) ->
+Core.dialogue_indices = (subs, sel, include_comments = false) ->
   out, seen = {}, {}
   for i in *(sel or {})
     n = tonumber i
-    if n and not seen[n] and Core.is_dialogue subs[n]
+    line = n and subs[n] or nil
+    is_selected_dialogue = Core.is_dialogue(line) or (include_comments and line and line.class == "dialogue")
+    if n and not seen[n] and is_selected_dialogue
       out[#out + 1] = n
       seen[n] = true
   table.sort out
@@ -764,6 +789,19 @@ Core.script_resolution = (line, data = nil) ->
       y or= info_y
   x, y
 
+Core.tracking_resolution = (subs) ->
+  script_info = {}
+  for i = 1, #subs
+    line = subs[i]
+    if line and line.class == "info"
+      key = tostring(line.key or "")
+      script_info[key] = line.value
+      script_info[key\lower!] = line.value
+  x, y = Core.script_resolution nil, {scriptInfo: script_info}
+  return x, y if x and y
+  x, y = Core.video_resolution!
+  if x and y then x, y else 1920, 1080
+
 Core.span_is_in_override = (text, absolute_pos) ->
   for block in *Core.override_block_spans text
     if absolute_pos > block.start and absolute_pos < block.stop and Core.looks_like_override block.inner
@@ -816,34 +854,18 @@ Core.next_char = (text, pos) ->
     rest = text\sub pos
     for ch in unicode.chars rest
       return ch, #ch
-  ch = text\sub pos, pos
-  ch, 1
-
-Core.last_visible_char_span = (text) ->
-  text = tostring(text or "")
-  pos = 1
-  last_start, last_stop, last_any_start, last_any_stop = nil, nil, nil, nil
-  while pos <= #text
-    c = text\sub pos, pos
-    if c == "{"
-      close = text\find "}", pos + 1, true
-      break unless close
-      pos = close + 1
-    elseif c == "\\" and pos < #text and text\sub(pos + 1, pos + 1)\match "[Nnh]"
-      pos += 2
-    else
-      ch, len = Core.next_char text, pos
-      len = math.max 1, tonumber(len) or 1
-      last_any_start, last_any_stop = pos, pos + len - 1
-      unless ch\match "^%s$"
-        last_start, last_stop = pos, pos + len - 1
-      pos += len
-  if last_start then last_start, last_stop else last_any_start, last_any_stop
-
-Core.insert_tag_before_last_visible = (text, tag) ->
-  start_pos = Core.last_visible_char_span text
-  return Core.insert_leading_tags text, tag unless start_pos
-  text\sub(1, start_pos - 1) .. "{" .. tag .. "}" .. text\sub(start_pos)
+  first = text\byte pos
+  len = if not first or first < 0x80
+    1
+  elseif first < 0xE0
+    2
+  elseif first < 0xF0
+    3
+  elseif first < 0xF8
+    4
+  else
+    1
+  text\sub(pos, math.min(#text, pos + len - 1)), len
 
 Core.balanced_paren_end = (text, open_pos) ->
   depth = 0
@@ -870,7 +892,7 @@ Core.tag_name_at = (inner, slash_pos) ->
   rest\match "^[1-4]?%a+"
 
 Core.clip_span_in_inner = (text, inner, base_offset, init = 1) ->
-  frames = {{inner: inner or "", base_offset: base_offset, pos: 1}}
+  frames = {{inner: inner or "", base_offset: base_offset, pos: 1, in_transform: false}}
   while #frames > 0
     frame = frames[#frames]
     if frame.pos > #frame.inner
@@ -893,12 +915,14 @@ Core.clip_span_in_inner = (text, inner, base_offset, init = 1) ->
               name: name
               raw: text\sub absolute_start, absolute_stop
               inner: frame.inner\sub value_pos + 1, close - 1
+              in_transform: frame.in_transform and true or false
             }
           frame.pos = close + 1
           frames[#frames + 1] = {
             inner: frame.inner\sub(value_pos + 1, close - 1)
             base_offset: frame.base_offset + value_pos
             pos: 1
+            in_transform: frame.in_transform or name == "t"
           }
           continue
         frame.pos = value_pos
@@ -1360,6 +1384,36 @@ Core.first_clip_commands = (text) ->
   return nil, nil unless span
   Core.clip_commands_from_span(span), span
 
+Core.tracking_segment_for_line = (line) ->
+  effective = nil
+  for span in *Core.all_clip_spans(line and line.text or "")
+    return nil, "transform" if span.in_transform
+    effective = span
+  return nil, "no_clip" unless effective
+  kind, _, payload = Core.clip_inner_parts effective.inner
+  return nil, "segment" unless kind == "vector"
+  cmds = Core.parse_draw_commands payload
+  return nil, "segment" unless cmds and #cmds == 2 and cmds[1].type == "m" and (cmds[2].type == "l" or cmds[2].type == "b")
+  return nil, "segment" unless (cmds[2].type == "l" and #cmds[2].pts == 2) or (cmds[2].type == "b" and #cmds[2].pts == 6)
+  x1, y1 = cmds[1].pts[1], cmds[1].pts[2]
+  x2, y2 = nil, nil
+  if cmds[2].type == "l"
+    x2, y2 = cmds[2].pts[1], cmds[2].pts[2]
+  else
+    x2, y2 = cmds[2].pts[5], cmds[2].pts[6]
+  segment = {:x1, :y1, :x2, :y2}
+  length = Core.segment_length segment
+  return nil, "zero" unless length > GEOMETRY_EPSILON
+  {
+    :x1, :y1, :x2, :y2
+    kind: cmds[2].type
+    span: effective
+    x: (x1 + x2) / 2
+    y: (y1 + y2) / 2
+    :length
+    angle: Core.segment_angle_math segment
+  }
+
 Core.atan2 = (dy, dx) ->
   dy, dx = tonumber(dy) or 0, tonumber(dx) or 0
   if math.atan2
@@ -1570,37 +1624,33 @@ Core.clip_scale_reference = (subs, sel) ->
     return single.seg1, single.seg2, {mode: "single", source: single.index}
   nil, nil, nil, "no_clip"
 
-Core.visible_char_spans = (text) ->
+Core.curve_char_units = (text) ->
   text = tostring(text or "")
-  spans, pos = {}, 1
+  units, pos = {}, 1
   while pos <= #text
     c = text\sub pos, pos
     if c == "{"
       close = text\find "}", pos + 1, true
       break unless close
       pos = close + 1
-    elseif c == "\\" and pos < #text and text\sub(pos + 1, pos + 1)\match "[Nnh]"
-      pos += 2
+    elseif c == "\\" and pos < #text
+      escaped = text\sub pos + 1, pos + 1
+      return nil, "multiline" if escaped == "N" or escaped == "n"
+      if escaped == "h"
+        units[#units + 1] = {start: pos, stop: pos + 1, insert: false}
+        pos += 2
+      elseif escaped == "\\"
+        units[#units + 1] = {start: pos, stop: pos + 1, insert: true}
+        pos += 2
+      else
+        units[#units + 1] = {start: pos, stop: pos, insert: true}
+        pos += 1
     else
       ch, len = Core.next_char text, pos
       len = math.max 1, tonumber(len) or 1
-      unless ch\match "^%s$"
-        spans[#spans + 1] = {start: pos, stop: pos + len - 1}
+      units[#units + 1] = {start: pos, stop: pos + len - 1, insert: not ch\match("^%s$")}
       pos += len
-  spans
-
-Core.selected_stop_indices = (count, limit) ->
-  return {} if count <= 0
-  limit = math.floor(tonumber(limit) or 0)
-  limit = count if limit <= 0 or limit > count
-  return {1} if count == 1 or limit == 1
-  seen, out = {}, {}
-  for i = 1, limit
-    idx = 1 + math.floor((i - 1) * (count - 1) / (limit - 1) + 0.5)
-    unless seen[idx]
-      seen[idx] = true
-      out[#out + 1] = idx
-  out
+  units
 
 Core.insert_tags_at_spans = (text, inserts) ->
   text = tostring(text or "")
@@ -1955,31 +2005,109 @@ Core.transform_clip_ruler_text = (line, seg1, seg2, opts) ->
   payload = start_tags .. "\\t(0," .. tostring(dur) .. "," .. final_tags .. ")"
   Core.insert_leading_tags(line.text or "", payload), {d1: d1, d2: d2, ratio: ratio, a1: Core.segment_frz(seg1), a2: Core.segment_frz(seg2)}
 
-Core.frz_lerp_stops_text = (line, seg1, seg2, opts) ->
-  a1, a2 = Core.segment_frz(seg1), Core.segment_frz(seg2)
-  text = Core.insert_leading_tags line.text or "", "\\frz" .. Core.format_num(a1, 2)
-  text = Core.insert_tag_before_last_visible text, "\\frz" .. Core.format_num(a2, 2)
-  text = Core.strip_clip_tags text if opts.remove_clip
-  text, {a1: a1, a2: a2}
+Core.single_cubic_bezier = (cmds) ->
+  return nil unless cmds and #cmds == 2
+  move, bezier = cmds[1], cmds[2]
+  return nil unless move.type == "m" and #move.pts >= 2
+  return nil unless bezier.type == "b" and #bezier.pts == 6
+  curve = {
+    Core.point_xy move.pts[1], move.pts[2]
+    Core.point_xy bezier.pts[1], bezier.pts[2]
+    Core.point_xy bezier.pts[3], bezier.pts[4]
+    Core.point_xy bezier.pts[5], bezier.pts[6]
+  }
+  return nil if Core.same_point curve[1], curve[4]
+  curve
 
-Core.frz_tangent_stops_text = (line, cmds, opts = {}) ->
-  return nil unless cmds
-  spans = Core.visible_char_spans line.text
-  return nil unless #spans > 0
-  sampled, total = Core.sample_path cmds, 40
-  return nil unless sampled and total and total > 0
-  indices = Core.selected_stop_indices #spans, opts.tangent_stops
-  inserts = {}
-  for idx in *indices
-    ratio = if #spans <= 1 then 0 else (idx - 1) / (#spans - 1)
-    point = Core.point_on_path sampled, total * ratio
-    continue unless point and point.angle != nil
-    angle = -math.deg point.angle
-    inserts[#inserts + 1] = {pos: spans[idx].start, tag: "{\\frz#{Core.format_num angle, 2}}"}
-  return nil if #inserts == 0
-  text = Core.insert_tags_at_spans line.text or "", inserts
+Core.clean_curve_model = (curve) ->
+  return nil unless curve and #curve == 4
+  p0, p1, p2, p3 = curve[1], curve[2], curve[3], curve[4]
+  dx, dy = p3.x - p0.x, p3.y - p0.y
+  chord = math.sqrt dx * dx + dy * dy
+  return nil unless chord > GEOMETRY_EPSILON
+  nx, ny = -dy / chord, dx / chord
+  samples, total = Core.bezier_arclength_samples p0, p1, p2, p3, BEZIER_ARCLENGTH_SEGMENTS
+  return nil unless samples and total and total > GEOMETRY_EPSILON
+
+  depths = {}
+  for s in *{0.35, 0.425, 0.5, 0.575, 0.65}
+    t = Core.bezier_t_at_distance samples, total * s
+    point = Core.bezier_point t, p0, p1, p2, p3
+    arch = 4 * s * (1 - s)
+    continue unless arch > NUMERIC_EPSILON
+    base_x, base_y = p0.x + dx * s, p0.y + dy * s
+    offset = (point.x - base_x) * nx + (point.y - base_y) * ny
+    depths[#depths + 1] = offset / arch
+  return nil if #depths == 0
+  table.sort depths
+  middle = math.floor((#depths + 1) / 2)
+  sagitta = depths[middle]
+  sagitta = 0 if math.abs(sagitta) < 0.5
+  {
+    chord: chord
+    chord_angle: Core.atan2 dy, dx
+    sagitta: sagitta
+  }
+
+Core.clean_curve_frz = (model, s, depth_percent = 100) ->
+  s = Core.clamp tonumber(s) or 0, 0, 1
+  scale = (tonumber(depth_percent) or 100) / 100
+  depth = model.sagitta * scale
+  half_sweep = 2 * Core.atan2(2 * depth, model.chord)
+  half_sweep *= SAME_LINE_CURVE_COMPENSATION
+  tangent = model.chord_angle + half_sweep * (1 - 2 * s)
+  -math.deg tangent
+
+Core.has_curve_transform = (text) ->
+  for block in *Core.override_block_spans text
+    continue unless Core.looks_like_override block.inner
+    for payload in block.inner\gmatch "\\t(%b())"
+      return true if payload\find("\\frz", 1, true) or payload\find("\\fsp", 1, true)
+      pos = 1
+      while true
+        pos = payload\find "\\fr", pos, true
+        break unless pos
+        next_char = payload\sub pos + 3, pos + 3
+        return true if next_char\match "[%+%-%.%d]"
+        pos += 3
+  false
+
+Core.has_drawing_mode = (text) ->
+  for block in *Core.override_block_spans text
+    continue unless Core.looks_like_override block.inner
+    for value in block.inner\gmatch "\\p(%d+)"
+      return true if (tonumber(value) or 0) > 0
+  false
+
+Core.curved_text_from_bezier = (line, opts = {}) ->
+  source = line and line.text or ""
+  return nil, "drawing" if Core.has_drawing_mode source
+  return nil, "transform" if Core.has_curve_transform source
+  cmds = Core.first_clip_commands source
+  curve = Core.single_cubic_bezier cmds
+  return nil, "bezier" unless curve
+  model = Core.clean_curve_model curve
+  return nil, "bezier" unless model
+
+  state = Core.effective_line_state line
+  base_spacing = Core.line_tag_value(line, "fsp", "spacing", 0, state) or 0
+  spacing = base_spacing + (tonumber(opts.curve_spacing) or 0)
+  text = Core.remove_tag_names source, {"fr", "frz", "fsp"}
   text = Core.strip_clip_tags text if opts.remove_clip
-  text, {stops: #inserts}
+  units, unit_error = Core.curve_char_units text
+  return nil, unit_error unless units
+  visible = 0
+  visible += 1 for unit in *units when unit.insert
+  return nil, "text" if visible == 0
+
+  inserts = {}
+  for index, unit in ipairs units
+    continue unless unit.insert
+    ratio = if #units == 1 then 0.5 else (index - 1) / (#units - 1)
+    frz = Core.clean_curve_frz model, ratio, opts.curve_depth
+    tag = "{\\frz" .. Core.format_num(frz, 2) .. "\\fsp" .. Core.format_num(spacing, 2) .. "}"
+    inserts[#inserts + 1] = {pos: unit.start, tag: tag}
+  Core.insert_tags_at_spans(text, inserts), nil, {characters: visible, spacing: spacing, depth: model.sagitta}
 
 Core.measure_report = (label, seg1, seg2) ->
   d1, d2 = Core.segment_length(seg1), Core.segment_length(seg2)
@@ -2103,31 +2231,35 @@ Core.op_rescale_by_rectangle_clip = (subs, sel, opts) ->
     Core.show_message summary, "Rescale by rectangle clip"
   true
 
-Core.op_frz_lerp_stops = (subs, sel, opts) ->
-  ref1, ref2 = Core.clip_scale_reference subs, sel
-  ref_cmds = nil
-  ref_cmds = Core.first_clip_path_reference subs, sel if opts.curve_source != "Two guide strokes"
-  changed = 0
+Core.curve_error_message = (reason) ->
+  switch reason
+    when "multiline" then "Curved text must stay on one visual line."
+    when "drawing" then "Curved text only accepts text, not \\p drawings."
+    when "transform" then "Remove animated \\fr/\\frz/\\fsp transforms before curving the text."
+    when "text" then "No visible text was found to curve."
+    else "Use exactly one cubic Bezier clip: \\clip(m x y b x1 y1 x2 y2 x3 y3)."
+
+Core.op_bezier_clip_to_curved_text = (subs, sel, opts) ->
+  changed, reasons = 0, {}
   for i in *Core.dialogue_indices(subs, sel)
     line = subs[i]
-    cmds = Core.first_clip_commands line.text
-    next_text = nil
-    if opts.curve_source != "Two guide strokes"
-      next_text = Core.frz_tangent_stops_text line, cmds or ref_cmds, opts
-    if not next_text and opts.curve_source != "Path tangents"
-      segs = cmds and Core.first_path_segments(cmds, 2, 8) or {}
-      seg1 = segs[1] or ref1
-      seg2 = segs[2] or ref2
-      next_text = Core.frz_lerp_stops_text line, seg1, seg2, opts if seg1 and seg2
-    continue unless next_text
+    next_text, reason = Core.curved_text_from_bezier line, opts
+    unless next_text
+      reasons[reason or "bezier"] = (reasons[reason or "bezier"] or 0) + 1
+      continue
     if next_text != line.text
       line.text = next_text
       subs[i] = line
       changed += 1
   if changed == 0
-    Core.show_message "No line received FRZ stops."
+    reason = nil
+    for candidate in *{"multiline", "drawing", "transform", "text", "bezier"}
+      if reasons[candidate]
+        reason = candidate
+        break
+    Core.show_message Core.curve_error_message(reason)
     return false
-  aegisub.set_undo_point "Cliptomaniac - FRZ stops"
+  aegisub.set_undo_point "Cliptomaniac - Bezier clip to curved text"
   true
 
 Core.position_text_at = (text, x, y) ->
@@ -2215,20 +2347,23 @@ Core.shift_path = (path, dx, dy) ->
     nx, ny = Core.shift_pair x, y, dx, dy
     nx .. " " .. ny
 
-Core.shift_geometry_text = (text, dx, dy) ->
+Core.shift_geometry_text = (text, dx, dy, line = nil) ->
   text = tostring(text or "")
+  shifted_anchor = false
   text = Core.map_override_blocks text, (inner) ->
     inner = inner\gsub "\\pos%(%s*(" .. NUM_PATTERN .. ")%s*,%s*(" .. NUM_PATTERN .. ")%s*%)", (x, y) ->
+      shifted_anchor = true
       nx, ny = Core.shift_pair x, y, dx, dy
       "\\pos(#{nx},#{ny})"
     inner = inner\gsub "\\move%(%s*(" .. NUM_PATTERN .. ")%s*,%s*(" .. NUM_PATTERN .. ")%s*,%s*(" .. NUM_PATTERN .. ")%s*,%s*(" .. NUM_PATTERN .. ")(.-)%)", (x1, y1, x2, y2, rest) ->
+      shifted_anchor = true
       nx1, ny1 = Core.shift_pair x1, y1, dx, dy
       nx2, ny2 = Core.shift_pair x2, y2, dx, dy
       "\\move(#{nx1},#{ny1},#{nx2},#{ny2}#{rest})"
     inner\gsub "\\org%(%s*(" .. NUM_PATTERN .. ")%s*,%s*(" .. NUM_PATTERN .. ")%s*%)", (x, y) ->
       nx, ny = Core.shift_pair x, y, dx, dy
       "\\org(#{nx},#{ny})"
-  Core.map_clip_tags text, (span) ->
+  text = Core.map_clip_tags text, (span) ->
     kind, scale, payload = Core.clip_inner_parts span.inner
     if kind == "rect"
       b = Core.pad_bounds(payload, 0)
@@ -2237,6 +2372,10 @@ Core.shift_geometry_text = (text, dx, dy) ->
       "\\#{span.name}(#{Core.vector_inner_with_scale(Core.shift_path(payload, dx, dy), scale)})"
     else
       span.raw
+  unless shifted_anchor or not line
+    point = PerspectiveTools.default_position line
+    text = Core.replace_pos_or_insert text, point.x + dx, point.y + dy if point
+  text
 
 Core.op_clip_to_frz = (subs, sel, opts) ->
   changed = 0
@@ -2313,14 +2452,24 @@ Core.op_clip_to_fay = (subs, sel, opts) ->
   true
 
 Core.op_clip_to_reposition = (subs, sel, opts) ->
+  indices = Core.dialogue_indices subs, sel
+  guide, guide_index = nil, nil
+  for i in *indices
+    candidate = Core.tracking_segment_for_line subs[i]
+    if candidate and candidate.kind == "l"
+      guide, guide_index = candidate, i
+      break
+  unless guide
+    Core.show_message "No usable vector clip found."
+    return false
+  dx, dy = guide.x2 - guide.x1, guide.y2 - guide.y1
   changed = 0
-  for i in *Core.dialogue_indices(subs, sel)
+  for i in *indices
     line = subs[i]
-    seg = Core.first_segment_for_line line
-    continue unless seg
-    dx, dy = seg.x2 - seg.x1, seg.y2 - seg.y1
-    text = Core.shift_geometry_text line.text, dx, dy
-    text = Core.strip_clip_tags text if opts.remove_clip
+    source_text = line.text or ""
+    if i == guide_index and opts.remove_clip
+      source_text = source_text\sub(1, guide.span.start - 1) .. source_text\sub(guide.span.stop + 1)
+    text = Core.shift_geometry_text source_text, dx, dy, line
     if text != line.text
       line.text = text
       subs[i] = line
@@ -3455,6 +3604,27 @@ Core.frame_range_for_line = (line) ->
   return nil unless start_frame and last_frame
   start_frame, math.max(start_frame, last_frame) + 1
 
+Core.tracking_fps = ->
+  if aegisub and aegisub.ms_from_frame
+    ok_first, first_ms = pcall aegisub.ms_from_frame, 0
+    ok_last, last_ms = pcall aegisub.ms_from_frame, 1000
+    first_ms, last_ms = Core.finite_number(first_ms), Core.finite_number(last_ms)
+    elapsed = last_ms - first_ms if ok_first and ok_last and first_ms and last_ms
+    return 1000000 / elapsed if elapsed and elapsed > 0
+  TRACKING_FALLBACK_FPS
+
+Core.tracking_frame_count = (line, fps) ->
+  start_ms = Core.finite_number(line and line.start_time)
+  end_ms = Core.finite_number(line and line.end_time)
+  return nil, "duration" unless start_ms and end_ms and end_ms > start_ms
+  if aegisub and aegisub.frame_from_ms
+    ok_start, start_frame = pcall aegisub.frame_from_ms, start_ms
+    ok_end, end_frame = pcall aegisub.frame_from_ms, end_ms
+    start_frame, end_frame = tonumber(start_frame), tonumber(end_frame)
+    return math.max(1, end_frame - start_frame) if ok_start and ok_end and start_frame and end_frame
+  fps = Core.finite_number(fps) or TRACKING_FALLBACK_FPS
+  math.max 1, math.floor((end_ms - start_ms) * fps / 1000 + 0.5)
+
 Core.manual_move_fbf_lines = (line) ->
   move = Core.parse_move_tag line.text
   return nil unless move and Core.first_clip_span(line.text)
@@ -3569,6 +3739,76 @@ Core.op_animated_clip_to_fbf = (subs, sel, active, opts) ->
       inserted_offset += #lines - 1
     changed += #lines
   aegisub.set_undo_point "Cliptomaniac - Animated clip to FBF"
+  true
+
+Core.collect_ae_clip_track = (subs, sel) ->
+  fps = Core.tracking_fps!
+  indices = Core.dialogue_indices subs, sel, true
+  return nil, nil, Core.L("select_one") if #indices == 0
+  table.sort indices, (a, b) ->
+    line_a, line_b = subs[a], subs[b]
+    start_a, start_b = tonumber(line_a and line_a.start_time) or 0, tonumber(line_b and line_b.start_time) or 0
+    if start_a == start_b then a < b else start_a < start_b
+  jobs, problems = {}, {}
+  for n, i in ipairs indices
+    segment, reason = Core.tracking_segment_for_line subs[i]
+    frame_count, time_reason = Core.tracking_frame_count subs[i], fps
+    reason or= time_reason
+    if reason
+      problems[#problems + 1] = "#{Core.L 'track_sample'} #{n}: #{Core.L('track_' .. reason)}."
+    else
+      jobs[#jobs + 1] = {:segment, :frame_count}
+  if #problems > 0
+    return nil, nil, Core.L("track_failed") .. "\n\n" .. table.concat(problems, "\n")
+  samples, frame = {}, 0
+  for job in *jobs
+    for _ = 1, job.frame_count
+      samples[#samples + 1] = {
+        :frame
+        x: job.segment.x
+        y: job.segment.y
+        length: job.segment.length
+        angle: job.segment.angle
+      }
+      frame += 1
+  samples, fps
+
+Core.build_ae_clip_track_data = (samples, fps, width, height) ->
+  position = {
+    "Adobe After Effects 6.0 Keyframe Data\n\n"
+    "\tUnits Per Second\t#{Core.format_num fps, 6}\n"
+    "\tSource Width\t#{Core.format_num width, 0}\n"
+    "\tSource Height\t#{Core.format_num height, 0}\n"
+    "\tSource Pixel Aspect Ratio\t1\n"
+    "\tComp Pixel Aspect Ratio\t1\n\n"
+    "Position\n\tFrame\tX pixels\tY pixels\tZ pixels\n"
+  }
+  scale = {"\nScale\n\tFrame\tX percent\tY percent\tZ percent\n"}
+  rotation = {"\nRotation\n\tFrame\tDegrees\n"}
+  reference_length = samples[1].length
+  previous_angle = samples[1].angle
+  unwrapped_rotation = 0
+  for n, sample in ipairs samples
+    if n > 1
+      delta = (sample.angle - previous_angle) % 360
+      delta -= 360 if delta > 180
+      unwrapped_rotation += delta
+      previous_angle = sample.angle
+    scale_percent = sample.length / reference_length * 100
+    position[#position + 1] = string.format "\t%d\t%s\t%s\t0\n", sample.frame, Core.format_num(sample.x, 4), Core.format_num(sample.y, 4)
+    value = Core.format_num scale_percent, 4
+    scale[#scale + 1] = string.format "\t%d\t%s\t%s\t%s\n", sample.frame, value, value, value
+    rotation[#rotation + 1] = string.format "\t%d\t%s\n", sample.frame, Core.format_num(unwrapped_rotation, 4)
+  rotation[#rotation + 1] = "\nEnd of Keyframe Data"
+  table.concat(position) .. table.concat(scale) .. table.concat(rotation)
+
+Core.op_export_clip_track_ae = (subs, sel) ->
+  samples, fps, problem = Core.collect_ae_clip_track subs, sel
+  unless samples
+    Core.show_message problem, "Export clip track to AE"
+    return false
+  width, height = Core.tracking_resolution subs
+  aegisub.log Core.build_ae_clip_track_data samples, fps, width, height
   true
 
 Core.quad_from_clip = (text) ->
@@ -4417,11 +4657,11 @@ ACTION_META = {
   {"Measure & transform clip", "options", "Uses two guide strokes as a before and after ruler, then adds a size animation."}
   {"Adjust by clip scale", "options", "Uses two guide strokes as rulers and resizes the selected text values."}
   {"Rescale by rectangle clip", "options", "Resizes text tags to fit a rectangular clip. Vector clips are intentionally rejected."}
-  {"FRZ stops for LerpByChar", "options", "Places rotation marks from guide strokes or from the clip path direction."}
+  {"Bezier clip to curved text", "options", "Converts one cubic Bezier clip directly into clean per-character rotation and spacing tags."}
   {"Clip to FRZ", "options", "Turns the first guide stroke into the line rotation."}
   {"Clip to FAX", "options", "Turns the first guide stroke into the line slant."}
   {"Clip to FAY", "options", "Turns the first vertical guide stroke into the line Y slant."}
-  {"Clip to reposition", "options", "Moves the line by the distance and direction of the first guide stroke."}
+  {"Clip to reposition", "options", "Uses the first selected two-point clip as a shared source-to-target vector and translates every selected line without changing their relative layout."}
   {"Clip to move", "options", "Changes a fixed position into movement using the first guide stroke."}
   {"Position at clip midpoint", "direct", "Moves selected lines to the middle of their clip path, or to the first selected clip."}
   {"Align to clip", "direct", "Moves the line position onto the nearest point of the clip path."}
@@ -4448,6 +4688,7 @@ ACTION_META = {
   {"Complete quadrilateral", "direct", "Adds D to a three-point A-B-C clip by closing opposite directions in the line's perspective plane."}
   {"Create strip clips", "options", "Splits a clip or text area, optionally including full-duration transform bounds, into thin clipped copies."}
   {"Animated clip to FBF", "options", "Bakes a moving or transformed clipped line into frame-by-frame clipped lines."}
+  {"Export clip track to AE", "direct", "Concatenates the selected clip durations as After Effects Position, Scale, and Rotation keyframe data in the console."}
   {"Extract clip as mask line", "direct", "Creates a new drawing line from the first clip."}
   {"Clip boolean with text/shape", "options", "Combines the current clip with the selected text or drawing outline."}
   {"Clip diagnostics", "direct", "Shows clip type, size, points, and perspective-plane status."}
@@ -4480,7 +4721,7 @@ ACTION_HELP_ES = {
   ["Extract clip as mask line"]: "Crea una nueva línea de dibujo a partir del primer clip."
   ["Position at clip midpoint"]: "Mueve las líneas seleccionadas al centro de su clip, o al primer clip seleccionado."
   ["Align to clip"]: "Mueve la posición de la línea al punto más cercano de la ruta del clip."
-  ["Clip to reposition"]: "Mueve la línea usando la distancia y dirección del primer trazo guía."
+  ["Clip to reposition"]: "Usa el primer clip de dos puntos como vector origen-destino y traslada juntas todas las líneas seleccionadas."
   ["Clip to move"]: "Convierte una posición fija en movimiento usando el primer trazo guía."
   ["Clip to FRZ"]: "Convierte el primer trazo guía en rotación de la línea."
   ["Clip to FAX"]: "Convierte el primer trazo guía en inclinación de la línea."
@@ -4491,17 +4732,19 @@ ACTION_HELP_ES = {
   ["Clip to perspective"]: "Usa un clip de cuatro esquinas como plano de perspectiva para la línea."
   ["Create strip clips"]: "Divide un clip o área de texto, con límites transformados opcionales para toda la duración, en copias con franjas finas."
   ["Animated clip to FBF"]: "Hornea una línea con clip movido o transformado en líneas frame a frame."
+  ["Export clip track to AE"]: "Concatena la duración de los clips seleccionados como datos de Position, Scale y Rotation para After Effects en la consola."
   ["Calibrate clip X"]: "Endereza horizontalmente el primer trazo guía."
   ["Calibrate clip Y"]: "Endereza verticalmente el primer trazo guía."
   ["Rectangle from diagonal"]: "Crea un rectángulo desde el primer trazo diagonal."
   ["Circle from 2 points"]: "Crea un círculo usando el primer trazo como diámetro."
   ["New clip shape"]: "Empieza una forma de clip nueva desde el último punto de la ruta actual."
-  ["FRZ stops for LerpByChar"]: "Coloca marcas de rotación desde trazos guía o desde la dirección de la ruta del clip."
+  ["Bezier clip to curved text"]: "Convierte un único clip Bézier cúbico directamente en rotación y espaciado limpios por carácter."
   ["Clip diagnostics"]: "Muestra tipo, tamaño, puntos y estado de perspectiva del clip."
 }
 
 READ_ONLY_ACTIONS = {
   ["Measure clip"]: true
+  ["Export clip track to AE"]: true
   ["Clip diagnostics"]: true
 }
 
@@ -4527,8 +4770,8 @@ Core.normalize_options = (res = {}) ->
   default_style_pad = if strip_defaults then false else DEFAULTS.style_pad
   opts.axis = Core.enum_option res.axis, AXES, DEFAULTS.axis
   opts.angle_mode = Core.enum_option res.angle_mode, ANGLE_MODES, DEFAULTS.angle_mode
-  opts.curve_source = Core.enum_option res.curve_source, CURVE_SOURCES, DEFAULTS.curve_source
-  opts.tangent_stops = Core.clamp math.floor(tonumber(res.tangent_stops) or DEFAULTS.tangent_stops), 0, 256
+  opts.curve_depth = Core.clamp tonumber(res.curve_depth) or DEFAULTS.curve_depth, 0, 300
+  opts.curve_spacing = Core.clamp tonumber(res.curve_spacing) or DEFAULTS.curve_spacing, -100, 300
   opts.autofit_mode = Core.enum_option res.autofit_mode, AUTOFIT_MODES, AUTOFIT_MODES[1]
   opts.rescale_rect_mode = Core.enum_option res.rescale_rect_mode, RESCALE_RECT_MODES, DEFAULTS.rescale_rect_mode
   opts.strip_mode = if Core.choice_raw(res.strip_mode) == "Vertical" then "Vertical" else "Horizontal"
@@ -4604,14 +4847,17 @@ CONTROL_HELP_ES = {
     "espacio/borde/sombra/blur: escala esas dimensiones."
     "Los clips vectoriales se rechazan; usa primero un clip rectangular."
   }
-  ["FRZ stops for LerpByChar"]: {
-    "Fuente: elige si la rotación viene de dos trazos guía o de la dirección de la ruta."
-    "Marcas: limita cuántas marcas de rotación se colocan. 0 usa la longitud del texto visible."
-    "Quitar clip guía: borra el clip después de usarlo como guía."
+  ["Bezier clip to curved text"]: {
+    "Profundidad: 100% crea un arco circular compensado desde el clip; 0% lo endereza y valores mayores lo hunden más."
+    "fsp adicional: suma separación uniforme al espaciado efectivo de la línea."
+    "Quitar clip guía: borra el clip después de convertir la curvatura."
   }
   ["Clip to FRZ"]: {"Quitar clip guía: borra el clip después de usarlo como guía."}
   ["Clip to FAX"]: {"Quitar clip guía: borra el clip después de usarlo como guía."}
-  ["Clip to reposition"]: {"Quitar clip guía: borra el clip después de usarlo como guía."}
+  ["Clip to reposition"]: {
+    "El primer clip recto de dos puntos seleccionado define el desplazamiento para toda la selección."
+    "Quitar clip guía: borra solo ese clip de referencia; los demás clips se trasladan con sus líneas."
+  }
   ["Clip to move"]: {"Quitar clip guía: borra el clip después de usarlo como guía."}
   ["Clip to perspective"]: {
     "Esquinas: elige como se leen las cuatro esquinas del clip."
@@ -4707,13 +4953,18 @@ Core.operation_control_help = (operation) ->
         "spacing/outline/shadow/blur: scale those dimensions like Rhea's Rescale to Clip."
         "Vector clips are rejected. Use Rect clip to vector only after this operation, not before it."
       }
-    when "FRZ stops for LerpByChar"
+    when "Bezier clip to curved text"
       {
-        "Curve source: choose whether rotation comes from two guide strokes or the path direction."
-        "Tangent stops: limit how many rotation marks are placed. 0 means use the visible text length."
-        "Remove guide clip: delete the clip after it has been used as a guide."
+        "Curve depth: 100% builds a compensated circular arc from the clip; 0% straightens it and larger values deepen it."
+        "Extra fsp: add uniform spacing to the line's effective letter spacing."
+        "Remove guide clip: delete the clip after converting the curve."
       }
-    when "Clip to FRZ", "Clip to FAX", "Clip to FAY", "Clip to reposition", "Clip to move"
+    when "Clip to reposition"
+      {
+        "The first selected straight two-point clip defines the displacement for the whole selection."
+        "Remove guide clip: delete only that reference clip; other clips move with their lines."
+      }
+    when "Clip to FRZ", "Clip to FAX", "Clip to FAY", "Clip to move"
       {
         "Remove guide clip: delete the clip after it has been used as a guide."
       }
@@ -5036,11 +5287,11 @@ Core.options_gui = (operation) ->
       gui[#gui + 1] = {class: "checkbox", name: "recenter", label: Core.L("center"), value: DEFAULTS.recenter, x: 0, y: 7, width: 4}
       Core.add_remove_clip gui, 8
       gui[#gui + 1] = {class: "checkbox", name: "info", label: Core.L("show_report"), value: DEFAULTS.info, x: 6, y: 8, width: 5}
-    when "FRZ stops for LerpByChar"
-      gui[#gui + 1] = {class: "label", label: Core.L("curve_source"), x: 0, y: 4, width: 4}
-      gui[#gui + 1] = {class: "dropdown", name: "curve_source", items: Core.localized_items(CURVE_SOURCES), value: Core.choice_label(DEFAULTS.curve_source), x: 4, y: 4, width: 7}
-      gui[#gui + 1] = {class: "label", label: Core.L("tangent_stops"), x: 0, y: 5, width: 4}
-      gui[#gui + 1] = {class: "intedit", name: "tangent_stops", value: DEFAULTS.tangent_stops, min: 0, max: 256, x: 4, y: 5, width: 3}
+    when "Bezier clip to curved text"
+      gui[#gui + 1] = {class: "label", label: Core.L("curve_depth"), x: 0, y: 4, width: 5}
+      gui[#gui + 1] = {class: "intedit", name: "curve_depth", value: DEFAULTS.curve_depth, min: 0, max: 300, x: 5, y: 4, width: 3}
+      gui[#gui + 1] = {class: "label", label: Core.L("curve_spacing"), x: 0, y: 5, width: 5}
+      gui[#gui + 1] = {class: "floatedit", name: "curve_spacing", value: DEFAULTS.curve_spacing, min: -100, max: 300, x: 5, y: 5, width: 3}
       Core.add_remove_clip gui, 6
     when "Clip to FRZ", "Clip to FAX", "Clip to FAY", "Clip to reposition", "Clip to move"
       Core.add_remove_clip gui, 4
@@ -5168,7 +5419,7 @@ Core.dispatch = (subs, sel, active, opts) ->
     when "Measure & transform clip" then Core.op_measure_transform subs, sel, opts
     when "Adjust by clip scale" then Core.op_adjust_by_clip_scale subs, sel, opts
     when "Rescale by rectangle clip" then Core.op_rescale_by_rectangle_clip subs, sel, opts
-    when "FRZ stops for LerpByChar" then Core.op_frz_lerp_stops subs, sel, opts
+    when "Bezier clip to curved text" then Core.op_bezier_clip_to_curved_text subs, sel, opts
     when "Clip to FRZ" then Core.op_clip_to_frz subs, sel, opts
     when "Clip to FAX" then Core.op_clip_to_fax subs, sel, opts
     when "Clip to FAY" then Core.op_clip_to_fay subs, sel, opts
@@ -5199,6 +5450,7 @@ Core.dispatch = (subs, sel, active, opts) ->
     when "Complete quadrilateral" then Core.op_complete_quadrilateral subs, sel, opts
     when "Create strip clips" then Core.op_create_strip_clips subs, sel, active, opts
     when "Animated clip to FBF" then Core.op_animated_clip_to_fbf subs, sel, active, opts
+    when "Export clip track to AE" then Core.op_export_clip_track_ae subs, sel
     when "Extract clip as mask line" then Core.op_extract_clip_as_mask subs, sel, opts
     when "Clip boolean with text/shape" then Core.op_clip_boolean subs, sel, active, opts
     when "Clip diagnostics" then Core.op_clip_diagnostics subs, sel, opts
@@ -5239,7 +5491,7 @@ Core.action_macro = (operation) ->
     Core.run_operation subs, sel, active, operation
 
 Core.hotkey_menu_path = (operation) ->
-  HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. operation
+  HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. operation\gsub("/", "／")
 
 Core.help_macro = ->
   Core.action_help_picker!
