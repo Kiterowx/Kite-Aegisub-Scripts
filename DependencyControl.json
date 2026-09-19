@@ -26,41 +26,41 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.0.13",
-          "released": "2026-08-16",
+          "version": "2.1.8",
+          "released": "2026-09-17",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AddTexture.moon",
               "localFilePath": "Macros/kite.AddTexture.moon",
-              "sha1": "1ED95918D43B03B0DCFA3D454C9B2294F03202F5"
+              "sha1": "0CDCFA68D5A74AE9F9ED07AE9A167DB36825981D"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "ZF.main",
               "version": "2.3.0",
-              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "ZF.main",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts"
             },
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -73,21 +73,95 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "3.2.3",
-          "released": "2026-08-08",
+          "version": "3.4.3",
+          "released": "2026-09-19",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AlectoKFX.lua",
               "localFilePath": "Macros/kite.AlectoKFX.lua",
-              "sha1": "54CFCA9E6BB42F1396558B9B19BDA8BD7B3FD2BD"
+              "sha1": "3930A6082D4208FB18380931D8E4348F2B64DA1C"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.1",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
+    "kite.Allure": {
+      "name": "Allure",
+      "description": "Reusable ASS styling and pivot-aware sign posing",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.2.4",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Allure.lua",
+              "localFilePath": "Macros/kite.Allure.lua",
+              "sha1": "7AE9A3FEAFE4F38951B285BFB7194E498EFA5F6C"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.1",
+              "moduleName": "kite.PyBridge",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "0.8.0",
+              "moduleName": "l0.dkjson",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/DependencyControl/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/DependencyControl"
+            },
+            {
+              "moduleName": "aegisub.re"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -97,28 +171,52 @@
     },
     "kite.AutoBlur": {
       "name": "AutoBlur",
-      "description": "Match a sign's \\\\blur to frame sharpness with fixed or tracked sample points and time-varying blur curves.",
+      "description": "Match a sign's \\blur to frame sharpness with fixed or tracked sample points and time-varying blur curves.",
       "author": "Kiterow",
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.0.9",
-          "released": "2026-08-08",
+          "version": "2.1.4",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AutoBlur.lua",
               "localFilePath": "Macros/kite.AutoBlur.lua",
-              "sha1": "A06F1C065236F87533E58641CF1BB4BF83EE57EB"
+              "sha1": "74E858B6886011E06EDA721DE8B17CF97BABB7B7"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "kite.UI",
-              "version": "1.1.3",
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -131,35 +229,47 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.4.7",
-          "released": "2026-08-13",
+          "version": "2.5.5",
+          "released": "2026-09-17",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.AutoMask.moon",
               "localFilePath": "Macros/kite.AutoMask.moon",
-              "sha1": "34DDBE7FCD026EEFCA9EE26C361D71ED6E6FB5B1"
+              "sha1": "C8B0BCA74FDA2253A506C22F6928BFA2AE1CF4B2"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.1",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.0.2",
+              "moduleName": "kite.AssDrawing",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -172,62 +282,59 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.3.2",
-          "released": "2026-08-08",
+          "version": "1.5.3",
+          "released": "2026-09-06",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.ChronoSuite.lua",
               "localFilePath": "Macros/kite.ChronoSuite.lua",
-              "sha1": "F3E1038E40913D2C90872EC02EC3457045BB6410"
+              "sha1": "3B8940B2A4F498C9EE19D3EDE6DB2AFDDA7C5F45"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "l0.ASSFoundation",
-              "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
-            },
-            {
-              "moduleName": "l0.Functional",
-              "version": "0.6.0",
-              "url": "https://github.com/TypesettingTools/Functional",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json"
-            },
-            {
-              "moduleName": "aegisub.re"
-            },
-            {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.4.1",
               "moduleName": "kite.Timing",
-              "version": "1.2.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.1",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.4.0",
               "moduleName": "kite.Media",
-              "version": "1.2.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.3.0",
+              "moduleName": "kite.EventOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -240,69 +347,75 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "0.3.8",
-          "released": "2026-08-16",
+          "version": "0.4.4",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Cliptomaniac.moon",
               "localFilePath": "Macros/kite.Cliptomaniac.moon",
-              "sha1": "90E1D50BB7D602539E94FB9F1C8C63A2B9D78931"
+              "sha1": "611062028EC3A6C97AE67D092B2B551D706C0007"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "ZF.main",
               "version": "2.3.0",
-              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "ZF.main",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts"
             },
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
-              "moduleName": "arch.Perspective",
               "version": "1.2.1",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Perspective",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
-              "moduleName": "a-mo.LineCollection",
-              "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
-            },
-            {
-              "moduleName": "l0.Functional",
               "version": "0.6.0",
-              "url": "https://github.com/TypesettingTools/Functional",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json"
+              "moduleName": "l0.Functional",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Functional"
             },
             {
-              "moduleName": "arch.Util",
               "version": "0.1.0",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Util",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
-              "moduleName": "a-mo.Line",
               "version": "1.5.3",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Line",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -317,27 +430,33 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.1.3",
-          "released": "2026-08-08",
+          "version": "1.1.8",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.FieldGroupManager.moon",
               "localFilePath": "Macros/kite.FieldGroupManager.moon",
-              "sha1": "C9598D2E08C2678CF492F57DBF61B759F59DA12B"
+              "sha1": "B4A63A7138558DBBE1BA39EF575A26FEF75CADFE"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -352,108 +471,140 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.8.3",
-          "released": "2026-08-08",
+          "version": "1.8.9",
+          "released": "2026-09-06",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.GradientRow.moon",
               "localFilePath": "Macros/kite.GradientRow.moon",
-              "sha1": "4C7B7A33B38643B66B26182362AC6F8FB1286C7A"
+              "sha1": "1A2B440C270EEE7FA9C9E6257E0AFA9245FAA43A"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "a-mo.LineCollection",
               "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "a-mo.Line",
               "version": "1.5.3",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Line",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
-              "moduleName": "arch.Perspective",
               "version": "1.2.1",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Perspective",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "optional": true,
+              "version": "0.6.0",
+              "moduleName": "SubInspector.Inspector",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/SubInspector/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/SubInspector"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
-              "moduleName": "SubInspector.Inspector",
-              "version": "0.6.0",
-              "url": "https://github.com/TypesettingTools/SubInspector",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/SubInspector/master/DependencyControl.json",
-              "optional": true
+              "version": "1.2.0",
+              "moduleName": "kite.Color",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
       }
     },
-    "kite.MakeupnPosing": {
-      "name": "MakeupnPosing",
-      "description": "Reusable ASS styling and rigid sign posing",
+    "kite.Hotkeys": {
+      "name": "Hotkeys",
+      "description": "Shared action catalog, hotkey migration, favorites and settings",
       "author": "Kiterow",
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.0.0",
-          "released": "2026-08-16",
+          "version": "2.0.2",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
-              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.MakeupnPosing.lua",
-              "localFilePath": "Macros/kite.MakeupnPosing.lua",
-              "sha1": "5BA9C4E4A41F38CF748C17A59D59F505D69790F4"
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros-Lite/kite.Hotkeys.lua",
+              "localFilePath": "Macros-Lite/kite.Hotkeys.lua",
+              "sha1": "5F5A600C46F2C6BF6CA4BDDEF2EDC2AC1F4A8220"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.PyBridge",
-              "version": "1.4.5",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "l0.dkjson",
-              "version": "0.8.0",
-              "url": "https://github.com/TypesettingTools/DependencyControl",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/DependencyControl/master/DependencyControl.json"
-            },
-            {
-              "moduleName": "aegisub.re"
-            },
-            {
+              "version": "1.5.1",
               "moduleName": "kite.UI",
-              "version": "1.1.2",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
+    "kite.MacariaRevert": {
+      "name": "Macaria Revert",
+      "description": "Recover base karaoke lines from selected generated events",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.0.2",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.MacariaRevert.lua",
+              "localFilePath": "Macros/kite.MacariaRevert.lua",
+              "sha1": "2C33E7E80BF1735908E1FD5291933B57955C2F8E"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.4.3",
+              "moduleName": "kite.Timing",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -468,86 +619,104 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "3.6.1",
-          "released": "2026-08-16",
+          "version": "3.7.6",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.MokaMotion.moon",
               "localFilePath": "Macros/kite.MokaMotion.moon",
-              "sha1": "70D25BEA031473D64854E401013DED92F7F9B482"
+              "sha1": "CC659C4C47FB8426351CA2285A55953C0BB357EF"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "a-mo.LineCollection",
               "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "a-mo.Tags",
               "version": "1.3.4",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Tags",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
-              "moduleName": "arch.Math",
               "version": "0.1.10",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Math",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
-              "moduleName": "arch.Perspective",
               "version": "1.2.1",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Perspective",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
-              "moduleName": "arch.Util",
               "version": "0.1.0",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Util",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
-              "moduleName": "ZF.main",
               "version": "2.3.0",
-              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "ZF.main",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/zeref-Aegisub-Scripts"
             },
             {
-              "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.PyBridge",
               "version": "1.5.0",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.2",
+              "moduleName": "kite.PyBridge",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
               "moduleName": "kite.Media",
-              "version": "1.2.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.2",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
               "moduleName": "aegisub.clipboard"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.3",
+              "moduleName": "kite.AssDrawing",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -560,39 +729,57 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "0.3.5",
-          "released": "2026-08-12",
+          "version": "0.4.5",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Obake.moon",
               "localFilePath": "Macros/kite.Obake.moon",
-              "sha1": "FA84A4B9C3C31A5EBCBC17CC48C0B52544DEC13F"
+              "sha1": "2527EBA228835D6C3A798D7AEB9349F17E30C9CB"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
-              "moduleName": "a-mo.Line",
               "version": "1.5.3",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Line",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.2",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
               "version": "1.1.3",
+              "moduleName": "kite.AssContext",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "version": "1.2.0",
+              "moduleName": "kite.Color",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -607,41 +794,53 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.5.0",
-          "released": "2026-08-15",
+          "version": "1.6.4",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.PNG2ASS.lua",
               "localFilePath": "Macros/kite.PNG2ASS.lua",
-              "sha1": "4DE1ECD95C8A39E61DD77A93F99B7F48E8C4BDB8"
+              "sha1": "6326B7080693B38944F941EC25DE29D9161234A4"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "aka.command",
               "version": "1.0.2",
-              "url": "https://github.com/Akatmks/Akatsumekusa-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Akatmks/Akatsumekusa-Aegisub-Scripts/master/DependencyControl.json"
+              "moduleName": "aka.command",
+              "feed": "https://raw.githubusercontent.com/Akatmks/Akatsumekusa-Aegisub-Scripts/master/DependencyControl.json",
+              "url": "https://github.com/Akatmks/Akatsumekusa-Aegisub-Scripts"
             },
             {
-              "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.PyBridge",
               "version": "1.5.0",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.1",
+              "moduleName": "kite.PyBridge",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.0.2",
+              "moduleName": "kite.AssDrawing",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -654,27 +853,39 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.1.2",
-          "released": "2026-08-08",
+          "version": "1.1.7",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros-Lite/kite.Pointiac.moon",
               "localFilePath": "Macros-Lite/kite.Pointiac.moon",
-              "sha1": "0631884B8DFC156B41A868DAF7DB587035C42434"
+              "sha1": "8C33BD7921AF09A9FCF251ED65F6C19B299BF969"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.2",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "version": "1.2.1",
+              "moduleName": "kite.Color",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -689,75 +900,99 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.8.5",
-          "released": "2026-08-16",
+          "version": "2.1.4",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.RheaSigns.lua",
               "localFilePath": "Macros/kite.RheaSigns.lua",
-              "sha1": "27A44CDA9A83B8CF5ABEF5BC15B63BB4ABC87E65"
+              "sha1": "055941082F27A76920ABA2DD98B48EBF96498EB9"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
-              "moduleName": "l0.Functional",
               "version": "0.6.0",
-              "url": "https://github.com/TypesettingTools/Functional",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json"
+              "moduleName": "l0.Functional",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Functional"
             },
             {
-              "moduleName": "arch.Perspective",
               "version": "1.2.1",
-              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"
+              "moduleName": "arch.Perspective",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts"
             },
             {
-              "moduleName": "a-mo.LineCollection",
               "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "a-mo.Line",
               "version": "1.5.3",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Line",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.EventOps",
-              "version": "1.0.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
-            },
-            {
-              "moduleName": "kite.ShapeOptimizer",
               "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.2",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.1",
+              "moduleName": "kite.PyBridge",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.3.0",
+              "moduleName": "kite.EventOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.3.1",
+              "moduleName": "kite.ShapeOptimizer",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.3",
+              "moduleName": "kite.AssContext",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.3",
+              "moduleName": "kite.AssDrawing",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.2.1",
+              "moduleName": "kite.Color",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -772,23 +1007,23 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "2.1.3",
-          "released": "2026-08-08",
+          "version": "2.1.8",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Selesub.moon",
               "localFilePath": "Macros/kite.Selesub.moon",
-              "sha1": "9016FA1BA54780FF85856926212B93924CDADDA0"
+              "sha1": "84A12F0443121A07105BB0E9E4CD69CCA72A662F"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.5.1",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
               "moduleName": "aegisub.re"
@@ -797,22 +1032,28 @@
               "moduleName": "aegisub.unicode"
             },
             {
-              "moduleName": "myaa.ASSParser",
               "version": "0.0.4",
-              "url": "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json"
+              "moduleName": "myaa.ASSParser",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts"
             },
             {
+              "version": "1.7.2",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.1",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             }
           ]
         }
@@ -825,56 +1066,154 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.6.3",
-          "released": "2026-08-08",
+          "version": "1.6.8",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Snapshoter.moon",
               "localFilePath": "Macros/kite.Snapshoter.moon",
-              "sha1": "4F93ED71448087D9514F9110E202F67C4F145012"
+              "sha1": "DBD5C84AA5BA389422A97AA2F2C796BDD516A4EA"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "a-mo.LineCollection",
               "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
+              "version": "1.5.1",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
-              "moduleName": "a-mo.Log",
               "version": "1.0.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Log",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "l0.ASSFoundation",
-              "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "version": "0.0.4",
+              "moduleName": "myaa.ASSParser",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts"
             },
             {
+              "version": "1.7.2",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.2",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
-              "moduleName": "Yutils"
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.0.3",
+              "moduleName": "kite.AssDrawing",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            }
+          ]
+        }
+      }
+    },
+    "kite.SocialClip": {
+      "name": "Social Clip",
+      "description": "Crear máscaras de recorte animadas y exportar vídeo vertical continuo",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.0.3",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.SocialClip.lua",
+              "localFilePath": "Macros/kite.SocialClip.lua",
+              "sha1": "6BEF582954AC92500A7DDB7C99CFC8D108D0575E"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.3.0",
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
+            },
+            {
+              "version": "1.5.1",
+              "moduleName": "kite.UI",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "0.5.0",
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.3",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.2",
+              "moduleName": "kite.PyBridge",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.0.3",
+              "moduleName": "kite.AssDrawing",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.3",
+              "moduleName": "kite.AssContext",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "0.0.4",
+              "moduleName": "myaa.ASSParser",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts"
             }
           ]
         }
@@ -887,27 +1226,45 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.3.2",
-          "released": "2026-08-08",
+          "version": "1.3.6",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros-Lite/kite.Wave2json.moon",
               "localFilePath": "Macros-Lite/kite.Wave2json.moon",
-              "sha1": "C9254AEA88FE3685C056C7EC6F84969B9158AD28"
+              "sha1": "0A221BB43F9B982CC721A6FF882B8D23DC0464B9"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.7.2",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2",
+              "version": "1.5.1",
+              "moduleName": "kite.UI",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -922,50 +1279,68 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.1.2",
-          "released": "2026-08-08",
+          "version": "1.2.3",
+          "released": "2026-09-19",
           "default": true,
           "files": [
             {
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.ZagreoGlyphs.moon",
               "localFilePath": "Macros/kite.ZagreoGlyphs.moon",
-              "sha1": "767CDC91B6C463E656CFEC64A0088CCD02710901"
+              "sha1": "9245A416B7972E551D9C1D463BB89F7B37929263"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "a-mo.LineCollection",
               "version": "1.3.0",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.LineCollection",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "a-mo.Line",
               "version": "1.5.3",
-              "url": "https://github.com/TypesettingTools/Aegisub-Motion",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"
+              "moduleName": "a-mo.Line",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/Aegisub-Motion"
             },
             {
-              "moduleName": "l0.ASSFoundation",
               "version": "0.5.0",
-              "url": "https://github.com/TypesettingTools/ASSFoundation",
-              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"
+              "moduleName": "l0.ASSFoundation",
+              "feed": "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json",
+              "url": "https://github.com/TypesettingTools/ASSFoundation"
             },
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.5.0",
               "moduleName": "kite.UI",
-              "version": "1.1.3",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2",
-              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
             },
             {
               "moduleName": "Yutils"
+            },
+            {
+              "version": "1.1.3",
+              "moduleName": "kite.AssContext",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.3",
+              "moduleName": "kite.AssDrawing",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -978,21 +1353,57 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "4.5.3",
-          "released": "2026-08-14",
+          "version": "4.7.3",
+          "released": "2026-09-19",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.Zheus.lua",
               "localFilePath": "Macros/kite.Zheus.lua",
-              "sha1": "27DA83E24DDB33010566536336021629AF224079"
+              "sha1": "874AE40E0DF837C0BDE8CBD456DAF6EFB84E4FC5"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.7.2",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.7.4",
+              "moduleName": "kite.LineOps",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts"
+            },
+            {
+              "version": "1.2.2",
+              "moduleName": "kite.Color",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.1",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.1.3",
+              "moduleName": "kite.AssContext",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.1",
+              "moduleName": "kite.Settings",
               "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
@@ -1002,6 +1413,163 @@
     }
   },
   "modules": {
+    "kite.AssContext": {
+      "name": "kite.AssContext",
+      "description": "Shared ASS line context, placement and ordered temporal evaluation",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.1.3",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/AssContext.lua",
+              "localFilePath": "Modules/kite/AssContext.lua",
+              "sha1": "A67FAAB6E3FFD99D63B2C39DFB874603808BCCD7"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.0",
+              "moduleName": "kite.Settings",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.2.1",
+              "moduleName": "kite.Color",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
+    "kite.AssDrawing": {
+      "name": "kite.AssDrawing",
+      "description": "Pure ASS drawing validation profiles for Kite macros",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.0.3",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/AssDrawing.lua",
+              "localFilePath": "Modules/kite/AssDrawing.lua",
+              "sha1": "A5075F65D3F46984857D9F2CB67492EAF34D8F26"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
+    "kite.Color": {
+      "name": "kite.Color",
+      "description": "ASS and RGB color conversion and contrast primitives",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.2.2",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/Color.lua",
+              "localFilePath": "Modules/kite/Color.lua",
+              "sha1": "E52D7C2D0A38692613280420D13FE62C270459EE"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.4",
+              "moduleName": "kite.LineOps",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            }
+          ]
+        }
+      }
+    },
+    "kite.Core": {
+      "name": "kite.Core",
+      "description": "Shared pure primitives for Kite modules and macros",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.1.0",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/Core.lua",
+              "localFilePath": "Modules/kite/Core.lua",
+              "sha1": "5BC7749BBF0A28CCDBFD9CA4466DDF20A73B1316"
+            }
+          ],
+          "requiredModules": []
+        }
+      }
+    },
     "kite.EventOps": {
       "name": "kite.EventOps",
       "description": "Shared dialogue-event transformations for Kite macros",
@@ -1009,21 +1577,35 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.0.3",
-          "released": "2026-08-16",
+          "version": "1.3.1",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/EventOps.lua",
               "localFilePath": "Modules/kite/EventOps.lua",
-              "sha1": "0A1975EC0A6FC213E056F56DB383721A9BF83C2F"
+              "sha1": "255B860AF26535B4FE4FA686EE0CE06A96D0C764"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.0",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2"
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1036,15 +1618,23 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.5.3",
-          "released": "2026-08-10",
+          "version": "1.7.4",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/LineOps.lua",
               "localFilePath": "Modules/kite/LineOps.lua",
-              "sha1": "E3D88E49A90C4927924E0E9D1C5FEDC2CD9940E4"
+              "sha1": "CFEEB1F032BCDF2CF2F0443A5444CCE871FE5ABD"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1057,25 +1647,35 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.2.2",
-          "released": "2026-08-08",
+          "version": "1.4.0",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/Media.lua",
               "localFilePath": "Modules/kite/Media.lua",
-              "sha1": "12D60224B116205DD470B33F6E9AC25D4601BE31"
+              "sha1": "28B3D9F6495AC59B5432F0C99377814F2A532AAB"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2"
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.1",
               "moduleName": "kite.PyBridge",
-              "version": "1.4.4"
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1088,21 +1688,62 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.5.0",
-          "released": "2026-08-15",
+          "version": "1.7.2",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/PyBridge.lua",
               "localFilePath": "Modules/kite/PyBridge.lua",
-              "sha1": "4C82B3349A050809999B45694B35AA8366AA0B17"
+              "sha1": "55DE6B90D3BEE60CCAB9B6A20CC6753F43E22D05"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "aka.command",
-              "version": "1.0.2"
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.2",
+              "moduleName": "aka.command"
+            }
+          ]
+        }
+      }
+    },
+    "kite.Settings": {
+      "name": "kite.Settings",
+      "description": "Shared settings sections, migration and validated persistence",
+      "author": "Kiterow",
+      "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      "channels": {
+        "main": {
+          "version": "1.0.1",
+          "released": "2026-09-05",
+          "default": true,
+          "files": [
+            {
+              "name": ".lua",
+              "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/Settings.lua",
+              "localFilePath": "Modules/kite/Settings.lua",
+              "sha1": "381B2E2B9A5BACB7ECCFCF527D50C51E587D7F11"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.1",
+              "moduleName": "kite.PyBridge",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1115,25 +1756,41 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.1.0",
-          "released": "2026-08-16",
+          "version": "1.3.2",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/ShapeOptimizer.lua",
               "localFilePath": "Modules/kite/ShapeOptimizer.lua",
-              "sha1": "E4F1F17C0F0EF228D9AC85965AFB9A76CC836D44"
+              "sha1": "711768B3854FFF075E050ACEC4F42729F7C84A1B"
             }
           ],
           "requiredModules": [
             {
-              "moduleName": "kite.LineOps",
-              "version": "1.5.2"
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             },
             {
-              "moduleName": "kite.UI",
-              "version": "1.1.3"
+              "version": "1.7.0",
+              "moduleName": "kite.LineOps",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.0",
+              "moduleName": "kite.Settings",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.2.2",
+              "moduleName": "kite.Color",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1146,21 +1803,53 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.2.2",
-          "released": "2026-08-08",
+          "version": "1.4.3",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/Timing.lua",
               "localFilePath": "Modules/kite/Timing.lua",
-              "sha1": "CE804A5B59621E7CA8E20B831555A3A4D9803FC9"
+              "sha1": "7DB4FB4F997B343DF24160B0C49621EE40A28F9E"
             }
           ],
           "requiredModules": [
             {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.7.2",
               "moduleName": "kite.LineOps",
-              "version": "1.5.2"
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.4.0",
+              "moduleName": "kite.Media",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.5.0",
+              "moduleName": "kite.UI",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.1.1",
+              "moduleName": "kite.AssContext",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.0",
+              "moduleName": "kite.Settings",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }
@@ -1173,15 +1862,29 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.1.3",
-          "released": "2026-08-08",
+          "version": "1.5.1",
+          "released": "2026-09-05",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Modules/kite/UI.lua",
               "localFilePath": "Modules/kite/UI.lua",
-              "sha1": "40773984602F2F0B903F5B5D38349AE39C1C7B97"
+              "sha1": "8F577246E3F737D052A67D8EE0A73C331AAD8E46"
+            }
+          ],
+          "requiredModules": [
+            {
+              "version": "1.1.0",
+              "moduleName": "kite.Core",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+            },
+            {
+              "version": "1.0.0",
+              "moduleName": "kite.Settings",
+              "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
             }
           ]
         }

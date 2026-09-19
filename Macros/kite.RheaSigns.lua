@@ -1,19 +1,13 @@
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "1.8.5"
+script_version     = "2.1.4"
 script_namespace   = "kite.RheaSigns"
-
-local MAX_MARKER_ID = 9999
-local RHEA_ZERO_EPSILON = 1e-9
-local RHEA_DIMENSION_EPSILON = 0.0001
-
-local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-local HOTKEY_MENU_SCRIPT = script_name
-
+local rheaZeroEpsilon = 1e-9
+local rheaDimensionEpsilon = 0.0001
+local hotkeyMenuRoot = ": Kite Hotkeys :"
+local hotkeyMenuScript = script_name
 include("karaskel.lua")
-
-
 local DependencyControl = require("l0.DependencyControl")
 local depRec = DependencyControl{
     feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
@@ -33,42 +27,44 @@ local depRec = DependencyControl{
         { "a-mo.Line", version = "1.5.3",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
-        { "kite.UI", version = "1.1.3",
+        { "kite.Core", version = "1.1.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.LineOps", version = "1.5.2",
+        { "kite.UI", version = "1.5.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.PyBridge", version = "1.4.4",
+        { "kite.LineOps", version = "1.7.2",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.EventOps", version = "1.0.3",
+        { "kite.PyBridge", version = "1.7.1",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.ShapeOptimizer", version = "1.1.0",
+        { "kite.EventOps", version = "1.3.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.ShapeOptimizer", version = "1.3.1",
+          url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.AssContext", version = "1.1.3" },
+        { "kite.AssDrawing", version = "1.0.3" },
+        { "kite.Color", version = "1.2.1" },
     },
 }
-local ASS, Functional, ArchPersp, LineCollection, AMLine, KiteUI, LineOps, PyBridge, _, SharedShapeOptimizer = depRec:requireModules()
-
-local function ConfigHandler(interface, file_name, _, version)
+local ASS, Functional, ArchPersp, LineCollection, AMLine, Core, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
+local AssContext = require("kite.AssContext")
+local function ConfigHandler(interface, fileName, _, version)
     return KiteUI.dialogHandler(interface, script_namespace, version, {
-        { path = "?user/" .. file_name, format = "json_sections" },
+        { path = "?user/" .. fileName, format = "json_sections" },
     })
 end
-
-local FunctionalString  = Functional.string
-local FunctionalMath    = Functional.math
-local FunctionalList    = Functional.list
-local FunctionalTable   = Functional.table
-local FunctionalUtil    = Functional.util
-
-local unicode = require("aegisub.unicode")
-
-
+local AssDrawing = require("kite.AssDrawing")
+local Color = require("kite.Color")
 local LANG = {
     en = {
+        mask_err_name = "Enter a mask name without colons or line breaks.",
+        mask_err_drawing = "The selection contains no valid ASS drawing.",
+        sh_perimeter_sequence_hint = "Enter unit numbers separated by spaces or commas; they repeat in this order.",
+        tool_style_tags = "Style to Tags",
         title_perspectiva = "PERSPECTIVE",
         title_signlayout = "SIGN",
         title_masks = "MASKS",
@@ -110,7 +106,6 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "No selection.",
-        err_tool_load = "Could not load %s:\n\n%s",
         tool_font_manager = "Font and style manager",
         tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Shuffle line text",
@@ -165,6 +160,10 @@ local LANG = {
         tagops_tags_changed = "Tags changed",
     },
     es = {
+        mask_err_name = "Escribe un nombre de máscara sin dos puntos ni saltos de línea.",
+        mask_err_drawing = "La selección no contiene un dibujo ASS válido.",
+        sh_perimeter_sequence_hint = "Escribe los números de unidad separados por espacios o comas; se repetirán en ese orden.",
+        tool_style_tags = "Estilo a tags",
         title_perspectiva = "PERSPECTIVA",
         title_signlayout = "CARTEL",
         title_masks = "MASCARAS",
@@ -206,7 +205,6 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "Sin seleccion.",
-        err_tool_load = "No se pudo cargar %s:\n\n%s",
         tool_font_manager = "Gestor de fuentes y estilos",
         tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Mezclar texto de líneas",
@@ -261,6 +259,10 @@ local LANG = {
         tagops_tags_changed = "Tags cambiados",
     },
     pt = {
+        mask_err_name = "Digite um nome de máscara sem dois-pontos nem quebras de linha.",
+        mask_err_drawing = "A seleção não contém um desenho ASS válido.",
+        sh_perimeter_sequence_hint = "Digite os números das unidades separados por espaços ou vírgulas; eles se repetem nessa ordem.",
+        tool_style_tags = "Estilo para tags",
         title_perspectiva = "PERSPECTIVA",
         title_signlayout = "PLACA",
         title_masks = "MASCARAS",
@@ -302,7 +304,6 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "Sem selecao.",
-        err_tool_load = "Nao foi possivel carregar %s:\n\n%s",
         tool_font_manager = "Gerenciador de fontes e estilos",
         tool_fade_suite = "Fast Fades",
         tool_shuffle_line_text = "Embaralhar texto das linhas",
@@ -357,14 +358,14 @@ local LANG = {
         tagops_tags_changed = "Tags alterados",
     },
 }
-local EXTRA_LANG = {
+local extraLang = {
     en = {
         lang_en = "English", lang_es = "Spanish", lang_pt = "Portuguese",
         btn_delete = "Delete", btn_apply = "Execute", btn_copy_tags = "Copy Tags", btn_keep_only = "Keep Only",
         op_apply_chain = "Apply chain", op_apply_mask = "Apply mask", op_create_layer = "Create layer",
-        op_replace_mask = "Replace mask", op_save_shape = "Save shape", op_delete_shape = "Delete shape", op_clean_dr = "Clean DR",
+        op_replace_mask = "Replace mask", op_save_shape = "Save shape", op_delete_shape = "Delete shape",
         op_typewriter = "Typewriter", op_vertical_drop = "Vertical drop", op_circle_text = "Circle text", op_curve_text = "Curve text",
-        op_clean_sio = "Clean SiO", choice_frame = "Frame", choice_duration = "Duration", choice_normal = "Normal",
+        choice_frame = "Frame", choice_duration = "Duration", choice_normal = "Normal",
         choice_inverted = "Inverted", choice_vertical = "Vertical", choice_from_clip = "From clip",
         pk_copy_exact = "Copy exact (same plane)", pk_copy_static = "Copy static plane (keep \\pos)", pk_copy_move_plane = "Copy move plane (whole plane)",
         pk_copy_swap = "Copy with corner swap", pk_copy_translate = "Copy translate (keep \\pos)", pk_copy_transport = "Copy transport (\\org -> \\pos)",
@@ -413,9 +414,6 @@ local EXTRA_LANG = {
         msg_style_not_found = "style not found",
         msg_missing_pipe = "missing | marker",
         msg_marker_error = "marker error",
-        msg_delete_dr_marked = "Delete %d DR-marked lines?",
-        msg_no_dr_marked = "No DR-marked lines found.",
-        msg_no_dr_marked_selection = "No DR-marked lines in selection.",
         msg_no_vector_curve = "No vector clip found in selection for curve.",
         msg_no_vector_align = "No vector clip found in selection for align.",
         msg_no_usable_path_align = "Vector clip has no usable path for align.",
@@ -426,7 +424,7 @@ local EXTRA_LANG = {
         signs_no_editable = "No editable lines found in selection.",
         signs_original = "ORIGINAL (read-only)",
         signs_modified = "MODIFIED (edit here)",
-        signs_regen_gbc = "Regenerate GBC gradients on modified lines",
+        signs_regen_gbc = "Regenerate marked GBC gradients",
         signs_info = "%d unique texts, %d total lines. %d GBC detected.",
         signs_skipped_vectors = " Skipped %d vectors.",
         signs_skipped_over_limit = " Skipped %d over limit.",
@@ -467,12 +465,10 @@ local EXTRA_LANG = {
         sh_perimeter_err_base_line = "Base line %d: %s", sh_perimeter_err_base_exterior = "Base line %d contains no usable exterior contour.",
         sh_perimeter_err_shared_pos = "All layers in a unit must share exactly the same \\pos.", sh_perimeter_err_no_units = "No units were detected after the base shape.",
         sh_perimeter_err_zero_width = "A unit has zero visible width.", sh_perimeter_err_empty_period = "The period cannot be empty.", sh_perimeter_err_invalid_unit = "The period contains an invalid unit.",
-        sh_perimeter_custom = "Custom...", sh_perimeter_unit = "Unit %d", sh_perimeter_period_length = "Period length:", sh_perimeter_period_hint = "Only the first steps selected by the length are used.",
-        sh_perimeter_step = "Step %d:", sh_perimeter_err_period_length = "The period length is invalid.", sh_perimeter_err_step = "Step %d does not contain a valid unit.",
-        sh_perimeter_err_cycles = "The repetition count for contour %d is invalid.", sh_perimeter_err_tangent = "A tangent could not be calculated for contour %d.",
+        sh_perimeter_custom = "Custom...", sh_perimeter_err_period_length = "The period length is invalid.", sh_perimeter_err_cycles = "The repetition count for contour %d is invalid.", sh_perimeter_err_tangent = "A tangent could not be calculated for contour %d.",
         sh_perimeter_err_advance = "Contour %d has too many repetitions: the advance between units is no longer positive.", sh_perimeter_err_closure = "Pattern closure does not match contour %d.",
         sh_perimeter_err_replace_pos = "A layer's \\pos could not be replaced.", sh_perimeter_err_rotation = "A layer's rotation could not be inserted.",
-        sh_perimeter_err_output_limit = "The output would contain %d lines; the safe limit is %d.", sh_perimeter_err_template = "Template line %d: %s",
+        sh_perimeter_err_template = "Template line %d: %s",
         sh_perimeter_detected = "Detected units: %d", sh_perimeter_summary = "Exteriors: %d (%s px) | Holes: %d (%s px)", sh_perimeter_pattern = "Periodic pattern:",
         sh_perimeter_close_hint = "Each contour closes its period independently.", sh_perimeter_order_hint = "Order: units 1, 2, 3... by their first \\pos in the selection.", sh_perimeter_err_pattern = "Choose a valid periodic pattern.",
     },
@@ -480,9 +476,9 @@ local EXTRA_LANG = {
         lang_en = "Ingles", lang_es = "Espanol", lang_pt = "Portugues",
         btn_delete = "Borrar", btn_apply = "Execute", btn_copy_tags = "Copiar tags", btn_keep_only = "Keep Only",
         op_apply_chain = "Aplicar cadena", op_apply_mask = "Aplicar mascara", op_create_layer = "Crear capa",
-        op_replace_mask = "Reemplazar mascara", op_save_shape = "Guardar forma", op_delete_shape = "Borrar forma", op_clean_dr = "Limpiar DR",
+        op_replace_mask = "Reemplazar mascara", op_save_shape = "Guardar forma", op_delete_shape = "Borrar forma",
         op_typewriter = "Maquina de escribir", op_vertical_drop = "Caida vertical", op_circle_text = "Texto circular", op_curve_text = "Texto en curva",
-        op_clean_sio = "Limpiar SiO", choice_frame = "Frame", choice_duration = "Duracion", choice_normal = "Normal",
+        choice_frame = "Frame", choice_duration = "Duracion", choice_normal = "Normal",
         choice_inverted = "Invertido", choice_vertical = "Vertical", choice_from_clip = "Desde clip",
         pk_copy_exact = "Copiar exacto (mismo plano)", pk_copy_static = "Copiar plano estatico (mantener \\pos)", pk_copy_move_plane = "Copiar plano con \\move",
         pk_copy_swap = "Copiar intercambiando esquinas", pk_copy_translate = "Copiar traslacion (mantener \\pos)", pk_copy_transport = "Transportar copia (\\org -> \\pos)",
@@ -531,9 +527,6 @@ local EXTRA_LANG = {
         msg_style_not_found = "estilo no encontrado",
         msg_missing_pipe = "sin marcador |",
         msg_marker_error = "error con marcador",
-        msg_delete_dr_marked = "Borrar %d lineas marcadas DR?",
-        msg_no_dr_marked = "No se encontraron lineas marcadas DR.",
-        msg_no_dr_marked_selection = "No hay lineas marcadas DR en la seleccion.",
         msg_no_vector_curve = "No se encontro clip vectorial en la seleccion para curva.",
         msg_no_vector_align = "No se encontro clip vectorial en la seleccion para alinear.",
         msg_no_usable_path_align = "El clip vectorial no tiene ruta usable para alinear.",
@@ -542,7 +535,7 @@ local EXTRA_LANG = {
         signs_auto_gbc = "Detectar y regenerar gradientes GBC automaticamente",
         signs_use_cap = "Aplicar limite de caracteres",
         signs_no_editable = "No se encontraron lineas editables en la seleccion.",
-        signs_original = "ORIGINAL (solo lectura)",
+        signs_original = "ORIGINAL (referencia)",
         signs_modified = "MODIFICADO (editar aqui)",
         signs_regen_gbc = "Regenerar gradientes GBC en lineas modificadas",
         signs_info = "%d textos unicos, %d lineas totales. %d GBC detectados.",
@@ -585,12 +578,10 @@ local EXTRA_LANG = {
         sh_perimeter_err_base_line = "Linea base %d: %s", sh_perimeter_err_base_exterior = "Linea base %d: no contiene un contorno exterior utilizable.",
         sh_perimeter_err_shared_pos = "Las capas de una unidad deben compartir exactamente el mismo \\pos.", sh_perimeter_err_no_units = "No se detectaron unidades despues de la shape base.",
         sh_perimeter_err_zero_width = "Una unidad tiene ancho visible cero.", sh_perimeter_err_empty_period = "El periodo no puede estar vacio.", sh_perimeter_err_invalid_unit = "El periodo contiene una unidad invalida.",
-        sh_perimeter_custom = "Personalizado...", sh_perimeter_unit = "Unidad %d", sh_perimeter_period_length = "Longitud del periodo:", sh_perimeter_period_hint = "Solo se usan los primeros pasos indicados por la longitud.",
-        sh_perimeter_step = "Paso %d:", sh_perimeter_err_period_length = "La longitud del periodo no es valida.", sh_perimeter_err_step = "El paso %d no contiene una unidad valida.",
-        sh_perimeter_err_cycles = "La cantidad de repeticiones del contorno %d no es valida.", sh_perimeter_err_tangent = "No se pudo calcular una tangente del contorno %d.",
+        sh_perimeter_custom = "Personalizado...", sh_perimeter_err_period_length = "La longitud del periodo no es valida.", sh_perimeter_err_cycles = "La cantidad de repeticiones del contorno %d no es valida.", sh_perimeter_err_tangent = "No se pudo calcular una tangente del contorno %d.",
         sh_perimeter_err_advance = "Demasiadas repeticiones en el contorno %d: el avance entre unidades deja de ser positivo.", sh_perimeter_err_closure = "El cierre del patron no coincide con el contorno %d.",
         sh_perimeter_err_replace_pos = "No se pudo reemplazar el \\pos de una capa.", sh_perimeter_err_rotation = "No se pudo insertar la rotacion de una capa.",
-        sh_perimeter_err_output_limit = "La salida tendria %d lineas; el limite seguro es %d.", sh_perimeter_err_template = "Linea plantilla %d: %s",
+        sh_perimeter_err_template = "Linea plantilla %d: %s",
         sh_perimeter_detected = "Unidades detectadas: %d", sh_perimeter_summary = "Exteriores: %d (%s px) | Huecos: %d (%s px)", sh_perimeter_pattern = "Patron periodico:",
         sh_perimeter_close_hint = "Cada contorno cierra su periodo de forma independiente.", sh_perimeter_order_hint = "Orden: unidades 1, 2, 3... segun su primer \\pos en la seleccion.", sh_perimeter_err_pattern = "Elige un patron periodico valido.",
     },
@@ -598,9 +589,9 @@ local EXTRA_LANG = {
         lang_en = "Ingles", lang_es = "Espanhol", lang_pt = "Portugues",
         btn_delete = "Apagar", btn_apply = "Execute", btn_copy_tags = "Copiar tags", btn_keep_only = "Keep Only",
         op_apply_chain = "Aplicar cadeia", op_apply_mask = "Aplicar mascara", op_create_layer = "Criar camada",
-        op_replace_mask = "Substituir mascara", op_save_shape = "Salvar forma", op_delete_shape = "Apagar forma", op_clean_dr = "Limpar DR",
+        op_replace_mask = "Substituir mascara", op_save_shape = "Salvar forma", op_delete_shape = "Apagar forma",
         op_typewriter = "Maquina de escrever", op_vertical_drop = "Queda vertical", op_circle_text = "Texto circular", op_curve_text = "Texto em curva",
-        op_clean_sio = "Limpar SiO", choice_frame = "Frame", choice_duration = "Duracao", choice_normal = "Normal",
+        choice_frame = "Frame", choice_duration = "Duracao", choice_normal = "Normal",
         choice_inverted = "Invertido", choice_vertical = "Vertical", choice_from_clip = "Do clip",
         pk_copy_exact = "Copiar exato (mesmo plano)", pk_copy_static = "Copiar plano estatico (manter \\pos)", pk_copy_move_plane = "Copiar plano com \\move",
         pk_copy_swap = "Copiar trocando cantos", pk_copy_translate = "Copiar translacao (manter \\pos)", pk_copy_transport = "Transportar copia (\\org -> \\pos)",
@@ -649,9 +640,6 @@ local EXTRA_LANG = {
         msg_style_not_found = "estilo nao encontrado",
         msg_missing_pipe = "sem marcador |",
         msg_marker_error = "erro com marcador",
-        msg_delete_dr_marked = "Apagar %d linhas marcadas DR?",
-        msg_no_dr_marked = "Nenhuma linha marcada DR encontrada.",
-        msg_no_dr_marked_selection = "Nao ha linhas marcadas DR na selecao.",
         msg_no_vector_curve = "Nenhum clip vetorial encontrado na selecao para curva.",
         msg_no_vector_align = "Nenhum clip vetorial encontrado na selecao para alinhar.",
         msg_no_usable_path_align = "O clip vetorial nao tem caminho usavel para alinhar.",
@@ -660,9 +648,9 @@ local EXTRA_LANG = {
         signs_auto_gbc = "Detectar e regenerar gradientes GBC automaticamente",
         signs_use_cap = "Aplicar limite de caracteres",
         signs_no_editable = "Nenhuma linha editavel encontrada na selecao.",
-        signs_original = "ORIGINAL (somente leitura)",
+        signs_original = "ORIGINAL (referência)",
         signs_modified = "MODIFICADO (editar aqui)",
-        signs_regen_gbc = "Regenerar gradientes GBC nas linhas modificadas",
+        signs_regen_gbc = "Regenerar gradientes GBC marcados",
         signs_info = "%d textos unicos, %d linhas totais. %d GBC detectados.",
         signs_skipped_vectors = " %d vetores ignorados.",
         signs_skipped_over_limit = " %d ignoradas por limite.",
@@ -703,33 +691,28 @@ local EXTRA_LANG = {
         sh_perimeter_err_base_line = "Linha base %d: %s", sh_perimeter_err_base_exterior = "A linha base %d nao contem um contorno exterior utilizavel.",
         sh_perimeter_err_shared_pos = "As camadas de uma unidade devem compartilhar exatamente o mesmo \\pos.", sh_perimeter_err_no_units = "Nenhuma unidade foi detectada depois da forma base.",
         sh_perimeter_err_zero_width = "Uma unidade tem largura visivel zero.", sh_perimeter_err_empty_period = "O periodo nao pode estar vazio.", sh_perimeter_err_invalid_unit = "O periodo contem uma unidade invalida.",
-        sh_perimeter_custom = "Personalizado...", sh_perimeter_unit = "Unidade %d", sh_perimeter_period_length = "Comprimento do periodo:", sh_perimeter_period_hint = "Somente os primeiros passos indicados pelo comprimento sao usados.",
-        sh_perimeter_step = "Passo %d:", sh_perimeter_err_period_length = "O comprimento do periodo e invalido.", sh_perimeter_err_step = "O passo %d nao contem uma unidade valida.",
-        sh_perimeter_err_cycles = "A quantidade de repeticoes do contorno %d e invalida.", sh_perimeter_err_tangent = "Nao foi possivel calcular uma tangente para o contorno %d.",
+        sh_perimeter_custom = "Personalizado...", sh_perimeter_err_period_length = "O comprimento do periodo e invalido.", sh_perimeter_err_cycles = "A quantidade de repeticoes do contorno %d e invalida.", sh_perimeter_err_tangent = "Nao foi possivel calcular uma tangente para o contorno %d.",
         sh_perimeter_err_advance = "O contorno %d tem repeticoes demais: o avanco entre unidades deixa de ser positivo.", sh_perimeter_err_closure = "O fechamento do padrao nao coincide com o contorno %d.",
         sh_perimeter_err_replace_pos = "Nao foi possivel substituir o \\pos de uma camada.", sh_perimeter_err_rotation = "Nao foi possivel inserir a rotacao de uma camada.",
-        sh_perimeter_err_output_limit = "A saida teria %d linhas; o limite seguro e %d.", sh_perimeter_err_template = "Linha modelo %d: %s",
+        sh_perimeter_err_template = "Linha modelo %d: %s",
         sh_perimeter_detected = "Unidades detectadas: %d", sh_perimeter_summary = "Exteriores: %d (%s px) | Furos: %d (%s px)", sh_perimeter_pattern = "Padrao periodico:",
         sh_perimeter_close_hint = "Cada contorno fecha seu periodo de forma independente.", sh_perimeter_order_hint = "Ordem: unidades 1, 2, 3... conforme o primeiro \\pos na selecao.", sh_perimeter_err_pattern = "Escolha um padrao periodico valido.",
     },
 }
-for code, tbl in pairs(EXTRA_LANG) do
+for code, tbl in pairs(extraLang) do
     LANG[code] = LANG[code] or {}
     for key, value in pairs(tbl) do LANG[code][key] = value end
 end
-local current_lang = "en"
+local currentLang = "en"
 local function L(key)
-    local localValue = (LANG[current_lang] and LANG[current_lang][key]) or LANG.en[key]
+    local localValue = (LANG[currentLang] and LANG[currentLang][key]) or LANG.en[key]
     if localValue then return localValue end
     return key
 end
-
 local function sectionTitle(key)
     return "== " .. L(key) .. " =="
 end
-
-
-local DEFAULT_CONFIG = {
+local defaultConfig = {
     language = "en",
     mask_color = "#000000",
     fastsign_box_color = "#151515", fastsign_box_alpha = "80",
@@ -755,18 +738,31 @@ local DEFAULT_CONFIG = {
     tagops_k = false, tagops_kf = false, tagops_ko = false, tagops_p = false, tagops_pbo = false,
     tagops_fe = false,
 }
-local CONFIG_HANDLER
-local RheaConfig = { defaults = {}, sections = {} }
-local config_loaded = false
-local current_config = FunctionalTable.union(DEFAULT_CONFIG)
-
-local function loadGlobalConfig()
-    if not CONFIG_HANDLER then
+local configHandler
+local Rhea = {
+    Config = { defaults = {}, sections = {} },
+    Foundation = {},
+    Selection = {},
+    Lines = {},
+    Macros = {},
+    Operations = {
+        Perspective = {},
+        Masks = {},
+        Sign = {},
+        Tools = {},
+        TagOps = { U = {} },
+    },
+}
+local RheaConfig = Rhea.Config
+local configLoaded = false
+local currentConfig = Functional.table.union(defaultConfig)
+function RheaConfig.load()
+    if not configHandler then
         local section = {}
         local function addConfigValue(k, v)
             section[k] = { value = v, config = true, name = k, class = "edit" }
         end
-        for k, v in pairs(DEFAULT_CONFIG) do addConfigValue(k, v) end
+        for k, v in pairs(defaultConfig) do addConfigValue(k, v) end
         if RheaConfig and RheaConfig.defaults and RheaConfig.key then
             for prefix, defaults in pairs(RheaConfig.defaults) do
                 for key, value in pairs(defaults or {}) do
@@ -774,32 +770,30 @@ local function loadGlobalConfig()
                 end
             end
         end
-        CONFIG_HANDLER = ConfigHandler({ rhea = section }, "rhea_signs_config.json", true, script_version)
+        configHandler = ConfigHandler({ rhea = section }, "rhea_signs_config.json", true, script_version)
     end
-    if config_loaded then return true end
-    local f = io.open(CONFIG_HANDLER.fileName, "r")
-    if f then
-        f:close()
-    else
-        CONFIG_HANDLER:write()
+    if configLoaded then return true end
+    local ok, loaded, err = pcall(configHandler.read, configHandler)
+    local loadError = configHandler.store and configHandler.store.loadError
+    if not ok or loaded == false or loadError then
+        KiteUI.message(tostring(loadError or err or loaded))
     end
-    CONFIG_HANDLER:read()
-    current_config = CONFIG_HANDLER.configuration.rhea
-    current_lang = current_config.language or "en"
-    config_loaded = true
+    currentConfig = configHandler.configuration.rhea
+    currentLang = currentConfig.language or "en"
+    configLoaded = true
     return true
 end
-
-local function saveGlobalConfig()
-    if CONFIG_HANDLER then CONFIG_HANDLER:write(); return true end
+function RheaConfig.save()
+    if configHandler then
+        local ok, saved, err = pcall(configHandler.write, configHandler)
+        if ok and saved then return true end
+        KiteUI.message((currentLang == "es" and "No se pudo guardar la configuración." or currentLang == "pt" and "Não foi possível salvar a configuração." or "Could not save settings.") .. "\n" .. tostring(err or saved or ""))
+    end
     return false
 end
-
-local function resolveConfig()
-    loadGlobalConfig()
+function RheaConfig.resolve()
+    RheaConfig.load()
 end
-
-
 local function showMsg(msg, buttons, opts, dialogOpts)
     opts = opts or {}
     return aegisub.dialog.display({{
@@ -807,15 +801,11 @@ local function showMsg(msg, buttons, opts, dialogOpts)
         x = 0, y = 0, width = opts.width or 25, height = opts.height or 4,
     }}, buttons or {L("btn_ok")}, dialogOpts)
 end
-
-local Rhea = {}
-
-Rhea.trim             = FunctionalString.trim
-Rhea.escapePattern    = FunctionalString.escLuaExp
-Rhea.clamp            = FunctionalUtil.clamp
-Rhea.round            = FunctionalMath.round
-Rhea.roundTo          = function(n, d) return FunctionalMath.round(tonumber(n) or 0, d or 0) end
-
+Rhea.trim             = Core.trim
+Rhea.escapePattern    = Functional.string.escLuaExp
+Rhea.clamp            = Core.clamp
+Rhea.round            = Functional.math.round
+Rhea.roundTo          = function(n, d) return Functional.math.round(tonumber(n) or 0, d or 0) end
 function Rhea.cloneLine(l)
     if type(l.copy) == "function" then return l:copy() end
     local d = { class = l.class or "dialogue" }
@@ -826,7 +816,8 @@ function Rhea.cloneLine(l)
     end
     setmetatable(d, getmetatable(l)); return d
 end
-
+Rhea.Lines.clone = Rhea.cloneLine
+Rhea.Lines.transaction = LineOps.transaction
 function Rhea.stripTags(t) return LineOps.analyzeText(t).plain end
 function Rhea.visibleText(t) return LineOps.visibleText(t) end
 function Rhea.visibleLines(t)
@@ -834,25 +825,10 @@ function Rhea.visibleLines(t)
     for i, line in ipairs(lines) do lines[i] = line ~= "" and line or " " end
     return #lines > 0 and lines or {" "}
 end
-
 function Rhea.isDialogue(l) return type(l) == "table" and (l.class == nil or l.class == "dialogue") end
-
-function Rhea.htmlToAss(html)
-    if not html or html == "" then return "&H000000&" end
-    html = tostring(html)
-    local hex = html:match("&[Hh]([%xA-Fa-f]+)&?")
-    if hex then
-        if #hex > 6 then hex = hex:sub(-6) end
-        while #hex < 6 do hex = "0" .. hex end
-        return "&H" .. hex:upper() .. "&"
-    end
-    local r, g, b = html:match("^#?(%x%x)(%x%x)(%x%x)$")
-    if not r then r, g, b = html:match("^#?(%x%x)(%x%x)(%x%x)%x%x$") end
-    if r then return "&H" .. b:upper() .. g:upper() .. r:upper() .. "&" end
-    return "&H000000&"
+function Rhea.htmlToAss(value)
+    return Color.parseAss(value) or Color.normalizeStrict(value) or "&H000000&"
 end
-
-
 function Rhea.styleMap(subs)
     local s = {}
     for i = 1, #subs do
@@ -860,66 +836,27 @@ function Rhea.styleMap(subs)
     end
     return s
 end
-function Rhea.formatNum(n, decimals)
-    decimals = decimals or 4
-    n = tonumber(n)
-    if not n or n ~= n or n == math.huge or n == -math.huge then return "0" end
-    if n == math.floor(n) then return string.format("%d", math.floor(n + 0.5)) end
-    local s = string.format("%." .. decimals .. "f", n)
-    s = s:gsub("0+$", ""):gsub("%.$", "")
-    if s == "-0" or s == "" then s = "0" end
-    return s
+function Rhea.formatNum(value, decimals)
+    return Core.formatNumber(value, decimals or 4)
 end
-
 function Rhea.firstBlock(text)
-    return tostring(text or ""):match("^({[^}]*})") or ""
+    return tostring(text or ""):match("^({%s*\\[^}]*})") or ""
 end
-function Rhea.injectFirst(text, payload)
-    if not payload or payload == "" then return text end
-    local fb = Rhea.firstBlock(text)
-    if fb ~= "" then
-        return "{" .. payload .. fb:sub(2, -2) .. "}" .. text:sub(#fb + 1)
-    end
-    return "{" .. payload .. "}" .. text
-end
+Rhea.injectFirst = LineOps.prependTag
 function Rhea.isVectorLine(text)
     return LineOps.hasDrawing(text)
 end
-
 function Rhea.tokenize(text)
-    local tokens, pos = {}, 1
-    text = tostring(text or "")
-    local n = #text
-    while pos <= n do
-        local b = text:sub(pos, pos)
-        if b == "{" then
-            local close = text:find("}", pos + 1, true)
-            if close then
-                local content = text:sub(pos, close)
-                tokens[#tokens + 1] = { type = "tag", content = content }
-                pos = close + 1
-            else
-                tokens[#tokens + 1] = { type = "char", content = "{" }
-                pos = pos + 1
-            end
-        elseif b == "\\" and pos < n then
-            local nx = text:sub(pos + 1, pos + 1)
-            if nx == "N" or nx == "n" or nx == "h" then
-                tokens[#tokens + 1] = { type = "break", content = "\\" .. nx }
-                pos = pos + 2
-            else
-                tokens[#tokens + 1] = { type = "char", content = b }
-                pos = pos + 1
-            end
+    local tokens = {}
+    for _, section in ipairs(LineOps.scanSections(text)) do
+        if section.type == "override" or section.type == "comment" then
+            tokens[#tokens + 1] = {type = "tag", content = "{" .. section.text .. "}"}
+        elseif section.type == "drawing" then
+            tokens[#tokens + 1] = {type = "drawing", content = section.text}
         else
-            local ch
-            for c in unicode.chars(text:sub(pos)) do ch = c; break end
-            if ch and ch ~= "" then
-                tokens[#tokens + 1] = { type = "char", content = ch }
-                pos = pos + #ch
-            else
-                tokens[#tokens + 1] = { type = "char", content = b }
-                pos = pos + 1
+            for _, value in ipairs(LineOps.graphemes(section.text)) do
+                local isBreak = value == "\\N" or value == "\\n" or value == "\\h"
+                tokens[#tokens + 1] = {type = isBreak and "break" or "char", content = value}
             end
         end
     end
@@ -928,45 +865,56 @@ end
 function Rhea.tokenizeVisible(text)
     local out = {}
     for _, tk in ipairs(Rhea.tokenize(text)) do
-        if tk.type ~= "tag" then out[#out + 1] = { type = tk.type, content = tk.content } end
+        if tk.type == "char" or tk.type == "break" then out[#out + 1] = { type = tk.type, content = tk.content } end
     end
     return out
 end
-
-local RHEA_BREAK_SENTINELS = {
+local rheaBreakSentinels = {
     ["\\N"] = string.char(238, 128, 128),
     ["\\n"] = string.char(238, 128, 129),
     ["\\h"] = string.char(238, 128, 130),
 }
-
-local RHEA_BREAK_FROM_SENTINEL = {}
-for breakText, sentinel in pairs(RHEA_BREAK_SENTINELS) do
-    RHEA_BREAK_FROM_SENTINEL[sentinel] = breakText
+local rheaBreakFromSentinel = {}
+for breakText, sentinel in pairs(rheaBreakSentinels) do
+    rheaBreakFromSentinel[sentinel] = breakText
 end
-
 function Rhea.protectVisibleBreaks(text)
     local out = {}
     for _, tk in ipairs(Rhea.tokenize(text)) do
-        out[#out + 1] = tk.type == "break" and RHEA_BREAK_SENTINELS[tk.content] or tk.content
+        out[#out + 1] = tk.type == "break" and rheaBreakSentinels[tk.content] or tk.content
     end
     return table.concat(out)
 end
-
 function Rhea.restoreVisibleBreaks(text)
     text = tostring(text or "")
-    for sentinel, breakText in pairs(RHEA_BREAK_FROM_SENTINEL) do
+    for sentinel, breakText in pairs(rheaBreakFromSentinel) do
         text = text:gsub(Rhea.escapePattern(sentinel), breakText)
     end
     return text
 end
-
-function Rhea.readMarker(line, prefix)
-    return (line and line.effect or ""):match("%[" .. prefix .. "%-([%w]+)%]")
+local RheaFoundation = setmetatable(Rhea.Foundation, { __index = Rhea })
+function RheaFoundation.colorAlpha(value)
+    value = tostring(value or "")
+    return value:match("^#%x%x%x%x%x%x(%x%x)$") or value:match("^&[Hh](%x%x)%x%x%x%x%x%x&?$") or "00"
 end
-
-local RheaFoundation = setmetatable({}, { __index = Rhea })
-
-local RHEA_TAG_TO_ASS = {
+function RheaFoundation.retainDialog(dialog, values)
+    for _, item in ipairs(dialog) do
+        if item.name and values[item.name] ~= nil then
+            if item.class == "edit" or item.class == "textbox" then item.text = values[item.name]
+            else item.value = values[item.name] end
+        end
+    end
+end
+function Rhea.Lines.atomic(subs, callback)
+    return LineOps.transaction(subs, "", function()
+        LineOps.checkCancelled()
+        local function pack(...) return {n = select("#", ...), ...} end
+        local result = pack(callback())
+        LineOps.checkCancelled()
+        return unpack(result, 1, result.n)
+    end)
+end
+local rheaTagToAss = {
     pos = "position", move = "move", org = "origin",
     clip = "clip_vect", iclip = "iclip_vect",
     fad = "fade_simple", fade = "fade",
@@ -989,11 +937,6 @@ local RHEA_TAG_TO_ASS = {
     k = "karaoke", kf = "karaoke_sweep", K = "karaoke_sweep", ko = "karaoke_outline",
     p = "drawing", pbo = "drawing_offset", fe = "encoding",
 }
-
-local RHEA_KNOWN_NAMES = {}
-for k in pairs(RHEA_TAG_TO_ASS) do RHEA_KNOWN_NAMES[#RHEA_KNOWN_NAMES + 1] = k end
-table.sort(RHEA_KNOWN_NAMES, function(a, b) return #a > #b end)
-
 function RheaFoundation.balancedParenEnd(text, startPos)
     local depth = 0
     for i = startPos, #text do
@@ -1006,7 +949,6 @@ function RheaFoundation.balancedParenEnd(text, startPos)
     end
     return #text
 end
-
 function RheaFoundation.iterTagBlocks(text)
     local blocks, i = {}, 1
     text = tostring(text or "")
@@ -1021,51 +963,21 @@ function RheaFoundation.iterTagBlocks(text)
     end
     return blocks
 end
-
 function RheaFoundation.parseTagBlock(block)
     block = tostring(block or "")
-    local tags, i = {}, 1
-    while i <= #block do
-        if block:sub(i, i) == "\\" then
-            local nameStart = i + 1
-            local name
-            for _, known in ipairs(RHEA_KNOWN_NAMES) do
-                if block:sub(nameStart, nameStart + #known - 1) == known then
-                    name = known
-                    break
-                end
-            end
-            if not name then name = block:sub(nameStart):match("^[1-4]?[A-Za-z]+") or "" end
-            if name ~= "" then
-                local j = nameStart + #name
-                local tokenEnd
-                if block:sub(j, j) == "(" then
-                    tokenEnd = RheaFoundation.balancedParenEnd(block, j)
-                else
-                    tokenEnd = j - 1
-                    while tokenEnd + 1 <= #block and block:sub(tokenEnd + 1, tokenEnd + 1) ~= "\\" do
-                        tokenEnd = tokenEnd + 1
-                    end
-                end
-                tags[#tags + 1] = {
-                    name = name,
-                    raw = block:sub(i, tokenEnd),
-                    value = block:sub(j, tokenEnd),
-                    startPos = i,
-                    endPos = tokenEnd,
-                }
-                i = tokenEnd + 1
-            else
-                i = i + 1
-            end
-        else
-            i = i + 1
-        end
+    if not block:match("^%s*\\") then return {} end
+    local first = block:find("\\", 1, true)
+    local tags = {}
+    for _, token in ipairs(LineOps.overrideTokens(block:sub(first))) do
+        tags[#tags + 1] = {
+            name = token.raw:sub(2, #token.raw_name + 1),
+            raw = token.raw, value = token.value,
+            startPos = token.start_position + first - 1,
+            endPos = token.end_position + first - 1,
+        }
     end
     return tags
 end
-
-
 function RheaFoundation.namesToASS(rawNames)
     local list, seen = {}, {}
     local function addMapped(mapped)
@@ -1079,7 +991,7 @@ function RheaFoundation.namesToASS(rawNames)
             addMapped("iclip_vect")
             addMapped("iclip_rect")
         else
-            addMapped(RHEA_TAG_TO_ASS[n] or n)
+            addMapped(rheaTagToAss[n] or n)
         end
     end
     if type(rawNames) == "string" then add(rawNames)
@@ -1092,34 +1004,17 @@ function RheaFoundation.namesToASS(rawNames)
     end
     return list
 end
-
-local ASS_LINE_DEFAULTS = {
-    class = "dialogue", comment = false, layer = 0,
-    start_time = 0, end_time = 0, style = "Default",
-    actor = "", margin_l = 0, margin_r = 0, margin_t = 0,
-    effect = "", text = "",
-}
-
 function RheaFoundation.toASSLine(textOrLine)
-    if type(textOrLine) == "table" and textOrLine.__class then return textOrLine end
-    local src = type(textOrLine) == "table" and textOrLine or { text = tostring(textOrLine or "") }
-    local line = {}
-    for k, v in pairs(ASS_LINE_DEFAULTS) do line[k] = v end
-    for k, v in pairs(src) do line[k] = v end
-    line.text = tostring(line.text or "")
-    return AMLine(line, src.parentCollection, {})
+    return AssContext.toLine(textOrLine, AMLine)
 end
-
 function RheaFoundation.parseLine(textOrLine)
     if type(textOrLine) == "table" and textOrLine.class == ASS.LineContents then return textOrLine end
     return ASS:parse(RheaFoundation.toASSLine(textOrLine))
 end
-
 function RheaFoundation.tryParseLine(textOrLine)
     local ok, data = pcall(RheaFoundation.parseLine, textOrLine)
     return ok and data or nil
 end
-
 function RheaFoundation.removeTags(text, rawNames)
     if not text or text == "" then return text end
     local data = RheaFoundation.tryParseLine(text)
@@ -1127,7 +1022,6 @@ function RheaFoundation.removeTags(text, rawNames)
     data:removeTags(RheaFoundation.namesToASS(rawNames))
     return data:getString()
 end
-
 function RheaFoundation.insertTags(text, payload, mode)
     if not payload or payload == "" then return text end
     if mode == "append" then
@@ -1139,11 +1033,9 @@ function RheaFoundation.insertTags(text, payload, mode)
     end
     return Rhea.injectFirst(text, payload)
 end
-
 function RheaFoundation.stripAutoMarkers(text)
     return (tostring(text or ""):gsub("{%*[^}]*}", ""))
 end
-
 function RheaFoundation.firstClipTag(textOrLine)
     local ok, eff = pcall(function()
         local data = RheaFoundation.parseLine(textOrLine)
@@ -1152,7 +1044,6 @@ function RheaFoundation.firstClipTag(textOrLine)
     if not ok or not eff then return nil end
     return eff.clip_vect or eff.iclip_vect or eff.clip_rect or eff.iclip_rect
 end
-
 function RheaFoundation.clipCommandList(clip)
     if not clip then return {} end
     if clip.commands then return clip.commands end
@@ -1164,7 +1055,6 @@ function RheaFoundation.clipCommandList(clip)
     end
     return out
 end
-
 function RheaFoundation.clipPoints(clip)
     if not clip then return nil end
     if clip.topLeft and clip.bottomRight then
@@ -1190,7 +1080,6 @@ function RheaFoundation.clipPoints(clip)
     end
     return pts
 end
-
 function RheaFoundation.clipBBox(clip)
     if not clip then return nil end
     if clip.topLeft and clip.bottomRight then
@@ -1208,7 +1097,6 @@ function RheaFoundation.clipBBox(clip)
     if minx == math.huge then return nil end
     return minx, miny, maxx, maxy
 end
-
 function RheaFoundation.anchorPointFromAlign(an, x1, y1, x2, y2)
     an = tonumber(an) or 5
     local h = (an - 1) % 3
@@ -1217,7 +1105,6 @@ function RheaFoundation.anchorPointFromAlign(an, x1, y1, x2, y2)
     local y = v == 0 and y2 or (v == 1 and (y1 + y2) / 2 or y1)
     return x, y
 end
-
 function RheaFoundation.setPositionTag(text, x, y, opts)
     text = tostring(text or "")
     if opts and opts.keepMove and LineOps.hasTag(text, "move", true) then return text end
@@ -1226,14 +1113,12 @@ function RheaFoundation.setPositionTag(text, x, y, opts)
     if changed then return replaced end
     return Rhea.injectFirst(text, pos)
 end
-
 function RheaFoundation.setAlignTag(text, an)
     text = tostring(text or "")
     local align = string.format("\\an%d", tonumber(an) or 5)
     if text:match("\\an[1-9]") then return (text:gsub("\\an[1-9]", align, 1)) end
     return Rhea.injectFirst(text, align)
 end
-
 function RheaFoundation.clipCommands(clip)
     if not clip then return nil end
     if clip.topLeft and clip.bottomRight then
@@ -1258,7 +1143,6 @@ function RheaFoundation.clipCommands(clip)
     end
     return #out > 0 and out or nil
 end
-
 function RheaFoundation.lineBoundsSize(line, text, style)
     if not line then return nil end
     local sample = Rhea.cloneLine(line)
@@ -1277,11 +1161,9 @@ function RheaFoundation.lineBoundsSize(line, text, style)
     end
     return nil
 end
-
 function RheaFoundation.textExtents(style, text)
     return aegisub.text_extents(style, tostring(text or ""))
 end
-
 function RheaFoundation.multilineTextExtents(style, text)
     local width, height = 0, 0
     for _, line in ipairs(Rhea.visibleLines(text)) do
@@ -1291,7 +1173,6 @@ function RheaFoundation.multilineTextExtents(style, text)
     end
     return width, height
 end
-
 function RheaFoundation.groupByTagState(ass, tagName)
     local groups, group = {}, nil
     ass:callback(function(section, sections, i)
@@ -1308,52 +1189,35 @@ function RheaFoundation.groupByTagState(ass, tagName)
     end)
     return groups
 end
-
 function RheaFoundation.lerpGroup(sections, startTagState, endTagState)
     if not startTagState or not endTagState then return false end
-    local totalCharCount = 0
-    for _, section in ipairs(sections) do
+    local tokens, total = {}, 0
+    for i, section in ipairs(sections) do
         if section.instanceOf and section.instanceOf[ASS.Section.Text] then
-            totalCharCount = totalCharCount + section.len
+            tokens[i] = LineOps.graphemes(section.value)
+            total = total + #tokens[i]
         end
     end
-    if totalCharCount == 0 then return false end
-
-    local processedCharCount = 0
-    local lerpedSections, l = {}, 1
-    for s, section in ipairs(sections) do
-        if not (section.instanceOf and section.instanceOf[ASS.Section.Text]) then
-            lerpedSections[l] = section
-            l = l + 1
+    if total == 0 then return false end
+    local output, processed = {}, 0
+    for i, section in ipairs(sections) do
+        LineOps.checkCancelled()
+        if not tokens[i] then output[#output + 1] = section
         else
-            local charCount = section.len
-            local previousSection = sections[s - 1]
-            local startIdx
-            if previousSection and previousSection.instanceOf and previousSection.instanceOf[ASS.Section.Tag] then
-                previousSection:removeTags(startTagState.__tag.name)
-                previousSection:insertTags(startTagState:lerp(endTagState, processedCharCount / totalCharCount))
-                local left, right = section:splitAtChar(2, true)
-                lerpedSections[l] = left
-                section = right
-                l = l + 1
-                startIdx = 2
-            else
-                startIdx = 1
+            for j, value in ipairs(tokens[i]) do
+                local tag = startTagState:lerp(endTagState, processed / total)
+                local previous = output[#output]
+                if j == 1 and previous and previous.instanceOf and previous.instanceOf[ASS.Section.Tag] then
+                    previous:removeTags(startTagState.__tag.name)
+                    previous:insertTags(tag)
+                else output[#output + 1] = ASS.Section.Tag({tag}) end
+                output[#output + 1] = ASS.Section.Text(value)
+                processed = processed + 1
             end
-            for i = startIdx, charCount do
-                local tag = startTagState:lerp(endTagState, (processedCharCount + i - 1) / totalCharCount)
-                lerpedSections[l] = ASS.Section.Tag({ tag })
-                local left, right = section:splitAtChar(2, true)
-                lerpedSections[l + 1] = left
-                section = right
-                l = l + 2
-            end
-            processedCharCount = processedCharCount + charCount
         end
     end
-    return lerpedSections
+    return output
 end
-
 function RheaFoundation.visibleFromASS(ass)
     local out = {}
     ass:callback(function(section)
@@ -1363,7 +1227,6 @@ function RheaFoundation.visibleFromASS(ass)
     end)
     return table.concat(out)
 end
-
 function RheaFoundation.replaceVisibleText(ass, newVisible)
     local sections, sizes, total = {}, {}, 0
     ass:callback(function(section)
@@ -1382,36 +1245,24 @@ function RheaFoundation.replaceVisibleText(ass, newVisible)
         for i = 2, #sections do sections[i].value = "" end
         return true
     end
-    local used = 0
+    local used, cumulative = 0, 0
     for i, section in ipairs(sections) do
-        local chunk
-        if i == #sections then
-            chunk = newTotal - used
-        else
-            local proportional = Rhea.round(newTotal * (sizes[i] / total))
-            local leftAfter = newTotal - used - proportional
-            local needForRest = #sections - i
-            if leftAfter < needForRest then
-                proportional = math.max(0, newTotal - used - needForRest)
-            end
-            chunk = proportional
-        end
+        cumulative = cumulative + sizes[i]
+        local boundary = Rhea.round(newTotal * cumulative / total)
         local pieces = {}
-        for j = 1, chunk do pieces[j] = elems[used + j].content end
+        for j = used + 1, boundary do pieces[#pieces + 1] = elems[j].content end
         section.value = table.concat(pieces)
-        used = used + chunk
+        used = boundary
     end
     return true
 end
-
 function RheaFoundation.detectGBCTag(text)
     local star = tostring(text or ""):match("{%*([^}]+)}")
     if not star then return nil end
     local raw = star:match("^\\([1-4]?[A-Za-z]+)")
     if not raw then return nil end
-    return RHEA_TAG_TO_ASS[raw] or raw
+    return rheaTagToAss[raw] or raw
 end
-
 function RheaFoundation.lerpLine(ass, tagName)
     local groups = RheaFoundation.groupByTagState(ass, tagName)
     local insertOffset = 0
@@ -1428,36 +1279,31 @@ function RheaFoundation.lerpLine(ass, tagName)
     if applied then ass:cleanTags(4) end
     return applied
 end
-
 function RheaConfig.key(prefix, key)
     return tostring(prefix or "rhea") .. "_" .. tostring(key)
 end
-
-
 function RheaConfig.read(prefix, defaults)
     local cfg = {}
     for key, value in pairs(defaults or {}) do
         local globalKey = RheaConfig.key(prefix, key)
-        if current_config[globalKey] == nil then current_config[globalKey] = value end
-        cfg[key] = current_config[globalKey]
+        if currentConfig[globalKey] == nil then currentConfig[globalKey] = value end
+        cfg[key] = currentConfig[globalKey]
     end
     return cfg
 end
-
 function RheaConfig.write(prefix, updates, defaults)
     local cfg = RheaConfig.read(prefix, defaults)
     for key, value in pairs(updates or {}) do
         if not defaults or defaults[key] ~= nil then
-            current_config[RheaConfig.key(prefix, key)] = value
+            currentConfig[RheaConfig.key(prefix, key)] = value
             cfg[key] = value
         else
-            current_config[RheaConfig.key(prefix, key)] = nil
+            currentConfig[RheaConfig.key(prefix, key)] = nil
         end
     end
-    saveGlobalConfig()
+    RheaConfig.save()
     return cfg
 end
-
 function RheaConfig.section(prefix, defaults)
     local section = {
         read = function() return RheaConfig.read(prefix, defaults) end,
@@ -1468,60 +1314,16 @@ function RheaConfig.section(prefix, defaults)
     RheaConfig.sections[prefix] = section
     return section
 end
-
-function RheaFoundation.nextMarkerSeq(current, used)
-    used = used or {}
-    local id = ((tonumber(current) or 0) % MAX_MARKER_ID) + 1
-    for _ = 1, MAX_MARKER_ID do
-        if not used[id] then
-            used[id] = true
-            return id, id
-        end
-        id = (id % MAX_MARKER_ID) + 1
-    end
-    error("Rhea Signs exhausted all available marker IDs.", 0)
-end
-
-function RheaFoundation.stampMarker(line, prefix, seq)
-    line.effect = line.effect or ""
-    local pat = "%[" .. prefix .. "%-%d+%]"
-    local cleaned = FunctionalString.trim(line.effect:gsub(pat, "")):gsub("%s+", " ")
-    local tag = string.format("[%s-%03d]", prefix, seq)
-    line.effect = cleaned ~= "" and (tag .. " " .. cleaned) or tag
-end
-
-function RheaFoundation.markerTools(prefix)
-    local seq = 0
-    local tools = {}
-    function tools.next(used)
-        local id
-        seq, id = RheaFoundation.nextMarkerSeq(seq, used)
-        return id
-    end
-    function tools.reset()
-        seq = 0
-    end
-    function tools.stamp(line, markerID)
-        RheaFoundation.stampMarker(line, prefix, tonumber(markerID) or tools.next())
-    end
-    function tools.read(line)
-        return Rhea.readMarker(line, prefix)
-    end
-    return tools
-end
-
 function RheaFoundation.choose(value, items, defaultValue)
     for _, item in ipairs(items or {}) do
         if value == item then return value end
     end
     return defaultValue or items and items[1]
 end
-
 function RheaFoundation.chooseAlias(value, aliases, items, defaultValue)
     local aliased = aliases and aliases[tostring(value or "")] or value
     return RheaFoundation.choose(aliased, items, defaultValue)
 end
-
 function RheaFoundation.selectionEffectGroups(subs, sel)
     local groups, order = {}, {}
     for _, i in ipairs(sel or {}) do
@@ -1542,15 +1344,8 @@ function RheaFoundation.selectionEffectGroups(subs, sel)
     end
     return order
 end
-
-function RheaFoundation.selectionDialogueIndices(subs, sel)
-    local indices = {}
-    for _, i in ipairs(sel or {}) do
-        if Rhea.isDialogue(subs[i]) then indices[#indices + 1] = i end
-    end
-    return indices
-end
-
+Rhea.Selection.dialogueIndices = EventOps.dialogueIndices
+RheaFoundation.selectionDialogueIndices = Rhea.Selection.dialogueIndices
 function RheaFoundation.currentFrameMs()
     if not aegisub or type(aegisub.project_properties) ~= "function" or type(aegisub.ms_from_frame) ~= "function" then
         return nil, "fade_err_frame_read"
@@ -1566,8 +1361,7 @@ function RheaFoundation.currentFrameMs()
     end
     return milliseconds
 end
-
-local ShapeCore = assert(SharedShapeOptimizer and SharedShapeOptimizer.geometry)
+local ShapeCore = assert(ShapeOptimizer and ShapeOptimizer.geometry)
 RheaFoundation.Shapes = ShapeCore
 function RheaFoundation.selectionCopyGroups(subs, sel)
     local runGroups, skipped = {}, 0
@@ -1589,32 +1383,6 @@ function RheaFoundation.selectionCopyGroups(subs, sel)
     end
     return runGroups, skipped
 end
-
-function RheaFoundation.selectionAfterDeletedLines(sel, deleted)
-    local deletedSet, deletedNums = {}, {}
-    for _, item in ipairs(deleted or {}) do
-        local n = type(item) == "table" and tonumber(item.number) or tonumber(item)
-        if n then
-            deletedSet[n] = true
-            deletedNums[#deletedNums + 1] = n
-        end
-    end
-    if #deletedNums == 0 then return sel or {} end
-    table.sort(deletedNums)
-    local out = {}
-    for _, rawIndex in ipairs(sel or {}) do
-        local index = tonumber(rawIndex)
-        if index and not deletedSet[index] then
-            local shift = 0
-            for _, deletedIndex in ipairs(deletedNums) do
-                if deletedIndex < index then shift = shift + 1 else break end
-            end
-            out[#out + 1] = index - shift
-        end
-    end
-    return out
-end
-
 function RheaFoundation.tagValue(tag, defaultValue)
     if type(tag) == "table" then
         local n = tonumber(tag.value)
@@ -1623,14 +1391,12 @@ function RheaFoundation.tagValue(tag, defaultValue)
     end
     return defaultValue
 end
-
 function RheaFoundation.setTagValue(tag, value)
     if type(tag) ~= "table" then return end
     local n = tonumber(value) or 0
     tag.value = n
     tag.dim_value = n
 end
-
 function RheaFoundation.syncDimTags(tags)
     if type(tags) ~= "table" then return tags end
     for _, name in ipairs({"align", "scale_x", "scale_y", "angle", "angle_x", "angle_y", "shear_x", "shear_y", "fontsize", "outline_x", "outline_y", "shadow_x", "shadow_y"}) do
@@ -1638,30 +1404,23 @@ function RheaFoundation.syncDimTags(tags)
     end
     return tags
 end
-
 function RheaFoundation.assNumber(n)
     n = tonumber(n)
     if not n then return "0" end
     return tostring(Rhea.roundTo(n))
 end
-
 function RheaFoundation.configNumber(value, defaultValue, minValue, maxValue)
-    local n = tonumber(value)
-    if n == nil then n = tonumber(defaultValue) or 0 end
+    local n = Core.finiteNumber(value)
+    if n == nil then n = Core.finiteNumber(defaultValue) or 0 end
     if minValue ~= nil and n < minValue then n = minValue end
     if maxValue ~= nil and n > maxValue then n = maxValue end
     return n
 end
-
-
-
 function RheaFoundation.sanitizeAlpha(a, defaultAlpha)
     local fallback = tostring(defaultAlpha or "80"):upper():match("^%x%x$") or "80"
     local value = tostring(a or ""):upper()
     return value:match("^%x%x$") or value:match("^&H(%x%x)&$") or value:match("(%x%x)") or fallback
 end
-
-
 function RheaFoundation.atan2(dy, dx)
     dy, dx = tonumber(dy) or 0, tonumber(dx) or 0
     if math.atan2 then return math.atan2(dy, dx) end
@@ -1672,8 +1431,6 @@ function RheaFoundation.atan2(dy, dx)
     if dy < 0 then return -math.pi / 2 end
     return 0
 end
-
-
 function RheaFoundation.bezierPoint(t, p0, p1, p2, p3)
     local u = 1 - t
     local tt = t * t
@@ -1685,7 +1442,6 @@ function RheaFoundation.bezierPoint(t, p0, p1, p2, p3)
         y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y,
     }
 end
-
 function RheaFoundation.bezierDerivative(t, p0, p1, p2, p3)
     local u = 1 - t
     local uu = u * u
@@ -1695,13 +1451,13 @@ function RheaFoundation.bezierDerivative(t, p0, p1, p2, p3)
         y = 3 * uu * (p1.y - p0.y) + 6 * u * t * (p2.y - p1.y) + 3 * tt * (p3.y - p2.y),
     }
 end
-
 function RheaFoundation.samplePath(cmds, segments, atan2fn)
     local pts = {}
     local cur = {x=0, y=0}
     local atan = atan2fn or RheaFoundation.atan2
-    segments = math.max(1, tonumber(segments) or 30)
+    segments = math.max(1, math.floor(Core.finiteNumber(segments) or 30))
     for _, cmd in ipairs(cmds or {}) do
+        LineOps.checkCancelled()
         if cmd.type == "m" and #cmd.pts >= 2 then
             cur = {x = cmd.pts[1], y = cmd.pts[2]}
             pts[#pts + 1] = {p = cur, dist = 0, angle = 0}
@@ -1713,10 +1469,8 @@ function RheaFoundation.samplePath(cmds, segments, atan2fn)
                 local dist = math.sqrt(dx*dx + dy*dy)
                 if dist > 0 then
                     local ang = atan(dy, dx)
-                    for j=1, segments do
-                        local t = j / segments
-                        pts[#pts + 1] = {p = {x=cur.x + dx * t, y=cur.y + dy * t}, dist = dist / segments, angle = ang}
-                    end
+                    if pts[#pts].dist == 0 then pts[#pts].angle = ang end
+                    pts[#pts + 1] = {p = {x = nx, y = ny}, dist = dist, angle = ang, linear = true}
                 end
                 cur = {x = nx, y = ny}
             end
@@ -1726,7 +1480,12 @@ function RheaFoundation.samplePath(cmds, segments, atan2fn)
                 local p1 = {x = cmd.pts[i], y = cmd.pts[i+1]}
                 local p2 = {x = cmd.pts[i+2], y = cmd.pts[i+3]}
                 local p3 = {x = cmd.pts[i+4], y = cmd.pts[i+5]}
+                if pts[#pts].dist == 0 then
+                    local direction = RheaFoundation.bezierDerivative(0, cur, p1, p2, p3)
+                    pts[#pts].angle = atan(direction.y, direction.x)
+                end
                 for j=1, segments do
+                    LineOps.checkCancelled()
                     local t = j / segments
                     local pt = RheaFoundation.bezierPoint(t, cur, p1, p2, p3)
                     local dp = RheaFoundation.bezierDerivative(t, cur, p1, p2, p3)
@@ -1749,71 +1508,25 @@ function RheaFoundation.samplePath(cmds, segments, atan2fn)
     if #pts > 0 then pts[1].accDist = 0 end
     return pts, totalDist
 end
-
-
 function RheaFoundation.pointOnPath(sampled, targetDist)
     if #sampled == 0 then return nil end
     if targetDist <= 0 then return sampled[1] end
     if targetDist >= sampled[#sampled].accDist then return sampled[#sampled] end
-    for i=2, #sampled do
-        if sampled[i].accDist >= targetDist then
-            local p1, p2 = sampled[i-1], sampled[i]
-            local d = p2.accDist - p1.accDist
-            if d == 0 then return p2 end
-            local t = (targetDist - p1.accDist) / d
-            return {
-                p = {
-                    x = p1.p.x + (p2.p.x - p1.p.x) * t,
-                    y = p1.p.y + (p2.p.y - p1.p.y) * t,
-                },
-                angle = p1.angle + (p2.angle - p1.angle) * t,
-            }
-        end
+    local lo, hi = 2, #sampled
+    while lo < hi do
+        local mid = math.floor((lo + hi) / 2)
+        if sampled[mid].accDist < targetDist then lo = mid + 1 else hi = mid end
     end
-    return sampled[#sampled]
+    local p1, p2 = sampled[lo - 1], sampled[lo]
+    local distance = p2.accDist - p1.accDist
+    if distance <= 0 then return p2 end
+    local ratio = (targetDist - p1.accDist) / distance
+    local angleDelta = (p2.angle - p1.angle + math.pi) % (2 * math.pi) - math.pi
+    return {p = {x = p1.p.x + (p2.p.x - p1.p.x) * ratio,
+        y = p1.p.y + (p2.p.y - p1.p.y) * ratio}, angle = p2.linear and p2.angle or p1.angle + angleDelta * ratio}
 end
-
-function RheaFoundation.applyInlineStyleTags(style, tags)
-    local data = RheaFoundation.tryParseLine("{" .. tostring(tags or ""):gsub("[{}]", "") .. "}x")
-    if not data then return style end
-    local eff = data:getEffectiveTags(-1, false, true, false).tags
-    if eff.fontsize then style.fontsize = RheaFoundation.tagValue(eff.fontsize, style.fontsize) end
-    if eff.scale_x then style.scale_x = RheaFoundation.tagValue(eff.scale_x, style.scale_x) end
-    if eff.scale_y then style.scale_y = RheaFoundation.tagValue(eff.scale_y, style.scale_y) end
-    if eff.spacing then style.spacing = RheaFoundation.tagValue(eff.spacing, style.spacing) end
-    return style
-end
-
-function RheaFoundation.cleanByMarker(subs, sel, scope, prefix, confirmFmt, emptyMsg, undoLabel)
-    local pool = {}
-    if scope == "all" then
-        for i = 1, #subs do pool[#pool + 1] = i end
-    else
-        for _, i in ipairs(sel or {}) do pool[#pool + 1] = i end
-    end
-    local lines = LineCollection(subs, pool)
-    local toDelete = {}
-    lines:runCallback(function(_, line)
-        if Rhea.readMarker(line, prefix) then toDelete[#toDelete + 1] = line end
-    end)
-    if #toDelete == 0 then
-        if emptyMsg then showMsg(emptyMsg) end
-        return sel, false
-    end
-    if confirmFmt then
-        local delete, cancel = L("btn_delete"), L("btn_cancel")
-        local btn = aegisub.dialog.display(
-            {{class="label", label=string.format(confirmFmt, #toDelete)}},
-            {delete, cancel})
-        if btn ~= delete then return sel, false end
-    end
-    lines:deleteLines(toDelete)
-    local label = type(undoLabel) == "function" and undoLabel(#toDelete) or undoLabel
-    aegisub.set_undo_point(label or string.format("Rhea Signs: clean %s markers", prefix))
-    return RheaFoundation.selectionAfterDeletedLines(sel, toDelete), true, #toDelete
-end
-
-local function sortedLineEntries(map)
+RheaFoundation.applyInlineStyleTags = AssContext.applyInlineStyleTags
+function Rhea.Lines.sortedEntries(map)
     local entries = {}
     for line, newLines in pairs(map or {}) do
         if newLines and newLines.class then newLines = { newLines } end
@@ -1824,11 +1537,10 @@ local function sortedLineEntries(map)
     table.sort(entries, function(a, b) return a.line.number < b.line.number end)
     return entries
 end
-
 function RheaFoundation.replaceCollectedLines(lines, replacements, selectLast)
     local toDelete = {}
     local deletedBefore, insertedBefore = 0, 0
-    for _, entry in ipairs(sortedLineEntries(replacements)) do
+    for _, entry in ipairs(Rhea.Lines.sortedEntries(replacements)) do
         local insertAt = entry.line.number - deletedBefore + insertedBefore
         for i, newLine in ipairs(entry.newLines) do
             local selected = selectLast == nil and true or (selectLast and i == #entry.newLines)
@@ -1843,11 +1555,10 @@ function RheaFoundation.replaceCollectedLines(lines, replacements, selectLast)
     local newSel = lines:getSelection()
     return #newSel > 0 and newSel or nil
 end
-
 function RheaFoundation.insertCollectedLinesAfter(lines, additions, selectLast)
     lines:replaceLines()
     local insertedBefore = 0
-    for _, entry in ipairs(sortedLineEntries(additions)) do
+    for _, entry in ipairs(Rhea.Lines.sortedEntries(additions)) do
         local insertAt = entry.line.number + insertedBefore + 1
         for i, newLine in ipairs(entry.newLines) do
             local selected = selectLast == nil and true or (selectLast and i == #entry.newLines)
@@ -1859,27 +1570,15 @@ function RheaFoundation.insertCollectedLinesAfter(lines, additions, selectLast)
     local newSel = lines:getSelection()
     return #newSel > 0 and newSel or nil
 end
-
-
-local RheaOps = {
-    Perspective = {},
-    Masks = {},
-    Sign = {},
-    Tools = {},
-    TagOps = { U = {} },
-}
-
+local RheaOps = Rhea.Operations
 do
 local Quad, transformPoints, tagsFromQuad = ArchPersp.Quad, ArchPersp.transformPoints, ArchPersp.tagsFromQuad
 local prepareForPerspective = ArchPersp.prepareForPerspective
-
-
 local DEFAULTS = {
     mode = "Copy w/ corner swap", map = "ABCD (exact copy)",
     orgm = "3 minimize fax",
     set_sx = false, sx = 100, set_sy = false, sy = 100, qscale = 100,
 }
-
 local MODE_ITEMS = {
     "Copy Exact (same plane)",
     "Copy Static Plane (keep \\pos)",
@@ -1891,49 +1590,44 @@ local MODE_ITEMS = {
     "Restore Extradata",
     "Identity reproject",
 }
-
-local ORG_ITEMS = {"1 keep dst org", "2 quad center", "3 minimize fax"}
-
-local LAYOUT_SCALE = 1
-local LAYOUT_SCALE_INFO = { scale = 1 }
-local PK_LAYOUT_WARNED = {}
-
-local function compute_layout_scale(meta)
+local orgItems = {"1 keep dst org", "2 quad center", "3 minimize fax"}
+local layoutScale = 1
+local layoutScaleInfo = { scale = 1 }
+local pkLayoutWarned = {}
+local function computeLayoutScale(meta)
     meta = meta or {}
-    local play_y = tonumber(meta.PlayResY or meta.playresy or meta.res_y)
-    local layout_y = tonumber(meta.LayoutResY or meta.layoutresy)
-    local source = layout_y and "LayoutResY" or "video height"
-    if not layout_y and aegisub.video_size then
+    local play_y = Core.finiteNumber(meta.PlayResY or meta.playresy or meta.res_y)
+    local layoutY = Core.finiteNumber(meta.LayoutResY or meta.layoutresy)
+    local source = layoutY and "LayoutResY" or "video height"
+    if not layoutY and aegisub.video_size then
         local ok, _, video_y = pcall(aegisub.video_size)
-        if ok then layout_y = tonumber(video_y) end
+        if ok then layoutY = Core.finiteNumber(video_y) end
     end
     local scale = 1
-    if play_y and layout_y and play_y > 0 and layout_y > 0 then
-        scale = play_y / layout_y
+    if play_y and layoutY and play_y > 0 and layoutY > 0 then
+        scale = play_y / layoutY
     end
-    LAYOUT_SCALE_INFO = {
+    layoutScaleInfo = {
         scale = scale,
         play_y = play_y,
-        layout_y = layout_y,
+        layout_y = layoutY,
         source = source,
     }
     return scale
 end
-
-local function perspective_mode_uses_layout_scale(mode)
+local function perspectiveModeUsesLayoutScale(mode)
     return mode == "Scale Quad (3D Box)"
         or mode == "Identity reproject"
         or mode == "Mass FSC (lock quad)"
         or (type(mode) == "string" and mode:match("^Copy") ~= nil)
 end
-
-local function layout_warning_key()
+local function layoutWarningKey()
     local filename = ""
     if aegisub.file_name then
         local ok, name = pcall(aegisub.file_name)
         if ok then filename = tostring(name or "") end
     end
-    local info = LAYOUT_SCALE_INFO or {}
+    local info = layoutScaleInfo or {}
     return table.concat({
         filename,
         tostring(info.play_y or ""),
@@ -1941,14 +1635,12 @@ local function layout_warning_key()
         tostring(info.source or ""),
     }, "|")
 end
-
-local function confirm_layout_scale()
-    local info = LAYOUT_SCALE_INFO or {}
+local function confirmLayoutScale()
+    local info = layoutScaleInfo or {}
     local scale = tonumber(info.scale) or 1
-    if math.abs(scale - 1) < RHEA_DIMENSION_EPSILON then return true end
-    local key = layout_warning_key()
-    if PK_LAYOUT_WARNED[key] then return true end
-
+    if math.abs(scale - 1) < rheaDimensionEpsilon then return true end
+    local key = layoutWarningKey()
+    if pkLayoutWarned[key] then return true end
     local detail
     if info.source == "LayoutResY" then
         detail = string.format(L("msg_layout_mismatch_layout"),
@@ -1961,7 +1653,6 @@ local function confirm_layout_scale()
         .. string.format("\n\n" .. L("msg_layout_depth_scale"), scale)
         .. "\n\n" .. L("msg_layout_recommended")
         .. "\n\n" .. L("msg_continue_anyway")
-
     local continue = L("btn_continue")
     local cancel = L("btn_cancel")
     local pressed = aegisub.dialog.display(
@@ -1970,19 +1661,15 @@ local function confirm_layout_scale()
         {cancel=cancel, close=cancel, ok=continue}
     )
     if pressed ~= continue then return false end
-    PK_LAYOUT_WARNED[key] = true
+    pkLayoutWarned[key] = true
     return true
 end
-
-local PK_CONFIG = RheaConfig.section("pk", DEFAULTS)
-
-
-local function dim_tag(v)
+local pkConfig = RheaConfig.section("pk", DEFAULTS)
+local function dimTag(v)
     v = tonumber(v) or 0
     return { value = v, dim_value = v }
 end
-
-local function perspective_meta(meta)
+local function perspectiveMeta(meta)
     meta = meta or {}
     local out = {}
     for k, v in pairs(meta) do out[k] = v end
@@ -2000,8 +1687,7 @@ local function perspective_meta(meta)
     if out.LayoutResY == nil then out.LayoutResY = out.layoutresy end
     return out
 end
-
-local function perspective_style(style, name)
+local function perspectiveStyle(style, name)
     local out = {}
     if type(style) == "table" then
         for k, v in pairs(style) do out[k] = v end
@@ -2037,65 +1723,60 @@ local function perspective_style(style, name)
     }, "|")
     return out
 end
-
-local function perspective_styles(styles, lineStyle, style)
+local function perspectiveStyles(styles, lineStyle, style)
     local out = {}
     if type(styles) == "table" then
         for name, st in pairs(styles) do
             if type(st) == "table" then
-                out[name] = perspective_style(st, name)
+                out[name] = perspectiveStyle(st, name)
             end
         end
     end
     local styleName = lineStyle or (type(style) == "table" and style.name) or "Default"
-    out[styleName] = perspective_style(type(style) == "table" and style or out[styleName], styleName)
+    out[styleName] = perspectiveStyle(type(style) == "table" and style or out[styleName], styleName)
     if not out.Default then out.Default = out[styleName] end
     return out
 end
-
-local function line_for_perspective(line, style, meta, styles)
+local function lineForPerspective(line, style, meta, styles)
     local copy = {}
     for k, v in pairs(line or {}) do copy[k] = v end
     copy.text = tostring(copy.text or "")
     copy.style = copy.style or (type(style) == "table" and style.name) or "Default"
-    local pstyles = perspective_styles(styles, copy.style, style)
+    local pstyles = perspectiveStyles(styles, copy.style, style)
     copy.styleRef = pstyles[copy.style] or pstyles.Default
     copy.parentCollection = {
-        meta = perspective_meta(meta),
+        meta = perspectiveMeta(meta),
         styles = pstyles,
     }
     return copy
 end
-
-local function build_tags(line, style, meta, styles)
-    local pmeta = perspective_meta(meta)
-    local data = RheaFoundation.parseLine(line_for_perspective(line, style, pmeta, styles))
-    local eff  = data:getEffectiveTags(-1, true, true, true).tags
-    local pos  = eff.position or {
-        x = (tonumber(pmeta.PlayResX) or 0) / 2,
-        y = (tonumber(pmeta.PlayResY) or 0) / 2,
-    }
-    local org  = eff.origin or pos
+local function buildTags(line, style, meta, styles)
+    local pmeta = perspectiveMeta(meta)
+    local prepared = lineForPerspective(line, style, pmeta, styles)
+    local eff = AssContext.effectiveTags(prepared, ASS, AMLine)
+    local x, y, err = AssContext.position(prepared)
+    assert(x and y, err)
+    local ox, oy = AssContext.origin(prepared)
+    local pos, org = {x=x, y=y}, {x=ox, y=oy}
     return {
-        align     = eff.align    or dim_tag(style and style.align or 5),
-        scale_x   = eff.scale_x  or dim_tag(style and style.scale_x or 100),
-        scale_y   = eff.scale_y  or dim_tag(style and style.scale_y or 100),
-        angle     = eff.angle    or dim_tag(style and style.angle or 0),
-        angle_x   = eff.angle_x  or dim_tag(0),
-        angle_y   = eff.angle_y  or dim_tag(0),
-        shear_x   = eff.shear_x  or dim_tag(0),
-        shear_y   = eff.shear_y  or dim_tag(0),
-        fontsize  = eff.fontsize or dim_tag(style and style.fontsize or 20),
+        align     = dimTag(AssContext.alignment(line.text, style)),
+        scale_x   = eff.scale_x  or dimTag(style and style.scale_x or 100),
+        scale_y   = eff.scale_y  or dimTag(style and style.scale_y or 100),
+        angle     = eff.angle    or dimTag(style and style.angle or 0),
+        angle_x   = eff.angle_x  or dimTag(0),
+        angle_y   = eff.angle_y  or dimTag(0),
+        shear_x   = eff.shear_x  or dimTag(0),
+        shear_y   = eff.shear_y  or dimTag(0),
+        fontsize  = eff.fontsize or dimTag(style and style.fontsize or 20),
         position  = { x = pos.x, y = pos.y },
         origin    = { x = org.x, y = org.y },
-        outline_x = eff.outline_x or eff.outline or dim_tag(style and style.outline or 0),
-        outline_y = eff.outline_y or eff.outline or dim_tag(style and style.outline or 0),
-        shadow_x  = eff.shadow_x or eff.shadow or dim_tag(style and style.shadow or 0),
-        shadow_y  = eff.shadow_y or eff.shadow or dim_tag(style and style.shadow or 0),
+        outline_x = eff.outline_x or eff.outline or dimTag(style and style.outline or 0),
+        outline_y = eff.outline_y or eff.outline or dimTag(style and style.outline or 0),
+        shadow_x  = eff.shadow_x or eff.shadow or dimTag(style and style.shadow or 0),
+        shadow_y  = eff.shadow_y or eff.shadow or dimTag(style and style.shadow or 0),
     }
 end
-
-local function serialize_into(line, t)
+local function serializeInto(line, t)
     RheaFoundation.syncDimTags(t)
     local stripped = RheaFoundation.removeTags(line.text,
         {"fr","frx","fry","frz","fax","fay","fscx","fscy","pos","org"})
@@ -2114,65 +1795,52 @@ local function serialize_into(line, t)
     end
     line.text = line.text:gsub("{}", "")
 end
-
-local function parse_plane_points(raw)
-    if raw == nil then return nil end
-    raw = tostring(raw):gsub("#7C", "|"):gsub("^e", "")
-    local pts = {}
-    for x, y in raw:gmatch("([%+%-]?[%d%.]+[eE%+%-]*)%s*;%s*([%+%-]?[%d%.]+[eE%+%-]*)") do
-        x, y = tonumber(x), tonumber(y)
-        if x and y then
-            pts[#pts + 1] = {x, y}
-            if #pts >= 4 then break end
-        end
+local function parsePlanePoints(raw)
+    local points = {}
+    raw = tostring(raw or ""):gsub("#7C", "|"):gsub("^e", "")
+    for pair in (raw .. "|"):gmatch("(.-)|") do
+        local x, y = pair:match("^%s*([^;]+);([^;]+)%s*$")
+        x, y = Core.finiteNumber(x), Core.finiteNumber(y)
+        if not x or not y then return nil end
+        points[#points + 1] = {x, y}
     end
-    return #pts == 4 and pts or nil
+    return #points == 4 and points or nil
 end
-
-local function parse_baked_plane(text)
+local function parseBakedPlane(text)
     local body = tostring(text or ""):match("{\\_persp%(([^%)]*)%)}")
     if not body then return nil end
-    local nums = {}
-    for n in body:gmatch("[%+%-]?[%d%.]+[eE%+%-]*") do
-        nums[#nums + 1] = tonumber(n)
-        if #nums >= 8 then break end
+    local values, points = LineOps.splitArguments(body), {}
+    if #values ~= 8 then return nil end
+    for index = 1, #values, 2 do
+        local x, y = Core.finiteNumber(values[index]), Core.finiteNumber(values[index + 1])
+        if not x or not y then return nil end
+        points[#points + 1] = {x, y}
     end
-    if #nums < 8 then return nil end
-    return {
-        {nums[1], nums[2]},
-        {nums[3], nums[4]},
-        {nums[5], nums[6]},
-        {nums[7], nums[8]},
-    }
+    return points
 end
-
-local function plane_extra_string(pts)
+local function planeExtraString(pts)
     if type(pts) ~= "table" or #pts < 4 then return nil end
     return string.format("%.3f;%.3f|%.3f;%.3f|%.3f;%.3f|%.3f;%.3f",
         pts[1][1], pts[1][2], pts[2][1], pts[2][2],
         pts[3][1], pts[3][2], pts[4][1], pts[4][2])
 end
-
-local function plane_marker(pts)
+local function planeMarker(pts)
     if type(pts) ~= "table" or #pts < 4 then return nil end
     return string.format("{\\_persp(%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f)}",
         pts[1][1], pts[1][2], pts[2][1], pts[2][2],
         pts[3][1], pts[3][2], pts[4][1], pts[4][2])
 end
-
-local function set_plane_extra(line, quad)
-    local plane = plane_extra_string(quad)
+local function setPlaneExtra(line, quad)
+    local plane = planeExtraString(quad)
     if not plane then return false end
     if type(line.extra) ~= "table" then line.extra = {} end
     line.extra["_aegi_perspective_ambient_plane"] = plane
     return true
 end
-
-
-local function bake_extradata(line)
+local function bakeExtradata(line)
     if type(line.extra) ~= "table" then return false end
-    local pts = parse_plane_points(line.extra["_aegi_perspective_ambient_plane"])
-    local comment = plane_marker(pts)
+    local pts = parsePlanePoints(line.extra["_aegi_perspective_ambient_plane"])
+    local comment = planeMarker(pts)
     if comment then
         if line.text:match("^{\\_persp%(") then
             line.text = line.text:gsub("^{\\_persp%([^%)]+%)}", comment, 1)
@@ -2183,11 +1851,10 @@ local function bake_extradata(line)
     end
     return false
 end
-
-local function restore_extradata(line)
+local function restoreExtradata(line)
     if not line or not line.text then return false end
-    local pts = parse_baked_plane(line.text)
-    local plane = plane_extra_string(pts)
+    local pts = parseBakedPlane(line.text)
+    local plane = planeExtraString(pts)
     if plane then
         if type(line.extra) ~= "table" then line.extra = {} end
         line.extra["_aegi_perspective_ambient_plane"] = plane
@@ -2196,59 +1863,50 @@ local function restore_extradata(line)
     end
     return false
 end
-
-
-
 local function finite(n)
-    return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge and math.abs(n) < 1e7
+    return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
 end
-
-local function valid_dim(n)
-    return finite(n) and n > RHEA_DIMENSION_EPSILON
+local function validDim(n)
+    return finite(n) and n > rheaDimensionEpsilon
 end
-
-local function valid_quad(q)
-    if type(q) ~= "table" then return false end
-    local area = 0
+local function validQuad(q)
+    if type(q) ~= "table" or #q ~= 4 then return false end
     for i = 1, 4 do
-        if type(q[i]) ~= "table" or not finite(q[i][1]) or not finite(q[i][2]) then
-            return false
-        end
-        local j = (i % 4) + 1
-        if q[j] then area = area + q[i][1] * q[j][2] - q[j][1] * q[i][2] end
+        if type(q[i]) ~= "table" or not finite(q[i][1]) or not finite(q[i][2]) then return false end
     end
-    return math.abs(area) > 0.01
+    local area = 0
+    for i = 2, 3 do
+        area = area + (q[i][1] - q[1][1]) * (q[i + 1][2] - q[1][2])
+            - (q[i + 1][1] - q[1][1]) * (q[i][2] - q[1][2])
+    end
+    return finite(area) and math.abs(area) > rheaDimensionEpsilon * rheaDimensionEpsilon
 end
-
-local function tags_are_finite(tags)
-    local scalar_tags = {"scale_x", "scale_y", "angle", "angle_x", "angle_y", "shear_x", "shear_y"}
-    for _, name in ipairs(scalar_tags) do
+local function tagsAreFinite(tags)
+    local scalarTags = {"scale_x", "scale_y", "angle", "angle_x", "angle_y", "shear_x", "shear_y"}
+    for _, name in ipairs(scalarTags) do
         if not tags[name] or not finite(RheaFoundation.tagValue(tags[name])) then return false end
     end
     return tags.position and tags.origin
         and finite(tags.position.x) and finite(tags.position.y)
         and finite(tags.origin.x) and finite(tags.origin.y)
 end
-
-local function apply_tags_from_quad(tags, quad, w, h, orgMode)
-    if not valid_quad(quad) or not valid_dim(w) or not valid_dim(h) then
+local function applyTagsFromQuad(tags, quad, w, h, orgMode)
+    if not validQuad(quad) or not validDim(w) or not validDim(h) then
         return false
     end
     RheaFoundation.syncDimTags(tags)
     local ok = pcall(function()
         local Q = Quad{quad[1], quad[2], quad[3], quad[4]}
-        tagsFromQuad(tags, Q, w, h, orgMode or 3, LAYOUT_SCALE)
+        tagsFromQuad(tags, Q, w, h, orgMode or 3, layoutScale)
     end)
     if not ok then return false end
     RheaFoundation.syncDimTags(tags)
-    return tags_are_finite(tags)
+    return tagsAreFinite(tags)
 end
-
-local function remove_clip_tag(text)
+local function removeClipTag(text)
     return RheaFoundation.removeTags(text, {"clip","iclip"})
 end
-
-local function shape_extents_for_perspective(text)
+local function shapeExtentsForPerspective(text)
     if not Rhea.isVectorLine(text) then return nil end
     local body = LineOps.analyzeText(text).drawing
     local minx, maxx, miny, maxy = math.huge, -math.huge, math.huge, -math.huge
@@ -2266,8 +1924,7 @@ local function shape_extents_for_perspective(text)
     if not found then return nil end
     return math.max(maxx - minx, 0.01), math.max(maxy - miny, 0.01)
 end
-
-local function measure_style_for_perspective(line, style)
+local function measureStyleForPerspective(line, style)
     local s = {}
     for k, v in pairs(style or {}) do s[k] = v end
     local head = tostring(line and line.text or ""):match("^{(.-)}") or ""
@@ -2280,72 +1937,63 @@ local function measure_style_for_perspective(line, style)
     if i then s.italic = (i == "1") end
     return s
 end
-
-local function get_extents(line, style, tags)
-    local sw, sh = shape_extents_for_perspective(line and line.text)
-    if valid_dim(sw) and valid_dim(sh) then return sw, sh end
-
+local function getExtents(line, style, tags)
+    local sw, sh = shapeExtentsForPerspective(line and line.text)
+    if validDim(sw) and validDim(sh) then return sw, sh end
     local clean = Rhea.visibleText(line and line.text or "")
     if clean == "" or clean:match("^%s*$") then return 100, 100 end
-
-    local measureStyle = measure_style_for_perspective(line, style)
+    local measureStyle = measureStyleForPerspective(line, style)
     local ok, w, h = pcall(RheaFoundation.multilineTextExtents, measureStyle, line and line.text or "")
-    if not ok or not valid_dim(w) or not valid_dim(h) then return 100, 100 end
-
+    if not ok or not validDim(w) or not validDim(h) then return 100, 100 end
     local sx = RheaFoundation.tagValue(tags and tags.scale_x, tonumber(measureStyle.scale_x) or 100)
     local sy = RheaFoundation.tagValue(tags and tags.scale_y, tonumber(measureStyle.scale_y) or 100)
-    if valid_dim(sx) then w = w / (sx / 100) end
-    if valid_dim(sy) then h = h / (sy / 100) end
-    if not valid_dim(w) or not valid_dim(h) then return 100, 100 end
+    if validDim(sx) then w = w / (sx / 100) end
+    if validDim(sy) then h = h / (sy / 100) end
+    if not validDim(w) or not validDim(h) then return 100, 100 end
     return math.max(w, 0.01), math.max(h, 0.01)
 end
-
-local function prepare_tags_for_perspective(line, style, meta, styles)
-    local data = RheaFoundation.parseLine(line_for_perspective(line, style, meta, styles))
+local function prepareTagsForPerspective(line, style, meta, styles)
+    local data = RheaFoundation.parseLine(lineForPerspective(line, style, meta, styles))
     if type(prepareForPerspective) == "function" then
         local ok, tags, w, h = pcall(prepareForPerspective, ASS, data)
-        if ok and tags and valid_dim(w) and valid_dim(h) then
+        if ok and tags and validDim(w) and validDim(h) then
             if tostring(line and line.text or ""):find("\\N", 1, true)
                 or tostring(line and line.text or ""):find("\\n", 1, true) then
-                local mw, mh = get_extents(line, style, tags)
-                if valid_dim(mw) and valid_dim(mh) then w, h = mw, mh end
+                local mw, mh = getExtents(line, style, tags)
+                if validDim(mw) and validDim(mh) then w, h = mw, mh end
             end
             return tags, w, h
         end
     end
-    local tags = build_tags(line, style, meta, styles)
-    local w, h = get_extents(line, style, tags)
+    local tags = buildTags(line, style, meta, styles)
+    local w, h = getExtents(line, style, tags)
     return tags, w, h
 end
-
-local function build_quad_for(line, style, meta, styles)
-    local t, w, h = prepare_tags_for_perspective(line, style, meta, styles)
+local function buildQuadFor(line, style, meta, styles)
+    local t, w, h = prepareTagsForPerspective(line, style, meta, styles)
     RheaFoundation.syncDimTags(t)
-    local pts = transformPoints(t, w, h, nil, LAYOUT_SCALE)
+    local pts = transformPoints(t, w, h, nil, layoutScale)
     local q = {}
     for i = 1, 4 do q[i] = {pts[i][1], pts[i][2]} end
     return q, t, w, h
 end
-
-local function safe_build_quad_for(line, style, meta, styles)
+local function safeBuildQuadFor(line, style, meta, styles)
     if not line or not style or not line.text then return nil end
-    local ok, q, t, w, h = pcall(build_quad_for, line, style, meta, styles)
+    local ok, q, t, w, h = pcall(buildQuadFor, line, style, meta, styles)
     if not ok then return nil end
-    if not valid_quad(q) or not valid_dim(w) or not valid_dim(h) then
+    if not validQuad(q) or not validDim(w) or not validDim(h) then
         return nil
     end
     return q, t, w, h
 end
-
-local function get_quad_center(q)
+local function getQuadCenter(q)
     local cx, cy = 0, 0
     for i=1,4 do cx=cx+q[i][1]; cy=cy+q[i][2] end
     return cx/4, cy/4
 end
-
-local function scale_quad(q, scale_pct)
-    local cx, cy = get_quad_center(q)
-    local f = scale_pct / 100
+local function scaleQuad(q, scalePct)
+    local cx, cy = getQuadCenter(q)
+    local f = scalePct / 100
     local nq = {}
     for i=1,4 do
         nq[i] = {
@@ -2355,7 +2003,6 @@ local function scale_quad(q, scale_pct)
     end
     return nq
 end
-
 local MAPPINGS = {
     {"ABCD (exact copy)",  {1,2,3,4}},
     {"BADC (h-mirror)",    {2,1,4,3}},
@@ -2370,18 +2017,15 @@ local MAPPINGS = {
     {"AC src + BD dst",    "AC_src_BD_dst"},
     {"BD src + AC dst",    "BD_src_AC_dst"},
 }
-
-local function map_names()
-    return FunctionalList.map(MAPPINGS, function(v) return v[1] end)
+local function mapNames()
+    return Functional.list.map(MAPPINGS, function(v) return v[1] end)
 end
-
-local function find_mapping(name)
+local function findMapping(name)
     for _, v in ipairs(MAPPINGS) do
         if v[1] == name then return v[2] end
     end
     return {1,2,3,4}
 end
-
 local function normalizePerspectiveMode(mode)
     if type(mode) == "string" and mode:find("Copy Exact", 1, true) then
         return "Copy Exact (same plane)"
@@ -2394,7 +2038,6 @@ local function normalizePerspectiveMode(mode)
     end
     return mode
 end
-
 local function normalizePerspectiveMap(name)
     name = tostring(name or "")
     if name:find("^ABCD") then return "ABCD (exact copy)" end
@@ -2411,68 +2054,60 @@ local function normalizePerspectiveMap(name)
     if name:find("^BD src") or name:find("^BD source") then return "BD src + AC dst" end
     return name
 end
-
-local function remap_quad(src_q, dst_q, m)
+local function remapQuad(srcQ, dstQ, m)
     if type(m) == "string" then
-        if m == "AB_src_CD_dst" then return {src_q[1], src_q[2], dst_q[3], dst_q[4]}
-        elseif m == "CD_src_AB_dst" then return {dst_q[1], dst_q[2], src_q[3], src_q[4]}
-        elseif m == "AC_src_BD_dst" then return {src_q[1], dst_q[2], src_q[3], dst_q[4]}
-        elseif m == "BD_src_AC_dst" then return {dst_q[1], src_q[2], dst_q[3], src_q[4]}
+        if m == "AB_src_CD_dst" then return {srcQ[1], srcQ[2], dstQ[3], dstQ[4]}
+        elseif m == "CD_src_AB_dst" then return {dstQ[1], dstQ[2], srcQ[3], srcQ[4]}
+        elseif m == "AC_src_BD_dst" then return {srcQ[1], dstQ[2], srcQ[3], dstQ[4]}
+        elseif m == "BD_src_AC_dst" then return {dstQ[1], srcQ[2], dstQ[3], srcQ[4]}
         end
     end
-    return {src_q[m[1]], src_q[m[2]], src_q[m[3]], src_q[m[4]]}
+    return {srcQ[m[1]], srcQ[m[2]], srcQ[m[3]], srcQ[m[4]]}
 end
-
-local function copy_tag_value(v)
+local function copyTagValue(v)
     if type(v) ~= "table" then return v end
     local out = {}
     for k, value in pairs(v) do out[k] = value end
     return out
 end
-
-local PERSPECTIVE_COPY_TAGS = {"angle", "angle_x", "angle_y", "shear_x", "shear_y", "scale_x", "scale_y"}
-
-local function copy_perspective_state(dst, src)
-    for _, key in ipairs(PERSPECTIVE_COPY_TAGS) do
-        dst[key] = copy_tag_value(src[key])
+local perspectiveCopyTags = {"angle", "angle_x", "angle_y", "shear_x", "shear_y", "scale_x", "scale_y"}
+local function copyPerspectiveState(dst, src)
+    for _, key in ipairs(perspectiveCopyTags) do
+        dst[key] = copyTagValue(src[key])
     end
 end
-
-local function quad_from_tags(tags, w, h)
-    if not valid_dim(w) or not valid_dim(h) then return nil end
+local function quadFromTags(tags, w, h)
+    if not validDim(w) or not validDim(h) then return nil end
     RheaFoundation.syncDimTags(tags)
-    local ok, pts = pcall(transformPoints, tags, w, h, nil, LAYOUT_SCALE)
+    local ok, pts = pcall(transformPoints, tags, w, h, nil, layoutScale)
     if not ok or type(pts) ~= "table" then return nil end
     local q = {}
     for i = 1, 4 do
         if type(pts[i]) ~= "table" then return nil end
         q[i] = {pts[i][1], pts[i][2]}
     end
-    return valid_quad(q) and q or nil
+    return validQuad(q) and q or nil
 end
-
-local function apply_copied_plane(line, tags, w, h, removeClip)
-    if not tags_are_finite(tags) then return false end
-    local q = quad_from_tags(tags, w, h)
+local function applyCopiedPlane(line, tags, w, h, removeClip)
+    if not tagsAreFinite(tags) then return false end
+    local q = quadFromTags(tags, w, h)
     if not q then return false end
-    serialize_into(line, tags)
-    set_plane_extra(line, q)
-    if removeClip then line.text = remove_clip_tag(line.text) end
+    serializeInto(line, tags)
+    setPlaneExtra(line, q)
+    if removeClip then line.text = removeClipTag(line.text) end
     return true
 end
-
-local function apply_quad(line, tags, quad, w, h, orgMode, removeClip)
-    if not apply_tags_from_quad(tags, quad, w, h, orgMode) then
+local function applyQuad(line, tags, quad, w, h, orgMode, removeClip)
+    if not applyTagsFromQuad(tags, quad, w, h, orgMode) then
         return false
     end
-    serialize_into(line, tags)
-    set_plane_extra(line, quad)
-    if removeClip then line.text = remove_clip_tag(line.text) end
+    serializeInto(line, tags)
+    setPlaneExtra(line, quad)
+    if removeClip then line.text = removeClipTag(line.text) end
     return true
 end
-
-local function apply_quad_locked_scale(line, tags, quad, w, h, target_fscx, target_fscy, removeClip)
-    if (target_fscx and not valid_dim(target_fscx)) or (target_fscy and not valid_dim(target_fscy)) then
+local function applyQuadLockedScale(line, tags, quad, w, h, targetFscx, targetFscy, removeClip)
+    if (targetFscx and not validDim(targetFscx)) or (targetFscy and not validDim(targetFscy)) then
         return false
     end
     local probe = {}
@@ -2482,75 +2117,68 @@ local function apply_quad_locked_scale(line, tags, quad, w, h, target_fscx, targ
             for k2, v2 in pairs(v) do probe[k][k2] = v2 end
         end
     end
-    if not apply_tags_from_quad(probe, quad, w, h, 3) then
+    if not applyTagsFromQuad(probe, quad, w, h, 3) then
         return false
     end
-    local nat_sx = RheaFoundation.tagValue(probe.scale_x, 100)
-    local nat_sy = RheaFoundation.tagValue(probe.scale_y, 100)
-    local fake_w, fake_h = w, h
-    if target_fscx then fake_w = w * nat_sx / target_fscx end
-    if target_fscy then fake_h = h * nat_sy / target_fscy end
-    if not apply_tags_from_quad(tags, quad, fake_w, fake_h, 3) then
+    local natSx = RheaFoundation.tagValue(probe.scale_x, 100)
+    local natSy = RheaFoundation.tagValue(probe.scale_y, 100)
+    local fakeW, fakeH = w, h
+    if targetFscx then fakeW = w * natSx / targetFscx end
+    if targetFscy then fakeH = h * natSy / targetFscy end
+    if not applyTagsFromQuad(tags, quad, fakeW, fakeH, 3) then
         return false
     end
-    if target_fscx then RheaFoundation.setTagValue(tags.scale_x, target_fscx) end
-    if target_fscy then RheaFoundation.setTagValue(tags.scale_y, target_fscy) end
-    if not tags_are_finite(tags) then return false end
-    serialize_into(line, tags)
-    set_plane_extra(line, quad)
-    if removeClip then line.text = remove_clip_tag(line.text) end
+    if targetFscx then RheaFoundation.setTagValue(tags.scale_x, targetFscx) end
+    if targetFscy then RheaFoundation.setTagValue(tags.scale_y, targetFscy) end
+    if not tagsAreFinite(tags) then return false end
+    serializeInto(line, tags)
+    setPlaneExtra(line, quad)
+    if removeClip then line.text = removeClipTag(line.text) end
     return true
 end
-
-local function build_styles(subs)
+local function buildStyles(subs)
     local meta, styles = karaskel.collect_head(subs, false)
     return meta or {}, styles or {}
 end
-
-local function perspective_pick_style(styles, name)
+local function perspectivePickStyle(styles, name)
     if type(styles) ~= "table" then return nil end
     local style = styles[name]
     if type(style) ~= "table" then style = styles.Default end
     if type(style) ~= "table" then return nil end
     return style
 end
-
 function RheaOps.Perspective.context(subs)
-    return build_styles(subs)
+    return buildStyles(subs)
 end
-
 function RheaOps.Perspective.isPerspectiveLine(line)
     if type(line) ~= "table" then return false end
     if type(line.extra) == "table"
-        and parse_plane_points(line.extra["_aegi_perspective_ambient_plane"]) then
+        and parsePlanePoints(line.extra["_aegi_perspective_ambient_plane"]) then
         return true
     end
     local text = tostring(line.text or "")
-    if parse_baked_plane(text) then return true end
+    if parseBakedPlane(text) then return true end
     return text:match("\\frx") ~= nil
         or text:match("\\fry") ~= nil
         or text:match("\\fax") ~= nil
         or text:match("\\fay") ~= nil
 end
-
 function RheaOps.Perspective.captureQuad(line, style, meta, styles)
     if not RheaOps.Perspective.isPerspectiveLine(line) then return nil end
-    local q = safe_build_quad_for(line, style, meta, styles)
+    local q = safeBuildQuadFor(line, style, meta, styles)
     return q
 end
-
 function RheaOps.Perspective.reprojectLineToQuad(line, style, meta, styles, quad, selected)
-    if not valid_quad(quad) then return false end
-    local tags, w, h = prepare_tags_for_perspective(line, style, meta, styles)
-    if not tags or not valid_dim(w) or not valid_dim(h) then return false end
-    local target_sx = selected and selected.fscx and RheaFoundation.tagValue(tags.scale_x, 100) or nil
-    local target_sy = selected and selected.fscy and RheaFoundation.tagValue(tags.scale_y, 100) or nil
-    if target_sx or target_sy then
-        return apply_quad_locked_scale(line, tags, quad, w, h, target_sx, target_sy, false)
+    if not validQuad(quad) then return false end
+    local tags, w, h = prepareTagsForPerspective(line, style, meta, styles)
+    if not tags or not validDim(w) or not validDim(h) then return false end
+    local targetSx = selected and selected.fscx and RheaFoundation.tagValue(tags.scale_x, 100) or nil
+    local targetSy = selected and selected.fscy and RheaFoundation.tagValue(tags.scale_y, 100) or nil
+    if targetSx or targetSy then
+        return applyQuadLockedScale(line, tags, quad, w, h, targetSx, targetSy, false)
     end
-    return apply_quad(line, tags, quad, w, h, 3, false)
+    return applyQuad(line, tags, quad, w, h, 3, false)
 end
-
 local function perspectiveFinish(label, changed, zeroMsg)
     if (tonumber(changed) or 0) <= 0 then
         if zeroMsg and zeroMsg ~= "" then showMsg(zeroMsg) end
@@ -2559,71 +2187,70 @@ local function perspectiveFinish(label, changed, zeroMsg)
     aegisub.set_undo_point(label)
     return true
 end
-
-local function run_copy_mode(subs, sel, styles, res, orgMode, meta)
-    local is_exact = res.mode == "Copy Exact (same plane)"
-    local is_static = res.mode == "Copy Static Plane (keep \\pos)"
-    local is_move_plane = res.mode == "Copy Move Plane (whole plane)"
+local function runCopyMode(subs, sel, styles, res, orgMode, meta)
+    local isExact = res.mode == "Copy Exact (same plane)"
+    local isStatic = res.mode == "Copy Static Plane (keep \\pos)"
+    local isMovePlane = res.mode == "Copy Move Plane (whole plane)"
     if not sel or #sel < 2 then
         showMsg(L("msg_need_two_copy_lines"))
         return false
     end
-    local mapping = find_mapping(res.map)
+    local mapping = findMapping(res.map)
     local removeCopyClip = false
-    local pairs_done, groups_done = 0, 0
+    local pairsDone, groupsDone = 0, 0
     local run_groups, skipped = RheaFoundation.selectionCopyGroups(subs, sel)
     if #run_groups == 0 then
         showMsg(L("msg_need_two_copy_lines"))
         return false
     end
-
     for _, g in ipairs(run_groups) do
-            local src_line = subs[g.source]
-            local src_style = perspective_pick_style(styles, src_line.style)
-            local src_q, src_t = safe_build_quad_for(src_line, src_style, meta, styles)
-            if src_q then
+            local srcLine = subs[g.source]
+            local srcStyle = perspectivePickStyle(styles, srcLine.style)
+            local srcQ, srcT = safeBuildQuadFor(srcLine, srcStyle, meta, styles)
+            if srcQ then
                 for _, i in ipairs(g.targets) do
+                    LineOps.checkCancelled()
                     local line = subs[i]
-                    local style = perspective_pick_style(styles, line.style)
+                    local style = perspectivePickStyle(styles, line.style)
                     if style then
-                        local dst_q, dst_t, dst_w, dst_h = safe_build_quad_for(line, style, meta, styles)
-                        if dst_q then
-                            if is_exact then
-                                copy_perspective_state(dst_t, src_t)
-                                dst_t.position = { x = src_t.position.x, y = src_t.position.y }
-                                dst_t.origin = { x = src_t.origin.x, y = src_t.origin.y }
-                                if apply_copied_plane(line, dst_t, dst_w, dst_h, removeCopyClip) then
+                        local dstQ, dstT, dstW, dstH = safeBuildQuadFor(line, style, meta, styles)
+                        if dstQ then
+                            if isExact then
+                                copyPerspectiveState(dstT, srcT)
+                                dstT.position = { x = srcT.position.x, y = srcT.position.y }
+                                dstT.origin = { x = srcT.origin.x, y = srcT.origin.y }
+                                if applyCopiedPlane(line, dstT, dstW, dstH, removeCopyClip) then
                                     subs[i] = line
-                                    pairs_done = pairs_done + 1
+                                    pairsDone = pairsDone + 1
                                 else
                                     skipped = skipped + 1
                                 end
-                            elseif is_static then
-                                copy_perspective_state(dst_t, src_t)
-                                dst_t.origin = { x = src_t.origin.x, y = src_t.origin.y }
-                                if apply_copied_plane(line, dst_t, dst_w, dst_h, removeCopyClip) then
+                            elseif isStatic then
+                                copyPerspectiveState(dstT, srcT)
+                                dstT.origin = { x = srcT.origin.x, y = srcT.origin.y }
+                                if applyCopiedPlane(line, dstT, dstW, dstH, removeCopyClip) then
                                     subs[i] = line
-                                    pairs_done = pairs_done + 1
+                                    pairsDone = pairsDone + 1
                                 else
                                     skipped = skipped + 1
                                 end
-                            elseif is_move_plane then
-                                copy_perspective_state(dst_t, src_t)
-                                local dx = dst_t.position.x - src_t.position.x
-                                local dy = dst_t.position.y - src_t.position.y
-                                dst_t.position = { x = src_t.position.x + dx, y = src_t.position.y + dy }
-                                dst_t.origin = { x = src_t.origin.x + dx, y = src_t.origin.y + dy }
-                                if apply_copied_plane(line, dst_t, dst_w, dst_h, removeCopyClip) then
+                            elseif isMovePlane then
+                                copyPerspectiveState(dstT, srcT)
+                                local dx = dstT.position.x - srcT.position.x
+                                local dy = dstT.position.y - srcT.position.y
+                                dstT.position = { x = srcT.position.x + dx, y = srcT.position.y + dy }
+                                dstT.origin = { x = srcT.origin.x + dx, y = srcT.origin.y + dy }
+                                if applyCopiedPlane(line, dstT, dstW, dstH, removeCopyClip) then
                                     subs[i] = line
-                                    pairs_done = pairs_done + 1
+                                    pairsDone = pairsDone + 1
                                 else
                                     skipped = skipped + 1
                                 end
                             else
-                                local out_q = remap_quad(src_q, dst_q, mapping)
-                                if apply_quad(line, dst_t, out_q, dst_w, dst_h, orgMode, removeCopyClip) then
+                                local outQ = remapQuad(srcQ, dstQ, mapping)
+                                if applyQuad(line, dstT, outQ, dstW, dstH, orgMode, removeCopyClip) then
                                     subs[i] = line
-                                    pairs_done = pairs_done + 1
+                                    pairsDone = pairsDone + 1
                                 else
                                     skipped = skipped + 1
                                 end
@@ -2635,203 +2262,191 @@ local function run_copy_mode(subs, sel, styles, res, orgMode, meta)
                         skipped = skipped + 1
                     end
                 end
-                groups_done = groups_done + 1
+                groupsDone = groupsDone + 1
             else
                 skipped = skipped + 1
             end
     end
-    local tag = is_exact and "exact" or (is_static and "static-plane" or (is_move_plane and "move-plane" or "copy"))
+    local tag = isExact and "exact" or (isStatic and "static-plane" or (isMovePlane and "move-plane" or "copy"))
     return perspectiveFinish(
         string.format("Rhea Signs - Perspective: %s (%d grupos, %d destinos, %d omitidos)",
-            tag, groups_done, pairs_done, skipped),
-        pairs_done,
-        string.format("Perspective Copy: 0 lines changed (%d groups, %d skipped).", groups_done, skipped)
+            tag, groupsDone, pairsDone, skipped),
+        pairsDone,
+        string.format("Perspective Copy: 0 lines changed (%d groups, %d skipped).", groupsDone, skipped)
     )
 end
-
-local function pk_dispatch(subs, sel, opts)
-    if not subs or not sel or #sel == 0 then return end
-    local meta, styles = build_styles(subs)
-    LAYOUT_SCALE = compute_layout_scale(meta)
-    local C = PK_CONFIG.read()
-    C = FunctionalTable.union(opts or {}, C, DEFAULTS)
-    C.mode = normalizePerspectiveMode(C.mode)
-    C.map = normalizePerspectiveMap(C.map)
-    C.mode = RheaFoundation.choose(C.mode, MODE_ITEMS, DEFAULTS.mode)
-    C.map = RheaFoundation.choose(C.map, map_names(), DEFAULTS.map)
-    C.orgm = RheaFoundation.choose(C.orgm, ORG_ITEMS, DEFAULTS.orgm)
-    PK_CONFIG.write(C)
-    local res = C
-    local orgMode = tonumber(res.orgm:sub(1,1)) or 3
-    if res.mode ~= "Bake Extradata" and res.mode ~= "Restore Extradata" then
-        local resolvedMeta = perspective_meta(meta)
-        if resolvedMeta.PlayResX <= 0 or resolvedMeta.PlayResY <= 0 then
-            showMsg("Perspective tools need a valid script resolution or loaded video dimensions.")
-            return false
+local function pkDispatch(subs, sel, opts)
+    sel = RheaFoundation.selectionDialogueIndices(subs, sel)
+    return Rhea.Lines.atomic(subs, function()
+        if not subs or not sel or #sel == 0 then return end
+        local meta, styles = buildStyles(subs)
+        layoutScale = computeLayoutScale(meta)
+        local C = pkConfig.read()
+        C = Functional.table.union(opts or {}, C, DEFAULTS)
+        C.mode = normalizePerspectiveMode(C.mode)
+        C.map = normalizePerspectiveMap(C.map)
+        C.mode = RheaFoundation.choose(C.mode, MODE_ITEMS, DEFAULTS.mode)
+        C.map = RheaFoundation.choose(C.map, mapNames(), DEFAULTS.map)
+        C.orgm = RheaFoundation.choose(C.orgm, orgItems, DEFAULTS.orgm)
+        for _, key in ipairs({"sx", "sy", "qscale"}) do
+            C[key] = RheaFoundation.configNumber(C[key], DEFAULTS[key], rheaDimensionEpsilon)
         end
-        meta = resolvedMeta
-    end
-    if perspective_mode_uses_layout_scale(res.mode) and not confirm_layout_scale() then
-        return
-    end
-
-    if res.mode == "Bake Extradata" then
-        local done = 0
-        for _, i in ipairs(sel) do
-            local line = subs[i]
-            if bake_extradata(line) then
-                subs[i] = line
-                done = done + 1
+        pkConfig.write(C)
+        local res = C
+        local orgMode = tonumber(res.orgm:sub(1,1)) or 3
+        if res.mode ~= "Bake Extradata" and res.mode ~= "Restore Extradata" then
+            local resolvedMeta = perspectiveMeta(meta)
+            if resolvedMeta.PlayResX <= 0 or resolvedMeta.PlayResY <= 0 then
+                showMsg("Perspective tools need a valid script resolution or loaded video dimensions.")
+                return false
             end
+            meta = resolvedMeta
         end
-        return perspectiveFinish("Rhea Signs - Perspective Bake Extradata", done,
-            "Bake Extradata: 0 lines changed (no perspective ambient plane data).")
-    end
-    if res.mode == "Restore Extradata" then
-        local done = 0
-        for _, i in ipairs(sel) do
-            local line = subs[i]
-            if restore_extradata(line) then
-                subs[i] = line
-                done = done + 1
+        if perspectiveModeUsesLayoutScale(res.mode) and not confirmLayoutScale() then
+            return
+        end
+        if res.mode == "Bake Extradata" then
+            local done = 0
+            for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+                local line = subs[i]
+                if bakeExtradata(line) then
+                    subs[i] = line
+                    done = done + 1
+                end
             end
+            return perspectiveFinish("Rhea Signs - Perspective Bake Extradata", done,
+                "Bake Extradata: 0 lines changed (no perspective ambient plane data).")
         end
-        return perspectiveFinish("Rhea Signs - Perspective Restore Extradata", done,
-            "Restore Extradata: 0 lines changed (no baked \\_persp marker).")
-    end
-    if res.mode == "Scale Quad (3D Box)" then
-        local changed, skipped = 0, 0
-        for _, i in ipairs(sel) do
-            local line = subs[i]
-            local style = perspective_pick_style(styles, line.style)
-            if style then
-                local q, t, w, h = safe_build_quad_for(line, style, meta, styles)
-                if q then
-                    local nq = scale_quad(q, res.qscale)
-                    if apply_quad(line, t, nq, w, h, orgMode, false) then
-                        subs[i] = line
-                        changed = changed + 1
+        if res.mode == "Restore Extradata" then
+            local done = 0
+            for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+                local line = subs[i]
+                if restoreExtradata(line) then
+                    subs[i] = line
+                    done = done + 1
+                end
+            end
+            return perspectiveFinish("Rhea Signs - Perspective Restore Extradata", done,
+                "Restore Extradata: 0 lines changed (no baked \\_persp marker).")
+        end
+        if res.mode == "Scale Quad (3D Box)" then
+            local changed, skipped = 0, 0
+            for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+                local line = subs[i]
+                local style = perspectivePickStyle(styles, line.style)
+                if style then
+                    local q, t, w, h = safeBuildQuadFor(line, style, meta, styles)
+                    if q then
+                        local nq = scaleQuad(q, res.qscale)
+                        if applyQuad(line, t, nq, w, h, orgMode, false) then
+                            subs[i] = line
+                            changed = changed + 1
+                        else
+                            skipped = skipped + 1
+                        end
                     else
                         skipped = skipped + 1
                     end
                 else
                     skipped = skipped + 1
                 end
-            else
-                skipped = skipped + 1
             end
+            return perspectiveFinish("Rhea Signs - Perspective Scale Quad", changed,
+                string.format("Scale Quad: 0 lines changed (%d skipped).", skipped))
         end
-        return perspectiveFinish("Rhea Signs - Perspective Scale Quad", changed,
-            string.format("Scale Quad: 0 lines changed (%d skipped).", skipped))
-    end
-    if res.mode == "Identity reproject" then
-        local changed, skipped = 0, 0
-        for _, i in ipairs(sel) do
-            local line = subs[i]
-            local style = perspective_pick_style(styles, line.style)
-            if style then
-                local q, t, w, h = safe_build_quad_for(line, style, meta, styles)
-                if q then
-                    if apply_quad(line, t, q, w, h, orgMode, false) then
-                        subs[i] = line
-                        changed = changed + 1
+        if res.mode == "Identity reproject" then
+            local changed, skipped = 0, 0
+            for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+                local line = subs[i]
+                local style = perspectivePickStyle(styles, line.style)
+                if style then
+                    local q, t, w, h = safeBuildQuadFor(line, style, meta, styles)
+                    if q then
+                        if applyQuad(line, t, q, w, h, orgMode, false) then
+                            subs[i] = line
+                            changed = changed + 1
+                        else
+                            skipped = skipped + 1
+                        end
                     else
                         skipped = skipped + 1
                     end
                 else
                     skipped = skipped + 1
                 end
-            else
-                skipped = skipped + 1
             end
+            return perspectiveFinish("Rhea Signs - Perspective Identity Reproject", changed,
+                string.format("Identity reproject: 0 lines changed (%d skipped).", skipped))
         end
-        return perspectiveFinish("Rhea Signs - Perspective Identity Reproject", changed,
-            string.format("Identity reproject: 0 lines changed (%d skipped).", skipped))
-    end
-    if res.mode == "Mass FSC (lock quad)" then
-        local changed, skipped = 0, 0
-        for _, i in ipairs(sel) do
-            local line = subs[i]
-            local style = perspective_pick_style(styles, line.style)
-            if style then
-                local q, t, w, h = safe_build_quad_for(line, style, meta, styles)
-                if q then
-                    local fx = res.set_sx and res.sx or RheaFoundation.tagValue(t.scale_x, 100)
-                    local fy = res.set_sy and res.sy or RheaFoundation.tagValue(t.scale_y, 100)
-                    if apply_quad_locked_scale(line, t, q, w, h, fx, fy, false) then
-                        subs[i] = line
-                        changed = changed + 1
+        if res.mode == "Mass FSC (lock quad)" then
+            local changed, skipped = 0, 0
+            for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+                local line = subs[i]
+                local style = perspectivePickStyle(styles, line.style)
+                if style then
+                    local q, t, w, h = safeBuildQuadFor(line, style, meta, styles)
+                    if q then
+                        local fx = res.set_sx and res.sx or RheaFoundation.tagValue(t.scale_x, 100)
+                        local fy = res.set_sy and res.sy or RheaFoundation.tagValue(t.scale_y, 100)
+                        if applyQuadLockedScale(line, t, q, w, h, fx, fy, false) then
+                            subs[i] = line
+                            changed = changed + 1
+                        else
+                            skipped = skipped + 1
+                        end
                     else
                         skipped = skipped + 1
                     end
                 else
                     skipped = skipped + 1
                 end
-            else
-                skipped = skipped + 1
             end
+            return perspectiveFinish("Rhea Signs - Perspective Mass FSC", changed,
+                string.format("Mass FSC: 0 lines changed (%d skipped).", skipped))
         end
-        return perspectiveFinish("Rhea Signs - Perspective Mass FSC", changed,
-            string.format("Mass FSC: 0 lines changed (%d skipped).", skipped))
-    end
-    if res.mode and res.mode:match("^Copy") then
-        return run_copy_mode(subs, sel, styles, res, orgMode, meta)
-    end
+        if res.mode and res.mode:match("^Copy") then
+            return runCopyMode(subs, sel, styles, res, orgMode, meta)
+        end
+    end)
 end
-
-RheaOps.Perspective.run = pk_dispatch
+RheaOps.Perspective.run = pkDispatch
 RheaOps.Perspective.loadConfig = function()
-    local C = PK_CONFIG.read()
-    C = FunctionalTable.union(C, DEFAULTS)
+    local C = pkConfig.read()
+    C = Functional.table.union(C, DEFAULTS)
     C.mode = normalizePerspectiveMode(C.mode)
     C.map = normalizePerspectiveMap(C.map)
     C.mode = RheaFoundation.choose(C.mode, MODE_ITEMS, DEFAULTS.mode)
-    C.map = RheaFoundation.choose(C.map, map_names(), DEFAULTS.map)
-    C.orgm = RheaFoundation.choose(C.orgm, ORG_ITEMS, DEFAULTS.orgm)
+    C.map = RheaFoundation.choose(C.map, mapNames(), DEFAULTS.map)
+    C.orgm = RheaFoundation.choose(C.orgm, orgItems, DEFAULTS.orgm)
     return C
 end
 RheaOps.Perspective.modes = MODE_ITEMS
-RheaOps.Perspective.mapNames = map_names
-RheaOps.Perspective.orgModes = ORG_ITEMS
+RheaOps.Perspective.mapNames = mapNames
+RheaOps.Perspective.orgModes = orgItems
 end
-
 do
-
-local MASK_FILE = aegisub.decode_path("?user") .. "/dramaturgy_masks.txt"
-
-local BUILTIN_MASKS = [[mask:square:m -50 -50 l 50 -50 50 50 -50 50:
+local maskFile = aegisub.decode_path("?user") .. "/dramaturgy_masks.txt"
+local builtinMasks = [[mask:square:m -50 -50 l 50 -50 50 50 -50 50:
 mask:rounded:m -100 -25 b -100 -92 -92 -100 -25 -100 l 25 -100 b 92 -100 100 -92 100 -25 l 100 25 b 100 92 92 100 25 100 l -25 100 b -92 100 -100 92 -100 25 l -100 -25:
 mask:circle:m -100 -100 b -45 -155 45 -155 100 -100 b 155 -45 155 45 100 100 b 46 155 -45 155 -100 100 b -155 45 -155 -45 -100 -100:
 mask:triangle:m -120 70 l 120 70 l 0 -140:
 ]]
-
-local function stampSeqMarker(line, seq)
-    line.effect = Rhea.trim((line.effect or ""):gsub("%[DR%-%w+%]", ""))
-    RheaFoundation.stampMarker(line, "DR", seq)
-end
-
 local function clipCommandsToLocalDrawing(cmds, ox, oy)
     local parts = {}
-    local firstX, firstY, lastX, lastY
     for _, cmd in ipairs(cmds or {}) do
         parts[#parts + 1] = cmd.type
         for i = 1, #cmd.pts, 2 do
-            local x = (tonumber(cmd.pts[i]) or 0) - ox
-            local y = (tonumber(cmd.pts[i + 1]) or 0) - oy
-            if not firstX then firstX, firstY = x, y end
-            lastX, lastY = x, y
-            parts[#parts + 1] = RheaFoundation.assNumber(x)
-            parts[#parts + 1] = RheaFoundation.assNumber(y)
+            parts[#parts + 1] = RheaFoundation.assNumber(cmd.pts[i] - ox)
+            parts[#parts + 1] = RheaFoundation.assNumber(cmd.pts[i + 1] - oy)
         end
     end
-    if firstX and lastX and (math.abs(firstX - lastX) > 0.001 or math.abs(firstY - lastY) > 0.001) then
-        parts[#parts + 1] = "l"
-        parts[#parts + 1] = RheaFoundation.assNumber(firstX)
-        parts[#parts + 1] = RheaFoundation.assNumber(firstY)
-    end
-    return Rhea.trim(table.concat(parts, " "))
+    return table.concat(parts, " ")
 end
-
 local function extractClipMaskShape(text)
     local clip = RheaFoundation.firstClipTag(text)
     if not clip then return nil end
@@ -2841,62 +2456,68 @@ local function extractClipMaskShape(text)
     if not cmds or #cmds == 0 then return nil end
     return clipCommandsToLocalDrawing(cmds, x1, y1), x1, y1, x2, y2
 end
-
 local function replaceDrawing(lineText, shape)
-    local text = tostring(lineText or ""):gsub("\\fsc[xy][^}\\]+", "")
-    local replaced
-    text, replaced = text:gsub("}m%s+[^{}]*", "\\fscx100\\fscy100}" .. shape, 1)
-    if replaced == 0 then text = text:gsub("}[^{}]*$", "\\fscx100\\fscy100}" .. shape, 1) end
+    local text = tostring(lineText or "")
+    for _, section in ipairs(LineOps.scanSections(text)) do
+        if section.type == "drawing" then
+            return text:sub(1, section.start - 1) .. "{\\p1\\fscx100\\fscy100}" .. shape .. text:sub(section.finish + 1)
+        end
+    end
     return text
 end
-
-local DR_DEFAULTS = {
+local drDefaults = {
     mask_source = "from clip", alignment = "an7",
     create_layer = true, replace_mask = false, bicubic = false,
     use_alpha = false, alpha_value = "80",
     use_color = true,  color_value = "#000000",
 }
-
-local DR_CONFIG = RheaConfig.section("dr", DR_DEFAULTS)
-
+local drConfig = RheaConfig.section("dr", drDefaults)
 local function loadMaskLibrary()
-    local content = PyBridge.readFile(MASK_FILE) or ""
-    local masks, names = {}, {"from clip"}
-    local source = BUILTIN_MASKS .. content
-    if source:sub(-1) ~= "\n" then source = source .. "\n" end
-    for name, shape in source:gmatch("mask:(.-):(.-):\n") do
-        names[#names + 1] = name
-        masks[#masks + 1] = {name = name, shape = shape}
+    local source = builtinMasks .. (PyBridge.readFile(maskFile) or "")
+    local masks, names, positions = {}, {"from clip"}, {}
+    for record in source:gmatch("[^\r\n]+") do
+        local name, shape = record:match("^mask:([^:]+):([^:]+):%s*$")
+        if name and AssDrawing.validatePath(shape) then
+            if not positions[name] then
+                positions[name] = #masks + 1
+                names[#names + 1] = name
+            end
+            masks[positions[name]] = {name = name, shape = shape}
+        end
     end
     return masks, names
 end
-
+local function updateMaskLibrary(name, shape)
+    local content, readError = PyBridge.readFile(maskFile)
+    if not content and PyBridge.fileExists(maskFile) then return false, readError end
+    local records = {}
+    for record in tostring(content or ""):gmatch("[^\r\n]+") do
+        if record:match("^mask:([^:]+):") ~= name then records[#records + 1] = record end
+    end
+    if shape then records[#records + 1] = "mask:" .. name .. ":" .. shape .. ":" end
+    local updated = #records > 0 and table.concat(records, "\n") .. "\n" or ""
+    if updated == (content or "") then return true end
+    return PyBridge.writeFile(maskFile, updated)
+end
 local function saveMask(name, shapeText)
     name = Rhea.trim(name)
-    if name == "" or name:match("[:\r\n]") then return false, "El nombre de la máscara no es válido." end
-    local shape = tostring(shapeText or ""):gsub("{[^}]-}", ""):match("m%s+[^{}:\r\n]+")
-    if not shape then return false, "La línea seleccionada no contiene un dibujo ASS válido." end
-    shape = Rhea.trim(shape)
-    local content, readError = PyBridge.readFile(MASK_FILE)
-    if not content and PyBridge.fileExists(MASK_FILE) then return false, readError end
-    content = content or ""
-    if content ~= "" and content:sub(-1) ~= "\n" then content = content .. "\n" end
-    return PyBridge.writeFile(MASK_FILE, content .. "mask:" .. name .. ":" .. shape .. ":\n\n")
+    if name == "" or name == "from clip" or name:match("[:\r\n]") then return false, L("mask_err_name") end
+    local paths = {}
+    for _, section in ipairs(LineOps.scanSections(shapeText)) do
+        if section.type == "drawing" then
+            local scale = Core.finiteNumber(2 ^ (section.drawing - 1))
+            if not scale or scale <= 0 or not AssDrawing.validatePath(section.text) then return false, L("mask_err_drawing") end
+            paths[#paths + 1] = AssDrawing.mapCoordinates(section.text, function(x, y) return x / scale, y / scale end)
+        end
+    end
+    if #paths == 0 then return false, L("mask_err_drawing") end
+    return updateMaskLibrary(name, table.concat(paths, " "))
 end
-
 local function deleteMask(name)
     name = Rhea.trim(name)
-    if name == "" or name:match("[:\r\n]") then return false, "El nombre de la máscara no es válido." end
-    local content, readError = PyBridge.readFile(MASK_FILE)
-    if not content then
-        if PyBridge.fileExists(MASK_FILE) then return false, readError end
-        return true
-    end
-    local updated = content:gsub("mask:" .. Rhea.escapePattern(name) .. ":.-:\n\n?", "")
-    if updated == content then return true end
-    return PyBridge.writeFile(MASK_FILE, updated)
+    if name == "" or name:match("[:\r\n]") then return false, L("mask_err_name") end
+    return updateMaskLibrary(name)
 end
-
 local function findMaskShape(masks, name)
     for i = #(masks or {}), 1, -1 do
         local m = masks[i]
@@ -2904,33 +2525,34 @@ local function findMaskShape(masks, name)
     end
     return nil
 end
-
 local function insertedMaskSelection(sel, additions)
     local entries = {}
     for line in pairs(additions) do entries[#entries + 1] = line.number end
     table.sort(entries)
-
     local selected = {}
     for _, i in ipairs(sel) do
-        local shift = 0
-        for _, n in ipairs(entries) do if n < i then shift = shift + 1 end end
-        selected[#selected + 1] = i + shift
+        local lo, hi = 1, #entries + 1
+        while lo < hi do
+            local mid = math.floor((lo + hi) / 2)
+            if entries[mid] < i then lo = mid + 1 else hi = mid end
+        end
+        selected[#selected + 1] = i + lo - 1
     end
     for offset, n in ipairs(entries) do
         selected[#selected + 1] = n + offset
     end
     return selected
 end
-
 local function applyMask(subs, sel, opts)
     local masks, _ = loadMaskLibrary()
-    local lines = LineCollection(subs, sel, function() return true end)
+    local lines = LineCollection(subs, RheaFoundation.selectionDialogueIndices(subs, sel), Rhea.isDialogue)
     local lineMeta = lines.meta or {}
-    local playResX = tonumber(lineMeta.PlayResX or lineMeta.playresx or lineMeta.res_x)
-    local playResY = tonumber(lineMeta.PlayResY or lineMeta.playresy or lineMeta.res_y)
+    local placementContext = AssContext.fromSubtitles(subs)
+    placementContext.meta = lineMeta
     local additions = {}
     local changed = false
-    lines:runCallback(function(_, line, seq)
+    lines:runCallback(function(_, line)
+        LineOps.checkCancelled()
         local text = line.text or ""
         local sourceText = text
         local colorTag = opts.use_color and ("\\c" .. Rhea.htmlToAss(opts.color_value or "#000000")) or ""
@@ -2945,31 +2567,33 @@ local function applyMask(subs, sel, opts)
         if not sourceIsClip then
             libraryShape = findMaskShape(masks, opts.mask_source)
             if not libraryShape then return end
+            local px, py = AssContext.position(line, placementContext)
+            if not px or not py then return end
         end
         if opts.create_layer and not opts.replace_mask then
             if sourceIsClip then
                 if not clipPath then return end
             end
             local baseLayer = tonumber(line.layer) or 0
-            local mask_line = Rhea.cloneLine(line)
+            local maskLine = Rhea.cloneLine(line)
             if baseLayer <= 0 then
                 line.layer = 1
-                mask_line.layer = 0
+                maskLine.layer = 0
                 changed = true
             else
-                mask_line.layer = baseLayer - 1
+                maskLine.layer = baseLayer - 1
             end
             if sourceIsClip then
-                mask_line.text = RheaFoundation.removeTags(mask_line.text or "", {"clip", "iclip"})
+                maskLine.text = RheaFoundation.removeTags(maskLine.text or "", {"clip", "iclip"})
                 line.text = RheaFoundation.removeTags(line.text or "", {"clip", "iclip"})
             end
-            additions[line] = mask_line
+            additions[line] = maskLine
             changed = true
-            target = mask_line
+            target = maskLine
             text = sourceText
         end
         if opts.replace_mask then
-            if not text:match("\\p1") then return end
+            if not Rhea.isVectorLine(text) then return end
             if sourceIsClip then
                 if not clipPath then return end
                 local an = tonumber(tostring(opts.alignment or "an7"):match("an([1-9])")) or 7
@@ -2978,35 +2602,29 @@ local function applyMask(subs, sel, opts)
                 target.text = replaceDrawing(target.text, clipPath)
                 target.text = RheaFoundation.setAlignTag(target.text, an)
                 target.text = RheaFoundation.setPositionTag(target.text, cx, cy)
+                target.text = LineOps.prependTag(LineOps.removeTags(target.text, {"org", "frz", "fr", "frx", "fry", "fax", "fay"}), "\\frz0\\frx0\\fry0\\fax0\\fay0")
             else
                 target.text = replaceDrawing(target.text, libraryShape)
             end
-            stampSeqMarker(target, seq)
             changed = true
         elseif sourceIsClip then
             if not clipPath then return end
             local an = tonumber(tostring(opts.alignment or "an7"):match("an([1-9])")) or 7
             local cx, cy = RheaFoundation.anchorPointFromAlign(an, x1, y1, x2, y2)
             target.text = string.format(
-                "{\\an%d\\blur1\\bord0\\shad0\\fscx100\\fscy100%s%s\\pos(%.3f,%.3f)\\p1}%s",
+                "{\\an%d\\blur1\\bord0\\shad0\\fscx100\\fscy100\\frz0\\frx0\\fry0\\fax0\\fay0%s%s\\pos(%.3f,%.3f)\\p1}%s",
                 an, colorTag, alphaTag, cx, cy, clipPath)
-            stampSeqMarker(target, seq)
             changed = true
         else
-            local rotTags = ""
-            for _, pat in ipairs({"\\org%b()", "\\frz[%d%.%-]+", "\\frx[%d%.%-]+", "\\fry[%d%.%-]+"}) do
-                local m = text:match(pat); if m then rotTags = rotTags .. m end
+            local rotTags = {}
+            for _, call in ipairs(LineOps.tagCalls(text, {"org", "frz", "fr", "frx", "fry"})) do
+                if call.top_level then rotTags[#rotTags + 1] = call.raw end
             end
-            local posCall = LineOps.lastTagCall(text, "pos", true)
-            local posTag = posCall and posCall.raw or ""
+            local px, py = AssContext.position(line, placementContext)
+            if not px or not py then return end
             target.text = string.format(
-                "{\\%s\\bord0\\shad0\\blur1%s%s%s%s\\p1}%s",
-                opts.alignment, rotTags, posTag, colorTag, alphaTag, libraryShape)
-            if not LineOps.hasTag(target.text, "pos", true) and playResX and playResY then
-                local centerTag = string.format("\\pos(%.3f,%.3f)\\p1", playResX / 2, playResY / 2)
-                target.text = target.text:gsub("\\p1", centerTag, 1)
-            end
-            stampSeqMarker(target, seq)
+                "{\\%s\\bord0\\shad0\\blur1%s\\pos(%s,%s)%s%s\\p1}%s",
+                opts.alignment, table.concat(rotTags), Rhea.formatNum(px), Rhea.formatNum(py), colorTag, alphaTag, libraryShape)
             changed = true
         end
         if opts.bicubic then
@@ -3027,72 +2645,51 @@ local function applyMask(subs, sel, opts)
     lines:replaceLines()
     return sel, true
 end
-
-local function cleanAllDLines(subs, sel)
-    return RheaFoundation.cleanByMarker(subs, sel, "all", "DR", L("msg_delete_dr_marked"), L("msg_no_dr_marked"))
+local function drDispatch(subs, sel, opts)
+    return Rhea.Lines.atomic(subs, function()
+        if not sel or #sel == 0 then showMsg(L("err_no_selection")); return nil, false end
+        local cfg = drConfig.read()
+        cfg = Functional.table.union(opts or {}, cfg, drDefaults)
+        local saved, saveErr = pcall(drConfig.write, cfg)
+        if not saved and aegisub and aegisub.log then
+            aegisub.log(1, "Rhea Signs: could not save mask settings: %s\n", tostring(saveErr))
+        end
+        local newSel, changed = applyMask(subs, sel, cfg)
+        if changed then aegisub.set_undo_point("Rhea Signs - Masks Apply") end
+        return newSel, changed == true
+    end)
 end
-
-local function cleanSelectedDLines(subs, sel)
-    return RheaFoundation.cleanByMarker(subs, sel, "sel", "DR", nil, L("msg_no_dr_marked_selection"))
-end
-
-local function dr_dispatch(subs, sel, opts)
-    if not sel or #sel == 0 then showMsg(L("err_no_selection")); return nil, false end
-    local cfg = DR_CONFIG.read()
-    cfg = FunctionalTable.union(opts or {}, cfg, DR_DEFAULTS)
-    if cfg.op == "clean" then return cleanAllDLines(subs, sel) end
-    local saved, saveErr = pcall(DR_CONFIG.write, cfg)
-    if not saved and aegisub and aegisub.log then
-        aegisub.log(1, "Rhea Signs: could not save mask settings: %s\n", tostring(saveErr))
-    end
-    local newSel, changed = applyMask(subs, sel, cfg)
-    if changed then aegisub.set_undo_point("Rhea Signs - Masks Apply") end
-    return newSel, changed == true
-end
-RheaOps.Masks.run = dr_dispatch
+RheaOps.Masks.run = drDispatch
 RheaOps.Masks.maskNames = function() local _, names = loadMaskLibrary(); return names end
-RheaOps.Masks.defaults = DR_DEFAULTS
-RheaOps.Masks.loadConfig = DR_CONFIG.read
-RheaOps.Masks.saveConfig = DR_CONFIG.write
+RheaOps.Masks.defaults = drDefaults
+RheaOps.Masks.loadConfig = drConfig.read
+RheaOps.Masks.saveConfig = drConfig.write
 RheaOps.Masks.saveMask = saveMask
 RheaOps.Masks.deleteMask = deleteMask
-RheaOps.Masks.cleanAll = cleanAllDLines
-RheaOps.Masks.cleanSelected = cleanSelectedDLines
-
+RheaOps.Masks.actionItems = {"Apply Mask", "Create Layer", "Replace Mask", "Save Shape", "Delete Shape"}
+RheaOps.Masks.actions = {
+    Apply = "Apply Mask",
+    Create = "Create Layer",
+    Replace = "Replace Mask",
+    Save = "Save Shape",
+    Delete = "Delete Shape",
+}
+RheaOps.Masks.alignments = {"an1", "an2", "an3", "an4", "an5", "an6", "an7", "an8", "an9"}
+RheaOps.Masks.alphaValues = {"00", "20", "40", "60", "80", "A0", "C0", "E0", "FF"}
 end
-
 do
-local sioMarkers = RheaFoundation.markerTools("SiO")
-local generateMarkerID = sioMarkers.next
-local _so_reset = sioMarkers.reset
-local stampEffect = sioMarkers.stamp
-
-local function usedSignMarkerIDs(subs)
-    local used = {}
-    for i = 1, #subs do
-        local id = tonumber(Rhea.readMarker(subs[i], "SiO"))
-        if id then used[id] = true end
-    end
-    return used
-end
-
-local SIGN_GEOM_TAGS = {"clip","iclip","pos","move","org","an","frx","fry","frz","fr","fax","fay"}
+local signGeomTags = {"clip","iclip","pos","move","org","an","frx","fry","frz","fr","fax","fay"}
 local function stripGeneratedGeometry(tags)
-    return RheaFoundation.removeTags(tostring(tags or ""), SIGN_GEOM_TAGS)
+    return RheaFoundation.removeTags(tostring(tags or ""), signGeomTags)
 end
-
 local function tagsWithGeometry(tags, geom)
     local cleaned = stripGeneratedGeometry(tags)
     if cleaned == "" then return "{" .. geom .. "}" end
     if not cleaned:find("{", 1, true) then return "{" .. cleaned .. geom .. "}" end
     local prefix, finalOverride = cleaned:match("^(.*){(\\[^}]*)}$")
     if finalOverride then return prefix .. "{" .. finalOverride .. geom .. "}" end
-    -- A trailing comment block is not an override block; keep it intact and
-    -- append geometry in a new override block.
     return cleaned .. "{" .. geom .. "}"
 end
-
-
 local DEFAULTS = {
     type_mode = "Frame",
     vertical_gap = 0,
@@ -3102,50 +2699,38 @@ local DEFAULTS = {
     circ_invert = false,
     circ_delete = false
 }
-
-local SIGN_TYPE_ITEMS = {"Frame", "Duration"}
-local SIGN_ROT_ITEMS = {"Normal", "Invertido", "Vertical"}
-local SIGN_TYPE_ALIASES = { ["Duracion"] = "Duration", ["Duracao"] = "Duration" }
-local SIGN_ROT_ALIASES = { ["Inverted"] = "Invertido" }
-
+local signTypeItems = {"Frame", "Duration"}
+local signRotItems = {"Normal", "Invertido", "Vertical"}
+local signTypeAliases = { ["Duracion"] = "Duration", ["Duracao"] = "Duration" }
+local signRotAliases = { ["Inverted"] = "Invertido" }
 local function normalizeSignConfig(cfg)
-    cfg = FunctionalTable.union(cfg or {}, DEFAULTS)
-    cfg.type_mode = RheaFoundation.chooseAlias(cfg.type_mode, SIGN_TYPE_ALIASES, SIGN_TYPE_ITEMS, DEFAULTS.type_mode)
-    cfg.circ_rot = RheaFoundation.chooseAlias(cfg.circ_rot, SIGN_ROT_ALIASES, SIGN_ROT_ITEMS, DEFAULTS.circ_rot)
-    cfg.vertical_gap = tonumber(cfg.vertical_gap) or DEFAULTS.vertical_gap
+    cfg = Functional.table.union(cfg or {}, DEFAULTS)
+    cfg.type_mode = RheaFoundation.chooseAlias(cfg.type_mode, signTypeAliases, signTypeItems, DEFAULTS.type_mode)
+    cfg.circ_rot = RheaFoundation.chooseAlias(cfg.circ_rot, signRotAliases, signRotItems, DEFAULTS.circ_rot)
+    for _, key in ipairs({"vertical_gap", "circ_radio", "circ_track"}) do
+        cfg[key] = Core.finiteNumber(cfg[key]) or DEFAULTS[key]
+    end
     return cfg
 end
-
-local SO_CONFIG = RheaConfig.section("so", DEFAULTS)
-
+local soConfig = RheaConfig.section("so", DEFAULTS)
 local function prepareSignLine(subs, meta, styles, line)
-    local ok = pcall(karaskel.preproc_line, subs, meta, styles, line)
-    if not ok or not line.styleref then
-        local style = styles[line.style] or styles["Default"]
-        if not style then return false end
-        line.styleref = style
-        line.text_stripped = Rhea.visibleText(line.text or "")
-        local data = RheaFoundation.tryParseLine(line)
-        if not data then return false end
-        local tags = data:getEffectiveTags(-1, false, true, true).tags
-        local pos = tags.position
-        line.x = pos and pos.x or 0
-        line.y = pos and pos.y or 0
-    end
-    return line.styleref ~= nil
+    pcall(karaskel.preproc_line, subs, meta, styles, line)
+    line.styleref = line.styleref or styles[line.style] or styles.Default
+    if not line.styleref then return false end
+    line.x, line.y = AssContext.position(line, {styles = styles, meta = meta, sub = subs})
+    return line.x ~= nil and line.y ~= nil
 end
-
 local function typewriterOffset(line, index, count, mode)
     local startMs = tonumber(line and line.start_time) or 0
     local endMs = tonumber(line and line.end_time) or startMs
     local duration = math.max(0, endMs - startMs)
     if mode == "Frame" and aegisub.frame_from_ms and aegisub.ms_from_frame then
         local okFrame, startFrame = pcall(aegisub.frame_from_ms, startMs)
-        if okFrame and startFrame then
+        if okFrame and Core.finiteNumber(startFrame) then
             local okLast, lastFrame = pcall(aegisub.frame_from_ms, math.max(startMs, endMs - 1))
-            local targetFrame = okLast and lastFrame and math.min(startFrame + index, lastFrame) or startFrame + index
+            local targetFrame = okLast and Core.finiteNumber(lastFrame) and math.min(startFrame + index, lastFrame) or startFrame + index
             local okTime, frameMs = pcall(aegisub.ms_from_frame, targetFrame)
-            if okTime and frameMs then
+            if okTime and Core.finiteNumber(frameMs) then
                 return math.max(0, math.min(math.max(0, duration - 1), math.floor(frameMs - startMs + 0.5)))
             end
         end
@@ -3153,15 +2738,14 @@ local function typewriterOffset(line, index, count, mode)
     return math.max(0, math.min(math.max(0, duration - 1),
         math.floor(index * duration / math.max(1, count))))
 end
-
 local function applyTypewriter(subs, sel, cfg)
-    local usedMarkers = usedSignMarkerIDs(subs)
     local cnt = 0
     local changedSelection = {}
     for _, i in ipairs(RheaFoundation.selectionDialogueIndices(subs, sel)) do
+        LineOps.checkCancelled()
         local line = subs[i]
-        local startMs = tonumber(line.start_time)
-        local endMs = tonumber(line.end_time)
+        local startMs = Core.finiteNumber(line.start_time)
+        local endMs = Core.finiteNumber(line.end_time)
         if not line.comment and startMs and endMs and endMs > startMs then
             local tokens = Rhea.tokenize(line.text or "")
             local nchars = 0
@@ -3169,10 +2753,11 @@ local function applyTypewriter(subs, sel, cfg)
             if nchars > 0 then
                 local out, idx = {}, 0
                 for _, tk in ipairs(tokens) do
-                    if tk.type == "tag" then
+        LineOps.checkCancelled()
+        if tk.type == "tag" then
                         local cleaned = RheaFoundation.removeTags(tk.content, {"alpha","1a","2a","3a","4a"})
                         if cleaned ~= "{}" then out[#out + 1] = cleaned end
-                    elseif tk.type == "break" then
+                    elseif tk.type == "break" or tk.type == "drawing" then
                         out[#out + 1] = tk.content
                     else
                         local ts = typewriterOffset(line, idx, nchars, cfg.type_mode)
@@ -3180,9 +2765,7 @@ local function applyTypewriter(subs, sel, cfg)
                         idx = idx + 1
                     end
                 end
-
                 line.text = table.concat(out)
-                stampEffect(line, generateMarkerID(usedMarkers))
                 subs[i] = line
                 cnt = cnt + 1
                 changedSelection[#changedSelection + 1] = i
@@ -3192,10 +2775,7 @@ local function applyTypewriter(subs, sel, cfg)
     if cnt > 0 then aegisub.set_undo_point("SignOps: Typewriter") end
     return cnt, cnt > 0 and changedSelection or nil
 end
-
-
 local function applyVertical(subs, sel, cfg)
-    local usedMarkers = usedSignMarkerIDs(subs)
     local meta, styles = karaskel.collect_head(subs, false)
     local lines = LineCollection(subs, sel, function(line)
         return Rhea.isDialogue(line) and not line.comment
@@ -3204,17 +2784,18 @@ local function applyVertical(subs, sel, cfg)
     local cnt = 0
     local verticalGap = tonumber(cfg.vertical_gap) or 0
     lines:runCallback(function(_, line)
-        local markerID = generateMarkerID(usedMarkers)
+        LineOps.checkCancelled()
         if not prepareSignLine(subs, meta, styles, line) then return end
         local px, py = LineOps.tagPair(line.text, "pos", line.x, line.y, true)
         local chars = {}
         local currentTags = ""
         local currentStyle = {}
+        local currentBaseStyle = line.styleref
         for key, value in pairs(line.styleref) do currentStyle[key] = value end
         for _, token in ipairs(Rhea.tokenize(line.text or "")) do
             if token.type == "tag" then
                 currentTags = currentTags .. token.content
-                RheaFoundation.applyInlineStyleTags(currentStyle, token.content)
+                currentStyle, currentBaseStyle = RheaFoundation.applyInlineStyleTags(currentStyle, token.content, styles, currentBaseStyle, line.styleref)
             elseif token.type == "char" then
                 local charStyle = {}
                 for key, value in pairs(currentStyle) do charStyle[key] = value end
@@ -3225,13 +2806,12 @@ local function applyVertical(subs, sel, cfg)
         local cy = 0
         local new_lines = {}
         for _, char in ipairs(chars) do
+        LineOps.checkCancelled()
             local nline = Rhea.cloneLine(line)
             local _, chH = RheaFoundation.textExtents(char.style, char.content)
-            local scaleY = tonumber(char.style and char.style.scale_y) or 100
-            local chh = (tonumber(chH) or 0) * (scaleY / 100)
+            local chh = Core.finiteNumber(chH) or 0
             local geom = string.format("\\an5\\pos(%.1f,%.1f)", px, py + cy)
             nline.text = tagsWithGeometry(char.tags, geom) .. char.content
-            stampEffect(nline, markerID)
             cy = cy + chh + verticalGap
             new_lines[#new_lines + 1] = nline
         end
@@ -3245,60 +2825,53 @@ local function applyVertical(subs, sel, cfg)
     if cnt > 0 then aegisub.set_undo_point("SignOps: Vertical") end
     return cnt, cnt > 0 and (newSel or sel) or nil
 end
-
 local function applyCircle(subs, sel, cfg)
-    local usedMarkers = usedSignMarkerIDs(subs)
     local meta, styles = karaskel.collect_head(subs, false)
     local lines = LineCollection(subs, sel, function(line)
         return Rhea.isDialogue(line) and not line.comment
     end)
     local replacements, additions = {}, {}
     local cnt = 0
-
     lines:runCallback(function(_, line)
-        local markerID = generateMarkerID(usedMarkers)
+        LineOps.checkCancelled()
         if not prepareSignLine(subs, meta, styles, line) then return end
-
         local px, py, posCall = LineOps.tagPair(line.text, "pos", nil, nil, true)
         local ox, oy, orgCall = LineOps.tagPair(line.text, "org", nil, nil, true)
         if not (posCall and orgCall and px and py and ox and oy) then
         else
-
             local rad = math.sqrt((px - ox)^2 + (py - oy)^2) + (cfg.circ_radio or 0)
             local ang = RheaFoundation.atan2(py - oy, px - ox)
-            if rad >= 1 then
+            if rad > rheaDimensionEpsilon then
                 local parts = Rhea.tokenize(line.text)
-                local cur_style = {}
-                for k,v in pairs(line.styleref) do cur_style[k]=v end
-
+                local curStyle = {}
+                local currentBaseStyle = line.styleref
+                for k,v in pairs(line.styleref) do curStyle[k]=v end
                 local letters = {}
                 local aw = 0
                 local ht = ""
-                local bord_val = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
-                local ro = rad + (cur_style.fontsize / 2.2)
-
+                local bordVal = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
+                local ro = rad + (curStyle.fontsize / 2.2)
                 for _, p in ipairs(parts) do
                     if p.type == "tag" then
                         ht = ht .. p.content
-                        RheaFoundation.applyInlineStyleTags(cur_style, p.content)
-                    elseif p.type ~= "break" then
+                        curStyle, currentBaseStyle = RheaFoundation.applyInlineStyleTags(curStyle, p.content, styles, currentBaseStyle, line.styleref)
+                    elseif p.type == "char" then
                         local ch = p.content
-                        local w = RheaFoundation.textExtents(cur_style, ch)
-                        local sx = cur_style.scale_x / 100
-                        local ar = (w * sx) + ((cur_style.spacing or 0) * sx) + (cfg.circ_track or 0) + (bord_val * 2 * sx)
+                        local w = RheaFoundation.textExtents(curStyle, ch)
+                        local sx = curStyle.scale_x / 100
+                        local ar = w + (cfg.circ_track or 0) + ((curStyle.outline or bordVal) * 2 * sx)
                         local ac = ar / ro
                         table.insert(letters, {char = ch, angle_rad = ac, tags = ht})
                         aw = aw + ac
                     end
                 end
-
                 if #letters > 0 then aw = aw - ((cfg.circ_track or 0) / ro) end
                 local pd = (py < oy) and 1 or -1
                 if cfg.circ_invert then pd = pd * -1 end
                 local acur = ang - (pd * (aw / 2))
-
                 local new_lines = {}
                 for _, let in ipairs(letters) do
+        LineOps.checkCancelled()
                     if not let.char:match("^%s*$") then
                         local am = acur + (pd * (let.angle_rad / 2))
                         local fx = ox + rad * math.cos(am)
@@ -3306,17 +2879,14 @@ local function applyCircle(subs, sel, cfg)
                         local rot = -math.deg(am) - 90
                         if cfg.circ_rot == "Vertical" then rot = 0
                         elseif cfg.circ_rot == "Invertido" then rot = rot + 180 end
-
                         local nline = Rhea.cloneLine(line)
                         local geom = string.format("\\an5\\pos(%.2f,%.2f)\\frz%.2f", fx, fy, rot)
                         nline.text = tagsWithGeometry(let.tags, geom) .. let.char
                         nline.layer = (tonumber(line.layer) or 0) + 1
-                        stampEffect(nline, markerID)
                         table.insert(new_lines, nline)
                     end
                     acur = acur + (pd * let.angle_rad)
                 end
-
                 if #new_lines > 0 then
                     if cfg.circ_delete then
                         replacements[line] = new_lines
@@ -3341,22 +2911,18 @@ local function applyCircle(subs, sel, cfg)
         return cnt, newSel or sel
     end
 end
-
-
 local function parseVectorClip(text)
     return RheaFoundation.clipCommands(RheaFoundation.firstClipTag(text))
 end
-
-local function applyCurve(subs, sel, cfg)
-    local usedMarkers = usedSignMarkerIDs(subs)
+local function applyCurve(subs, sel)
     local meta, styles = karaskel.collect_head(subs, false)
     local lines = LineCollection(subs, sel, function(line)
         return Rhea.isDialogue(line) and not line.comment
     end)
     local replacements = {}
-
     local globalClipCmds = nil
-    for _, i in ipairs(sel) do
+    for _, i in ipairs(RheaFoundation.selectionDialogueIndices(subs, sel)) do
+        LineOps.checkCancelled()
         globalClipCmds = parseVectorClip(subs[i].text)
         if globalClipCmds then break end
     end
@@ -3365,40 +2931,37 @@ local function applyCurve(subs, sel, cfg)
         return 0
     end
     local cnt = 0
-
     lines:runCallback(function(_, line)
-        local markerID = generateMarkerID(usedMarkers)
+        LineOps.checkCancelled()
         local clipCmds = parseVectorClip(line.text) or globalClipCmds
         local sampledPath, totalLen = RheaFoundation.samplePath(clipCmds, 40)
         if totalLen > 0 then
             if not prepareSignLine(subs, meta, styles, line) then return end
-
             local parts = Rhea.tokenize(line.text)
-            local cur_style = {}
-            for k,v in pairs(line.styleref) do cur_style[k]=v end
-
+            local curStyle = {}
+                local currentBaseStyle = line.styleref
+            for k,v in pairs(line.styleref) do curStyle[k]=v end
             local letters = {}
-            local total_w = 0
+            local totalW = 0
             local ht = ""
-            local bord_val = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
-
+            local bordVal = LineOps.tagNumber(line.text, "bord", line.styleref.outline or 0, true)
             for _, p in ipairs(parts) do
                 if p.type == "tag" then
                     ht = ht .. p.content
-                    RheaFoundation.applyInlineStyleTags(cur_style, p.content)
-                elseif p.type ~= "break" then
+                    curStyle, currentBaseStyle = RheaFoundation.applyInlineStyleTags(curStyle, p.content, styles, currentBaseStyle, line.styleref)
+                elseif p.type == "char" then
                     local ch = p.content
-                    local w = RheaFoundation.textExtents(cur_style, ch)
-                    local sx = cur_style.scale_x / 100
-                    local ar = (w * sx) + ((cur_style.spacing or 0) * sx) + (bord_val * 2 * sx)
+                    local w = RheaFoundation.textExtents(curStyle, ch)
+                    local sx = curStyle.scale_x / 100
+                    local ar = w + ((curStyle.outline or bordVal) * 2 * sx)
                     table.insert(letters, {char = ch, width = ar, tags = ht})
-                    total_w = total_w + ar
+                    totalW = totalW + ar
                 end
             end
-
             local new_lines = {}
-            local curDist = (totalLen - total_w) / 2
+            local curDist = (totalLen - totalW) / 2
             for _, let in ipairs(letters) do
+        LineOps.checkCancelled()
                 if not let.char:match("^%s*$") then
                     local charCenterDist = curDist + let.width / 2
                     local pathPt = RheaFoundation.pointOnPath(sampledPath, charCenterDist)
@@ -3406,18 +2969,15 @@ local function applyCurve(subs, sel, cfg)
                         local rot = -math.deg(pathPt.angle)
                         local px = pathPt.p.x
                         local py = pathPt.p.y
-
                         local nline = Rhea.cloneLine(line)
                         local geom = string.format("\\an5\\pos(%.2f,%.2f)\\frz%.2f", px, py, rot)
                         nline.text = tagsWithGeometry(let.tags, geom) .. let.char
                         nline.layer = (tonumber(line.layer) or 0) + 1
-                        stampEffect(nline, markerID)
                         table.insert(new_lines, nline)
                     end
                 end
                 curDist = curDist + let.width
             end
-
             if #new_lines > 0 then
                 replacements[line] = new_lines
                 cnt = cnt + 1
@@ -3429,134 +2989,104 @@ local function applyCurve(subs, sel, cfg)
     if cnt > 0 then aegisub.set_undo_point("SignOps: Curve Text") end
     return cnt, newSel or sel
 end
-
-local function cleanSiO(subs, sel)
-    local newSel, changed, count = RheaFoundation.cleanByMarker(subs, sel, "all", "SiO", nil, nil, "SignOps: Clean SiO-lines")
-    return count or 0, changed and newSel or nil
+local function soDispatch(subs, sel, opts)
+    return Rhea.Lines.atomic(subs, function()
+        if not sel or #sel == 0 then return false end
+        local cfg = soConfig.read()
+        cfg = normalizeSignConfig(Functional.table.union(opts or {}, cfg, DEFAULTS))
+        soConfig.write(cfg)
+        local op = opts and opts.op or ""
+        local n, newSel = 0, nil
+        if     op == "typewriter"    then n, newSel = applyTypewriter(subs, sel, cfg)
+        elseif op == "vertical_drop" then n, newSel = applyVertical(subs, sel, cfg)
+        elseif op == "circle_text"   then n, newSel = applyCircle(subs, sel, cfg)
+        elseif op == "curve_text"    then n, newSel = applyCurve(subs, sel) end
+        n = n or 0
+        return n > 0 and (newSel or true) or false, n > 0
+    end)
 end
-
-
-local function so_dispatch(subs, sel, opts)
-    if not sel or #sel == 0 then return false end
-    _so_reset()
-    local cfg = SO_CONFIG.read()
-    cfg = normalizeSignConfig(FunctionalTable.union(opts or {}, cfg, DEFAULTS))
-    SO_CONFIG.write(cfg)
-    local op = opts and opts.op or ""
-    local n, newSel = 0, nil
-    if     op == "typewriter"    then n, newSel = applyTypewriter(subs, sel, cfg)
-    elseif op == "vertical_drop" then n, newSel = applyVertical(subs, sel, cfg)
-    elseif op == "circle_text"   then n, newSel = applyCircle(subs, sel, cfg)
-    elseif op == "curve_text"    then n, newSel = applyCurve(subs, sel, cfg)
-    elseif op == "clean_sio"     then n, newSel = cleanSiO(subs, sel) end
-    n = n or 0
-    return n > 0 and (newSel or true) or false, n > 0
-end
-
-RheaOps.Sign.run = so_dispatch
+RheaOps.Sign.run = soDispatch
 RheaOps.Sign.loadConfig = function()
-    local cfg = SO_CONFIG.read()
+    local cfg = soConfig.read()
     return normalizeSignConfig(cfg)
 end
 RheaOps.Sign.defaults = DEFAULTS
-
+RheaOps.Sign.actionItems = {"Typewriter", "Vertical Drop", "Circle Text", "Curve Text"}
+RheaOps.Sign.actions = {
+    ["Typewriter"] = "typewriter",
+    ["Vertical Drop"] = "vertical_drop",
+    ["Circle Text"] = "circle_text",
+    ["Curve Text"] = "curve_text",
+}
+RheaOps.Sign.typeModes = signTypeItems
+RheaOps.Sign.rotations = signRotItems
 end
-
 do
-
-
 local function detectLerpTag(text)
     return RheaFoundation.detectGBCTag(text) or "color1"
 end
-
 local function processLine(line, newVisible, doLerp)
     local sourceText = line.text or ""
-    local cleanText = RheaFoundation.stripAutoMarkers(sourceText)
-    if cleanText ~= sourceText then line.text = cleanText end
-    local ass = RheaFoundation.tryParseLine(line)
-    if not ass then return false end
+    local probe = Rhea.cloneLine(line)
+    probe.text = RheaFoundation.stripAutoMarkers(sourceText)
+    local ass = RheaFoundation.tryParseLine(probe)
+    if not ass then return false, false end
     if newVisible ~= nil then
-        if RheaFoundation.replaceVisibleText(ass, newVisible) then
-            ass:commit(line)
-            ass = RheaFoundation.tryParseLine(line)
-            if not ass then return false end
-        end
+        if not RheaFoundation.replaceVisibleText(ass, newVisible) then return false, false end
+        ass:commit(probe)
+        ass = RheaFoundation.tryParseLine(probe)
+        if not ass then return false, false end
     end
-    local regenerated = false
-    local protectedBreaks = false
-    if doLerp then
-        local protectedText = Rhea.protectVisibleBreaks(line.text)
-        if protectedText ~= line.text then
-            line.text = protectedText
-            protectedBreaks = true
-            ass = RheaFoundation.tryParseLine(line)
-            if not ass then
-                line.text = Rhea.restoreVisibleBreaks(line.text)
-                return false
-            end
-        end
-        regenerated = RheaFoundation.lerpLine(ass, detectLerpTag(sourceText))
-    end
-    ass:commit(line)
-    if protectedBreaks then line.text = Rhea.restoreVisibleBreaks(line.text) end
-    return regenerated
+    local regenerated = doLerp and RheaFoundation.lerpLine(ass, detectLerpTag(sourceText)) or false
+    ass:commit(probe)
+    line.text = probe.text
+    return regenerated, true
 end
-
 local function groupVisible(lines, opts)
-    local records, order, groups = {}, {}, {}
-    local stats = { omit_vec = 0, omit_cap = 0 }
-    local skipVec = opts.skip_vec
-    local useCap, capLimit = opts.use_cap, opts.cap_limit or 150
+    local order, groups = {}, {}
+    local stats = {omit_vec = 0, omit_cap = 0}
+    local capLimit = math.max(1, Core.finiteNumber(opts.cap_limit) or 150)
     lines:runCallback(function(_, line, i)
+        LineOps.checkCancelled()
         if not line.text or line.text == "" then return end
-        if skipVec and Rhea.isVectorLine(line.text) then
-            stats.omit_vec = stats.omit_vec + 1; return
+        if opts.skip_vec and Rhea.isVectorLine(line.text) then
+            stats.omit_vec = stats.omit_vec + 1
+            return
         end
         local cleanText = RheaFoundation.stripAutoMarkers(line.text)
         local ass = RheaFoundation.tryParseLine(cleanText)
         if not ass then return end
         local visible = RheaFoundation.visibleFromASS(ass)
         if visible == "" then return end
-        if useCap and #visible > capLimit then
-            stats.omit_cap = stats.omit_cap + 1; return
+        if opts.use_cap and #Rhea.tokenizeVisible(visible) > capLimit then
+            stats.omit_cap = stats.omit_cap + 1
+            return
         end
-        local isGBC = line.text:find("{*", 1, true) ~= nil
-        records[#records + 1] = { visible = visible, line = line, idx = i, isGBC = isGBC }
-    end)
-    local grouped = FunctionalList.groupBy(records, "visible")
-    for _, record in ipairs(records) do
-        if not groups[record.visible] then
-            groups[record.visible] = grouped[record.visible]
-            order[#order + 1] = record.visible
-        end
-    end
+        if not groups[visible] then groups[visible] = {}; order[#order + 1] = visible end
+        local group = groups[visible]
+        group[#group + 1] = {visible = visible, line = line, idx = i, isGBC = line.text:find("{*", 1, true) ~= nil}
+    end, true)
     return groups, order, stats
 end
-
 local function main(sub, sel)
-    resolveConfig()
+    RheaConfig.resolve()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return false end
-
     local cfgDlg = {
         {class="label", x=0, y=0, width=4, height=1, label=L("signs_editor_title")},
         {class="checkbox", x=0, y=1, width=3, name="skip_vec", label=L("signs_skip_vec"), value=true},
         {class="checkbox", x=0, y=2, width=3, name="auto_gbc", label=L("signs_auto_gbc"), value=true},
         {class="checkbox", x=0, y=3, width=2, name="use_cap", label=L("signs_use_cap"), value=false},
-        {class="intedit", x=2, y=3, width=1, name="cap_limit", value=150, min=1, max=5000},
+        {class="intedit", x=2, y=3, width=1, name="cap_limit", value=150, min=1},
     }
-
     local continue, cancel = L("btn_continue"), L("btn_cancel")
     local btn1, res1 = aegisub.dialog.display(cfgDlg, {continue, cancel}, {ok=continue, close=cancel})
     if btn1 ~= continue then return false end
-
     local lines = LineCollection(sub, sel)
     local groups, order, stats = groupVisible(lines, res1)
-
     if #order == 0 then
         showMsg(L("signs_no_editable"))
         return false
     end
-
     local gbcCount, totalGrouped = 0, 0
     for _, vis in ipairs(order) do
         for _, d in ipairs(groups[vis]) do
@@ -3564,69 +3094,58 @@ local function main(sub, sel)
             if d.isGBC then gbcCount = gbcCount + 1 end
         end
     end
-
     local originalText = table.concat(order, "\n")
     local info = string.format(L("signs_info"), #order, totalGrouped, gbcCount)
     if stats.omit_vec > 0 then info = info .. string.format(L("signs_skipped_vectors"), stats.omit_vec) end
     if stats.omit_cap > 0 then info = info .. string.format(L("signs_skipped_over_limit"), stats.omit_cap) end
-
     local editDlg = {
-        {class="label", x=0, y=0, width=40, height=1, label=L("signs_original")},
-        {class="textbox", x=0, y=1, width=40, height=14, name="original", text=originalText},
-        {class="label", x=41, y=0, width=40, height=1, label=L("signs_modified")},
-        {class="textbox", x=41, y=1, width=40, height=14, name="modified", text=originalText},
-        {class="label", x=0, y=15, width=81, height=1, label=info},
-        {class="checkbox", x=0, y=16, width=40, name="do_gbc", label=L("signs_regen_gbc"), value=res1.auto_gbc},
+        {class="label", x=0, y=0, width=24, height=1, label=L("signs_original")},
+        {class="textbox", x=0, y=1, width=24, height=12, name="original", text=originalText},
+        {class="label", x=25, y=0, width=24, height=1, label=L("signs_modified")},
+        {class="textbox", x=25, y=1, width=24, height=12, name="modified", text=originalText},
+        {class="label", x=0, y=13, width=49, height=1, label=info},
+        {class="checkbox", x=0, y=14, width=49, name="do_gbc", label=L("signs_regen_gbc"), value=res1.auto_gbc},
     }
-
     local apply = L("btn_apply")
-    local btn2, res2 = aegisub.dialog.display(editDlg, {apply, cancel}, {ok=apply, close=cancel})
-    if btn2 ~= apply then return false end
-
-    local modifiedLines = {}
-    for line in (res2.modified .. "\n"):gmatch("([^\r\n]*)\r?\n") do
-        table.insert(modifiedLines, line)
-    end
-    while #modifiedLines > #order and modifiedLines[#modifiedLines] == "" do
-        table.remove(modifiedLines)
-    end
-
-    if #modifiedLines ~= #order then
-        showMsg(string.format(L("signs_line_mismatch"), #order, #modifiedLines))
-        return false
-    end
-
-    local remap = {}
-    for i, orig in ipairs(order) do remap[orig] = modifiedLines[i] end
-
-    local modCount, gbcRegen = 0, 0
-    for vis, dataList in pairs(groups) do
-        local newVis = remap[vis]
-        if newVis and newVis ~= vis then
-            for _, d in ipairs(dataList) do
-                local regenerated = processLine(d.line, newVis, d.isGBC and res2.do_gbc)
-                if regenerated then gbcRegen = gbcRegen + 1 end
-                modCount = modCount + 1
+    while true do
+        local btn2, res2 = aegisub.dialog.display(editDlg, {apply, cancel}, {ok=apply, close=cancel})
+        if btn2 ~= apply then return false end
+        RheaFoundation.retainDialog(editDlg, res2)
+        local modifiedLines = {}
+        for value in (tostring(res2.modified or ""):gsub("\r\n", "\n"):gsub("\r", "\n") .. "\n"):gmatch("([^\n]*)\n") do
+            modifiedLines[#modifiedLines + 1] = value
+        end
+        while #modifiedLines > #order and modifiedLines[#modifiedLines] == "" do table.remove(modifiedLines) end
+        if #modifiedLines ~= #order then
+            showMsg(string.format(L("signs_line_mismatch"), #order, #modifiedLines))
+        else
+            local changed = false
+            for i, vis in ipairs(order) do
+                local newVis = modifiedLines[i]
+                for _, item in ipairs(groups[vis]) do
+                    LineOps.checkCancelled()
+                    if newVis ~= vis or (item.isGBC and res2.do_gbc) then
+                        local _, processed = processLine(item.line, newVis, item.isGBC and res2.do_gbc)
+                        assert(processed, L("signs_no_editable"))
+                        changed = true
+                    end
+                end
             end
+            if not changed then return false end
+            Rhea.Lines.atomic(sub, function() lines:replaceLines() end)
+            break
         end
     end
-    lines:replaceLines()
-
     aegisub.set_undo_point("Signs Editor")
     return true
 end
-
-
 RheaOps.Tools.massSigns = main
 end
-
-
 local function fastSignsCleanText(text)
     local cleaned = Rhea.stripTags(text):gsub("\\n", "\\N")
     cleaned = cleaned:gsub("%s*\\N%s*", "\\N"):gsub("^\\N+", ""):gsub("\\N+$", "")
     return cleaned
 end
-
 local function fastSignsRes(meta)
     local xres = tonumber(meta and (meta.res_x or meta.PlayResX))
     local yres = tonumber(meta and (meta.res_y or meta.PlayResY))
@@ -3640,65 +3159,53 @@ local function fastSignsRes(meta)
     if not xres or xres <= 0 or not yres or yres <= 0 then return nil, nil end
     return xres, yres
 end
-
 local function fastSignsMeasure(line, style, text)
     local bw, bh = RheaFoundation.lineBoundsSize(line, text, style)
     return bw or 0, bh or ((style and style.fontsize) or 0)
 end
-
 local function fastSignsRect(w, h)
-    local wi = math.max(1, math.floor((tonumber(w) or 0) + 0.5))
-    local hi = math.max(1, math.floor((tonumber(h) or 0) + 0.5))
-    return string.format("m 0 0 l %d 0 l %d %d l 0 %d", wi, wi, hi, hi)
+    local wi = Rhea.formatNum(math.max(1, math.floor((Core.finiteNumber(w) or 0) + 0.5)), 0)
+    local hi = Rhea.formatNum(math.max(1, math.floor((Core.finiteNumber(h) or 0) + 0.5)), 0)
+    return string.format("m 0 0 l %s 0 l %s %s l 0 %s", wi, wi, hi, hi)
 end
-
-local function fastSignsEffect(effect, marker)
-    local cleaned = tostring(effect or ""):gsub("%[FS%-%d+%]", "")
-    cleaned = Rhea.trim(cleaned):gsub("%s+", " ")
-    return cleaned ~= "" and (marker .. " " .. cleaned) or marker
-end
-
 local function fastSignsConfig()
     local cfg = {}
-    for k, v in pairs(DEFAULT_CONFIG) do
-        if tostring(k):match("^fastsign_") then cfg[k] = current_config[k] ~= nil and current_config[k] or v end
+    for k, v in pairs(defaultConfig) do
+        if tostring(k):match("^fastsign_") then cfg[k] = currentConfig[k] ~= nil and currentConfig[k] or v end
     end
-    cfg.fastsign_box_alpha = RheaFoundation.sanitizeAlpha(cfg.fastsign_box_alpha, DEFAULT_CONFIG.fastsign_box_alpha)
-    cfg.fastsign_glow_alpha = RheaFoundation.sanitizeAlpha(cfg.fastsign_glow_alpha, DEFAULT_CONFIG.fastsign_glow_alpha)
-    cfg.fastsign_fade_ms = RheaFoundation.configNumber(cfg.fastsign_fade_ms, DEFAULT_CONFIG.fastsign_fade_ms, 0)
-    cfg.fastsign_margin_h = RheaFoundation.configNumber(cfg.fastsign_margin_h, DEFAULT_CONFIG.fastsign_margin_h, 0)
-    cfg.fastsign_margin_v = RheaFoundation.configNumber(cfg.fastsign_margin_v, DEFAULT_CONFIG.fastsign_margin_v, 0)
-    cfg.fastsign_top_offset = RheaFoundation.configNumber(cfg.fastsign_top_offset, DEFAULT_CONFIG.fastsign_top_offset, 0)
-    cfg.fastsign_horz_gap = RheaFoundation.configNumber(cfg.fastsign_horz_gap, DEFAULT_CONFIG.fastsign_horz_gap, 0)
-    cfg.fastsign_max_width = RheaFoundation.configNumber(cfg.fastsign_max_width, DEFAULT_CONFIG.fastsign_max_width, 10, 100)
-    cfg.fastsign_box_blur = RheaFoundation.configNumber(cfg.fastsign_box_blur, DEFAULT_CONFIG.fastsign_box_blur, 0)
-    cfg.fastsign_glow_border = RheaFoundation.configNumber(cfg.fastsign_glow_border, DEFAULT_CONFIG.fastsign_glow_border, 0)
-    cfg.fastsign_glow_blur = RheaFoundation.configNumber(cfg.fastsign_glow_blur, DEFAULT_CONFIG.fastsign_glow_blur, 0)
-    cfg.fastsign_text_blur = RheaFoundation.configNumber(cfg.fastsign_text_blur, DEFAULT_CONFIG.fastsign_text_blur, 0)
+    cfg.fastsign_box_alpha = RheaFoundation.sanitizeAlpha(cfg.fastsign_box_alpha, defaultConfig.fastsign_box_alpha)
+    cfg.fastsign_glow_alpha = RheaFoundation.sanitizeAlpha(cfg.fastsign_glow_alpha, defaultConfig.fastsign_glow_alpha)
+    cfg.fastsign_fade_ms = RheaFoundation.configNumber(cfg.fastsign_fade_ms, defaultConfig.fastsign_fade_ms, 0)
+    cfg.fastsign_margin_h = RheaFoundation.configNumber(cfg.fastsign_margin_h, defaultConfig.fastsign_margin_h, 0)
+    cfg.fastsign_margin_v = RheaFoundation.configNumber(cfg.fastsign_margin_v, defaultConfig.fastsign_margin_v, 0)
+    cfg.fastsign_top_offset = RheaFoundation.configNumber(cfg.fastsign_top_offset, defaultConfig.fastsign_top_offset, 0)
+    cfg.fastsign_horz_gap = RheaFoundation.configNumber(cfg.fastsign_horz_gap, defaultConfig.fastsign_horz_gap, 0)
+    cfg.fastsign_max_width = RheaFoundation.configNumber(cfg.fastsign_max_width, defaultConfig.fastsign_max_width, 10, 100)
+    cfg.fastsign_box_blur = RheaFoundation.configNumber(cfg.fastsign_box_blur, defaultConfig.fastsign_box_blur, 0)
+    cfg.fastsign_glow_border = RheaFoundation.configNumber(cfg.fastsign_glow_border, defaultConfig.fastsign_glow_border, 0)
+    cfg.fastsign_glow_blur = RheaFoundation.configNumber(cfg.fastsign_glow_blur, defaultConfig.fastsign_glow_blur, 0)
+    cfg.fastsign_text_blur = RheaFoundation.configNumber(cfg.fastsign_text_blur, defaultConfig.fastsign_text_blur, 0)
     return cfg
 end
-
 local function runFastSigns(subs, sel)
-    resolveConfig()
+    RheaConfig.resolve()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
     local cfg = fastSignsConfig()
     local meta, styles = karaskel.collect_head(subs, false)
-    local vid_w = fastSignsRes(meta)
-    if not vid_w then showMsg("FastSigns could not determine the script or video resolution."); return end
+    local vidW = fastSignsRes(meta)
+    if not vidW then showMsg("FastSigns could not determine the script or video resolution."); return end
     local clusters = {}
-    local rawCandidates = {}
+    local candidates = {}
     local lines = LineCollection(subs, sel, function(line)
-        return Rhea.isDialogue(line) and not line.comment and not Rhea.readMarker(line, "FS")
+        return Rhea.isDialogue(line) and not line.comment
     end)
     lines:runCallback(function(_, line)
+        LineOps.checkCancelled()
         if line.text and line.text ~= "" and tonumber(line.end_time) and tonumber(line.start_time)
             and line.end_time > line.start_time then
             local clean = fastSignsCleanText(line.text)
-            rawCandidates[#rawCandidates + 1] = { idx = line.number, line = line, clean = clean }
+            if clean ~= "" and not clean:match("^%s*$") then candidates[#candidates + 1] = {idx = line.number, line = line, clean = clean} end
         end
-    end)
-    local candidates = FunctionalList.filter(rawCandidates, function(item)
-        return item.clean ~= "" and not item.clean:match("^%s*$")
     end)
     if #candidates == 0 then
         showMsg("FastSigns found no eligible non-comment dialogue lines.")
@@ -3711,9 +3218,8 @@ local function runFastSigns(subs, sel)
         if ae ~= be then return ae < be end
         return a.idx < b.idx
     end)
-    for seq, item in ipairs(candidates) do
+    for _, item in ipairs(candidates) do
         local line = item.line
-        item.marker = string.format("[FS-%03d]", seq)
         local added = false
         local startTime = line.start_time or 0
         local endTime = line.end_time or startTime
@@ -3735,21 +3241,21 @@ local function runFastSigns(subs, sel)
     end
     local outputItems = {}
     for _, cluster in ipairs(clusters) do
-        local total_w = 0
+        local totalW = 0
         for _, item in ipairs(cluster.lines) do
             local style = styles[item.line.style] or styles.Default
-            local text_w, text_h = fastSignsMeasure(item.line, style, item.clean)
-            local box_w = math.min(text_w + cfg.fastsign_margin_h * 2, vid_w * (cfg.fastsign_max_width / 100))
-            local box_h = text_h + cfg.fastsign_margin_v * 2
-            item.box_w, item.box_h = box_w, box_h
-            total_w = total_w + box_w
+            local textW, textH = fastSignsMeasure(item.line, style, item.clean)
+            local boxW = math.min(textW + cfg.fastsign_margin_h * 2, vidW * (cfg.fastsign_max_width / 100))
+            local boxH = textH + cfg.fastsign_margin_v * 2
+            item.box_w, item.box_h = boxW, boxH
+            totalW = totalW + boxW
         end
-        total_w = total_w + cfg.fastsign_horz_gap * (#cluster.lines - 1)
-        local current_x = (vid_w / 2) - (total_w / 2)
+        totalW = totalW + cfg.fastsign_horz_gap * (#cluster.lines - 1)
+        local currentX = (vidW / 2) - (totalW / 2)
         for _, item in ipairs(cluster.lines) do
-            item.center_x = current_x + item.box_w / 2
+            item.center_x = currentX + item.box_w / 2
             item.center_y = cfg.fastsign_top_offset + item.box_h / 2
-            current_x = current_x + item.box_w + cfg.fastsign_horz_gap
+            currentX = currentX + item.box_w + cfg.fastsign_horz_gap
         end
     end
     for _, cluster in ipairs(clusters) do
@@ -3757,47 +3263,40 @@ local function runFastSigns(subs, sel)
     end
     local additions = {}
     for _, item in ipairs(outputItems) do
+        LineOps.checkCancelled()
         local line = item.line
         local lineDuration = math.max(0, (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0))
         local fadeMs = math.min(cfg.fastsign_fade_ms, math.floor(lineDuration / 2))
-        local marked_effect = fastSignsEffect(line.effect, item.marker)
-        local shape_x = item.center_x - item.box_w / 2
-        local shape_y = item.center_y - item.box_h / 2
-        local box_shape = fastSignsRect(item.box_w, item.box_h)
+        local shapeX = item.center_x - item.box_w / 2
+        local shapeY = item.center_y - item.box_h / 2
+        local boxShape = fastSignsRect(item.box_w, item.box_h)
         local base_layer = tonumber(line.layer) or 0
         local box = Rhea.cloneLine(line)
         local glow = Rhea.cloneLine(line)
         local text = Rhea.cloneLine(line)
         box.layer = base_layer
-        box.effect = marked_effect
         box.comment = false
-        box.text = string.format("{\\an7\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\fscx100\\fscy100\\1c%s\\1a&H%s&\\p1}%s",
-            shape_x, shape_y, fadeMs, fadeMs, cfg.fastsign_box_blur, Rhea.htmlToAss(cfg.fastsign_box_color), cfg.fastsign_box_alpha, box_shape)
+        box.text = string.format("{\\an7\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\fscx100\\fscy100\\frz0\\1c%s\\1a&H%s&\\p1}%s",
+            shapeX, shapeY, fadeMs, fadeMs, cfg.fastsign_box_blur, Rhea.htmlToAss(cfg.fastsign_box_color), cfg.fastsign_box_alpha, boxShape)
         glow.layer = base_layer + 1
-        glow.effect = marked_effect
         glow.comment = false
-        glow.text = string.format("{\\an5\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord%.2f\\shad0\\blur%.2f\\1c%s\\3c%s\\1a&HFF&\\3a&H%s&}%s",
+        glow.text = string.format("{\\an5\\frz0\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord%.2f\\shad0\\blur%.2f\\1c%s\\3c%s\\1a&HFF&\\3a&H%s&}%s",
             item.center_x, item.center_y, fadeMs, fadeMs, cfg.fastsign_glow_border, cfg.fastsign_glow_blur,
             Rhea.htmlToAss(cfg.fastsign_text_color), Rhea.htmlToAss(cfg.fastsign_glow_color), cfg.fastsign_glow_alpha, item.clean)
         text.layer = base_layer + 2
-        text.effect = marked_effect
         text.comment = false
-        text.text = string.format("{\\an5\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\1c%s}%s",
-            item.center_x, item.center_y, fadeMs, fadeMs, cfg.fastsign_text_blur, Rhea.htmlToAss(cfg.fastsign_text_color), item.clean)
+        text.text = string.format("{\\an5\\frz0\\pos(%.1f,%.1f)\\fad(%d,%d)\\bord0\\shad0\\blur%.2f\\1c%s\\1a&H%s&}%s",
+            item.center_x, item.center_y, fadeMs, fadeMs, cfg.fastsign_text_blur, Rhea.htmlToAss(cfg.fastsign_text_color), RheaFoundation.colorAlpha(cfg.fastsign_text_color), item.clean)
         line.comment = true
-        line.effect = marked_effect
         additions[line] = {box, glow, text}
     end
-    RheaFoundation.insertCollectedLinesAfter(lines, additions)
+    local result = Rhea.Lines.atomic(subs, function() return RheaFoundation.insertCollectedLinesAfter(lines, additions) end)
     aegisub.set_undo_point("Rhea Signs - FastSigns")
+    return result
 end
-
 RheaOps.Tools.fastSigns = runFastSigns
-
-
 local TagOps = RheaOps.TagOps
-
-local TAGOPS_DEFS = {
+local tagopsDefs = {
     { key="pos",   label="pos",    names={"pos"},        remove={"pos","move"},    animatable=false },
     { key="move",  label="move",   names={"move"},       remove={"move","pos"},    animatable=false },
     { key="org",   label="org",    names={"org"},        remove={"org"},           animatable=false },
@@ -3848,17 +3347,15 @@ local TAGOPS_DEFS = {
     { key="pbo",   label="pbo",    names={"pbo"},        remove={"pbo"},           animatable=false },
     { key="fe",    label="fe",     names={"fe"},         remove={"fe"},            animatable=false },
 }
-
-local TAGOPS_BY_KEY, TAGOPS_NAME_TO_KEYS = {}, {}
-for _, def in ipairs(TAGOPS_DEFS) do
-    TAGOPS_BY_KEY[def.key] = def
+local tagopsByKey, tagopsNameToKeys = {}, {}
+for _, def in ipairs(tagopsDefs) do
+    tagopsByKey[def.key] = def
     for _, n in ipairs(def.names) do
-        TAGOPS_NAME_TO_KEYS[n] = TAGOPS_NAME_TO_KEYS[n] or {}
-        TAGOPS_NAME_TO_KEYS[n][#TAGOPS_NAME_TO_KEYS[n] + 1] = def.key
+        tagopsNameToKeys[n] = tagopsNameToKeys[n] or {}
+        tagopsNameToKeys[n][#tagopsNameToKeys[n] + 1] = def.key
     end
 end
 TagOps.U.alert = showMsg
-
 local function tagopsAppendLeadingTags(text, payload)
     text = tostring(text or "")
     payload = tostring(payload or "")
@@ -3879,20 +3376,18 @@ local function tagopsAppendLeadingTags(text, payload)
     end
     return "{" .. payload .. "}" .. text
 end
-
 local function tagopsRemoveNames(selected)
-    return FunctionalList.reduce(TAGOPS_DEFS, {}, function(names, def)
-        if selected[def.key] then FunctionalList.makeSet(def.remove or def.names, names) end
+    return Functional.list.reduce(tagopsDefs, {}, function(names, def)
+        if selected[def.key] then Functional.list.makeSet(def.remove or def.names, names) end
         return names
     end)
 end
-
 local function tagopsExtractTags(text, selected, allBlocks)
     local out, found = {}, {}
     for blockIndex, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
         if allBlocks or blockIndex == 1 then
             for _, tag in ipairs(RheaFoundation.parseTagBlock(block.content)) do
-                local keys = TAGOPS_NAME_TO_KEYS[tag.name]
+                local keys = tagopsNameToKeys[tag.name]
                 if keys then
                     for _, key in ipairs(keys) do
                         if selected[key] then
@@ -3908,73 +3403,69 @@ local function tagopsExtractTags(text, selected, allBlocks)
     end
     return table.concat(out), found
 end
-
 local function tagopsHasAnySelected(selected)
-    for _ in pairs(selected or {}) do return true end
-    return false
+    return next(selected or {}) ~= nil
 end
-
 local function tagopsMergeFound(dst, src)
     for key, value in pairs(src or {}) do
         if value then dst[key] = true end
     end
 end
-
 function TagOps.opCopy(subs, sel, opts)
-    if not sel or #sel < 2 then TagOps.U.alert(L("tagops_err_copy_select")); return false end
-    opts = opts or {}
-    local selected = opts.selected or {}
-    if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_select_tag")); return false end
-    local groups = RheaFoundation.selectionCopyGroups(subs, sel)
-    if #groups == 0 then TagOps.U.alert(L("tagops_err_copy_select")); return false end
-
-    local names = tagopsRemoveNames(selected)
-    local changed, found = 0, {}
-    local anySourceTags = false
-    for _, group in ipairs(groups) do
-        if #group.targets > 0 then
-            local source = subs[group.source]
-            local tags, groupFound = tagopsExtractTags(source.text or "", selected, opts.all_blocks)
-            if tags ~= "" then
-                anySourceTags = true
-                tagopsMergeFound(found, groupFound)
-                for _, i in ipairs(group.targets) do
-                    local line = subs[i]
-                    local text = line.text or ""
-                    if opts.replace then text = RheaFoundation.removeTags(text, names) end
-                    local nextText = RheaFoundation.insertTags(text, tags, opts.append and "append" or nil)
-                    if nextText ~= line.text then
-                        line.text = nextText
-                        subs[i] = line
-                        changed = changed + 1
+    sel = RheaFoundation.selectionDialogueIndices(subs, sel)
+    return Rhea.Lines.atomic(subs, function()
+        if not sel or #sel < 2 then TagOps.U.alert(L("tagops_err_copy_select")); return false end
+        opts = opts or {}
+        local selected = opts.selected or {}
+        if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_select_tag")); return false end
+        local groups = RheaFoundation.selectionCopyGroups(subs, sel)
+        if #groups == 0 then TagOps.U.alert(L("tagops_err_copy_select")); return false end
+        local names = tagopsRemoveNames(selected)
+        local changed, found = 0, {}
+        local anySourceTags = false
+        for _, group in ipairs(groups) do
+            if #group.targets > 0 then
+                local source = subs[group.source]
+                local tags, groupFound = tagopsExtractTags(source.text or "", selected, opts.all_blocks)
+                if tags ~= "" then
+                    anySourceTags = true
+                    tagopsMergeFound(found, groupFound)
+                    for _, i in ipairs(group.targets) do
+                        LineOps.checkCancelled()
+                        local line = subs[i]
+                        local text = line.text or ""
+                        if opts.replace then text = RheaFoundation.removeTags(text, names) end
+                        local nextText = RheaFoundation.insertTags(text, tags, opts.append and "append" or nil)
+                        if nextText ~= line.text then
+                            line.text = nextText
+                            subs[i] = line
+                            changed = changed + 1
+                        end
                     end
                 end
             end
         end
-    end
-    if not anySourceTags then TagOps.U.alert(L("tagops_err_source_tag")); return false end
-    if changed == 0 then TagOps.U.alert(L("tagops_copy_no_change")); return false end
-    aegisub.set_undo_point("TagOps - Copy")
-    if opts.info then
-        local copied = FunctionalList.map(FunctionalList.filter(TAGOPS_DEFS, function(def)
-            return found[def.key]
-        end), function(def) return def.label end)
-        TagOps.U.alert(string.format("%s: %s\n%s: %d", L("tagops_copied"), table.concat(copied, ", "), L("tagops_targets"), changed))
-    end
-    return true
+        if not anySourceTags then TagOps.U.alert(L("tagops_err_source_tag")); return false end
+        if changed == 0 then TagOps.U.alert(L("tagops_copy_no_change")); return false end
+        aegisub.set_undo_point("TagOps - Copy")
+        if opts.info then
+            local copied = Functional.list.map(Functional.list.filter(tagopsDefs, function(def)
+                return found[def.key]
+            end), function(def) return def.label end)
+            TagOps.U.alert(string.format("%s: %s\n%s: %d", L("tagops_copied"), table.concat(copied, ", "), L("tagops_targets"), changed))
+        end
+        return true
+    end)
 end
-
 local function tagopsTagSelected(name, selected)
-    local keys = TAGOPS_NAME_TO_KEYS[name]
+    local keys = tagopsNameToKeys[name]
     if not keys then return false end
     for _, key in ipairs(keys) do if selected[key] then return true end end
     return false
 end
-
 local function tagopsIsOverrideBlock(content)
     return tostring(content or ""):match("^[*>]?\\") ~= nil
 end
-
 local function tagopsKeepOnlyContent(content, selected)
     content = tostring(content or "")
     local prefix = ""
@@ -3983,7 +3474,6 @@ local function tagopsKeepOnlyContent(content, selected)
         prefix = first
         content = content:sub(2)
     end
-
     local out, pos = {}, 1
     for _, tag in ipairs(RheaFoundation.parseTagBlock(content)) do
         out[#out + 1] = content:sub(pos, tag.startPos - 1)
@@ -3993,12 +3483,10 @@ local function tagopsKeepOnlyContent(content, selected)
         pos = tag.endPos + 1
     end
     out[#out + 1] = content:sub(pos)
-
     local cleaned = table.concat(out)
     if cleaned:match("^%s*$") then return "" end
     return prefix .. cleaned
 end
-
 local function tagopsKeepOnlyText(text, selected)
     text = tostring(text or "")
     local out, pos = {}, 1
@@ -4015,43 +3503,43 @@ local function tagopsKeepOnlyText(text, selected)
     out[#out + 1] = text:sub(pos)
     return (table.concat(out):gsub("{}", ""))
 end
-
 function TagOps.opKeepOnly(subs, sel, opts)
-    if not sel or #sel == 0 then TagOps.U.alert(L("tagops_err_adjust_select")); return false end
-    opts = opts or {}
-    local selected = opts.selected or {}
-    if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_select_tag")); return false end
-
-    local changed = 0
-    for _, i in ipairs(sel) do
-        local line = subs[i]
-        if Rhea.isDialogue(line) then
-            local nextText = tagopsKeepOnlyText(line.text or "", selected)
-            if nextText ~= line.text then
-                line.text = nextText
-                subs[i] = line
-                changed = changed + 1
+    sel = RheaFoundation.selectionDialogueIndices(subs, sel)
+    return Rhea.Lines.atomic(subs, function()
+        if not sel or #sel == 0 then TagOps.U.alert(L("tagops_err_adjust_select")); return false end
+        opts = opts or {}
+        local selected = opts.selected or {}
+        if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_select_tag")); return false end
+        local changed = 0
+        for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+            local line = subs[i]
+            if Rhea.isDialogue(line) then
+                local nextText = tagopsKeepOnlyText(line.text or "", selected)
+                if nextText ~= line.text then
+                    line.text = nextText
+                    subs[i] = line
+                    changed = changed + 1
+                end
             end
         end
-    end
-    if changed == 0 then
-        TagOps.U.alert(L("tagops_keep_only_no_change"))
-        return false
-    end
-    aegisub.set_undo_point("TagOps - Keep Only")
-    if opts.info then TagOps.U.alert(string.format(L("tagops_keep_only_changed"), changed)) end
-    return true
+        if changed == 0 then
+            TagOps.U.alert(L("tagops_keep_only_no_change"))
+            return false
+        end
+        aegisub.set_undo_point("TagOps - Keep Only")
+        if opts.info then TagOps.U.alert(string.format(L("tagops_keep_only_changed"), changed)) end
+        return true
+    end)
 end
-
-local TAGOPS_AUTO_ADJUST_KEYS = {
+local tagopsAutoAdjustKeys = {
     fs=true, fsp=true, fscx=true, fscy=true,
     frz=true, frx=true, fry=true, fax=true, fay=true,
     bord=true, xbord=true, ybord=true,
     shad=true, xshad=true, yshad=true,
     blur=true, be=true, pbo=true,
 }
-
-local TAGOPS_MANUAL_ADJUST_KEYS = {
+local tagopsManualAdjustKeys = {
     pos=true, move=true, org=true, clip=true, iclip=true,
     fad=true, fade=true, t=true, an=true, a=true, q=true,
     fs=true, fsp=true, fscx=true, fscy=true,
@@ -4060,9 +3548,8 @@ local TAGOPS_MANUAL_ADJUST_KEYS = {
     shad=true, xshad=true, yshad=true,
     blur=true, be=true, k=true, kf=true, ko=true, pbo=true,
 }
-
-local TAGOPS_STYLE_ADJUST_ORDER = {"fs", "fsp", "fscx", "fscy", "bord", "shad"}
-local TAGOPS_STYLE_ADJUST = {
+local tagopsStyleAdjustOrder = {"fs", "fsp", "fscx", "fscy", "bord", "shad"}
+local tagopsStyleAdjust = {
     fs   = { tag="fs",   field="fontsize", default=20 },
     fsp  = { tag="fsp",  field="spacing",  default=0  },
     fscx = { tag="fscx", field="scale_x",  default=100 },
@@ -4070,24 +3557,19 @@ local TAGOPS_STYLE_ADJUST = {
     bord = { tag="bord", field="outline",  default=0  },
     shad = { tag="shad", field="shadow",   default=0  },
 }
-
-local TAGOPS_NUM_VALUE_PATTERN = "[%+%-]?%d*%.?%d+"
-local TAGOPS_PERSPECTIVE_REPROJECT_KEYS = { fs=true, fsp=true, fscx=true, fscy=true }
-
+local tagopsPerspectiveReprojectKeys = { fs=true, fsp=true, fscx=true, fscy=true }
 local function tagopsAdjustKeyForName(name)
-    for _, key in ipairs(TAGOPS_NAME_TO_KEYS[name] or {}) do
-        if TAGOPS_AUTO_ADJUST_KEYS[key] then return key end
+    for _, key in ipairs(tagopsNameToKeys[name] or {}) do
+        if tagopsAutoAdjustKeys[key] then return key end
     end
     return nil
 end
-
 local function tagopsTransformInner(token)
     local tagStart = tostring(token or ""):find("\\", 4, true)
     if not tagStart then return nil end
     local tagEnd = token:sub(-1) == ")" and #token - 1 or #token
     return token:sub(tagStart, tagEnd)
 end
-
 local function tagopsCollectAdjustKeysFromBlock(block, selected)
     local pending, cursor = { block }, 1
     while cursor <= #pending do
@@ -4099,41 +3581,36 @@ local function tagopsCollectAdjustKeysFromBlock(block, selected)
                 if inner then pending[#pending + 1] = inner end
             else
                 local key = tagopsAdjustKeyForName(tag.name)
-                if key and tostring(tag.value or ""):match(TAGOPS_NUM_VALUE_PATTERN) then
+                if key and Core.finiteNumber(tag.value) then
                     selected[key] = true
                 end
             end
         end
     end
 end
-
 local function tagopsCollectAdjustKeysFromText(text, selected)
     for _, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
         tagopsCollectAdjustKeysFromBlock(block.content, selected)
     end
 end
-
 local function tagopsLineStyle(line, styles)
     if not line then return nil end
     return line.styleref or line.styleRef or (styles and (styles[line.style] or styles.Default)) or nil
 end
-
 local function tagopsStyleDefaultValue(style, spec)
     if not style or not spec then return nil end
     local value = tonumber(style[spec.field])
     if value == nil then value = spec.default end
     return value
 end
-
 local function tagopsCollectStyleAdjustKeys(line, styles, selected)
     local style = tagopsLineStyle(line, styles)
     if not style then return end
-    for _, key in ipairs(TAGOPS_STYLE_ADJUST_ORDER) do
-        local value = tagopsStyleDefaultValue(style, TAGOPS_STYLE_ADJUST[key])
-        if value and math.abs(value) > RHEA_ZERO_EPSILON then selected[key] = true end
+    for _, key in ipairs(tagopsStyleAdjustOrder) do
+        local value = tagopsStyleDefaultValue(style, tagopsStyleAdjust[key])
+        if value and math.abs(value) > rheaZeroEpsilon then selected[key] = true end
     end
 end
-
 local function tagopsAutoAdjustSelected(subs, sel, styles)
     local selected = {}
     for _, i in ipairs(sel or {}) do
@@ -4145,12 +3622,11 @@ local function tagopsAutoAdjustSelected(subs, sel, styles)
     end
     return selected
 end
-
 local function tagopsResolveAdjustSelected(autoSelected, manualSelected)
     local selected = {}
     for key in pairs(autoSelected or {}) do selected[key] = true end
     for key, value in pairs(manualSelected or {}) do
-        if value and TAGOPS_MANUAL_ADJUST_KEYS[key] then
+        if value and tagopsManualAdjustKeys[key] then
             if selected[key] then
                 selected[key] = nil
             else
@@ -4160,14 +3636,12 @@ local function tagopsResolveAdjustSelected(autoSelected, manualSelected)
     end
     return selected
 end
-
 local function tagopsAdjustNeedsPerspectiveReproject(selected)
-    for key in pairs(TAGOPS_PERSPECTIVE_REPROJECT_KEYS) do
+    for key in pairs(tagopsPerspectiveReprojectKeys) do
         if selected and selected[key] then return true end
     end
     return false
 end
-
 local function tagopsTextHasLeadingName(text, names)
     local set = {}
     for _, name in ipairs(names or {}) do set[name] = true end
@@ -4186,20 +3660,48 @@ local function tagopsTextHasLeadingName(text, names)
     end
     return false
 end
-
 local function tagopsAdjustNumber(raw, amount, mode)
-    local n = tonumber(raw)
+    local n = Core.finiteNumber(raw)
     if not n then return raw end
     if mode == "Percent" then n = n * (1 + amount / 100) else n = n + amount end
+    assert(Core.finiteNumber(n), L("tagops_err_numeric"))
     return Rhea.formatNum(n, 6)
 end
-
 local function tagopsAdjustToken(token, amount, mode)
-    return (token:gsub("(" .. TAGOPS_NUM_VALUE_PATTERN .. ")", function(n)
-        return tagopsAdjustNumber(n, amount, mode)
-    end))
+    local text, edits = "{" .. token .. "}", {}
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        local value, finish = call.value, call.finish
+        local first = call.start + #call.raw_name + 1
+        local updated
+        if call.name == "t" then
+            local payload = value:find("\\", 1, true)
+            if payload then value, finish = value:sub(1, payload - 1), first + payload - 2 end
+            updated = value:gsub("[^,%s()]+", function(number) return tagopsAdjustNumber(number, amount, mode) end)
+        elseif tagopsManualAdjustKeys[call.name] or tagopsAutoAdjustKeys[call.name] then
+            if value:sub(1, 1) == "(" then
+                local args = LineOps.splitArguments(value)
+                local path = args[#args]
+                if (call.name == "clip" or call.name == "iclip") and (#args == 1 or #args == 2) and AssDrawing.validatePath(path) then
+                    args[#args] = AssDrawing.mapCoordinates(path, function(x, y)
+                        return tonumber(tagopsAdjustNumber(x, amount, mode)), tonumber(tagopsAdjustNumber(y, amount, mode))
+                    end, 6)
+                else
+                    for i, number in ipairs(args) do args[i] = tagopsAdjustNumber(number, amount, mode) end
+                end
+                updated = "(" .. table.concat(args, ",") .. ")"
+            else updated = tagopsAdjustNumber(value, amount, mode) end
+        end
+        if updated and updated ~= value then edits[#edits + 1] = {first = first, last = finish, value = updated} end
+    end
+    local chunks, cursor = {}, 1
+    for _, edit in ipairs(edits) do
+        chunks[#chunks + 1] = text:sub(cursor, edit.first - 1)
+        chunks[#chunks + 1] = edit.value
+        cursor = edit.last + 1
+    end
+    chunks[#chunks + 1] = text:sub(cursor)
+    return table.concat(chunks):sub(2, -2)
 end
-
 local function tagopsAdjustBlock(block, selected, amount, mode)
     local function frameFor(content, prefix, suffix)
         return {
@@ -4213,7 +3715,6 @@ local function tagopsAdjustBlock(block, selected, amount, mode)
             suffix = suffix or "",
         }
     end
-
     local stack = { frameFor(block) }
     while #stack > 0 do
         local frame = stack[#stack]
@@ -4254,7 +3755,6 @@ local function tagopsAdjustBlock(block, selected, amount, mode)
     end
     return block, 0
 end
-
 local function tagopsAdjustText(text, selected, amount, mode)
     local out, pos, changed = {}, 1, 0
     for _, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
@@ -4267,18 +3767,17 @@ local function tagopsAdjustText(text, selected, amount, mode)
     out[#out + 1] = text:sub(pos)
     return table.concat(out), changed
 end
-
 local function tagopsInjectStyleAdjustments(text, selected, amount, mode, style)
     local payload = {}
-    for _, key in ipairs(TAGOPS_STYLE_ADJUST_ORDER) do
+    for _, key in ipairs(tagopsStyleAdjustOrder) do
         if selected[key] then
-            local spec = TAGOPS_STYLE_ADJUST[key]
+            local spec = tagopsStyleAdjust[key]
             local base = tagopsStyleDefaultValue(style, spec)
-            local names = (TAGOPS_BY_KEY[key] and TAGOPS_BY_KEY[key].names) or { spec.tag }
+            local names = (tagopsByKey[key] and tagopsByKey[key].names) or { spec.tag }
             if base and not tagopsTextHasLeadingName(text, names) then
                 local adjusted = tagopsAdjustNumber(tostring(base), amount, mode)
                 local adjustedNumber = tonumber(adjusted)
-                if adjustedNumber and math.abs(adjustedNumber - base) > RHEA_ZERO_EPSILON then
+                if adjustedNumber and math.abs(adjustedNumber - base) > rheaZeroEpsilon then
                     payload[#payload + 1] = "\\" .. spec.tag .. adjusted
                 end
             end
@@ -4287,152 +3786,136 @@ local function tagopsInjectStyleAdjustments(text, selected, amount, mode, style)
     if #payload == 0 then return text, 0 end
     return tagopsAppendLeadingTags(text, table.concat(payload)), #payload
 end
-
 local function tagopsTransformKeyForName(name, selected)
-    for _, key in ipairs(TAGOPS_NAME_TO_KEYS[name] or {}) do
-        local def = TAGOPS_BY_KEY[key]
+    for _, key in ipairs(tagopsNameToKeys[name] or {}) do
+        local def = tagopsByKey[key]
         if selected[key] and def and def.animatable then return key end
     end
     return nil
 end
-
 local function tagopsTransformText(text, selected, amount, style)
     local targets = {}
     for _, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
         for _, tag in ipairs(RheaFoundation.parseTagBlock(block.content)) do
             if tag.name ~= "t" then
                 local key = tagopsTransformKeyForName(tag.name, selected)
-                if key and tostring(tag.value or ""):match(TAGOPS_NUM_VALUE_PATTERN) then
+                if key and Core.finiteNumber(tag.value) then
                     local adjusted = tagopsAdjustToken(tag.raw, amount, "Add")
                     if adjusted ~= tag.raw then targets[key] = adjusted end
                 end
             end
         end
     end
-    for _, key in ipairs(TAGOPS_STYLE_ADJUST_ORDER) do
+    for _, key in ipairs(tagopsStyleAdjustOrder) do
         if selected[key] and not targets[key] then
-            local spec = TAGOPS_STYLE_ADJUST[key]
+            local spec = tagopsStyleAdjust[key]
             local base = tagopsStyleDefaultValue(style, spec)
             if base then
                 local adjusted = tagopsAdjustNumber(tostring(base), amount, "Add")
-                if tonumber(adjusted) and math.abs(tonumber(adjusted) - base) > RHEA_ZERO_EPSILON then
+                if tonumber(adjusted) and math.abs(tonumber(adjusted) - base) > rheaZeroEpsilon then
                     targets[key] = "\\" .. spec.tag .. adjusted
                 end
             end
         end
     end
     local payload = {}
-    for _, def in ipairs(TAGOPS_DEFS) do
+    for _, def in ipairs(tagopsDefs) do
         if targets[def.key] then payload[#payload + 1] = targets[def.key] end
     end
     if #payload == 0 then return text, 0 end
     return tagopsAppendLeadingTags(text, "\\t(" .. table.concat(payload) .. ")"), #payload
 end
-
 function TagOps.opAdjust(subs, sel, opts)
-    if not sel or #sel == 0 then TagOps.U.alert(L("tagops_err_adjust_select")); return false end
-    opts = opts or {}
-    local amount = tonumber(opts.amount)
-    if not amount then TagOps.U.alert(L("tagops_err_numeric")); return false end
-    local styles = Rhea.styleMap(subs)
-    local selected = tagopsResolveAdjustSelected(tagopsAutoAdjustSelected(subs, sel, styles), opts.selected)
-    if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_no_adjust_tags")); return false end
-    local transformMode = opts.mode == "Transform"
-    local perspectiveAware = not transformMode and tagopsAdjustNeedsPerspectiveReproject(selected)
-    local perspectiveMeta, perspectiveStyles, perspectiveContextLoaded
-    local function getPerspectiveContext()
-        if not perspectiveContextLoaded then
-            if RheaOps.Perspective.context then
-                perspectiveMeta, perspectiveStyles = RheaOps.Perspective.context(subs)
+    sel = RheaFoundation.selectionDialogueIndices(subs, sel)
+    return Rhea.Lines.atomic(subs, function()
+        if not sel or #sel == 0 then TagOps.U.alert(L("tagops_err_adjust_select")); return false end
+        opts = opts or {}
+        local amount = Core.finiteNumber(opts.amount)
+        if not amount then TagOps.U.alert(L("tagops_err_numeric")); return false end
+        local styles = Rhea.styleMap(subs)
+        local selected = tagopsResolveAdjustSelected(tagopsAutoAdjustSelected(subs, sel, styles), opts.selected)
+        if not tagopsHasAnySelected(selected) then TagOps.U.alert(L("tagops_err_no_adjust_tags")); return false end
+        local transformMode = opts.mode == "Transform"
+        local perspectiveAware = not transformMode and tagopsAdjustNeedsPerspectiveReproject(selected)
+        local perspectiveMeta, perspectiveStyles, perspectiveContextLoaded
+        local function getPerspectiveContext()
+            if not perspectiveContextLoaded then
+                if RheaOps.Perspective.context then
+                    perspectiveMeta, perspectiveStyles = RheaOps.Perspective.context(subs)
+                end
+                perspectiveMeta = perspectiveMeta or {}
+                perspectiveStyles = perspectiveStyles or styles
+                perspectiveContextLoaded = true
             end
-            perspectiveMeta = perspectiveMeta or {}
-            perspectiveStyles = perspectiveStyles or styles
-            perspectiveContextLoaded = true
+            return perspectiveMeta, perspectiveStyles
         end
-        return perspectiveMeta, perspectiveStyles
-    end
-    local linesChanged, tagsChanged = 0, 0
-    for _, i in ipairs(sel) do
-        local line = subs[i]
-        local style = tagopsLineStyle(line, styles)
-        local perspectiveQuad, perspectiveStyle, perspectiveMetaForLine, perspectiveStylesForLine
-        if perspectiveAware
-            and RheaOps.Perspective.isPerspectiveLine
-            and RheaOps.Perspective.isPerspectiveLine(line) then
-            perspectiveMetaForLine, perspectiveStylesForLine = getPerspectiveContext()
-            perspectiveStyle = tagopsLineStyle(line, perspectiveStylesForLine) or style
-            if perspectiveStyle and RheaOps.Perspective.captureQuad then
-                perspectiveQuad = RheaOps.Perspective.captureQuad(line, perspectiveStyle, perspectiveMetaForLine, perspectiveStylesForLine)
-            end
-        end
-        local nt, c
-        if transformMode then
-            nt, c = tagopsTransformText(line.text or "", selected, amount, style)
-        else
-            nt, c = tagopsAdjustText(line.text or "", selected, amount, opts.mode)
-            local injected, injectedCount = tagopsInjectStyleAdjustments(nt, selected, amount, opts.mode, style)
-            nt, c = injected, c + injectedCount
-        end
-        if c > 0 and nt ~= line.text then
-            line.text = nt
-            if perspectiveQuad and RheaOps.Perspective.reprojectLineToQuad then
-                if RheaOps.Perspective.reprojectLineToQuad(line, perspectiveStyle,
-                    perspectiveMetaForLine, perspectiveStylesForLine, perspectiveQuad, selected) then
-                    c = c + 1
+        local linesChanged, tagsChanged = 0, 0
+        for _, i in ipairs(sel) do
+            LineOps.checkCancelled()
+            local line = subs[i]
+            local style = tagopsLineStyle(line, styles)
+            local perspectiveQuad, perspectiveStyle, perspectiveMetaForLine, perspectiveStylesForLine
+            if perspectiveAware
+                and RheaOps.Perspective.isPerspectiveLine
+                and RheaOps.Perspective.isPerspectiveLine(line) then
+                perspectiveMetaForLine, perspectiveStylesForLine = getPerspectiveContext()
+                perspectiveStyle = tagopsLineStyle(line, perspectiveStylesForLine) or style
+                if perspectiveStyle and RheaOps.Perspective.captureQuad then
+                    perspectiveQuad = RheaOps.Perspective.captureQuad(line, perspectiveStyle, perspectiveMetaForLine, perspectiveStylesForLine)
                 end
             end
-            subs[i] = line
-            linesChanged = linesChanged + 1
-            tagsChanged = tagsChanged + c
+            local nt, c
+            if transformMode then
+                nt, c = tagopsTransformText(line.text or "", selected, amount, style)
+            else
+                nt, c = tagopsAdjustText(line.text or "", selected, amount, opts.mode)
+                local injected, injectedCount = tagopsInjectStyleAdjustments(nt, selected, amount, opts.mode, style)
+                nt, c = injected, c + injectedCount
+            end
+            if c > 0 and nt ~= line.text then
+                line.text = nt
+                if perspectiveQuad and RheaOps.Perspective.reprojectLineToQuad then
+                    if RheaOps.Perspective.reprojectLineToQuad(line, perspectiveStyle,
+                        perspectiveMetaForLine, perspectiveStylesForLine, perspectiveQuad, selected) then
+                        c = c + 1
+                    end
+                end
+                subs[i] = line
+                linesChanged = linesChanged + 1
+                tagsChanged = tagsChanged + c
+            end
         end
-    end
-    if linesChanged == 0 then TagOps.U.alert(L("tagops_adjust_no_change")); return false end
-    aegisub.set_undo_point("TagOps - Resize/Transform")
-    if opts.info then
-        TagOps.U.alert(string.format("%s: %d\n%s: %d", L("tagops_lines_changed"), linesChanged, L("tagops_tags_changed"), tagsChanged))
-    end
-    return true
-end
-
-local TAGOPS_NUM_PATTERN = "([%+%-]?%d*%.?%d+)"
-
-local function tagopsCoord(n)
-    return Rhea.formatNum(tonumber(n) or 0, 2)
-end
-
-local function tagopsShiftPair(x, y, dx, dy, scale)
-    scale = scale or 1
-    return tagopsCoord((tonumber(x) or 0) + dx * scale), tagopsCoord((tonumber(y) or 0) + dy * scale)
-end
-
-local function tagopsShiftPath(path, dx, dy, scale)
-    return tostring(path or ""):gsub(TAGOPS_NUM_PATTERN .. "%s+" .. TAGOPS_NUM_PATTERN, function(x, y)
-        local nx, ny = tagopsShiftPair(x, y, dx, dy, scale)
-        return nx .. " " .. ny
+        if linesChanged == 0 then TagOps.U.alert(L("tagops_adjust_no_change")); return false end
+        aegisub.set_undo_point("TagOps - Resize/Transform")
+        if opts.info then
+            TagOps.U.alert(string.format("%s: %d\n%s: %d", L("tagops_lines_changed"), linesChanged, L("tagops_tags_changed"), tagsChanged))
+        end
+        return true
     end)
 end
-
+local function tagopsCoord(value)
+    return Rhea.formatNum(value, 2)
+end
 local function tagopsFirstPos(text)
-    local x, y = tostring(text or ""):match("\\pos%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*%)")
-    if not x or not y then return nil, nil end
-    return tonumber(x), tonumber(y)
+    return AssContext.explicitPosition(text)
 end
-
 local function tagopsFirstOrg(text)
-    local x, y = tostring(text or ""):match("\\org%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*%)")
-    if not x or not y then return nil, nil end
-    return tonumber(x), tonumber(y)
+    local call = AssContext.firstTag(text, "org")
+    if not call then return nil end
+    local args = LineOps.splitArguments(call.value)
+    if #args ~= 2 then return nil end
+    return Core.finiteNumber(args[1]), Core.finiteNumber(args[2])
 end
-
-local function tagopsPosAlignDelta(sourceLine, referenceLine, moveGeometry)
+local function tagopsPosAlignDelta(sourceLine, referenceLine, moveGeometry, context)
     if not (Rhea.isDialogue(sourceLine) and Rhea.isDialogue(referenceLine)) then
         return nil, nil, L("tagops_err_align_select")
     end
     local sourceX, sourceY = tagopsFirstPos(sourceLine.text)
+    if not sourceX then sourceX, sourceY = AssContext.position(sourceLine, context) end
     if not sourceX then return nil, nil, L("tagops_err_source_pos") end
     local referenceX, referenceY = tagopsFirstPos(referenceLine.text)
+    if not referenceX then referenceX, referenceY = AssContext.position(referenceLine, context) end
     if not referenceX then return nil, nil, L("tagops_err_reference_pos") end
-
     local dx, dy = sourceX - referenceX, sourceY - referenceY
     if dx == 0 and dy == 0 and moveGeometry then
         local sourceOrgX, sourceOrgY = tagopsFirstOrg(sourceLine.text)
@@ -4444,108 +3927,91 @@ local function tagopsPosAlignDelta(sourceLine, referenceLine, moveGeometry)
     if dx == 0 and dy == 0 then return nil, nil, L("tagops_align_no_delta") end
     return dx, dy, nil
 end
-
 local function tagopsShiftAlignText(text, dx, dy, moveGeometry)
-    text = tostring(text or "")
-    text = text:gsub("\\pos%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*%)", function(x, y)
-        local nx, ny = tagopsShiftPair(x, y, dx, dy)
-        return "\\pos(" .. nx .. "," .. ny .. ")"
-    end)
-    if not moveGeometry then return text end
-
-    text = text:gsub("\\move%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "(.-)%)", function(x1, y1, x2, y2, rest)
-        local nx1, ny1 = tagopsShiftPair(x1, y1, dx, dy)
-        local nx2, ny2 = tagopsShiftPair(x2, y2, dx, dy)
-        return "\\move(" .. nx1 .. "," .. ny1 .. "," .. nx2 .. "," .. ny2 .. rest .. ")"
-    end)
-    text = text:gsub("\\org%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*%)", function(x, y)
-        local nx, ny = tagopsShiftPair(x, y, dx, dy)
-        return "\\org(" .. nx .. "," .. ny .. ")"
-    end)
-    text = text:gsub("(\\i?clip)%(%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*,%s*" .. TAGOPS_NUM_PATTERN .. "%s*%)", function(tag, x1, y1, x2, y2)
-        local nx1, ny1 = tagopsShiftPair(x1, y1, dx, dy)
-        local nx2, ny2 = tagopsShiftPair(x2, y2, dx, dy)
-        return tag .. "(" .. nx1 .. "," .. ny1 .. "," .. nx2 .. "," .. ny2 .. ")"
-    end)
-    text = text:gsub("(\\i?clip)%(%s*(%d+)%s*,%s*m%s+([^%)]+)%)", function(tag, scaleText, path)
-        local factor = 2 ^ ((tonumber(scaleText) or 1) - 1)
-        return tag .. "(" .. scaleText .. ",m " .. tagopsShiftPath(path, dx, dy, factor) .. ")"
-    end)
-    text = text:gsub("(\\i?clip)%(%s*m%s+([^%)]+)%)", function(tag, path)
-        return tag .. "(m " .. tagopsShiftPath(path, dx, dy) .. ")"
-    end)
-
-    local draw = text:match("}m%s+([^{]+)")
-    if draw then
-        local nextDraw = tagopsShiftPath(draw, dx, dy)
-        if nextDraw ~= draw then
-            text = text:gsub("}m%s+" .. Rhea.escapePattern(draw), "}m " .. nextDraw, 1)
+    local wanted = moveGeometry and {"pos", "move", "org", "clip", "iclip"} or {"pos", "move"}
+    return LineOps.mapTagCalls(text, wanted, function(call)
+        local clip = call.name == "clip" or call.name == "iclip"
+        if not call.top_level and not clip then return nil end
+        local args = LineOps.splitArguments(call.value)
+        local scale, path = 1, nil
+        if clip and #args == 1 then path = args[1]
+        elseif clip and #args == 2 then scale, path = Core.finiteNumber(args[1]), args[2] end
+        if path then
+            if not scale or scale < 1 or scale ~= math.floor(scale) then return nil end
+            local factor = Core.finiteNumber(2 ^ (scale - 1))
+            if not factor or not AssDrawing.validatePath(path) then return nil end
+            local shifted = AssDrawing.mapCoordinates(path, function(x, y) return x + dx * factor, y + dy * factor end, 2)
+            return "\\" .. call.raw_name .. "(" .. (#args == 2 and args[1] .. "," or "") .. shifted .. ")"
         end
-    end
-    return text
+        local pairs = (clip or call.name == "move") and 2 or 1
+        if #args ~= pairs * 2 and not (call.name == "move" and #args == 6) then return nil end
+        for _, value in ipairs(args) do if not Core.finiteNumber(value) then return nil end end
+        for i = 1, pairs * 2, 2 do
+            args[i], args[i + 1] = tagopsCoord(tonumber(args[i]) + dx), tagopsCoord(tonumber(args[i + 1]) + dy)
+        end
+        return "\\" .. call.raw_name .. "(" .. table.concat(args, ",") .. ")"
+    end, {top_level_only = false})
 end
-
 function TagOps.opPosAlign(subs, sel, opts)
-    local indices = RheaFoundation.selectionDialogueIndices(subs, sel)
-    if #indices < 2 then TagOps.U.alert(L("tagops_err_align_select")); return false end
-    local moveGeometry = opts and opts.align_org == "Move org"
-    local sourceIndex, referenceIndex = indices[1], indices[2]
-    local dx, dy, err = tagopsPosAlignDelta(subs[sourceIndex], subs[referenceIndex], moveGeometry)
-    if err then TagOps.U.alert(err); return false end
-
-    local changed = 0
-    for _, i in ipairs(indices) do
-        if i ~= sourceIndex then
-            local line = subs[i]
-            local nextText = tagopsShiftAlignText(line.text or "", dx, dy, moveGeometry)
-            if nextText ~= line.text then
-                line.text = nextText
-                subs[i] = line
-                changed = changed + 1
+    return Rhea.Lines.atomic(subs, function()
+        local indices = RheaFoundation.selectionDialogueIndices(subs, sel)
+        if #indices < 2 then TagOps.U.alert(L("tagops_err_align_select")); return false end
+        local moveGeometry = opts and opts.align_org == "Move org"
+        local sourceIndex, referenceIndex = indices[1], indices[2]
+        local context = AssContext.fromSubtitles(subs)
+        local dx, dy, err = tagopsPosAlignDelta(subs[sourceIndex], subs[referenceIndex], moveGeometry, context)
+        if err then TagOps.U.alert(err); return false end
+        local changed = 0
+        for _, i in ipairs(indices) do
+            LineOps.checkCancelled()
+            if i ~= sourceIndex then
+                local line = subs[i]
+                local text = line.text or ""
+                if not tagopsFirstPos(text) then
+                    local px, py = AssContext.position(line, context)
+                    if px and py then text = LineOps.prependTag(text, string.format("\\pos(%s,%s)", Rhea.formatNum(px), Rhea.formatNum(py))) end
+                end
+                local nextText = tagopsShiftAlignText(text, dx, dy, moveGeometry)
+                if nextText ~= line.text then
+                    line.text = nextText
+                    subs[i] = line
+                    changed = changed + 1
+                end
             end
         end
-    end
-    if changed == 0 then TagOps.U.alert(L("tagops_align_no_delta")); return false end
-    aegisub.set_undo_point("TagOps - Pos Align")
-    if opts and opts.info then TagOps.U.alert(string.format(L("tagops_align_done"), changed)) end
-    return changed > 0
+        if changed == 0 then TagOps.U.alert(L("tagops_align_no_delta")); return false end
+        aegisub.set_undo_point("TagOps - Pos Align")
+        if opts and opts.info then TagOps.U.alert(string.format(L("tagops_align_done"), changed)) end
+        return changed > 0
+    end)
 end
-
-TagOps.defs = TAGOPS_DEFS
+TagOps.defs = tagopsDefs
 TagOps.actions = {"Resize / transform", "Pos Align"}
-
 local function tagopsNormalizeAction(action)
     action = tostring(action or "")
     if action == "Adjust tags" or action == "Copy tags" or action == "Copy Tags" then return "Resize / transform" end
     if action == "" then return "" end
     return RheaFoundation.choose(action, TagOps.actions, "Resize / transform")
 end
-
-
-local HELP_TEXTS = {
+local helpTexts = {
 en = [[
 RHEA SIGNS - USER GUIDE
-
 Main panel:
 Mask and Perspective are on the top row; Shapes and Sign are below them.
 Each module has an Action field. Leave Action empty to skip that module.
-
 Mask:
-Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape, and Clean DR.
+Apply Mask, Create Layer, Replace Mask, Save Shape, and Delete Shape.
 The built-in square, rounded, circle, and triangle masks are centered around
 their own origin, so they behave predictably with the line position.
-
 Perspective:
 Copies, remaps, scales quads, bakes, restores, or reprojects perspective tags.
 Map controls corner order. Org controls the destination origin. X, Y, and Quad
 drive the scale operations.
-
 Sign:
 Typewriter reveals characters. Vertical Drop distributes text vertically; Y
 spacing adjusts the distance between generated elements and accepts negatives.
 Circle Text creates character lines on a circle. Curve Text places character
-lines along a vector clip. Clean SiO removes Sign output.
-
+lines along a vector clip.
 Shapes:
 Unify Positions gives selected ASS drawings one shared pivot without moving
 their rendered geometry. Place on Perimeter repeats multilayer units along all
@@ -4553,13 +4019,11 @@ visible exterior contours, with an optional mode for real nonzero-winding holes.
 Shape Color Optimizer merges nearby colors or reduces reliable gradients. Its
 mode, intensity, OKLab threshold, band limit, and summary option are editable in
 the main panel and saved in Config.
-
 Auxiliary buttons:
 Signs Editor edits repeated sign text in bulk. FastSigns creates box, glow, and
 front text layers. TagOps handles tag copy, keep-only, numeric recalculation,
 untimed transforms, and position alignment. Config stores language, mask color,
 FastSigns settings, and the Shapes controls.
-
 Toolbox:
 Font and Style Manager replaces fonts in styles and optional \fn tags,
 batch-edits style fields and colors, clones styles, and
@@ -4569,33 +4033,25 @@ exact shared timing boundaries between selected groups. Fade-in and fade-out
 preserve the other duration and unrelated tags.
 Shuffle Line Text redistributes text among selected dialogue rows without moving
 their timing or metadata. Leave the dropdown empty to skip it.
-
-Generated markers:
-DR = Masks, SiO = Sign, FS = FastSigns.
 ]],
 es = [[
 RHEA SIGNS - GUIA DE USO
-
 Panel principal:
 Mask y Perspective estan arriba; Shapes y Sign estan debajo. Cada modulo tiene
 un campo Accion. Deja Accion vacia para omitir ese modulo.
-
 Mask:
-Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape y Clean DR.
+Apply Mask, Create Layer, Replace Mask, Save Shape y Delete Shape.
 Las mascaras internas square, rounded, circle y triangle estan centradas sobre
 su propio origen para comportarse de forma predecible con la posicion de linea.
-
 Perspective:
 Copia, remapea, escala quads, guarda, restaura o reproyecta tags de perspectiva.
 Map controla el orden de esquinas. Org controla el origen destino. X, Y y Quad
 controlan las operaciones de escala.
-
 Sign:
 Typewriter revela caracteres. Vertical Drop distribuye texto en vertical;
 Espacio Y ajusta la distancia entre elementos y acepta valores negativos.
 Circle Text genera lineas por caracter en circulo. Curve Text coloca lineas por
-caracter sobre un clip vectorial. Clean SiO elimina la salida de Sign.
-
+caracter sobre un clip vectorial.
 Shapes:
 Unificar posiciones da a los dibujos ASS seleccionados un pivote compartido sin
 mover su geometria renderizada. Pegar al perimetro repite unidades multicapa por
@@ -4603,13 +4059,11 @@ todos los contornos exteriores visibles, con un modo opcional para huecos reales
 segun nonzero winding. Optimizar color de shapes fusiona colores cercanos o
 reduce gradientes fiables. Modo, intensidad, umbral OKLab, limite de bandas y
 resumen se editan en el panel principal y se guardan en Config.
-
 Botones auxiliares:
 Editor de carteles edita texto repetido en lote. FastSigns crea capas de caja,
 glow y texto frontal. TagOps maneja copiar tags, Keep Only, recalculo numerico,
 transformaciones sin tiempos y alineacion de posicion. Config guarda idioma,
 color de mascara, ajustes de FastSigns y controles de Shapes.
-
 Herramientas:
 El gestor de fuentes y estilos cambia fuentes en estilos y tags \fn opcionales,
 edita campos y colores en lote, clona
@@ -4619,33 +4073,25 @@ limite temporal exacto entre grupos seleccionados. La entrada y la salida no
 alteran la otra duracion ni los demas tags. Mezclar
 texto de lineas redistribuye el texto sin mover tiempos ni metadatos. Deja el
 dropdown vacio para omitirlo.
-
-Marcadores generados:
-DR = Mascaras, SiO = Sign, FS = FastSigns.
 ]],
 pt = [[
 RHEA SIGNS - GUIA DE USO
-
 Painel principal:
 Mask e Perspective ficam acima; Formas e Sign ficam abaixo. Cada modulo tem um
 campo Acao. Deixe Acao vazio para ignorar esse modulo.
-
 Mask:
-Apply Mask, Create Layer, Replace Mask, Save Shape, Delete Shape e Clean DR.
+Apply Mask, Create Layer, Replace Mask, Save Shape e Delete Shape.
 As mascaras internas square, rounded, circle e triangle ficam centradas no
 proprio origem para agir de forma previsivel com a posicao da linha.
-
 Perspective:
 Copia, remapeia, escala quads, grava, restaura ou reprojeta tags de perspectiva.
 Map controla a ordem dos cantos. Org controla a origem de destino. X, Y e Quad
 controlam as operacoes de escala.
-
 Sign:
 Typewriter revela caracteres. Vertical Drop distribui texto na vertical; Espaço
 Y ajusta a distância entre elementos e aceita valores negativos.
 Circle Text gera linhas por caractere em circulo. Curve Text coloca linhas por
-caractere sobre um clip vetorial. Clean SiO remove a saida de Sign.
-
+caractere sobre um clip vetorial.
 Formas:
 Unificar posicoes fornece aos desenhos ASS selecionados um pivo compartilhado
 sem mover a geometria renderizada. Colocar no perimetro repete unidades em
@@ -4653,13 +4099,11 @@ camadas por todos os contornos exteriores visiveis, com um modo opcional para
 furos reais segundo nonzero winding. Otimizar cores combina cores proximas ou
 reduz gradientes confiaveis. Modo, intensidade, limiar OKLab, limite de faixas e
 resumo sao editados no painel principal e salvos em Config.
-
 Botoes auxiliares:
 Editor de placas edita texto repetido em lote. FastSigns cria camadas de caixa,
 glow e texto frontal. TagOps cuida de copiar tags, Keep Only, recalculo numerico,
 transformacoes sem tempos e alinhamento de posicao. Config guarda idioma, cor da
 mascara, ajustes de FastSigns e controles de Formas.
-
 Ferramentas:
 O gerenciador de fontes e estilos troca fontes em estilos e etiquetas \fn
 opcionais, edita campos e cores em lote, clona estilos
@@ -4669,21 +4113,17 @@ exato entre grupos selecionados. A entrada e a saida nao alteram a outra duracao
 nem as demais tags. Embaralhar texto das
 linhas redistribui o texto sem mover tempos nem metadados. Deixe o dropdown vazio
 para ignora-lo.
-
-Marcadores gerados:
-DR = Mascaras, SiO = Sign, FS = FastSigns.
 ]],
 }
 local function helpText()
-    return HELP_TEXTS[current_lang] or HELP_TEXTS.en
+    return helpTexts[currentLang] or helpTexts.en
 end
-
-local CHOICE_KEYS = {
+local choiceKeys = {
     ["en"] = "lang_en", ["es"] = "lang_es", ["pt"] = "lang_pt",
     ["Apply Mask"] = "op_apply_mask", ["Create Layer"] = "op_create_layer",
-    ["Replace Mask"] = "op_replace_mask", ["Save Shape"] = "op_save_shape", ["Delete Shape"] = "op_delete_shape", ["Clean DR"] = "op_clean_dr",
+    ["Replace Mask"] = "op_replace_mask", ["Save Shape"] = "op_save_shape", ["Delete Shape"] = "op_delete_shape",
     ["Typewriter"] = "op_typewriter", ["Vertical Drop"] = "op_vertical_drop", ["Circle Text"] = "op_circle_text", ["Curve Text"] = "op_curve_text",
-    ["Clean SiO"] = "op_clean_sio", ["Frame"] = "choice_frame", ["Duration"] = "choice_duration", ["Normal"] = "choice_normal",
+    ["Frame"] = "choice_frame", ["Duration"] = "choice_duration", ["Normal"] = "choice_normal",
     ["Invertido"] = "choice_inverted", ["Vertical"] = "choice_vertical", ["from clip"] = "choice_from_clip",
     ["Copy Exact (same plane)"] = "pk_copy_exact", ["Copy Static Plane (keep \\pos)"] = "pk_copy_static", ["Copy Move Plane (whole plane)"] = "pk_copy_move_plane",
     ["Copy w/ corner swap"] = "pk_copy_swap", ["Copy Translate (keep \\pos)"] = "pk_copy_translate", ["Copy Transport (\\org -> \\pos)"] = "pk_copy_transport",
@@ -4712,17 +4152,16 @@ local CHOICE_KEYS = {
     ["Font and Style Manager"] = "tool_font_manager",
     ["Fast Fades"] = "tool_fade_suite",
     ["Shuffle Line Text"] = "tool_shuffle_line_text",
+    ["Style to Tags"] = "tool_style_tags",
 }
-
 local function choiceLabel(raw)
-    local key = CHOICE_KEYS[raw]
+    local key = choiceKeys[raw]
     if key then
         local translated = L(key)
         if translated ~= key then return translated end
     end
     return tostring(raw or "")
 end
-
 local function dropdownData(items)
     local out, toRaw, toShown = {""}, {[""] = ""}, {[""] = ""}
     local n = 1
@@ -4738,56 +4177,71 @@ local function dropdownData(items)
     end
     return out, toRaw, toShown
 end
-
 local function shownChoice(toShown, raw)
     return (toShown and toShown[raw]) or raw or ""
 end
-
 local function rawChoice(toRaw, shown)
     return (toRaw and toRaw[shown]) or shown or ""
 end
-
-local INTEGRATED_TOOL_SOURCES = {
-    ["Shapes"] = [====[
-local SharedShapeOptimizer = require("kite.ShapeOptimizer")
+Rhea.Actions = {
+    Tools = {
+        Shapes = "Shapes",
+        FontStyles = "Font and Style Manager",
+        Fades = "Fast Fades",
+        Shuffle = "Shuffle Line Text",
+    },
+    Shapes = {
+        Unify = "Unify Positions",
+        Perimeter = "Place on Perimeter",
+        Optimize = "Shape Color Optimizer",
+        PerimeterModes = {"Exterior contours only", "Exterior contours and holes"},
+    },
+    Fades = {
+        In = "Fade In from Current Frame",
+        Out = "Fade Out from Current Frame",
+        Clean = "Continuous Fade Cleanup",
+    },
+}
+Rhea.Actions.Shapes.Items = {
+    Rhea.Actions.Shapes.Unify,
+    Rhea.Actions.Shapes.Perimeter,
+    Rhea.Actions.Shapes.Optimize,
+}
+RheaOps.Shapes = (function()
 local Unify = (function()
-local script_name = "Unify Shape Positions"
-local script_description = "Unifies ASS drawing pivots without changing visible placement"
-local script_author = "Kiter"
-local script_version = "1.0.0"
-local ShapeCore = assert(RheaFoundation and RheaFoundation.Shapes)
+local undoName = "Unify Shape Positions"
 local EPSILON = ShapeCore.epsilon
-local current_context = nil
+local currentContext = nil
 local tr
 tr = function(key, fallback, ...)
-  return ShapeCore.translate(current_context, key, fallback, ...)
+  return ShapeCore.translate(currentContext, key, fallback, ...)
 end
-local set_context
-set_context = function(context)
-  current_context = context or { }
+local setContext
+setContext = function(context)
+  currentContext = context or { }
 end
 local finite = ShapeCore.finite
-local format_number = ShapeCore.formatNumber
-local copy_line = Rhea.cloneLine
-local split_shape_text
-split_shape_text = function(text)
+local formatNumber = ShapeCore.formatNumber
+local copyLine = Rhea.cloneLine
+local splitShapeText
+splitShapeText = function(text)
   return ShapeCore.splitText(text, tr, "The drawing needs leading tags, including \\pos and \\pN.")
 end
-local has_plain_tag = ShapeCore.hasPlainTag
-local last_numeric_tag = ShapeCore.lastNumericTag
-local parse_position
-parse_position = function(prefix)
+local hasPlainTag = ShapeCore.hasPlainTag
+local lastNumericTag = ShapeCore.lastNumericTag
+local parsePosition
+parsePosition = function(prefix)
   return ShapeCore.parsePosition(prefix, tr, "Each line must have exactly one leading \\pos(x,y).")
 end
-local tokenize_path
-tokenize_path = function(path)
+local tokenizePath
+tokenizePath = function(path)
   return ShapeCore.tokenizePath(path, tr)
 end
-local validate_path_tokens
-validate_path_tokens = function(tokens)
+local validatePathTokens
+validatePathTokens = function(tokens)
   local command, count = nil, 0
-  local valid_group
-  valid_group = function()
+  local validGroup
+  validGroup = function()
     if not (command) then
       return true
     end
@@ -4805,7 +4259,7 @@ validate_path_tokens = function(tokens)
   for _index_0 = 1, #tokens do
     local token = tokens[_index_0]
     if token.kind == "command" then
-      if not (valid_group()) then
+      if not (validGroup()) then
         return false
       end
       command, count = token.value, 0
@@ -4816,15 +4270,15 @@ validate_path_tokens = function(tokens)
       count = count + 1
     end
   end
-  return valid_group()
+  return validGroup()
 end
-local map_path
-map_path = function(path, map_x, map_y)
-  local tokens, err = tokenize_path(path)
+local mapPath
+mapPath = function(path, mapX, mapY)
+  local tokens, err = tokenizePath(path)
   if not (tokens) then
     return nil, err
   end
-  if not (validate_path_tokens(tokens)) then
+  if not (validatePathTokens(tokens)) then
     return nil, tr("sh_err_coordinates", "The drawing has an invalid coordinate count.")
   end
   local output, coordinate = { }, 0
@@ -4837,50 +4291,50 @@ map_path = function(path, map_x, map_y)
       coordinate = coordinate + 1
       local mapper
       if coordinate % 2 == 1 then
-        mapper = map_x
+        mapper = mapX
       else
-        mapper = map_y
+        mapper = mapY
       end
-      output[#output + 1] = format_number(mapper(token.value))
+      output[#output + 1] = formatNumber(mapper(token.value))
     end
   end
   return table.concat(output, " ")
 end
-local shift_path
-shift_path = function(path, dx, dy)
-  return map_path(path, (function(value)
+local shiftPath
+shiftPath = function(path, dx, dy)
+  return mapPath(path, (function(value)
     return value + dx
   end), (function(value)
     return value + dy
   end))
 end
-local round_fixed
-round_fixed = function(value)
+local roundFixed
+roundFixed = function(value)
   return math.floor(value * 64 + 0.5)
 end
-local rebase_path
-rebase_path = function(prepared, pivot)
+local rebasePath
+rebasePath = function(prepared, pivot)
   local factor = 2 ^ (prepared.drawing_scale - 1)
-  local screen_scale_x = prepared.scale_x / (100 * factor)
-  local screen_scale_y = prepared.scale_y / (100 * factor)
-  local delta_x = round_fixed(prepared.position.x) - round_fixed(pivot.x)
-  local delta_y = round_fixed(prepared.position.y) - round_fixed(pivot.y)
-  local map_x
-  map_x = function(value)
-    return (round_fixed(value * screen_scale_x) + delta_x) / (64 * screen_scale_x)
+  local screenScaleX = prepared.scale_x / (100 * factor)
+  local screenScaleY = prepared.scale_y / (100 * factor)
+  local deltaX = roundFixed(prepared.position.x) - roundFixed(pivot.x)
+  local deltaY = roundFixed(prepared.position.y) - roundFixed(pivot.y)
+  local mapX
+  mapX = function(value)
+    return (roundFixed(value * screenScaleX) + deltaX) / (64 * screenScaleX)
   end
-  local map_y
-  map_y = function(value)
-    return (round_fixed(value * screen_scale_y) + delta_y) / (64 * screen_scale_y)
+  local mapY
+  mapY = function(value)
+    return (roundFixed(value * screenScaleY) + deltaY) / (64 * screenScaleY)
   end
-  return map_path(prepared.drawing, map_x, map_y)
+  return mapPath(prepared.drawing, mapX, mapY)
 end
-local prepare_text
-prepare_text = function(text, style)
+local prepareText
+prepareText = function(text, style)
   if style == nil then
     style = { }
   end
-  local parts, err = split_shape_text(text)
+  local parts, err = splitShapeText(text)
   if not (parts) then
     return nil, err
   end
@@ -4898,32 +4352,32 @@ prepare_text = function(text, style)
   }
   for _index_0 = 1, #_list_0 do
     local tag = _list_0[_index_0]
-    if has_plain_tag(prefix, tag) then
+    if hasPlainTag(prefix, tag) then
       return nil, tr("sh_unify_err_tag", "\\%s is not supported because the compensation would not have one static pivot.", tag)
     end
   end
-  local position, pos_err = parse_position(prefix)
+  local position, posErr = parsePosition(prefix)
   if not (position) then
-    return nil, pos_err
+    return nil, posErr
   end
-  local drawing_scale = last_numeric_tag(prefix, "p")
-  if not (drawing_scale and drawing_scale == math.floor(drawing_scale) and drawing_scale >= 1 and drawing_scale <= 10) then
+  local drawingScale = lastNumericTag(prefix, "p")
+  if not (drawingScale and drawingScale == math.floor(drawingScale) and drawingScale >= 1 and drawingScale <= 10) then
     return nil, tr("sh_err_drawing_scale", "Drawing mode must be \\p1 or higher.")
   end
-  local style_angle = finite(style.angle) or 0
-  if math.abs(style_angle) >= EPSILON then
+  local styleAngle = finite(style.angle) or 0
+  if math.abs(styleAngle) >= EPSILON then
     return nil, tr("sh_unify_err_style_rotation", "The style has rotation; use an unrotated drawing first.")
   end
-  local scale_x = last_numeric_tag(prefix, "fscx") or finite(style.scale_x) or 100
-  local scale_y = last_numeric_tag(prefix, "fscy") or finite(style.scale_y) or 100
-  if not (scale_x > 0 and scale_y > 0) then
+  local scaleX = lastNumericTag(prefix, "fscx") or finite(style.scale_x) or 100
+  local scale_y = lastNumericTag(prefix, "fscy") or finite(style.scale_y) or 100
+  if not (scaleX > 0 and scale_y > 0) then
     return nil, tr("sh_err_positive_scale", "\\fscx and \\fscy must be greater than zero.")
   end
-  local tokens, token_err = tokenize_path(parts.drawing)
+  local tokens, tokenErr = tokenizePath(parts.drawing)
   if not (tokens) then
-    return nil, token_err
+    return nil, tokenErr
   end
-  if not (validate_path_tokens(tokens)) then
+  if not (validatePathTokens(tokens)) then
     return nil, tr("sh_err_coordinates", "The drawing has an invalid coordinate count.")
   end
   return {
@@ -4932,58 +4386,58 @@ prepare_text = function(text, style)
     drawing = parts.drawing,
     suffix = parts.suffix,
     position = position,
-    drawing_scale = drawing_scale,
-    scale_x = scale_x,
+    drawing_scale = drawingScale,
+    scale_x = scaleX,
     scale_y = scale_y
   }
 end
-local replace_position
-replace_position = function(prefix, position, pattern)
-  local replacement = "\\pos(" .. tostring(format_number(position.x)) .. "," .. tostring(format_number(position.y)) .. ")"
+local replacePosition
+replacePosition = function(prefix, position, pattern)
+  local replacement = "\\pos(" .. tostring(formatNumber(position.x)) .. "," .. tostring(formatNumber(position.y)) .. ")"
   local mapped, count = prefix:gsub(pattern, replacement)
-  if not (count == 1) then
+  if count ~= 1 then
     return nil, tr("sh_unify_err_replace_pos", "The line's \\pos could not be replaced.")
   end
   return mapped
 end
-local unify_prepared
-unify_prepared = function(prepared, pivot)
+local unifyPrepared
+unifyPrepared = function(prepared, pivot)
   local factor = 2 ^ (prepared.drawing_scale - 1)
   local dx = (prepared.position.x - pivot.x) * factor * 100 / prepared.scale_x
   local dy = (prepared.position.y - pivot.y) * factor * 100 / prepared.scale_y
   local drawing = prepared.drawing
   if math.abs(dx) >= EPSILON or math.abs(dy) >= EPSILON then
     local err
-    drawing, err = rebase_path(prepared, pivot)
+    drawing, err = rebasePath(prepared, pivot)
     if not (drawing) then
       return nil, err
     end
   end
-  local prefix, err = replace_position(prepared.prefix, pivot, prepared.position.pattern)
+  local prefix, err = replacePosition(prepared.prefix, pivot, prepared.position.pattern)
   if not (prefix) then
     return nil, err
   end
   return prefix .. drawing .. prepared.suffix
 end
-local style_map = ShapeCore.styleMaps
-local selection_indices = ShapeCore.selectionIndices
-local unify_selection
-unify_selection = function(subs, sel, active_line)
-  local indices = selection_indices(subs, sel)
+local styleMap = ShapeCore.styleMaps
+local selectionIndices = ShapeCore.selectionIndices
+local unifySelection
+unifySelection = function(subs, sel, activeLine)
+  local indices = selectionIndices(subs, sel)
   if #indices < 2 then
     return nil, tr("sh_unify_err_selection", "Select at least two drawing lines.")
   end
-  local styles, styles_folded = style_map(subs)
+  local styles, stylesFolded = styleMap(subs)
   local prepared = { }
   for _index_0 = 1, #indices do
     local index = indices[_index_0]
     local line = subs[index]
     local style_name = tostring(line.style or "")
-    local style = ShapeCore.styleFor(styles, styles_folded, style_name)
+    local style = ShapeCore.styleFor(styles, stylesFolded, style_name)
     if not (style) then
       return nil, tr("sh_err_style", "Line %d: style '%s' was not found.", index, style_name)
     end
-    local data, err = prepare_text(line.text, style)
+    local data, err = prepareText(line.text, style)
     if not (data) then
       return nil, tr("sh_err_line", "Line %d: %s", index, err)
     end
@@ -4994,11 +4448,11 @@ unify_selection = function(subs, sel, active_line)
     }
   end
   local reference = prepared[1]
-  active_line = tonumber(active_line)
-  if active_line then
+  activeLine = tonumber(activeLine)
+  if activeLine then
     for _index_0 = 1, #prepared do
       local item = prepared[_index_0]
-      if item.index == active_line then
+      if item.index == activeLine then
         reference = item
         break
       end
@@ -5011,12 +4465,12 @@ unify_selection = function(subs, sel, active_line)
   local updates = { }
   for _index_0 = 1, #prepared do
     local item = prepared[_index_0]
-    local new_text, err = unify_prepared(item.data, pivot)
-    if not (new_text) then
+    local newText, err = unifyPrepared(item.data, pivot)
+    if not (newText) then
       return nil, tr("sh_err_line", "Line %d: %s", item.index, err)
     end
-    local line = copy_line(item.line)
-    line.text = new_text
+    local line = copyLine(item.line)
+    line.text = newText
     updates[#updates + 1] = {
       index = item.index,
       line = line
@@ -5024,6 +4478,7 @@ unify_selection = function(subs, sel, active_line)
   end
   for _index_0 = 1, #updates do
     local update = updates[_index_0]
+    LineOps.checkCancelled()
     subs[update.index] = update.line
   end
   return {
@@ -5033,55 +4488,46 @@ unify_selection = function(subs, sel, active_line)
   }
 end
 local main
-main = function(subs, sel, active_line, context)
-  set_context(context)
-  local result, err = unify_selection(subs, sel, active_line)
+main = function(subs, sel, activeLine, context)
+  setContext(context)
+  local result, err = Rhea.Lines.atomic(subs, function() return unifySelection(subs, sel, activeLine) end)
   if not (result) then
     return sel, false, err
   end
   if context and context.undo then
     context.undo("sh_undo_unify", "Rhea Signs: unify shape positions")
   elseif aegisub and aegisub.set_undo_point then
-    aegisub.set_undo_point(script_name)
+    aegisub.set_undo_point(undoName)
   end
   return result.selection, true, result
 end
 return {
-  name = script_name,
-  description = script_description,
-  version = script_version,
-  set_context = set_context,
-  prepare_text = prepare_text,
-  shift_path = shift_path,
-  unify_prepared = unify_prepared,
-  unify_selection = unify_selection,
+  setContext = setContext,
+  prepareText = prepareText,
+  shiftPath = shiftPath,
+  unifyPrepared = unifyPrepared,
+  unifySelection = unifySelection,
   main = main
 }
 end)()
 local Perimeter = (function()
-local script_name = "Place Shapes on Perimeter"
-local script_description = "Repeats multilayer units along the true contour of an ASS drawing"
-local script_author = "Kiter"
-local script_version = "1.3.0"
-local ShapeCore = assert(RheaFoundation and RheaFoundation.Shapes)
+local undoName = "Place Shapes on Perimeter"
 local EPSILON = ShapeCore.epsilon
-local CURVE_TOLERANCE = 0.01
-local MAX_CURVE_DEPTH = 18
-local MAX_OUTPUT_LINES = 4000
-local CORNER_EPSILON = 0.00001
-local MAX_CUSTOM_PERIOD = 16
-local current_context = nil
+local curveTolerance = 0.01
+local maxCurveDepth = 18
+local cornerEpsilon = 0.00001
+local currentContext = nil
 local tr
 tr = function(key, fallback, ...)
-  return ShapeCore.translate(current_context, key, fallback, ...)
+  return ShapeCore.translate(currentContext, key, fallback, ...)
 end
-local set_context
-set_context = function(context)
-  current_context = context or { }
+local setContext
+setContext = function(context)
+  currentContext = context or { }
 end
 local finite = ShapeCore.finite
-local format_number = ShapeCore.formatNumber
-local copy_line = Rhea.cloneLine
+local formatNumber = ShapeCore.formatNumber
+local copyLine = Rhea.cloneLine
 local point
 point = function(x, y)
   return {
@@ -5089,8 +4535,8 @@ point = function(x, y)
     y = y
   }
 end
-local same_point
-same_point = function(a, b, epsilon)
+local samePoint
+samePoint = function(a, b, epsilon)
   if epsilon == nil then
     epsilon = EPSILON
   end
@@ -5104,7 +4550,7 @@ end
 local normalize
 normalize = function(x, y)
   local length = math.sqrt(x * x + y * y)
-  if not (length > EPSILON) then
+  if not finite(length) or length <= EPSILON then
     return nil
   end
   return {
@@ -5113,22 +4559,22 @@ normalize = function(x, y)
   }
 end
 local atan2 = RheaFoundation.atan2
-local split_shape_text
-split_shape_text = function(text)
+local splitShapeText
+splitShapeText = function(text)
   return ShapeCore.splitText(text, tr, "The drawing needs leading tags with \\pos and \\pN.")
 end
-local has_plain_tag = ShapeCore.hasPlainTag
-local last_numeric_tag = ShapeCore.lastNumericTag
-local parse_position
-parse_position = function(prefix)
+local hasPlainTag = ShapeCore.hasPlainTag
+local lastNumericTag = ShapeCore.lastNumericTag
+local parsePosition
+parsePosition = function(prefix)
   return ShapeCore.parsePosition(prefix, tr)
 end
-local tokenize_path
-tokenize_path = function(path)
+local tokenizePath
+tokenizePath = function(path)
   return ShapeCore.tokenizePath(path, tr)
 end
-local command_groups
-command_groups = function(tokens)
+local commandGroups
+commandGroups = function(tokens)
   local groups, current = { }, nil
   for _index_0 = 1, #tokens do
     local token = tokens[_index_0]
@@ -5147,16 +4593,16 @@ command_groups = function(tokens)
   end
   return groups
 end
-local line_segment
-line_segment = function(a, b)
+local lineSegment
+lineSegment = function(a, b)
   return {
     kind = "line",
     p0 = a,
     p1 = b
   }
 end
-local cubic_segment
-cubic_segment = function(a, b, c, d)
+local cubicSegment
+cubicSegment = function(a, b, c, d)
   return {
     kind = "cubic",
     p0 = a,
@@ -5165,82 +4611,82 @@ cubic_segment = function(a, b, c, d)
     p3 = d
   }
 end
-local parse_contours
-parse_contours = function(path)
-  local tokens, token_err = tokenize_path(path)
+local parseContours
+parseContours = function(path)
+  local tokens, tokenErr = tokenizePath(path)
   if not (tokens) then
-    return nil, token_err
+    return nil, tokenErr
   end
-  local groups, group_err = command_groups(tokens)
+  local groups, groupErr = commandGroups(tokens)
   if not (groups) then
-    return nil, group_err
+    return nil, groupErr
   end
-  local contours, current, current_point = { }, nil, nil
-  local finish_contour
-  finish_contour = function()
+  local contours, current, currentPoint = { }, nil, nil
+  local finishContour
+  finishContour = function()
     if not (current) then
       return
     end
-    if current.closed and current_point and not same_point(current_point, current.start) then
-      current.segments[#current.segments + 1] = line_segment(current_point, current.start)
+    if current.closed and currentPoint and not samePoint(currentPoint, current.start) then
+      current.segments[#current.segments + 1] = lineSegment(currentPoint, current.start)
     end
     contours[#contours + 1] = current
-    current, current_point = nil, nil
+    current, currentPoint = nil, nil
   end
   for _index_0 = 1, #groups do
     local group = groups[_index_0]
     local command, values = group.command, group.values
     if command == "m" or command == "n" then
-      if not (#values == 2) then
+      if #values ~= 2 then
         return nil, tr("sh_perimeter_err_move_pair", "Each %s command must contain exactly one coordinate pair.", command)
       end
-      finish_contour()
-      current_point = point(values[1], values[2])
+      finishContour()
+      currentPoint = point(values[1], values[2])
       current = {
-        start = current_point,
+        start = currentPoint,
         segments = { },
         closed = command == "m"
       }
     elseif command == "l" then
-      if not (current and current_point) then
+      if not (current and currentPoint) then
         return nil, tr("sh_perimeter_err_line_start", "An l command appears before the initial m command.")
       end
       if not (#values >= 2 and #values % 2 == 0) then
         return nil, tr("sh_perimeter_err_line_pairs", "The l command requires coordinate pairs.")
       end
       for index = 1, #values, 2 do
-        local next_point = point(values[index], values[index + 1])
-        if not (same_point(current_point, next_point)) then
-          current.segments[#current.segments + 1] = line_segment(current_point, next_point)
+        local nextPoint = point(values[index], values[index + 1])
+        if not (samePoint(currentPoint, nextPoint)) then
+          current.segments[#current.segments + 1] = lineSegment(currentPoint, nextPoint)
         end
-        current_point = next_point
+        currentPoint = nextPoint
       end
     elseif command == "b" then
-      if not (current and current_point) then
+      if not (current and currentPoint) then
         return nil, tr("sh_perimeter_err_bezier_start", "A b command appears before the initial m command.")
       end
       if not (#values >= 6 and #values % 6 == 0) then
         return nil, tr("sh_perimeter_err_bezier_groups", "The b command requires groups of six coordinates.")
       end
       for index = 1, #values, 6 do
-        local control_a = point(values[index], values[index + 1])
-        local control_b = point(values[index + 2], values[index + 3])
-        local next_point = point(values[index + 4], values[index + 5])
-        current.segments[#current.segments + 1] = cubic_segment(current_point, control_a, control_b, next_point)
-        current_point = next_point
+        local controlA = point(values[index], values[index + 1])
+        local controlB = point(values[index + 2], values[index + 3])
+        local nextPoint = point(values[index + 4], values[index + 5])
+        current.segments[#current.segments + 1] = cubicSegment(currentPoint, controlA, controlB, nextPoint)
+        currentPoint = nextPoint
       end
     else
       return nil, tr("sh_perimeter_err_spline", "Spline commands s/p/c must first be converted to lines or b Beziers.")
     end
   end
-  finish_contour()
+  finishContour()
   if #contours == 0 then
     return nil, tr("sh_perimeter_err_no_contour", "No valid contour was found.")
   end
   return contours
 end
-local new_bounds
-new_bounds = function()
+local newBounds
+newBounds = function()
   return {
     l = math.huge,
     t = math.huge,
@@ -5248,23 +4694,23 @@ new_bounds = function()
     b = -math.huge
   }
 end
-local include_point
-include_point = function(bounds, p)
+local includePoint
+includePoint = function(bounds, p)
   bounds.l = math.min(bounds.l, p.x)
   bounds.t = math.min(bounds.t, p.y)
   bounds.r = math.max(bounds.r, p.x)
   bounds.b = math.max(bounds.b, p.y)
 end
-local cubic_point
-cubic_point = function(segment, t)
+local cubicPoint
+cubicPoint = function(segment, t)
   return RheaFoundation.bezierPoint(t, segment.p0, segment.p1, segment.p2, segment.p3)
 end
-local cubic_derivative
-cubic_derivative = function(segment, t)
+local cubicDerivative
+cubicDerivative = function(segment, t)
   return RheaFoundation.bezierDerivative(t, segment.p0, segment.p1, segment.p2, segment.p3)
 end
-local quadratic_roots
-quadratic_roots = function(a, b, c)
+local quadraticRoots
+quadraticRoots = function(a, b, c)
   local roots = { }
   if math.abs(a) < EPSILON then
     if math.abs(b) >= EPSILON then
@@ -5283,45 +4729,45 @@ quadratic_roots = function(a, b, c)
   end
   return roots
 end
-local cubic_extrema
-cubic_extrema = function(p0, p1, p2, p3)
+local cubicExtrema
+cubicExtrema = function(p0, p1, p2, p3)
   local a = -p0 + 3 * p1 - 3 * p2 + p3
   local b = 3 * p0 - 6 * p1 + 3 * p2
   local c = -3 * p0 + 3 * p1
-  return quadratic_roots(3 * a, 2 * b, c)
+  return quadraticRoots(3 * a, 2 * b, c)
 end
-local include_segment_bounds
-include_segment_bounds = function(bounds, segment)
-  include_point(bounds, segment.p0)
+local includeSegmentBounds
+includeSegmentBounds = function(bounds, segment)
+  includePoint(bounds, segment.p0)
   if segment.kind == "line" then
-    include_point(bounds, segment.p1)
+    includePoint(bounds, segment.p1)
     return
   end
-  include_point(bounds, segment.p3)
-  local _list_0 = cubic_extrema(segment.p0.x, segment.p1.x, segment.p2.x, segment.p3.x)
+  includePoint(bounds, segment.p3)
+  local _list_0 = cubicExtrema(segment.p0.x, segment.p1.x, segment.p2.x, segment.p3.x)
   for _index_0 = 1, #_list_0 do
     local t = _list_0[_index_0]
     if t > EPSILON and t < 1 - EPSILON then
-      include_point(bounds, cubic_point(segment, t))
+      includePoint(bounds, cubicPoint(segment, t))
     end
   end
-  local _list_1 = cubic_extrema(segment.p0.y, segment.p1.y, segment.p2.y, segment.p3.y)
+  local _list_1 = cubicExtrema(segment.p0.y, segment.p1.y, segment.p2.y, segment.p3.y)
   for _index_0 = 1, #_list_1 do
     local t = _list_1[_index_0]
     if t > EPSILON and t < 1 - EPSILON then
-      include_point(bounds, cubic_point(segment, t))
+      includePoint(bounds, cubicPoint(segment, t))
     end
   end
 end
-local path_bounds
-path_bounds = function(contours)
-  local bounds = new_bounds()
+local pathBounds
+pathBounds = function(contours)
+  local bounds = newBounds()
   for _index_0 = 1, #contours do
     local contour = contours[_index_0]
     local _list_0 = contour.segments
     for _index_1 = 1, #_list_0 do
       local segment = _list_0[_index_1]
-      include_segment_bounds(bounds, segment)
+      includeSegmentBounds(bounds, segment)
     end
   end
   if bounds.l == math.huge then
@@ -5331,8 +4777,8 @@ path_bounds = function(contours)
   bounds.height = bounds.b - bounds.t
   return bounds
 end
-local alignment_factors
-alignment_factors = function(alignment)
+local alignmentFactors
+alignmentFactors = function(alignment)
   alignment = tonumber(alignment)
   if not (alignment and alignment >= 1 and alignment <= 9) then
     return nil
@@ -5355,20 +4801,20 @@ alignment_factors = function(alignment)
   end
   return ax, ay
 end
-local transform_segment
-transform_segment = function(segment, transform)
+local transformSegment
+transformSegment = function(segment, transform)
   local map
   map = function(p)
     return point(transform.ox + p.x * transform.sx, transform.oy + p.y * transform.sy)
   end
   if segment.kind == "line" then
-    return line_segment(map(segment.p0), map(segment.p1))
+    return lineSegment(map(segment.p0), map(segment.p1))
   else
-    return cubic_segment(map(segment.p0), map(segment.p1), map(segment.p2), map(segment.p3))
+    return cubicSegment(map(segment.p0), map(segment.p1), map(segment.p2), map(segment.p3))
   end
 end
-local transform_contours
-transform_contours = function(contours, transform)
+local transformContours
+transformContours = function(contours, transform)
   local output = { }
   for _index_0 = 1, #contours do
     local contour = contours[_index_0]
@@ -5380,20 +4826,20 @@ transform_contours = function(contours, transform)
     local _list_0 = contour.segments
     for _index_1 = 1, #_list_0 do
       local segment = _list_0[_index_1]
-      mapped.segments[#mapped.segments + 1] = transform_segment(segment, transform)
+      mapped.segments[#mapped.segments + 1] = transformSegment(segment, transform)
     end
     output[#output + 1] = mapped
   end
   return output
 end
-local prepare_shape
-prepare_shape = function(text, style)
+local prepareShape
+prepareShape = function(text, style)
   if style == nil then
     style = { }
   end
-  local parts, parts_err = split_shape_text(text)
+  local parts, partsErr = splitShapeText(text)
   if not (parts) then
-    return nil, parts_err
+    return nil, partsErr
   end
   local prefix = parts.prefix
   local _list_0 = {
@@ -5410,49 +4856,49 @@ prepare_shape = function(text, style)
   }
   for _index_0 = 1, #_list_0 do
     local tag = _list_0[_index_0]
-    if has_plain_tag(prefix, tag) then
+    if hasPlainTag(prefix, tag) then
       return nil, tr("sh_perimeter_err_tag", "\\%s is not supported in input geometry.", tag)
     end
   end
-  local position, pos_err = parse_position(prefix)
+  local position, posErr = parsePosition(prefix)
   if not (position) then
-    return nil, pos_err
+    return nil, posErr
   end
-  local drawing_scale = last_numeric_tag(prefix, "p")
-  if not (drawing_scale and drawing_scale == math.floor(drawing_scale) and drawing_scale >= 1 and drawing_scale <= 10) then
+  local drawingScale = lastNumericTag(prefix, "p")
+  if not (drawingScale and drawingScale == math.floor(drawingScale) and drawingScale >= 1 and drawingScale <= 10) then
     return nil, tr("sh_err_drawing_scale", "Drawing mode must be \\p1 or higher.")
   end
-  local scale_x = last_numeric_tag(prefix, "fscx") or finite(style.scale_x) or 100
-  local scale_y = last_numeric_tag(prefix, "fscy") or finite(style.scale_y) or 100
-  if not (scale_x > 0 and scale_y > 0) then
+  local scaleX = lastNumericTag(prefix, "fscx") or finite(style.scale_x) or 100
+  local scale_y = lastNumericTag(prefix, "fscy") or finite(style.scale_y) or 100
+  if not (scaleX > 0 and scale_y > 0) then
     return nil, tr("sh_err_positive_scale", "\\fscx and \\fscy must be greater than zero.")
   end
   if math.abs(finite(style.angle) or 0) >= EPSILON then
     return nil, tr("sh_perimeter_err_style_rotation", "The style has rotation; use unrotated geometry.")
   end
-  local alignment = last_numeric_tag(prefix, "an") or finite(style.align)
-  local ax, ay = alignment_factors(alignment)
+  local alignment = lastNumericTag(prefix, "an") or finite(style.align)
+  local ax, ay = alignmentFactors(alignment)
   if not (ax and ay) then
     return nil, tr("sh_perimeter_err_alignment", "An effective \\an1..\\an9 could not be determined.")
   end
-  local contours, contour_err = parse_contours(parts.drawing)
+  local contours, contourErr = parseContours(parts.drawing)
   if not (contours) then
-    return nil, contour_err
+    return nil, contourErr
   end
-  local raw_bounds = path_bounds(contours)
-  if not (raw_bounds and raw_bounds.width > EPSILON and raw_bounds.height > EPSILON) then
+  local rawBounds = pathBounds(contours)
+  if not (rawBounds and rawBounds.width > EPSILON and rawBounds.height > EPSILON) then
     return nil, tr("sh_perimeter_err_extent", "The drawing has no geometric extent.")
   end
-  local factor = 2 ^ (drawing_scale - 1)
-  local sx, sy = scale_x / (100 * factor), scale_y / (100 * factor)
+  local factor = 2 ^ (drawingScale - 1)
+  local sx, sy = scaleX / (100 * factor), scale_y / (100 * factor)
   local transform = {
     sx = sx,
     sy = sy,
-    ox = position.x - raw_bounds.width * sx * ax,
-    oy = position.y - raw_bounds.height * sy * ay
+    ox = position.x - rawBounds.width * sx * ax,
+    oy = position.y - rawBounds.height * sy * ay
   }
-  local screen_contours = transform_contours(contours, transform)
-  local screen_bounds = path_bounds(screen_contours)
+  local screenContours = transformContours(contours, transform)
+  local screenBounds = pathBounds(screenContours)
   return {
     text = tostring(text),
     prefix = prefix,
@@ -5460,33 +4906,33 @@ prepare_shape = function(text, style)
     suffix = parts.suffix,
     position = position,
     alignment = alignment,
-    drawing_scale = drawing_scale,
-    scale_x = scale_x,
+    drawing_scale = drawingScale,
+    scale_x = scaleX,
     scale_y = scale_y,
     contours = contours,
-    raw_bounds = raw_bounds,
-    screen_contours = screen_contours,
-    screen_bounds = screen_bounds
+    raw_bounds = rawBounds,
+    screen_contours = screenContours,
+    screen_bounds = screenBounds
   }
 end
-local lerp_point
-lerp_point = function(a, b, t)
+local lerpPoint
+lerpPoint = function(a, b, t)
   return point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 end
-local split_cubic
-split_cubic = function(segment)
-  local p01 = lerp_point(segment.p0, segment.p1, 0.5)
-  local p12 = lerp_point(segment.p1, segment.p2, 0.5)
-  local p23 = lerp_point(segment.p2, segment.p3, 0.5)
-  local p012 = lerp_point(p01, p12, 0.5)
-  local p123 = lerp_point(p12, p23, 0.5)
-  local middle = lerp_point(p012, p123, 0.5)
-  return cubic_segment(segment.p0, p01, p012, middle), cubic_segment(middle, p123, p23, segment.p3)
+local splitCubic
+splitCubic = function(segment)
+  local p01 = lerpPoint(segment.p0, segment.p1, 0.5)
+  local p12 = lerpPoint(segment.p1, segment.p2, 0.5)
+  local p23 = lerpPoint(segment.p2, segment.p3, 0.5)
+  local p012 = lerpPoint(p01, p12, 0.5)
+  local p123 = lerpPoint(p12, p23, 0.5)
+  local middle = lerpPoint(p012, p123, 0.5)
+  return cubicSegment(segment.p0, p01, p012, middle), cubicSegment(middle, p123, p23, segment.p3)
 end
-local flatten_cubic
-flatten_cubic = function(segment, tolerance)
+local flattenCubic
+flattenCubic = function(segment, tolerance)
   if tolerance == nil then
-    tolerance = CURVE_TOLERANCE
+    tolerance = curveTolerance
   end
   local samples = {
     {
@@ -5498,14 +4944,14 @@ flatten_cubic = function(segment, tolerance)
   recurse = function(curve, t0, t1, depth)
     local chord = distance(curve.p0, curve.p3)
     local polygon = distance(curve.p0, curve.p1) + distance(curve.p1, curve.p2) + distance(curve.p2, curve.p3)
-    if depth >= MAX_CURVE_DEPTH or polygon - chord <= tolerance then
+    if depth >= maxCurveDepth or polygon - chord <= tolerance then
       samples[#samples + 1] = {
         t = t1,
         p = curve.p3
       }
       return
     end
-    local left, right = split_cubic(curve)
+    local left, right = splitCubic(curve)
     local middle = (t0 + t1) * 0.5
     recurse(left, t0, middle, depth + 1)
     return recurse(right, middle, t1, depth + 1)
@@ -5513,24 +4959,24 @@ flatten_cubic = function(segment, tolerance)
   recurse(segment, 0, 1, 0)
   return samples
 end
-local segment_start_tangent
-segment_start_tangent = function(segment)
+local segmentStartTangent
+segmentStartTangent = function(segment)
   if segment.kind == "line" then
     return normalize(segment.p1.x - segment.p0.x, segment.p1.y - segment.p0.y)
   end
-  local tangent = cubic_derivative(segment, 0)
+  local tangent = cubicDerivative(segment, 0)
   return normalize(tangent.x, tangent.y) or normalize(segment.p3.x - segment.p0.x, segment.p3.y - segment.p0.y)
 end
-local segment_end_tangent
-segment_end_tangent = function(segment)
+local segmentEndTangent
+segmentEndTangent = function(segment)
   if segment.kind == "line" then
     return normalize(segment.p1.x - segment.p0.x, segment.p1.y - segment.p0.y)
   end
-  local tangent = cubic_derivative(segment, 1)
+  local tangent = cubicDerivative(segment, 1)
   return normalize(tangent.x, tangent.y) or normalize(segment.p3.x - segment.p0.x, segment.p3.y - segment.p0.y)
 end
-local build_arc
-build_arc = function(contour)
+local buildArc
+buildArc = function(contour)
   if not (contour.closed) then
     return nil, tr("sh_perimeter_err_closed", "The perimeter contour must be closed.")
   end
@@ -5554,9 +5000,9 @@ build_arc = function(contour)
         total = total + length
       end
     else
-      local samples = flatten_cubic(segment)
-      for sample_index = 2, #samples do
-        local a, b = samples[sample_index - 1], samples[sample_index]
+      local samples = flattenCubic(segment)
+      for sampleIndex = 2, #samples do
+        local a, b = samples[sampleIndex - 1], samples[sampleIndex]
         local length = distance(a.p, b.p)
         if length > EPSILON then
           pieces[#pieces + 1] = {
@@ -5574,15 +5020,15 @@ build_arc = function(contour)
       end
     end
   end
-  if not (total > EPSILON) then
+  if not finite(total) or total <= EPSILON then
     return nil, tr("sh_perimeter_err_zero_length", "The perimeter contour has zero length.")
   end
   local boundaries = { }
   local count = #contour.segments
   for index, segment in ipairs(contour.segments) do
     local previous = contour.segments[((index - 2) % count) + 1]
-    local incoming = segment_end_tangent(previous)
-    local outgoing = segment_start_tangent(segment)
+    local incoming = segmentEndTangent(previous)
+    local outgoing = segmentStartTangent(segment)
     boundaries[#boundaries + 1] = {
       distance = starts[index],
       point = segment.p0,
@@ -5597,8 +5043,8 @@ build_arc = function(contour)
     length = total
   }
 end
-local arc_area
-arc_area = function(arc)
+local arcArea
+arcArea = function(arc)
   local points = { }
   points[#points + 1] = arc.pieces[1].p0
   local _list_0 = arc.pieces
@@ -5613,8 +5059,8 @@ arc_area = function(arc)
   end
   return area * 0.5
 end
-local arc_points
-arc_points = function(arc)
+local arcPoints
+arcPoints = function(arc)
   local points = {
     arc.pieces[1].p0
   }
@@ -5625,50 +5071,50 @@ arc_points = function(arc)
   end
   return points
 end
-local arc_bounds
-arc_bounds = function(arc)
-  local bounds = new_bounds()
-  local _list_0 = arc_points(arc)
+local arcBounds
+arcBounds = function(arc)
+  local bounds = newBounds()
+  local _list_0 = arcPoints(arc)
   for _index_0 = 1, #_list_0 do
     local p = _list_0[_index_0]
-    include_point(bounds, p)
+    includePoint(bounds, p)
   end
   return bounds
 end
-local point_on_segment
-point_on_segment = function(p, a, b)
+local pointOnSegment
+pointOnSegment = function(p, a, b)
   local dx, dy = b.x - a.x, b.y - a.y
   local cross = dx * (p.y - a.y) - dy * (p.x - a.x)
-  if math.abs(cross) > CORNER_EPSILON * math.max(1, math.abs(dx) + math.abs(dy)) then
+  if math.abs(cross) > cornerEpsilon * math.max(1, math.abs(dx) + math.abs(dy)) then
     return false
   end
   local dot = (p.x - a.x) * dx + (p.y - a.y) * dy
-  return dot >= -CORNER_EPSILON and dot <= dx * dx + dy * dy + CORNER_EPSILON
+  return dot >= -cornerEpsilon and dot <= dx * dx + dy * dy + cornerEpsilon
 end
-local point_in_arc
-point_in_arc = function(p, arc)
-  local points = arc_points(arc)
+local pointInArc
+pointInArc = function(p, arc)
+  local points = arcPoints(arc)
   local inside = false
   for index = 1, #points - 1 do
     local a, b = points[index], points[index + 1]
-    if point_on_segment(p, a, b) then
+    if pointOnSegment(p, a, b) then
       return -1
     end
     if (a.y > p.y) ~= (b.y > p.y) then
-      local crossing_x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-      if crossing_x > p.x then
+      local crossingX = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+      if crossingX > p.x then
         inside = not inside
       end
     end
   end
-  if not same_point(points[#points], points[1]) then
+  if not samePoint(points[#points], points[1]) then
     local a, b = points[#points], points[1]
-    if point_on_segment(p, a, b) then
+    if pointOnSegment(p, a, b) then
       return -1
     end
     if (a.y > p.y) ~= (b.y > p.y) then
-      local crossing_x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-      if crossing_x > p.x then
+      local crossingX = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+      if crossingX > p.x then
         inside = not inside
       end
     end
@@ -5679,43 +5125,43 @@ point_in_arc = function(p, arc)
     return 0
   end
 end
-local arc_contains
-arc_contains = function(outer, inner)
-  if not (math.abs(outer.area) > math.abs(inner.area) + EPSILON) then
+local arcContains
+arcContains = function(outer, inner)
+  if not finite(outer.area) or not finite(inner.area) or math.abs(outer.area) <= math.abs(inner.area) + EPSILON then
     return false
   end
-  if inner.bounds.l < outer.bounds.l - CORNER_EPSILON or inner.bounds.t < outer.bounds.t - CORNER_EPSILON then
+  if inner.bounds.l < outer.bounds.l - cornerEpsilon or inner.bounds.t < outer.bounds.t - cornerEpsilon then
     return false
   end
-  if inner.bounds.r > outer.bounds.r + CORNER_EPSILON or inner.bounds.b > outer.bounds.b + CORNER_EPSILON then
+  if inner.bounds.r > outer.bounds.r + cornerEpsilon or inner.bounds.b > outer.bounds.b + cornerEpsilon then
     return false
   end
-  local strictly_inside = false
-  local _list_0 = arc_points(inner)
+  local strictlyInside = false
+  local _list_0 = arcPoints(inner)
   for _index_0 = 1, #_list_0 do
     local p = _list_0[_index_0]
-    local state = point_in_arc(p, outer)
+    local state = pointInArc(p, outer)
     if state == 0 then
       return false
     end
     if state == 1 then
-      strictly_inside = true
+      strictlyInside = true
     end
   end
-  return strictly_inside
+  return strictlyInside
 end
-local outer_arcs
-outer_arcs = function(contours, include_holes)
-  if include_holes == nil then
-    include_holes = false
+local outerArcs
+outerArcs = function(contours, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
   local arcs = { }
   for source_index, contour in ipairs(contours) do
     if contour.closed then
-      local arc = build_arc(contour)
+      local arc = buildArc(contour)
       if arc then
-        arc.area = arc_area(arc)
-        arc.bounds = arc_bounds(arc)
+        arc.area = arcArea(arc)
+        arc.bounds = arcBounds(arc)
         arc.source_index = source_index
         arcs[#arcs + 1] = arc
       end
@@ -5727,12 +5173,12 @@ outer_arcs = function(contours, include_holes)
   local selected = { }
   for _index_0 = 1, #arcs do
     local candidate = arcs[_index_0]
-    local containers, outside_winding = 0, 0
+    local containers, outsideWinding = 0, 0
     for _index_1 = 1, #arcs do
       local container = arcs[_index_1]
-      if container ~= candidate and arc_contains(container, candidate) then
+      if container ~= candidate and arcContains(container, candidate) then
         containers = containers + 1
-        outside_winding = outside_winding + (function()
+        outsideWinding = outsideWinding + (function()
           if container.area > 0 then
             return 1
           else
@@ -5741,17 +5187,17 @@ outer_arcs = function(contours, include_holes)
         end)()
       end
     end
-    local own_winding
+    local ownWinding
     if candidate.area > 0 then
-      own_winding = 1
+      ownWinding = 1
     else
-      own_winding = -1
+      ownWinding = -1
     end
-    local inside_winding = outside_winding + own_winding
+    local insideWinding = outsideWinding + ownWinding
     candidate.depth = containers
-    candidate.visible_boundary = (outside_winding == 0) ~= (inside_winding == 0)
-    candidate.is_hole = candidate.visible_boundary and outside_winding ~= 0 and inside_winding == 0
-    if candidate.visible_boundary and (include_holes or not candidate.is_hole) then
+    candidate.visible_boundary = (outsideWinding == 0) ~= (insideWinding == 0)
+    candidate.is_hole = candidate.visible_boundary and outsideWinding ~= 0 and insideWinding == 0
+    if candidate.visible_boundary and (includeHoles or not candidate.is_hole) then
       selected[#selected + 1] = candidate
     end
   end
@@ -5760,32 +5206,32 @@ outer_arcs = function(contours, include_holes)
   end
   return selected
 end
-local outer_arc
-outer_arc = function(contours)
-  local arcs, arcs_err = outer_arcs(contours)
+local outerArc
+outerArc = function(contours)
+  local arcs, arcsErr = outerArcs(contours)
   if not (arcs) then
-    return nil, arcs_err
+    return nil, arcsErr
   end
-  local best, best_area = nil, -math.huge
+  local best, bestArea = nil, -math.huge
   for _index_0 = 1, #arcs do
     local arc = arcs[_index_0]
     local area = math.abs(arc.area)
-    if area > best_area then
-      best, best_area = arc, area
+    if area > bestArea then
+      best, bestArea = arc, area
     end
   end
   return best
 end
-local corner_tangent
-corner_tangent = function(incoming, outgoing)
+local cornerTangent
+cornerTangent = function(incoming, outgoing)
   if not (incoming and outgoing) then
     return outgoing or incoming
   end
   local bisector = normalize(incoming.x + outgoing.x, incoming.y + outgoing.y)
   return bisector or outgoing
 end
-local arc_point
-arc_point = function(arc, target)
+local arcPoint
+arcPoint = function(arc, target)
   local length = arc.length
   target = target % length
   if target < 0 then
@@ -5796,10 +5242,10 @@ arc_point = function(arc, target)
     local boundary = _list_0[_index_0]
     local delta = math.abs(target - boundary.distance)
     delta = math.min(delta, length - delta)
-    if delta <= CORNER_EPSILON then
+    if delta <= cornerEpsilon then
       return {
         point = boundary.point,
-        tangent = corner_tangent(boundary.incoming, boundary.outgoing),
+        tangent = cornerTangent(boundary.incoming, boundary.outgoing),
         distance = target,
         corner = true
       }
@@ -5820,15 +5266,15 @@ arc_point = function(arc, target)
   if piece.kind == "line" then
     local tangent = normalize(piece.p1.x - piece.p0.x, piece.p1.y - piece.p0.y)
     return {
-      point = lerp_point(piece.p0, piece.p1, ratio),
+      point = lerpPoint(piece.p0, piece.p1, ratio),
       tangent = tangent,
       distance = target,
       corner = false
     }
   end
   local t = piece.t0 + (piece.t1 - piece.t0) * ratio
-  local position = cubic_point(piece.segment, t)
-  local derivative = cubic_derivative(piece.segment, t)
+  local position = cubicPoint(piece.segment, t)
+  local derivative = cubicDerivative(piece.segment, t)
   local tangent = normalize(derivative.x, derivative.y) or normalize(piece.p1.x - piece.p0.x, piece.p1.y - piece.p0.y)
   return {
     point = position,
@@ -5838,16 +5284,16 @@ arc_point = function(arc, target)
     t = t
   }
 end
-local style_map = ShapeCore.styleMaps
-local selection_indices = ShapeCore.selectionIndices
-local prepare_line
-prepare_line = function(line, index, styles, folded)
+local styleMap = ShapeCore.styleMaps
+local selectionIndices = ShapeCore.selectionIndices
+local prepareLine
+prepareLine = function(line, index, styles, folded)
   local style_name = tostring(line.style or "")
   local style = ShapeCore.styleFor(styles, folded, style_name)
   if not (style) then
     return nil, tr("sh_err_style", "Line %d: style '%s' was not found.", index, style_name)
   end
-  local shape, err = prepare_shape(line.text, style)
+  local shape, err = prepareShape(line.text, style)
   if not (shape) then
     return nil, tr("sh_err_line", "Line %d: %s", index, err)
   end
@@ -5857,31 +5303,31 @@ prepare_line = function(line, index, styles, folded)
     shape = shape
   }
 end
-local extend_bounds
-extend_bounds = function(target, source)
+local extendBounds
+extendBounds = function(target, source)
   target.l = math.min(target.l, source.l)
   target.t = math.min(target.t, source.t)
   target.r = math.max(target.r, source.r)
   target.b = math.max(target.b, source.b)
 end
-local analyze_selection
-analyze_selection = function(subs, sel)
-  local indices = selection_indices(subs, sel)
+local analyzeSelection
+analyzeSelection = function(subs, sel)
+  local indices = selectionIndices(subs, sel)
   if #indices < 2 then
     return nil, tr("sh_perimeter_err_selection", "Select the base shape first, followed by at least one unit.")
   end
-  local styles, folded = style_map(subs)
-  local base, base_err = prepare_line(subs[indices[1]], indices[1], styles, folded)
+  local styles, folded = styleMap(subs)
+  local base, baseErr = prepareLine(subs[indices[1]], indices[1], styles, folded)
   if not (base) then
-    return nil, base_err
+    return nil, baseErr
   end
-  local all_arcs, arcs_err = outer_arcs(base.shape.screen_contours, true)
-  if not (all_arcs) then
-    return nil, tr("sh_perimeter_err_base_line", "Base line %d: %s", indices[1], arcs_err)
+  local allArcs, arcsErr = outerArcs(base.shape.screen_contours, true)
+  if not (allArcs) then
+    return nil, tr("sh_perimeter_err_base_line", "Base line %d: %s", indices[1], arcsErr)
   end
   local arcs, holes = { }, { }
-  for _index_0 = 1, #all_arcs do
-    local arc = all_arcs[_index_0]
+  for _index_0 = 1, #allArcs do
+    local arc = allArcs[_index_0]
     if arc.is_hole then
       holes[#holes + 1] = arc
     else
@@ -5894,12 +5340,12 @@ analyze_selection = function(subs, sel)
   local groups, order = { }, { }
   for offset = 2, #indices do
     local index = indices[offset]
-    local item, item_err = prepare_line(subs[index], index, styles, folded)
+    local item, itemErr = prepareLine(subs[index], index, styles, folded)
     if not (item) then
-      return nil, item_err
+      return nil, itemErr
     end
     local position = item.shape.position
-    local key = tostring(format_number(position.x)) .. ":" .. tostring(format_number(position.y))
+    local key = tostring(formatNumber(position.x)) .. ":" .. tostring(formatNumber(position.y))
     local group = groups[key]
     if not (group) then
       group = {
@@ -5909,7 +5355,7 @@ analyze_selection = function(subs, sel)
           y = position.y
         },
         lines = { },
-        bounds = new_bounds()
+        bounds = newBounds()
       }
       groups[key] = group
       order[#order + 1] = group
@@ -5918,43 +5364,43 @@ analyze_selection = function(subs, sel)
       return nil, tr("sh_perimeter_err_shared_pos", "All layers in a unit must share exactly the same \\pos.")
     end
     group.lines[#group.lines + 1] = item
-    extend_bounds(group.bounds, item.shape.screen_bounds)
+    extendBounds(group.bounds, item.shape.screen_bounds)
   end
   if #order == 0 then
     return nil, tr("sh_perimeter_err_no_units", "No units were detected after the base shape.")
   end
-  local pattern_width = 0
+  local patternWidth = 0
   for _index_0 = 1, #order do
     local group = order[_index_0]
     group.min_x = group.bounds.l - group.position.x
     group.max_x = group.bounds.r - group.position.x
     group.width = group.max_x - group.min_x
     group.height = group.bounds.b - group.bounds.t
-    if not (group.width > EPSILON) then
+    if not finite(group.width) or group.width <= EPSILON then
       return nil, tr("sh_perimeter_err_zero_width", "A unit has zero visible width.")
     end
-    pattern_width = pattern_width + group.width
+    patternWidth = patternWidth + group.width
   end
-  local perimeter_length, all_perimeter_length = 0, 0
+  local perimeterLength, allPerimeterLength = 0, 0
   for _index_0 = 1, #arcs do
     local arc = arcs[_index_0]
-    perimeter_length = perimeter_length + arc.length
+    perimeterLength = perimeterLength + arc.length
   end
-  for _index_0 = 1, #all_arcs do
-    local arc = all_arcs[_index_0]
-    all_perimeter_length = all_perimeter_length + arc.length
+  for _index_0 = 1, #allArcs do
+    local arc = allArcs[_index_0]
+    allPerimeterLength = allPerimeterLength + arc.length
   end
   return {
     indices = indices,
     base = base,
     arc = arcs[1],
     arcs = arcs,
-    all_arcs = all_arcs,
+    all_arcs = allArcs,
     holes = holes,
-    perimeter_length = perimeter_length,
-    all_perimeter_length = all_perimeter_length,
+    perimeter_length = perimeterLength,
+    all_perimeter_length = allPerimeterLength,
     units = order,
-    pattern_width = pattern_width,
+    pattern_width = patternWidth,
     template_indices = (function()
       local _accum_0 = { }
       local _len_0 = 1
@@ -5966,16 +5412,16 @@ analyze_selection = function(subs, sel)
     end)()
   }
 end
-local default_pattern
-default_pattern = function(analysis)
+local defaultPattern
+defaultPattern = function(analysis)
   local pattern = { }
   for index = 1, #analysis.units do
     pattern[#pattern + 1] = index
   end
   return pattern
 end
-local copy_pattern
-copy_pattern = function(source)
+local copyPattern
+copyPattern = function(source)
   local _accum_0 = { }
   local _len_0 = 1
   for _index_0 = 1, #source do
@@ -5985,31 +5431,31 @@ copy_pattern = function(source)
   end
   return _accum_0
 end
-local pattern_label
-pattern_label = function(pattern)
+local patternLabel
+patternLabel = function(pattern)
   return table.concat(pattern, " -> ")
 end
-local pattern_width
-pattern_width = function(analysis, pattern)
+local patternWidth
+patternWidth = function(analysis, pattern)
   if not (pattern and #pattern > 0) then
     return nil, tr("sh_perimeter_err_empty_period", "The period cannot be empty.")
   end
   local width = 0
   for _index_0 = 1, #pattern do
-    local unit_index = pattern[_index_0]
-    if not (unit_index == math.floor(unit_index) and analysis.units[unit_index]) then
+    local unitIndex = pattern[_index_0]
+    if not (unitIndex == math.floor(unitIndex) and analysis.units[unitIndex]) then
       return nil, tr("sh_perimeter_err_invalid_unit", "The period contains an invalid unit.")
     end
-    width = width + analysis.units[unit_index].width
+    width = width + analysis.units[unitIndex].width
   end
   return width
 end
-local perimeter_arcs
-perimeter_arcs = function(analysis, include_holes)
-  if include_holes == nil then
-    include_holes = false
+local perimeterArcs
+perimeterArcs = function(analysis, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
-  if include_holes and analysis.all_arcs then
+  if includeHoles and analysis.all_arcs then
     return analysis.all_arcs
   else
     return analysis.arcs or {
@@ -6017,22 +5463,19 @@ perimeter_arcs = function(analysis, include_holes)
     }
   end
 end
-local automatic_cycles
-automatic_cycles = function(analysis, pattern, include_holes)
-  if pattern == nil then
-    pattern = nil
-  end
-  if include_holes == nil then
-    include_holes = false
+local automaticCycles
+automaticCycles = function(analysis, pattern, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
   if not (pattern) then
-    pattern = default_pattern(analysis)
+    pattern = defaultPattern(analysis)
   end
-  local width, width_err = pattern_width(analysis, pattern)
+  local width, widthErr = patternWidth(analysis, pattern)
   if not (width) then
-    return nil, width_err
+    return nil, widthErr
   end
-  local arcs = perimeter_arcs(analysis, include_holes)
+  local arcs = perimeterArcs(analysis, includeHoles)
   local cycles
   do
     local _accum_0 = { }
@@ -6050,223 +5493,139 @@ automatic_cycles = function(analysis, pattern, include_holes)
     return cycles
   end
 end
-local build_pattern_options
-build_pattern_options = function(analysis)
+local buildPatternOptions
+buildPatternOptions = function(analysis)
   local count = #analysis.units
   local items, patterns, seen = { }, { }, { }
-  local add_pattern
-  add_pattern = function(pattern)
+  local addPattern
+  addPattern = function(pattern)
     local key = table.concat(pattern, ",")
     if seen[key] then
       return
     end
     seen[key] = true
-    local label = pattern_label(pattern)
+    local label = patternLabel(pattern)
     items[#items + 1] = label
-    patterns[label] = copy_pattern(pattern)
+    patterns[label] = copyPattern(pattern)
   end
   for shift = 0, count - 1 do
     local pattern = { }
     for offset = 0, count - 1 do
       pattern[#pattern + 1] = ((shift + offset) % count) + 1
     end
-    add_pattern(pattern)
+    addPattern(pattern)
   end
   for shift = 0, count - 1 do
     local pattern = { }
     for offset = 0, count - 1 do
       pattern[#pattern + 1] = ((shift - offset) % count) + 1
     end
-    add_pattern(pattern)
+    addPattern(pattern)
   end
   if count > 2 then
-    local pattern = default_pattern(analysis)
+    local pattern = defaultPattern(analysis)
     for index = count - 1, 2, -1 do
       pattern[#pattern + 1] = index
     end
-    add_pattern(pattern)
+    addPattern(pattern)
   end
-  for unit_index = 1, count do
-    add_pattern({
-      unit_index
+  for unitIndex = 1, count do
+    addPattern({
+      unitIndex
     })
   end
-  local custom_label = tr("sh_perimeter_custom", "Custom...")
-  items[#items + 1] = custom_label
-  return items, patterns, custom_label
+  local customLabel = tr("sh_perimeter_custom", "Custom...")
+  items[#items + 1] = customLabel
+  return items, patterns, customLabel
 end
-local custom_pattern_dialog
-custom_pattern_dialog = function(analysis)
-  local unit_items
-  do
-    local _accum_0 = { }
-    local _len_0 = 1
-    for index = 1, #analysis.units do
-      _accum_0[_len_0] = tr("sh_perimeter_unit", "Unit %d", index)
-      _len_0 = _len_0 + 1
-    end
-    unit_items = _accum_0
-  end
-  local length_items
-  do
-    local _accum_0 = { }
-    local _len_0 = 1
-    for index = 1, MAX_CUSTOM_PERIOD do
-      _accum_0[_len_0] = tostring(index)
-      _len_0 = _len_0 + 1
-    end
-    length_items = _accum_0
-  end
-  local default_length = math.min(#analysis.units, MAX_CUSTOM_PERIOD)
-  local gui = {
-    {
-      class = "label",
-      label = tr("sh_perimeter_period_length", "Period length:"),
-      x = 0,
-      y = 0,
-      width = 1,
-      height = 1
-    },
-    {
-      class = "dropdown",
-      name = "period_length",
-      items = length_items,
-      value = tostring(default_length),
-      x = 1,
-      y = 0,
-      width = 1,
-      height = 1
-    },
-    {
-      class = "label",
-      label = tr("sh_perimeter_period_hint", "Only the first steps selected by the length are used."),
-      x = 0,
-      y = 1,
-      width = 4,
-      height = 1
+local customPatternDialog
+customPatternDialog = function(analysis)
+    local sequence = {}
+    for i = 1, #analysis.units do sequence[i] = tostring(i) end
+    local gui = {
+        {class = "label", label = tr("sh_perimeter_sequence_hint", "Enter unit numbers separated by spaces or commas; they repeat in this order."), x = 0, y = 0, width = 40, height = 2},
+        {class = "textbox", name = "pattern", text = table.concat(sequence, ", "), x = 0, y = 2, width = 40, height = 5},
     }
-  }
-  local half = math.ceil(MAX_CUSTOM_PERIOD / 2)
-  for step = 1, MAX_CUSTOM_PERIOD do
-    local column
-    if step <= half then
-      column = 0
-    else
-      column = 2
+    local apply, cancel = tr("sh_apply", "Apply"), tr("sh_cancel", "Cancel")
+    while true do
+        local button, values = aegisub.dialog.display(gui, {apply, cancel}, {ok = apply, close = cancel})
+        if button ~= apply then return nil end
+        RheaFoundation.retainDialog(gui, values)
+        local pattern, invalid = {}, false
+        for value in tostring(values.pattern or ""):gmatch("[^,%s]+") do
+            local index = Core.finiteNumber(value)
+            if not index or index ~= math.floor(index) or not analysis.units[index] then invalid = true; break end
+            pattern[#pattern + 1] = index
+        end
+        if not invalid and #pattern > 0 then return pattern end
+        showMsg(tr("sh_perimeter_err_period_length", "The period length is invalid."))
     end
-    local row = 2 + ((step - 1) % half)
-    local default_unit = ((step - 1) % #analysis.units) + 1
-    gui[#gui + 1] = {
-      class = "label",
-      label = tr("sh_perimeter_step", "Step %d:", step),
-      x = column,
-      y = row,
-      width = 1,
-      height = 1
-    }
-    gui[#gui + 1] = {
-      class = "dropdown",
-      name = "step_" .. tostring(step),
-      items = unit_items,
-      value = unit_items[default_unit],
-      x = column + 1,
-      y = row,
-      width = 1,
-      height = 1
-    }
-  end
-  local apply, cancel = tr("sh_apply", "Apply"), tr("sh_cancel", "Cancel")
-  local button, values = aegisub.dialog.display(gui, {
-    apply,
-    cancel
-  }, {
-    ok = apply,
-    cancel = cancel
-  })
-  if button ~= apply then
-    return nil
-  end
-  local length = tonumber(values.period_length)
-  if not (length and length == math.floor(length) and length >= 1 and length <= MAX_CUSTOM_PERIOD) then
-    return nil, tr("sh_perimeter_err_period_length", "The period length is invalid.")
-  end
-  local pattern = { }
-  for step = 1, length do
-    local unit_index = tonumber(tostring(values["step_" .. tostring(step)] or ""):match("(%d+)$"))
-    if not (unit_index and analysis.units[unit_index]) then
-      return nil, tr("sh_perimeter_err_step", "Step %d does not contain a valid unit.", step)
-    end
-    pattern[#pattern + 1] = unit_index
-  end
-  return pattern
 end
-local build_layout
-build_layout = function(analysis, cycles, pattern, include_holes)
-  if pattern == nil then
-    pattern = nil
-  end
-  if include_holes == nil then
-    include_holes = false
+local buildLayout
+buildLayout = function(analysis, cycles, pattern, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
   if not (pattern) then
-    pattern = default_pattern(analysis)
+    pattern = defaultPattern(analysis)
   end
-  local width, width_err = pattern_width(analysis, pattern)
+  local width, widthErr = patternWidth(analysis, pattern)
   if not (width) then
-    return nil, width_err
+    return nil, widthErr
   end
   local units = analysis.units
-  local arcs = perimeter_arcs(analysis, include_holes)
-  local placements, gaps, cycle_counts, total_count = { }, { }, { }, 0
-  for arc_index, arc in ipairs(arcs) do
-    local arc_cycles
+  local arcs = perimeterArcs(analysis, includeHoles)
+  local placements, gaps, cycleCounts, totalCount = { }, { }, { }, 0
+  for arcIndex, arc in ipairs(arcs) do
+    local arcCycles
     if type(cycles) == "table" then
-      arc_cycles = tonumber(cycles[arc_index])
+      arcCycles = Core.finiteNumber(cycles[arcIndex])
     else
-      arc_cycles = tonumber(cycles)
+      arcCycles = Core.finiteNumber(cycles)
     end
-    if not (arc_cycles and arc_cycles == math.floor(arc_cycles) and arc_cycles >= 1) then
-      return nil, tr("sh_perimeter_err_cycles", "The repetition count for contour %d is invalid.", arc_index)
+    if not (arcCycles and arcCycles == math.floor(arcCycles) and arcCycles >= 1) then
+      return nil, tr("sh_perimeter_err_cycles", "The repetition count for contour %d is invalid.", arcIndex)
     end
-    local count = #pattern * arc_cycles
-    local gap = (arc.length - width * arc_cycles) / count
+    local count = #pattern * arcCycles
+    local gap = (arc.length - width * arcCycles) / count
     local first = units[pattern[1]]
-    local start_distance = -first.min_x + gap * 0.5
-    local cursor = start_distance
-    for placement_index = 1, count do
-      local pattern_index = ((placement_index - 1) % #pattern) + 1
-      local next_pattern_index = (pattern_index % #pattern) + 1
-      local unit_index = pattern[pattern_index]
-      local next_index = pattern[next_pattern_index]
-      local unit, next_unit = units[unit_index], units[next_index]
-      local sample = arc_point(arc, cursor)
+    local startDistance = -first.min_x + gap * 0.5
+    local cursor = startDistance
+    for placementIndex = 1, count do
+      LineOps.checkCancelled()
+      local patternIndex = ((placementIndex - 1) % #pattern) + 1
+      local nextPatternIndex = (patternIndex % #pattern) + 1
+      local unitIndex = pattern[patternIndex]
+      local nextIndex = pattern[nextPatternIndex]
+      local unit, nextUnit = units[unitIndex], units[nextIndex]
+      local sample = arcPoint(arc, cursor)
       if not (sample and sample.tangent) then
-        return nil, tr("sh_perimeter_err_tangent", "A tangent could not be calculated for contour %d.", arc_index)
+        return nil, tr("sh_perimeter_err_tangent", "A tangent could not be calculated for contour %d.", arcIndex)
       end
       local angle = -atan2(sample.tangent.y, sample.tangent.x) * 180 / math.pi
       placements[#placements + 1] = {
         unit = unit,
-        unit_index = unit_index,
+        unit_index = unitIndex,
         point = sample.point,
         tangent = sample.tangent,
         angle = angle,
         distance = sample.distance,
         corner = sample.corner,
-        arc_index = arc_index
+        arc_index = arcIndex
       }
-      local advance = unit.max_x - next_unit.min_x + gap
-      if not (advance > EPSILON) then
-        return nil, tr("sh_perimeter_err_advance", "Contour %d has too many repetitions: the advance between units is no longer positive.", arc_index)
+      local advance = unit.max_x - nextUnit.min_x + gap
+      if not finite(advance) or advance <= EPSILON then
+        return nil, tr("sh_perimeter_err_advance", "Contour %d has too many repetitions: the advance between units is no longer positive.", arcIndex)
       end
       cursor = cursor + advance
     end
-    local expected = start_distance + arc.length
+    local expected = startDistance + arc.length
     if math.abs(cursor - expected) > 0.001 then
-      return nil, tr("sh_perimeter_err_closure", "Pattern closure does not match contour %d.", arc_index)
+      return nil, tr("sh_perimeter_err_closure", "Pattern closure does not match contour %d.", arcIndex)
     end
-    gaps[arc_index] = gap
-    cycle_counts[arc_index] = arc_cycles
-    total_count = total_count + count
+    gaps[arcIndex] = gap
+    cycleCounts[arcIndex] = arcCycles
+    totalCount = totalCount + count
   end
   local gap
   if #gaps == 1 then
@@ -6274,34 +5633,34 @@ build_layout = function(analysis, cycles, pattern, include_holes)
   else
     gap = nil
   end
-  local normalized_cycles
-  if #cycle_counts == 1 then
-    normalized_cycles = cycle_counts[1]
+  local normalizedCycles
+  if #cycleCounts == 1 then
+    normalizedCycles = cycleCounts[1]
   else
-    normalized_cycles = cycle_counts
+    normalizedCycles = cycleCounts
   end
   return {
     placements = placements,
     gap = gap,
     gaps = gaps,
-    cycles = normalized_cycles,
-    count = total_count,
-    pattern = copy_pattern(pattern),
+    cycles = normalizedCycles,
+    count = totalCount,
+    pattern = copyPattern(pattern),
     pattern_width = width
   }
 end
-local replace_position
-replace_position = function(prefix, shape, position)
-  local replacement = "\\pos(" .. tostring(format_number(position.x)) .. "," .. tostring(format_number(position.y)) .. ")"
+local replacePosition
+replacePosition = function(prefix, shape, position)
+  local replacement = "\\pos(" .. tostring(formatNumber(position.x)) .. "," .. tostring(formatNumber(position.y)) .. ")"
   local mapped, count = prefix:gsub(shape.position.pattern, replacement)
-  if not (count == 1) then
+  if count ~= 1 then
     return nil, tr("sh_perimeter_err_replace_pos", "A layer's \\pos could not be replaced.")
   end
   return mapped
 end
-local place_text
-place_text = function(shape, placement)
-  local prefix, err = replace_position(shape.prefix, shape, placement.point)
+local placeText
+placeText = function(shape, placement)
+  local prefix, err = replacePosition(shape.prefix, shape, placement.point)
   if not (prefix) then
     return nil, err
   end
@@ -6309,34 +5668,22 @@ place_text = function(shape, placement)
   if angle > 180 then
     angle = angle - 360
   end
-  local rotation = "\\frz" .. tostring(format_number(angle))
+  local rotation = "\\frz" .. tostring(formatNumber(angle))
   local count
   prefix, count = prefix:gsub("^{", "{" .. tostring(rotation), 1)
-  if not (count == 1) then
+  if count ~= 1 then
     return nil, tr("sh_perimeter_err_rotation", "A layer's rotation could not be inserted.")
   end
   return prefix .. shape.drawing .. shape.suffix
 end
-local build_output
-build_output = function(analysis, cycles, pattern, include_holes)
-  if pattern == nil then
-    pattern = nil
+local buildOutput
+buildOutput = function(analysis, cycles, pattern, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
-  if include_holes == nil then
-    include_holes = false
-  end
-  local layout, layout_err = build_layout(analysis, cycles, pattern, include_holes)
+  local layout, layoutErr = buildLayout(analysis, cycles, pattern, includeHoles)
   if not (layout) then
-    return nil, layout_err
-  end
-  local line_count = 0
-  local _list_0 = layout.placements
-  for _index_0 = 1, #_list_0 do
-    local placement = _list_0[_index_0]
-    line_count = line_count + #placement.unit.lines
-  end
-  if line_count > MAX_OUTPUT_LINES then
-    return nil, tr("sh_perimeter_err_output_limit", "The output would contain %d lines; the safe limit is %d.", line_count, MAX_OUTPUT_LINES)
+    return nil, layoutErr
   end
   local lines = { }
   local _list_1 = layout.placements
@@ -6345,11 +5692,12 @@ build_output = function(analysis, cycles, pattern, include_holes)
     local _list_2 = placement.unit.lines
     for _index_1 = 1, #_list_2 do
       local item = _list_2[_index_1]
-      local text, text_err = place_text(item.shape, placement)
+      LineOps.checkCancelled()
+      local text, textErr = placeText(item.shape, placement)
       if not (text) then
-        return nil, tr("sh_perimeter_err_template", "Template line %d: %s", item.index, text_err)
+        return nil, tr("sh_perimeter_err_template", "Template line %d: %s", item.index, textErr)
       end
-      local line = copy_line(item.line)
+      local line = copyLine(item.line)
       line.text = text
       lines[#lines + 1] = line
     end
@@ -6359,19 +5707,19 @@ build_output = function(analysis, cycles, pattern, include_holes)
     layout = layout
   }
 end
-local options_dialog
-options_dialog = function(analysis, include_holes)
-  if include_holes == nil then
-    include_holes = false
+local optionsDialog
+optionsDialog = function(analysis, includeHoles)
+  if includeHoles == nil then
+    includeHoles = false
   end
-  local pattern_items, patterns, custom_label = build_pattern_options(analysis)
-  local default_choice = pattern_items[1]
+  local patternItems, patterns, customLabel = buildPatternOptions(analysis)
+  local defaultChoice = patternItems[1]
   local arcs = analysis.arcs or {
     analysis.arc
   }
   local holes = analysis.holes or { }
-  local perimeter_length = analysis.perimeter_length or analysis.arc.length
-  local hole_length = (analysis.all_perimeter_length or perimeter_length) - perimeter_length
+  local perimeterLength = analysis.perimeter_length or analysis.arc.length
+  local holeLength = (analysis.all_perimeter_length or perimeterLength) - perimeterLength
   local gui = {
     {
       class = "label",
@@ -6383,7 +5731,7 @@ options_dialog = function(analysis, include_holes)
     },
     {
       class = "label",
-      label = tr("sh_perimeter_summary", "Exteriors: %d (%s px) | Holes: %d (%s px)", #arcs, format_number(perimeter_length, 2), #holes, format_number(hole_length, 2)),
+      label = tr("sh_perimeter_summary", "Exteriors: %d (%s px) | Holes: %d (%s px)", #arcs, formatNumber(perimeterLength, 2), #holes, formatNumber(holeLength, 2)),
       x = 0,
       y = 1,
       width = 2,
@@ -6400,8 +5748,8 @@ options_dialog = function(analysis, include_holes)
     {
       class = "dropdown",
       name = "pattern",
-      items = pattern_items,
-      value = default_choice,
+      items = patternItems,
+      value = defaultChoice,
       x = 1,
       y = 2,
       width = 1,
@@ -6436,12 +5784,12 @@ options_dialog = function(analysis, include_holes)
     return nil
   end
   local choice = values.pattern
-  local pattern = nil
-  if choice == custom_label then
-    local pattern_err
-    pattern, pattern_err = custom_pattern_dialog(analysis)
-    if pattern_err then
-      return nil, pattern_err
+  local pattern
+  if choice == customLabel then
+    local patternErr
+    pattern, patternErr = customPatternDialog(analysis)
+    if patternErr then
+      return nil, patternErr
     end
     if not (pattern) then
       return nil
@@ -6452,87 +5800,72 @@ options_dialog = function(analysis, include_holes)
   if not (pattern) then
     return nil, tr("sh_perimeter_err_pattern", "Choose a valid periodic pattern.")
   end
-  local cycles, cycles_err = automatic_cycles(analysis, pattern, include_holes)
+  local cycles, cyclesErr = automaticCycles(analysis, pattern, includeHoles)
   if not (cycles) then
-    return nil, cycles_err
+    return nil, cyclesErr
   end
   return {
     cycles = cycles,
     pattern = pattern,
-    include_holes = include_holes
+    include_holes = includeHoles
   }
 end
-local apply_output
-apply_output = function(subs, analysis, output)
-  for offset = #analysis.template_indices, 1, -1 do
-    subs.delete(analysis.template_indices[offset])
-  end
-  local selection = { }
-  local insert_at = analysis.base.index + 1
-  local _list_0 = output.lines
-  for _index_0 = 1, #_list_0 do
-    local line = _list_0[_index_0]
-    subs.insert(insert_at, line)
-    selection[#selection + 1] = insert_at
-    insert_at = insert_at + 1
-  end
-  return selection
+local applyOutput
+applyOutput = function(subs, analysis, output)
+  LineOps.deleteIndices(subs, analysis.template_indices)
+  return LineOps.insertLines(subs, {{index = analysis.base.index + 1, lines = output.lines}})
 end
 local main
-main = function(subs, sel, active_line, context, settings)
+main = function(subs, sel, _, context, settings)
   if settings == nil then
     settings = { }
   end
-  set_context(context)
-  local analysis, analysis_err = analyze_selection(subs, sel)
+  setContext(context)
+  local analysis, analysisErr = analyzeSelection(subs, sel)
   if not (analysis) then
-    return sel, false, analysis_err
+    return sel, false, analysisErr
   end
-  local options, options_err = options_dialog(analysis, settings.include_holes == true)
-  if options_err then
-    return sel, false, options_err
+  local options, optionsErr = optionsDialog(analysis, settings.include_holes == true)
+  if optionsErr then
+    return sel, false, optionsErr
   end
   if not (options) then
     return sel, false
   end
-  local output, output_err = build_output(analysis, options.cycles, options.pattern, options.include_holes)
+  local output, outputErr = buildOutput(analysis, options.cycles, options.pattern, options.include_holes)
   if not (output) then
-    return sel, false, output_err
+    return sel, false, outputErr
   end
-  local new_selection = apply_output(subs, analysis, output)
+  local new_selection = Rhea.Lines.atomic(subs, function() return applyOutput(subs, analysis, output) end)
   if context and context.undo then
     context.undo("sh_undo_perimeter", "Rhea Signs: place shapes on perimeter")
   elseif aegisub and aegisub.set_undo_point then
-    aegisub.set_undo_point(script_name)
+    aegisub.set_undo_point(undoName)
   end
   return new_selection, true, output
 end
 return {
-  name = script_name,
-  description = script_description,
-  version = script_version,
-  set_context = set_context,
-  prepare_shape = prepare_shape,
-  parse_contours = parse_contours,
-  path_bounds = path_bounds,
-  build_arc = build_arc,
-  outer_arcs = outer_arcs,
-  outer_arc = outer_arc,
-  arc_point = arc_point,
-  analyze_selection = analyze_selection,
-  default_pattern = default_pattern,
-  pattern_width = pattern_width,
-  perimeter_arcs = perimeter_arcs,
-  automatic_cycles = automatic_cycles,
-  build_pattern_options = build_pattern_options,
-  build_layout = build_layout,
-  build_output = build_output,
-  options_dialog = options_dialog,
-  apply_output = apply_output,
+  setContext = setContext,
+  prepareShape = prepareShape,
+  parseContours = parseContours,
+  pathBounds = pathBounds,
+  buildArc = buildArc,
+  outerArcs = outerArcs,
+  outerArc = outerArc,
+  arcPoint = arcPoint,
+  analyzeSelection = analyzeSelection,
+  defaultPattern = defaultPattern,
+  patternWidth = patternWidth,
+  perimeterArcs = perimeterArcs,
+  automaticCycles = automaticCycles,
+  buildPatternOptions = buildPatternOptions,
+  buildLayout = buildLayout,
+  buildOutput = buildOutput,
+  optionsDialog = optionsDialog,
+  applyOutput = applyOutput,
   main = main
 }
 end)()
-
 local function translated(context, key, fallback)
     if context and type(context.translate) == "function" then
         local value = context.translate(key)
@@ -6540,13 +5873,12 @@ local function translated(context, key, fallback)
     end
     return fallback
 end
-
 local function optimize(subs, sel, options, context)
-    SharedShapeOptimizer.setLanguage(context and context.language or "en")
-    local normalized = SharedShapeOptimizer.normalizeOptions(options or {})
-    local report, err = SharedShapeOptimizer.analyzeSelection(subs, sel, normalized)
+    ShapeOptimizer.setLanguage(context and context.language or "en")
+    local normalized = ShapeOptimizer.normalizeOptions(options or {})
+    local report, err = ShapeOptimizer.analyzeSelection(subs, sel, normalized)
     if not report then return sel, false, err end
-    local summary = SharedShapeOptimizer.summaryText(report)
+    local summary = ShapeOptimizer.summaryText(report)
     if not report.changed then
         if context and context.show then context.show(translated(context, "sh_no_reduction", "No safe reduction was found with these parameters.") .. "\n\n" .. summary) end
         return sel, false, report
@@ -6556,24 +5888,23 @@ local function optimize(subs, sel, options, context)
         if not context.confirm(prompt) then return sel, false, report end
     end
     local newSelection = LineOps.transaction(subs, "", function()
-        return SharedShapeOptimizer.applyReport(subs, report)
+        return ShapeOptimizer.applyReport(subs, report)
     end)
     if context and context.undo then context.undo("sh_undo_optimizer", "Rhea Signs: shape color optimizer") end
     if context and context.show and not context.silent then context.show(summary) end
     return newSelection, true, report
 end
-
 local function main(subs, sel, active, options, context)
     options = options or {}
     context = context or {}
     local result, changed, payload
-    if options.action == "Unify Positions" then
+    if options.action == Rhea.Actions.Shapes.Unify then
         result, changed, payload = Unify.main(subs, sel, active, context)
-    elseif options.action == "Place on Perimeter" then
+    elseif options.action == Rhea.Actions.Shapes.Perimeter then
         result, changed, payload = Perimeter.main(subs, sel, active, context, {
             include_holes = options.perimeter_mode == "Exterior contours and holes"
         })
-    elseif options.action == "Shape Color Optimizer" then
+    elseif options.action == Rhea.Actions.Shapes.Optimize then
         result, changed, payload = optimize(subs, sel, options, context)
     else
         return sel, false
@@ -6581,20 +5912,17 @@ local function main(subs, sel, active, options, context)
     if type(payload) == "string" and context.show then context.show(payload) end
     return result, changed, payload
 end
-
 return {
     main = main,
     optimize = optimize,
     unify = Unify,
     perimeter = Perimeter,
-    colorOptimizer = SharedShapeOptimizer,
+    colorOptimizer = ShapeOptimizer,
 }
-
-]====],
-    ["Font and Style Manager"] = [====[
-local FontSwap = { version = "1.3.0" }
-
-local LANG = {
+end)()
+RheaOps.FontStyles = (function()
+local FontStyles = {}
+local fontLanguages = {
     en = {
         title = "Font and Style Manager",
         button_swap = "Swap",
@@ -6619,6 +5947,7 @@ local LANG = {
         err_select_style = "Select at least one style.",
         err_no_styles = "The file contains no ASS styles.",
         err_empty_font = "The font cannot be empty.",
+        err_invalid_number = "Invalid numeric value: %s.",
         err_select_field = "Mark at least one field to apply.",
         err_select_color = "Mark at least one color to apply.",
         err_clone_source = "The source style no longer exists.",
@@ -6704,6 +6033,7 @@ local LANG = {
         err_select_style = "Selecciona al menos un estilo.",
         err_no_styles = "El archivo no contiene estilos ASS.",
         err_empty_font = "La fuente no puede quedar vacía.",
+        err_invalid_number = "Valor numérico no válido: %s.",
         err_select_field = "Marca al menos un campo para aplicar.",
         err_select_color = "Marca al menos un color para aplicar.",
         err_clone_source = "El estilo de origen ya no existe.",
@@ -6789,6 +6119,7 @@ local LANG = {
         err_select_style = "Selecione ao menos um estilo.",
         err_no_styles = "O arquivo não contém estilos ASS.",
         err_empty_font = "A fonte não pode ficar vazia.",
+        err_invalid_number = "Valor numérico inválido: %s.",
         err_select_field = "Marque ao menos um campo para aplicar.",
         err_select_color = "Marque ao menos uma cor para aplicar.",
         err_clone_source = "O estilo de origem não existe mais.",
@@ -6851,16 +6182,13 @@ local LANG = {
         undo_clone = "Gerenciador de fontes e estilos: clonar estilo",
     },
 }
-
-local current_language = "en"
-
+local currentLanguage = "en"
 local function T(key, ...)
-    local value = (LANG[current_language] and LANG[current_language][key]) or LANG.en[key] or key
+    local value = (fontLanguages[currentLanguage] and fontLanguages[currentLanguage][key]) or LANG.en[key] or key
     if select("#", ...) == 0 then return value end
     return string.format(value, ...)
 end
-
-local STYLE_DEFAULTS = {
+local styleDefaults = {
     fontname = "Arial",
     fontsize = 20,
     color1 = "&H00FFFFFF&",
@@ -6884,100 +6212,76 @@ local STYLE_DEFAULTS = {
     margin_t = 10,
     encoding = 1,
 }
-
-local function trim(value)
-    value = tostring(value or "")
-    value = value:gsub("^%s+", "")
-    value = value:gsub("%s+$", "")
-    return value
-end
-
-local function text_key(value)
+local trim = Core.trim
+local function textKey(value)
     return trim(value):lower()
 end
-
-local function copy_table(source)
-    local copy = {}
-    for key, value in pairs(source or {}) do
-        if key ~= "raw" then
-            copy[key] = value
-        end
-    end
+local function copyTable(source)
+    local copy = Core.copy(source or {})
+    copy.raw = nil
     return copy
 end
-
-local function show_message(message)
-    aegisub.dialog.display({
-        { class = "textbox", text = tostring(message or ""), x = 0, y = 0, width = 52, height = 8 },
-    }, { T("button_ok") }, { close = T("button_ok") })
+local function showMessage(message)
+    return KiteUI.message(message, {button=T("button_ok")})
 end
-
-local function style_value(style, key)
+local function styleValue(style, key)
     local value = style[key]
     if key == "margin_t" and value == nil then
         value = style.margin_v
         if value == nil then value = style.margin_b end
     end
-    if value == nil then value = STYLE_DEFAULTS[key] end
+    if value == nil then value = styleDefaults[key] end
     return value
 end
-
-local function set_style_value(style, key, value)
+local function setStyleValue(style, key, value)
     style[key] = value
     if key == "margin_t" then
         style.margin_b = value
     end
 end
-
-local function collect_styles(subs)
-    local list, by_name, by_key = {}, {}, {}
+local function collectStyles(subs)
+    local list, byName, byKey = {}, {}, {}
     for index = 1, #subs do
         local line = subs[index]
         if type(line) == "table" and line.class == "style" and trim(line.name) ~= "" then
             local record = { index = index, name = line.name, style = line }
             list[#list + 1] = record
-            by_name[line.name] = record
-            by_key[text_key(line.name)] = record
+            byName[line.name] = record
+            byKey[textKey(line.name)] = record
         end
     end
     table.sort(list, function(left, right)
-        local left_key, right_key = text_key(left.name), text_key(right.name)
-        if left_key == right_key then return left.name < right.name end
-        return left_key < right_key
+        local leftKey, rightKey = textKey(left.name), textKey(right.name)
+        if leftKey == rightKey then return left.name < right.name end
+        return leftKey < rightKey
     end)
-    return list, by_name, by_key
+    return list, byName, byKey
 end
-
-local function scan_inline_fonts(subs)
+local function scanInlineFonts(subs)
     local fonts = {}
     for index = 1, #subs do
+        LineOps.checkCancelled()
         local line = subs[index]
         if type(line) == "table" and line.class == "dialogue" then
-            for block in tostring(line.text or ""):gmatch("{([^}]*)}") do
-                for fontname in block:gmatch("\\fn([^\\}]*)") do
-                    fontname = trim(fontname)
-                    if fontname ~= "" then
-                        local key = text_key(fontname)
-                        local entry = fonts[key]
-                        if not entry then
-                            entry = { name = fontname, count = 0 }
-                            fonts[key] = entry
-                        end
-                        entry.count = entry.count + 1
-                    end
+            for _, call in ipairs(LineOps.tagCalls(line.text, "fn")) do
+                local fontname = trim(call.value)
+                if call.top_level and fontname ~= "" then
+                    local key = textKey(fontname)
+                    local entry = fonts[key] or {name = fontname, count = 0}
+                    entry.count = entry.count + 1
+                    fonts[key] = entry
                 end
             end
         end
     end
     return fonts
 end
-
-local function collect_fonts(subs, styles)
+local function collectFonts(subs, styles)
     local fonts = {}
     for _, record in ipairs(styles) do
-        local fontname = trim(style_value(record.style, "fontname"))
+        local fontname = trim(styleValue(record.style, "fontname"))
         if fontname ~= "" then
-            local key = text_key(fontname)
+            local key = textKey(fontname)
             local entry = fonts[key]
             if not entry then
                 entry = { name = fontname, style_count = 0, inline_count = 0 }
@@ -6986,7 +6290,7 @@ local function collect_fonts(subs, styles)
             entry.style_count = entry.style_count + 1
         end
     end
-    for key, inline in pairs(scan_inline_fonts(subs)) do
+    for key, inline in pairs(scanInlineFonts(subs)) do
         local entry = fonts[key]
         if not entry then
             entry = { name = inline.name, style_count = 0, inline_count = 0 }
@@ -6994,86 +6298,77 @@ local function collect_fonts(subs, styles)
         end
         entry.inline_count = inline.count
     end
-
     local list = {}
     for _, entry in pairs(fonts) do list[#list + 1] = entry end
     table.sort(list, function(left, right)
-        return text_key(left.name) < text_key(right.name)
+        return textKey(left.name) < textKey(right.name)
     end)
     return list, fonts
 end
-
-local function style_names(styles)
+local function styleNames(styles)
     local names = {}
     for _, record in ipairs(styles) do names[#names + 1] = record.name end
     return names
 end
-
-local function matching_style_names(styles, fontname)
-    local names, wanted = {}, text_key(fontname)
+local function matchingStyleNames(styles, fontname)
+    local names, wanted = {}, textKey(fontname)
     for _, record in ipairs(styles) do
-        if text_key(style_value(record.style, "fontname")) == wanted then
+        if textKey(styleValue(record.style, "fontname")) == wanted then
             names[#names + 1] = record.name
         end
     end
     return names
 end
-
-local function replace_inline_text(text, source_font, target_font)
-    local source_key = text_key(source_font)
-    local replacements = 0
-    local updated = tostring(text or ""):gsub("{([^}]*)}", function(block)
-        local replaced = block:gsub("(\\fn)([^\\}]*)", function(tag, value)
-            if text_key(value) == source_key and value ~= target_font then
-                replacements = replacements + 1
-                return tag .. target_font
-            end
-            return tag .. value
-        end)
-        return "{" .. replaced .. "}"
+local function replaceInlineText(text, sourceFont, targetFont)
+    local sourceKey, replacements = textKey(sourceFont), 0
+    local updated = LineOps.mapTagCalls(text, "fn", function(call)
+        if textKey(call.value) == sourceKey and call.value ~= targetFont then
+            replacements = replacements + 1
+            return "\\fn" .. targetFont
+        end
     end)
     return updated, replacements
 end
-
-local function apply_font_swap(subs, source_font, target_font, replace_inline)
-    source_font, target_font = trim(source_font), trim(target_font)
-    if source_font == "" then return nil, T("err_source_font") end
-    if target_font == "" then return nil, T("err_target_font") end
-
-    local changed_styles, changed_tags, changed_lines = 0, 0, 0
-    for index = 1, #subs do
-        local line = subs[index]
-        if type(line) == "table" and line.class == "style"
-            and text_key(style_value(line, "fontname")) == text_key(source_font)
-            and tostring(style_value(line, "fontname")) ~= target_font then
-            line.fontname = target_font
-            subs[index] = line
-            changed_styles = changed_styles + 1
-        elseif replace_inline and type(line) == "table" and line.class == "dialogue" then
-            local updated, count = replace_inline_text(line.text, source_font, target_font)
-            if count > 0 then
-                line.text = updated
+local function applyFontSwap(subs, sourceFont, targetFont, replaceInline)
+    return Rhea.Lines.atomic(subs, function()
+        sourceFont, targetFont = trim(sourceFont), trim(targetFont)
+        if sourceFont == "" then return nil, T("err_source_font") end
+        if targetFont == "" then return nil, T("err_target_font") end
+        local changedStyles, changedTags, changedLines = 0, 0, 0
+        for index = 1, #subs do
+            LineOps.checkCancelled()
+            local line = subs[index]
+            if type(line) == "table" and line.class == "style"
+                and textKey(styleValue(line, "fontname")) == textKey(sourceFont)
+                and tostring(styleValue(line, "fontname")) ~= targetFont then
+                line.fontname = targetFont
                 subs[index] = line
-                changed_tags = changed_tags + count
-                changed_lines = changed_lines + 1
+                changedStyles = changedStyles + 1
+            elseif replaceInline and type(line) == "table" and line.class == "dialogue" then
+                local updated, count = replaceInlineText(line.text, sourceFont, targetFont)
+                if count > 0 then
+                    line.text = updated
+                    subs[index] = line
+                    changedTags = changedTags + count
+                    changedLines = changedLines + 1
+                end
             end
         end
-    end
-    return {
-        styles = changed_styles,
-        tags = changed_tags,
-        lines = changed_lines,
-    }
+        return {
+            styles = changedStyles,
+            tags = changedTags,
+            lines = changedLines,
+        }
+    end)
 end
-
-local function parse_target_names(text, by_key)
+local function parseTargetNames(text, byKey)
     local names, seen, unknown = {}, {}, {}
     text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
     for row in (text .. "\n"):gmatch("(.-)\n") do
         local name = trim(row)
         if name ~= "" then
-            local key = text_key(name)
-            local record = by_key[key]
+            local key = textKey(name)
+            local record = byKey[key]
             if record and not seen[key] then
                 names[#names + 1] = record.name
                 seen[key] = true
@@ -7084,8 +6379,7 @@ local function parse_target_names(text, by_key)
     end
     return names, unknown
 end
-
-local function populated_line_count(text)
+local function populatedLineCount(text)
     local count = 0
     text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
     for row in (text .. "\n"):gmatch("(.-)\n") do
@@ -7093,30 +6387,28 @@ local function populated_line_count(text)
     end
     return count
 end
-
-local function choose_styles(subs, initial_names, title)
-    local styles, _, by_key = collect_styles(subs)
-    local all_names = style_names(styles)
-    local current = table.concat(initial_names or {}, "\n")
-    local button_next, button_all, button_cancel = T("button_next"), T("button_all"), T("button_cancel")
+local function chooseStyles(subs, initialNames, title)
+    local styles, _, byKey = collectStyles(subs)
+    local allNames = styleNames(styles)
+    local current = table.concat(initialNames or {}, "\n")
+    local buttonNext, buttonAll, buttonCancel = T("button_next"), T("button_all"), T("button_cancel")
     while true do
-        local list_height = math.min(12, math.max(4, populated_line_count(current)))
+        local listHeight = math.min(12, math.max(4, populatedLineCount(current)))
         local button, result = aegisub.dialog.display({
             { class = "label", label = title, x = 0, y = 0, width = 10, height = 1 },
             { class = "label", label = T("one_style_per_line"), x = 0, y = 1, width = 10, height = 1 },
-            { class = "textbox", name = "targets", text = current, x = 0, y = 2, width = 10, height = list_height },
-        }, { button_next, button_all, button_cancel }, { ok = button_next, close = button_cancel })
-
-        if button == button_cancel or not button then return nil end
-        if button == button_all then
-            current = table.concat(all_names, "\n")
+            { class = "textbox", name = "targets", text = current, x = 0, y = 2, width = 10, height = listHeight },
+        }, { buttonNext, buttonAll, buttonCancel }, { ok = buttonNext, close = buttonCancel })
+        if button == buttonCancel or not button then return nil end
+        if button == buttonAll then
+            current = table.concat(allNames, "\n")
         else
-            local names, unknown = parse_target_names(result.targets, by_key)
+            local names, unknown = parseTargetNames(result.targets, byKey)
             if #unknown > 0 then
-                show_message(T("err_unknown_styles", table.concat(unknown, "\n")))
+                showMessage(T("err_unknown_styles", table.concat(unknown, "\n")))
                 current = result.targets
             elseif #names == 0 then
-                show_message(T("err_select_style"))
+                showMessage(T("err_select_style"))
                 current = result.targets
             else
                 return names
@@ -7124,93 +6416,87 @@ local function choose_styles(subs, initial_names, title)
         end
     end
 end
-
-local function records_for_names(subs, names)
-    local _, _, by_key = collect_styles(subs)
+local function recordsForNames(subs, names)
+    local _, _, byKey = collectStyles(subs)
     local records = {}
     for _, name in ipairs(names or {}) do
-        local record = by_key[text_key(name)]
+        local record = byKey[textKey(name)]
         if record then records[#records + 1] = record end
     end
     return records
 end
-
-local function common_value(records, key)
-    local first = style_value(records[1].style, key)
+local function commonValue(records, key)
+    local first = styleValue(records[1].style, key)
     for index = 2, #records do
-        if style_value(records[index].style, key) ~= first then
+        if styleValue(records[index].style, key) ~= first then
             return first, true
         end
     end
     return first, false
 end
-
-local function mixed_label(label, mixed)
+local function mixedLabel(label, mixed)
     return mixed and (label .. "  [" .. T("mixed") .. "]") or label
 end
-
-local PROPERTY_FIELDS = {
+local propertyFields = {
     { key = "fontname", label_key = "field_font", class = "edit", width = 7 },
-    { key = "fontsize", label_key = "field_size", class = "floatedit", min = 0.1, max = 10000, step = 0.1 },
-    { key = "scale_x", label_key = "field_scale_x", class = "floatedit", min = 0, max = 10000, step = 0.1 },
-    { key = "scale_y", label_key = "field_scale_y", class = "floatedit", min = 0, max = 10000, step = 0.1 },
-    { key = "spacing", label_key = "field_spacing", class = "floatedit", min = -10000, max = 10000, step = 0.1 },
-    { key = "angle", label_key = "field_angle", class = "floatedit", min = -36000, max = 36000, step = 0.1 },
-    { key = "outline", label_key = "field_outline", class = "floatedit", min = 0, max = 1000, step = 0.1 },
-    { key = "shadow", label_key = "field_shadow", class = "floatedit", min = -1000, max = 1000, step = 0.1 },
-    { key = "margin_l", label_key = "field_margin_l", class = "intedit", min = 0, max = 100000 },
-    { key = "margin_r", label_key = "field_margin_r", class = "intedit", min = 0, max = 100000 },
-    { key = "margin_t", label_key = "field_margin_v", class = "intedit", min = 0, max = 100000 },
+    { key = "fontsize", label_key = "field_size", class = "floatedit", min = rheaDimensionEpsilon },
+    { key = "scale_x", label_key = "field_scale_x", class = "floatedit", min = 0 },
+    { key = "scale_y", label_key = "field_scale_y", class = "floatedit", min = 0 },
+    { key = "spacing", label_key = "field_spacing", class = "floatedit" },
+    { key = "angle", label_key = "field_angle", class = "floatedit" },
+    { key = "outline", label_key = "field_outline", class = "floatedit", min = 0 },
+    { key = "shadow", label_key = "field_shadow", class = "floatedit" },
+    { key = "margin_l", label_key = "field_margin_l", class = "intedit", min = 0 },
+    { key = "margin_r", label_key = "field_margin_r", class = "intedit", min = 0 },
+    { key = "margin_t", label_key = "field_margin_v", class = "intedit", min = 0 },
     { key = "encoding", label_key = "field_encoding", class = "intedit", min = 0, max = 255 },
 }
-
-local BOOLEAN_FIELDS = {
+local booleanFields = {
     { key = "bold", label_key = "field_bold" },
     { key = "italic", label_key = "field_italic" },
     { key = "underline", label_key = "field_underline" },
     { key = "strikeout", label_key = "field_strikeout" },
 }
-
-local COLOR_FIELDS = {
+local colorFields = {
     { key = "color1", label_key = "field_primary" },
     { key = "color2", label_key = "field_secondary" },
     { key = "color3", label_key = "field_outline" },
     { key = "color4", label_key = "field_shadow" },
 }
-
-local function apply_style_values(subs, names, values)
-    local records = records_for_names(subs, names)
-    local changed_styles, changed_fields = 0, 0
-    for _, record in ipairs(records) do
-        local style, changed = record.style, false
-        for key, value in pairs(values or {}) do
-            if style_value(style, key) ~= value then
-                set_style_value(style, key, value)
-                changed = true
-                changed_fields = changed_fields + 1
+local function applyStyleValues(subs, names, values)
+    return Rhea.Lines.atomic(subs, function()
+        local records = recordsForNames(subs, names)
+        local changedStyles, changedFields = 0, 0
+        for _, record in ipairs(records) do
+            LineOps.checkCancelled()
+            local style, changed = record.style, false
+            for key, value in pairs(values or {}) do
+                if styleValue(style, key) ~= value then
+                    setStyleValue(style, key, value)
+                    changed = true
+                    changedFields = changedFields + 1
+                end
+            end
+            if changed then
+                subs[record.index] = style
+                changedStyles = changedStyles + 1
             end
         end
-        if changed then
-            subs[record.index] = style
-            changed_styles = changed_styles + 1
-        end
-    end
-    return changed_styles, changed_fields
+        return changedStyles, changedFields
+    end)
 end
-
-local function edit_properties(subs, names)
-    local records = records_for_names(subs, names)
+local function editProperties(subs, names)
+    local records = recordsForNames(subs, names)
     if #records == 0 then return false end
-
     local dialog = {
         { class = "label", label = T("edit_title", #records), x = 0, y = 0, width = 11, height = 1 },
         { class = "label", label = T("edit_hint"), x = 0, y = 1, width = 11, height = 1 },
         { class = "textbox", text = table.concat(names, "\n"), x = 0, y = 2, width = 11, height = math.min(5, math.max(2, #names)) },
     }
     local row = 3 + math.min(5, math.max(2, #names))
-    for _, field in ipairs(PROPERTY_FIELDS) do
-        local value, mixed = common_value(records, field.key)
-        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+    for _, field in ipairs(propertyFields) do
+        local value, mixed = commonValue(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixedLabel(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
         dialog[#dialog + 1] = { class = "checkbox", name = "apply_" .. field.key, label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
         local control = {
             class = field.class,
@@ -7231,168 +6517,164 @@ local function edit_properties(subs, names)
         dialog[#dialog + 1] = control
         row = row + 1
     end
-
-    for _, field in ipairs(BOOLEAN_FIELDS) do
-        local _, mixed = common_value(records, field.key)
-        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+    for _, field in ipairs(booleanFields) do
+        local _, mixed = commonValue(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixedLabel(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
         dialog[#dialog + 1] = { class = "dropdown", name = field.key, items = { T("no_change"), T("bool_on"), T("bool_off") }, value = T("no_change"), x = 3, y = row, width = 8, height = 1 }
         row = row + 1
     end
-
-    local border, border_mixed = common_value(records, "borderstyle")
-    dialog[#dialog + 1] = { class = "label", label = mixed_label(T("field_border"), border_mixed), x = 0, y = row, width = 3, height = 1 }
+    local border, borderMixed = commonValue(records, "borderstyle")
+    dialog[#dialog + 1] = { class = "label", label = mixedLabel(T("field_border"), borderMixed), x = 0, y = row, width = 3, height = 1 }
     dialog[#dialog + 1] = { class = "checkbox", name = "apply_borderstyle", label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
     dialog[#dialog + 1] = { class = "dropdown", name = "borderstyle", items = { T("border_outline"), T("border_opaque") }, value = tonumber(border) == 3 and T("border_opaque") or T("border_outline"), x = 5, y = row, width = 6, height = 1 }
     row = row + 1
-
-    local align, align_mixed = common_value(records, "align")
-    local align_items = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
-    dialog[#dialog + 1] = { class = "label", label = mixed_label(T("field_alignment"), align_mixed), x = 0, y = row, width = 3, height = 1 }
+    local align, alignMixed = commonValue(records, "align")
+    local alignItems = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
+    dialog[#dialog + 1] = { class = "label", label = mixedLabel(T("field_alignment"), alignMixed), x = 0, y = row, width = 3, height = 1 }
     dialog[#dialog + 1] = { class = "checkbox", name = "apply_align", label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
-    dialog[#dialog + 1] = { class = "dropdown", name = "align", items = align_items, value = tostring(tonumber(align) or 2), x = 5, y = row, width = 6, height = 1 }
-
-    local button_apply, button_cancel = T("button_apply"), T("button_cancel")
+    dialog[#dialog + 1] = { class = "dropdown", name = "align", items = alignItems, value = tostring(tonumber(align) or 2), x = 5, y = row, width = 6, height = 1 }
+    local buttonApply, buttonCancel = T("button_apply"), T("button_cancel")
     while true do
-        local button, result = aegisub.dialog.display(dialog, { button_apply, button_cancel }, { ok = button_apply, close = button_cancel })
-        if button ~= button_apply then return false end
-
+        local button, result = aegisub.dialog.display(dialog, { buttonApply, buttonCancel }, { ok = buttonApply, close = buttonCancel })
+        if button ~= buttonApply then return false end
+        RheaFoundation.retainDialog(dialog, result)
         local values = {}
-        for _, field in ipairs(PROPERTY_FIELDS) do
+        for _, field in ipairs(propertyFields) do
             if result["apply_" .. field.key] then
                 if field.key == "fontname" then
                     local fontname = trim(result.fontname)
                     if fontname == "" then
-                        show_message(T("err_empty_font"))
+                        showMessage(T("err_empty_font"))
                         values = nil
                         break
                     end
                     values.fontname = fontname
                 else
-                    values[field.key] = tonumber(result[field.key])
+                    local value = Core.finiteNumber(result[field.key])
+                    if not value or (field.min and value < field.min) or (field.max and value > field.max)
+                        or (field.class == "intedit" and value ~= math.floor(value)) then
+                        showMessage(T("err_invalid_number", T(field.label_key)))
+                        values = nil
+                        break
+                    end
+                    values[field.key] = value
                 end
             end
         end
         if values then
-            for _, field in ipairs(BOOLEAN_FIELDS) do
+            for _, field in ipairs(booleanFields) do
                 if result[field.key] == T("bool_on") then values[field.key] = true end
                 if result[field.key] == T("bool_off") then values[field.key] = false end
             end
             if result.apply_borderstyle then values.borderstyle = tonumber(tostring(result.borderstyle):match("^%d+")) end
             if result.apply_align then values.align = tonumber(result.align) end
-
             if next(values) == nil then
-                show_message(T("err_select_field"))
+                showMessage(T("err_select_field"))
             else
-                local changed_styles, changed_fields = apply_style_values(subs, names, values)
-                return true, changed_styles, changed_fields
+                local changedStyles, changedFields = applyStyleValues(subs, names, values)
+                return true, changedStyles, changedFields
             end
         end
     end
 end
-
-local function edit_colors(subs, names)
-    local records = records_for_names(subs, names)
+local function editColors(subs, names)
+    local records = recordsForNames(subs, names)
     if #records == 0 then return false end
     local dialog = {
         { class = "label", label = T("colors_title", #records), x = 0, y = 0, width = 9, height = 1 },
         { class = "label", label = T("alpha_hint"), x = 0, y = 1, width = 9, height = 1 },
     }
     local row = 2
-    for _, field in ipairs(COLOR_FIELDS) do
-        local value, mixed = common_value(records, field.key)
-        dialog[#dialog + 1] = { class = "label", label = mixed_label(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
+    for _, field in ipairs(colorFields) do
+        local value, mixed = commonValue(records, field.key)
+        dialog[#dialog + 1] = { class = "label", label = mixedLabel(T(field.label_key), mixed), x = 0, y = row, width = 3, height = 1 }
         dialog[#dialog + 1] = { class = "checkbox", name = "apply_" .. field.key, label = T("apply"), value = false, x = 3, y = row, width = 2, height = 1 }
         dialog[#dialog + 1] = { class = "coloralpha", name = field.key, value = value, x = 5, y = row, width = 4, height = 1 }
         row = row + 1
     end
-
-    local button_apply, button_cancel = T("button_apply"), T("button_cancel")
+    local buttonApply, buttonCancel = T("button_apply"), T("button_cancel")
     while true do
-        local button, result = aegisub.dialog.display(dialog, { button_apply, button_cancel }, { ok = button_apply, close = button_cancel })
-        if button ~= button_apply then return false end
+        local button, result = aegisub.dialog.display(dialog, { buttonApply, buttonCancel }, { ok = buttonApply, close = buttonCancel })
+        if button ~= buttonApply then return false end
+        RheaFoundation.retainDialog(dialog, result)
         local values = {}
-        for _, field in ipairs(COLOR_FIELDS) do
+        for _, field in ipairs(colorFields) do
             if result["apply_" .. field.key] then values[field.key] = result[field.key] end
         end
         if next(values) == nil then
-            show_message(T("err_select_color"))
+            showMessage(T("err_select_color"))
         else
-            local changed_styles, changed_fields = apply_style_values(subs, names, values)
-            return true, changed_styles, changed_fields
+            local changedStyles, changedFields = applyStyleValues(subs, names, values)
+            return true, changedStyles, changedFields
         end
     end
 end
-
-local function next_clone_name(source_name, by_key)
-    local base = trim(source_name) .. T("copy_suffix")
+local function nextCloneName(sourceName, byKey)
+    local base = trim(sourceName) .. T("copy_suffix")
     local candidate, suffix = base, 2
-    while by_key[text_key(candidate)] do
+    while byKey[textKey(candidate)] do
         candidate = base .. " " .. suffix
         suffix = suffix + 1
     end
     return candidate
 end
-
-local function style_insert_position(subs)
-    local last_style, first_dialogue
+local function styleInsertPosition(subs)
+    local lastStyle, firstDialogue
     for index = 1, #subs do
         local class = subs[index] and subs[index].class
-        if class == "style" then last_style = index end
-        if class == "dialogue" and not first_dialogue then first_dialogue = index end
+        if class == "style" then lastStyle = index end
+        if class == "dialogue" and not firstDialogue then firstDialogue = index end
     end
-    if last_style then return last_style + 1 end
-    if first_dialogue then return first_dialogue end
+    if lastStyle then return lastStyle + 1 end
+    if firstDialogue then return firstDialogue end
     return #subs + 1
 end
-
-local function clone_style(subs, source_name, new_name, colors)
-    local _, _, by_key = collect_styles(subs)
-    local source = by_key[text_key(source_name)]
+local function cloneStyle(subs, sourceName, newName, colors)
+    local _, _, byKey = collectStyles(subs)
+    local source = byKey[textKey(sourceName)]
     if not source then return nil, T("err_clone_source") end
-    new_name = trim(new_name)
-    if new_name == "" then return nil, T("err_clone_name") end
-    if new_name:find("[,\r\n]") then return nil, T("err_clone_chars") end
-    if by_key[text_key(new_name)] then return nil, T("err_clone_exists") end
-
-    local clone = copy_table(source.style)
+    newName = trim(newName)
+    if newName == "" then return nil, T("err_clone_name") end
+    if newName:find("[,\r\n]") then return nil, T("err_clone_chars") end
+    if byKey[textKey(newName)] then return nil, T("err_clone_exists") end
+    local clone = copyTable(source.style)
     clone.class = "style"
-    clone.name = new_name
-    for key, value in pairs(colors or {}) do set_style_value(clone, key, value) end
-    local insert_at = style_insert_position(subs)
+    clone.name = newName
+    for key, value in pairs(colors or {}) do setStyleValue(clone, key, value) end
+    local insert_at = styleInsertPosition(subs)
     subs.insert(insert_at, clone)
     return insert_at, clone
 end
-
-local function clone_dialog(subs, source_name)
-    local _, _, by_key = collect_styles(subs)
-    local source = by_key[text_key(source_name)]
+local function cloneDialog(subs, sourceName)
+    local _, _, byKey = collectStyles(subs)
+    local source = byKey[textKey(sourceName)]
     if not source then
-        show_message(T("err_base_style"))
+        showMessage(T("err_base_style"))
         return nil
     end
-    local default_name = next_clone_name(source.name, by_key)
+    local defaultName = nextCloneName(source.name, byKey)
     local style = source.style
-    local button_clone, button_cancel = T("button_clone"), T("button_cancel")
-    while true do
-        local button, result = aegisub.dialog.display({
+    local buttonClone, buttonCancel = T("button_clone"), T("button_cancel")
+    local dialog = {
             { class = "label", label = T("clone_title"), x = 0, y = 0, width = 8, height = 1 },
             { class = "label", label = T("origin"), x = 0, y = 1, width = 2, height = 1 },
             { class = "label", label = source.name, x = 2, y = 1, width = 6, height = 1 },
             { class = "label", label = T("name"), x = 0, y = 2, width = 2, height = 1 },
-            { class = "edit", name = "new_name", text = default_name, x = 2, y = 2, width = 6, height = 1 },
+            { class = "edit", name = "new_name", text = defaultName, x = 2, y = 2, width = 6, height = 1 },
             { class = "label", label = T("mode"), x = 0, y = 3, width = 2, height = 1 },
             { class = "dropdown", name = "mode", items = { T("clone_exact"), T("clone_colors") }, value = T("clone_colors"), x = 2, y = 3, width = 6, height = 1 },
             { class = "label", label = T("field_primary"), x = 0, y = 4, width = 2, height = 1 },
-            { class = "coloralpha", name = "color1", value = style_value(style, "color1"), x = 2, y = 4, width = 6, height = 1 },
+            { class = "coloralpha", name = "color1", value = styleValue(style, "color1"), x = 2, y = 4, width = 6, height = 1 },
             { class = "label", label = T("field_secondary"), x = 0, y = 5, width = 2, height = 1 },
-            { class = "coloralpha", name = "color2", value = style_value(style, "color2"), x = 2, y = 5, width = 6, height = 1 },
+            { class = "coloralpha", name = "color2", value = styleValue(style, "color2"), x = 2, y = 5, width = 6, height = 1 },
             { class = "label", label = T("field_outline"), x = 0, y = 6, width = 2, height = 1 },
-            { class = "coloralpha", name = "color3", value = style_value(style, "color3"), x = 2, y = 6, width = 6, height = 1 },
+            { class = "coloralpha", name = "color3", value = styleValue(style, "color3"), x = 2, y = 6, width = 6, height = 1 },
             { class = "label", label = T("field_shadow"), x = 0, y = 7, width = 2, height = 1 },
-            { class = "coloralpha", name = "color4", value = style_value(style, "color4"), x = 2, y = 7, width = 6, height = 1 },
-        }, { button_clone, button_cancel }, { ok = button_clone, close = button_cancel })
-
-        if button ~= button_clone then return nil end
+            { class = "coloralpha", name = "color4", value = styleValue(style, "color4"), x = 2, y = 7, width = 6, height = 1 },
+    }
+    while true do
+        local button, result = aegisub.dialog.display(dialog, {buttonClone, buttonCancel}, {ok = buttonClone, close = buttonCancel})
+        if button ~= buttonClone then return nil end
         local colors
         if result.mode == T("clone_colors") then
             colors = {
@@ -7402,399 +6684,278 @@ local function clone_dialog(subs, source_name)
                 color4 = result.color4,
             }
         end
-        local insert_at, clone_or_error = clone_style(subs, source.name, result.new_name, colors)
-        if insert_at then return insert_at, clone_or_error end
-        show_message(clone_or_error)
-        default_name = result.new_name
+        local insert_at, cloneOrError = cloneStyle(subs, source.name, result.new_name, colors)
+        if insert_at then return insert_at, cloneOrError end
+        showMessage(cloneOrError)
+        RheaFoundation.retainDialog(dialog, result)
     end
 end
-
-local function shift_selection(selection, insert_at)
+local function shiftSelection(selection, insert_at)
     local shifted = {}
     for _, index in ipairs(selection or {}) do
         shifted[#shifted + 1] = index >= insert_at and (index + 1) or index
     end
     return shifted
 end
-
-local function font_summary(entry)
+local function fontSummary(entry)
     if not entry then return "" end
     return T("font_summary", entry.style_count, entry.inline_count)
 end
-
-local function choose_existing(value, items, fallback)
-    local wanted = text_key(value)
+local function chooseExisting(value, items, fallback)
+    local wanted = textKey(value)
     for _, item in ipairs(items) do
-        if text_key(item) == wanted then return item end
+        if textKey(item) == wanted then return item end
     end
     return fallback or items[1]
 end
-
-local function main(subs, selection, _, context)
+local function main(subs, selection, active, context)
     context = context or {}
-    current_language = LANG[context.language] and context.language or "en"
+    currentLanguage = fontLanguages[context.language] and context.language or "en"
     local state = { selected_font = nil, target_font = "", base_style = nil, replace_inline = false }
-    local active_selection = selection or {}
-
+    local activeSelection = selection or {}
+    local activeLine = active
     while true do
-        local styles = collect_styles(subs)
+        local styles = collectStyles(subs)
         if #styles == 0 then
-            show_message(T("err_no_styles"))
-            return active_selection
+            showMessage(T("err_no_styles"))
+            return activeSelection, activeLine
         end
-        local fonts, font_map = collect_fonts(subs, styles)
-        local font_items = {}
-        for _, entry in ipairs(fonts) do font_items[#font_items + 1] = entry.name end
-        local all_style_names = style_names(styles)
-        state.selected_font = choose_existing(state.selected_font, font_items, font_items[1])
-        state.base_style = choose_existing(state.base_style, all_style_names, all_style_names[1])
-
-        local matching = matching_style_names(styles, state.selected_font)
-        local entry = font_map[text_key(state.selected_font)]
-        local style_list_height = math.min(8, math.max(3, #matching))
-        local base_style_row = 6 + style_list_height
-        local button_swap = T("button_swap")
-        local button_refresh = T("button_refresh")
-        local button_edit = T("button_edit")
-        local button_colors = T("button_colors")
-        local button_clone = T("button_clone")
-        local button_close = T("button_close")
+        local fonts, fontMap = collectFonts(subs, styles)
+        local fontItems = {}
+        for _, entry in ipairs(fonts) do fontItems[#fontItems + 1] = entry.name end
+        local allStyleNames = styleNames(styles)
+        state.selected_font = chooseExisting(state.selected_font, fontItems, fontItems[1])
+        state.base_style = chooseExisting(state.base_style, allStyleNames, allStyleNames[1])
+        local matching = matchingStyleNames(styles, state.selected_font)
+        local entry = fontMap[textKey(state.selected_font)]
+        local styleListHeight = math.min(8, math.max(3, #matching))
+        local baseStyleRow = 6 + styleListHeight
+        local buttonSwap = T("button_swap")
+        local buttonRefresh = T("button_refresh")
+        local buttonEdit = T("button_edit")
+        local buttonColors = T("button_colors")
+        local buttonClone = T("button_clone")
+        local buttonClose = T("button_close")
         local button, result = aegisub.dialog.display({
             { class = "label", label = T("header", T("title"), #styles, #fonts), x = 0, y = 0, width = 10, height = 1 },
             { class = "label", label = T("detected_font"), x = 0, y = 1, width = 3, height = 1 },
-            { class = "dropdown", name = "source_font", items = font_items, value = state.selected_font, x = 3, y = 1, width = 7, height = 1 },
-            { class = "label", label = font_summary(entry), x = 0, y = 2, width = 10, height = 1 },
+            { class = "dropdown", name = "source_font", items = fontItems, value = state.selected_font, x = 3, y = 1, width = 7, height = 1 },
+            { class = "label", label = fontSummary(entry), x = 0, y = 2, width = 10, height = 1 },
             { class = "label", label = T("new_font"), x = 0, y = 3, width = 3, height = 1 },
             { class = "edit", name = "target_font", text = state.target_font, hint = T("exact_font_hint"), x = 3, y = 3, width = 7, height = 1 },
             { class = "checkbox", name = "replace_inline", label = T("replace_inline"), value = state.replace_inline, x = 0, y = 4, width = 10, height = 1 },
             { class = "label", label = T("using_styles"), x = 0, y = 5, width = 10, height = 1 },
-            { class = "textbox", text = table.concat(matching, "\n"), x = 0, y = 6, width = 10, height = style_list_height },
-            { class = "label", label = T("base_style"), x = 0, y = base_style_row, width = 3, height = 1 },
-            { class = "dropdown", name = "base_style", items = all_style_names, value = state.base_style, x = 3, y = base_style_row, width = 7, height = 1 },
-        }, { button_swap, button_refresh, button_edit, button_colors, button_clone, button_close }, { ok = button_swap, close = button_close })
-
-        if button == button_close or not button then return active_selection end
+            { class = "textbox", text = table.concat(matching, "\n"), x = 0, y = 6, width = 10, height = styleListHeight },
+            { class = "label", label = T("base_style"), x = 0, y = baseStyleRow, width = 3, height = 1 },
+            { class = "dropdown", name = "base_style", items = allStyleNames, value = state.base_style, x = 3, y = baseStyleRow, width = 7, height = 1 },
+        }, { buttonSwap, buttonRefresh, buttonEdit, buttonColors, buttonClone, buttonClose }, { ok = buttonSwap, close = buttonClose })
+        if button == buttonClose or not button then return activeSelection, activeLine end
         state.selected_font = result.source_font
         state.target_font = result.target_font
         state.base_style = result.base_style
         state.replace_inline = result.replace_inline == true
-
-        if button == button_swap then
-            local counts, error_message = apply_font_swap(subs, state.selected_font, state.target_font, state.replace_inline)
+        if button == buttonSwap then
+            local counts, errorMessage = applyFontSwap(subs, state.selected_font, state.target_font, state.replace_inline)
             if not counts then
-                show_message(error_message)
+                showMessage(errorMessage)
             elseif counts.styles + counts.tags == 0 then
-                show_message(T("no_matches"))
+                showMessage(T("no_matches"))
             else
                 aegisub.set_undo_point(T("undo_swap"))
-                show_message(T("swap_done", counts.styles, counts.tags, counts.lines))
+                showMessage(T("swap_done", counts.styles, counts.tags, counts.lines))
                 state.selected_font = trim(state.target_font)
                 state.target_font = ""
             end
-        elseif button == button_edit then
-            local targets = choose_styles(subs, matching_style_names(collect_styles(subs), state.selected_font), T("choose_edit"))
+        elseif button == buttonEdit then
+            local targets = chooseStyles(subs, matchingStyleNames(collectStyles(subs), state.selected_font), T("choose_edit"))
             if targets then
-                local applied, changed_styles, changed_fields = edit_properties(subs, targets)
+                local applied, changedStyles, changedFields = editProperties(subs, targets)
                 if applied then
-                    if changed_styles > 0 then aegisub.set_undo_point(T("undo_edit")) end
-                    show_message(T("edit_done", changed_styles, changed_fields))
+                    if changedStyles > 0 then aegisub.set_undo_point(T("undo_edit")) end
+                    showMessage(T("edit_done", changedStyles, changedFields))
                 end
             end
-        elseif button == button_colors then
-            local targets = choose_styles(subs, matching_style_names(collect_styles(subs), state.selected_font), T("choose_colors"))
+        elseif button == buttonColors then
+            local targets = chooseStyles(subs, matchingStyleNames(collectStyles(subs), state.selected_font), T("choose_colors"))
             if targets then
-                local applied, changed_styles, changed_fields = edit_colors(subs, targets)
+                local applied, changedStyles, changedFields = editColors(subs, targets)
                 if applied then
-                    if changed_styles > 0 then aegisub.set_undo_point(T("undo_colors")) end
-                    show_message(T("colors_done", changed_styles, changed_fields))
+                    if changedStyles > 0 then aegisub.set_undo_point(T("undo_colors")) end
+                    showMessage(T("colors_done", changedStyles, changedFields))
                 end
             end
-        elseif button == button_clone then
-            local insert_at, clone = clone_dialog(subs, state.base_style)
+        elseif button == buttonClone then
+            local insert_at, clone = cloneDialog(subs, state.base_style)
             if insert_at then
-                active_selection = shift_selection(active_selection, insert_at)
+                activeSelection = shiftSelection(activeSelection, insert_at)
+                if activeLine and activeLine >= insert_at then activeLine = activeLine + 1 end
                 aegisub.set_undo_point(T("undo_clone"))
                 state.base_style = clone.name
-                show_message(T("clone_created", clone.name))
+                showMessage(T("clone_created", clone.name))
             end
         end
     end
 end
-
-FontSwap.main = main
-
-return FontSwap
-]====],
-    ["Fast Fades"] = [====[
-local script_name = "Fast Fades"
-local script_description = "Frame-based fades and continuous fade cleanup"
-local script_author = "Kiterow"
-local script_version = "1.2.0"
-local EventOps = require("kite.EventOps")
-local LineOps = require("kite.LineOps")
-local translate
-translate = function(context, key, fallback, ...)
-  local value = fallback
-  if context and type(context.translate) == "function" then
-    local translated = context.translate(key)
-    if translated and translated ~= key then
-      value = translated
-    end
-  end
-  if select("#", ...) == 0 then
-    return value
-  end
-  return string.format(value, ...)
-end
-local notify
-notify = function(context, key, fallback, ...)
-  local message = translate(context, key, fallback, ...)
-  if context and type(context.show) == "function" then
-    context.show(message)
-  elseif context and type(context.notify_message) == "function" then
-    context.notify_message(message)
-  elseif context and type(context.notify) == "function" then
-    context.notify(key, message)
-  elseif aegisub and aegisub.dialog and aegisub.dialog.display then
-    aegisub.dialog.display({
-      {
-        class = "label",
-        label = message,
-        x = 0,
-        y = 0,
-        width = 45,
-        height = 2
-      }
-    }, {
-      translate(context, "btn_ok", "OK")
-    })
-  end
-  return message
-end
-local dialog
-dialog = function(context, spec, buttons, options)
-  if context and type(context.dialog) == "function" then
-    return context.dialog(spec, buttons, options)
-  end
-  return aegisub.dialog.display(spec, buttons, options)
-end
-local editable_indices
-editable_indices = function(subs, sel)
-  local indices = { }
-  local _list_0 = EventOps.dialogueIndices(subs, sel)
-  for _index_0 = 1, #_list_0 do
-    local index = _list_0[_index_0]
-    local line = subs[index]
-    if line and not line.comment then
-      table.insert(indices, index)
-    end
-  end
-  return indices
-end
-local current_frame_ms
-current_frame_ms = function(context)
-  if context and type(context.current_frame_ms) == "function" then
-    return context.current_frame_ms()
-  end
-  if not (aegisub and aegisub.project_properties and aegisub.ms_from_frame) then
-    return nil, "fade_err_frame_read"
-  end
-  local ok_props, props = pcall(aegisub.project_properties)
-  if not (ok_props) then
-    return nil, "fade_err_frame_read"
-  end
-  local frame = props and tonumber(props.video_position)
-  if not (frame) then
-    return nil, "fade_err_no_frame"
-  end
-  local ok_ms, ms = pcall(aegisub.ms_from_frame, frame)
-  ms = tonumber(ms)
-  if not (ok_ms and ms and ms == ms and ms ~= math.huge and ms ~= -math.huge) then
-    return nil, "fade_err_frame_ms"
-  end
-  return ms
-end
-local apply_frame_fade
-apply_frame_fade = function(subs, sel, mode, context)
-  local indices = editable_indices(subs, sel)
-  if #indices == 0 then
-    notify(context, "fade_err_selection", "Select at least one dialogue line.")
-    return sel, false
-  end
-  local frame_ms, frame_error = current_frame_ms(context)
-  if not (frame_ms) then
-    local messages = {
-      fade_err_frame_read = "The current video frame could not be read.",
-      fade_err_no_frame = "There is no active video frame.",
-      fade_err_frame_ms = "The current frame could not be converted to milliseconds."
-    }
-    notify(context, frame_error, messages[frame_error] or messages.fade_err_frame_read)
-    return sel, false
-  end
-  local updates = { }
-  for _index_0 = 1, #indices do
-    local index = indices[_index_0]
-    local line = subs[index]
-    local start_time = tonumber(line.start_time)
-    local end_time = tonumber(line.end_time)
-    if not (start_time and end_time and frame_ms >= start_time and frame_ms < end_time) then
-      notify(context, "fade_err_frame_inside", "The current frame must be inside every selected line.")
-      return sel, false
-    end
-    local duration
-    if mode == "in" then
-      duration = frame_ms - start_time
-    else
-      duration = end_time - frame_ms
-    end
-    duration = math.floor(duration + 0.5)
-    local text, update_error = EventOps.setFadeComponent(line.text, mode, duration)
-    if not (text) then
-      local fallback
-      if update_error == "invalid_fad" then
-        fallback = "Line %d contains an invalid \\fad tag."
-      else
-        fallback = "Line %d could not be updated."
-      end
-      notify(context, "fade_err_line", fallback, index)
-      return sel, false
-    end
-    table.insert(updates, {
-      index = index,
-      text = text
-    })
-  end
-  for _index_0 = 1, #updates do
-    local update = updates[_index_0]
-    local line = subs[update.index]
-    line.text = update.text
-    subs[update.index] = line
-  end
-  if context and type(context.undo) == "function" then
-    local key
-    if mode == "in" then
-      key = "fade_undo_intro"
-    else
-      key = "fade_undo_outro"
-    end
-    local fallback
-    if mode == "in" then
-      fallback = "Rhea Signs: fade in from current frame"
-    else
-      fallback = "Rhea Signs: fade out from current frame"
-    end
-    context.undo(key, fallback)
-  elseif aegisub and aegisub.set_undo_point then
-    aegisub.set_undo_point((function()
-      if mode == "in" then
-        return "Fast Fades - fade in"
-      else
-        return "Fast Fades - fade out"
-      end
-    end)())
-  end
-  return sel, true
-end
-local cleanup
-cleanup = function(subs, sel, context)
-  local indices = EventOps.dialogueIndices(subs, sel)
-  local groups = { }
-  for _index_0 = 1, #indices do
-    local index = indices[_index_0]
-    local line = subs[index]
-    groups[tostring(line.start_time) .. "\31" .. tostring(line.end_time)] = true
-  end
-  local count = 0
-  for _ in pairs(groups) do
-    count = count + 1
-  end
-  if count < 2 then
-    notify(context, "fade_err_cleanup_groups", "Select at least two timing groups.")
-    return sel, false
-  end
-  local result, changed = LineOps.transaction(subs, "", function()
-    return EventOps.continuousFadeCleanup(subs, indices)
-  end)
-  if changed > 0 then
-    if context and type(context.undo) == "function" then
-      context.undo("fade_undo_cleanup", "Rhea Signs: continuous fade cleanup")
-    elseif aegisub and aegisub.set_undo_point then
-      aegisub.set_undo_point("Fast Fades - continuous cleanup")
-    end
-  end
-  return result, changed > 0
-end
-local run
-run = function(subs, sel, action, context)
-  if action == "Fade In from Current Frame" then
-    return apply_frame_fade(subs, sel, "in", context)
-  end
-  if action == "Fade Out from Current Frame" then
-    return apply_frame_fade(subs, sel, "out", context)
-  end
-  if action == "Continuous Fade Cleanup" then
-    return cleanup(subs, sel, context)
-  end
-  return sel, false
-end
-local main
-main = function(subs, sel, active, context)
-  local fade_in = translate(context, "fade_action_intro", "In")
-  local fade_out = translate(context, "fade_action_outro", "Out")
-  local continuous = translate(context, "fade_action_cleanup", "Clean")
-  local cancel = translate(context, "fade_cancel", "Cancel")
-  local button = dialog(context, {
-    {
-      class = "label",
-      label = translate(context, "fade_prompt", "Choose a fade operation:"),
-      x = 0,
-      y = 0,
-      width = 22,
-      height = 1
-    }
-  }, {
-    fade_in,
-    fade_out,
-    continuous,
-    cancel
-  }, {
-    close = cancel
-  })
-  if not (button and button ~= cancel) then
-    return sel, false
-  end
-  if button == fade_in then
-    return run(subs, sel, "Fade In from Current Frame", context)
-  end
-  if button == fade_out then
-    return run(subs, sel, "Fade Out from Current Frame", context)
-  end
-  return run(subs, sel, "Continuous Fade Cleanup", context)
-end
-return {
-  name = script_name,
-  version = script_version,
-  main = main,
-  run = run,
-  applyFrameFade = apply_frame_fade,
-  cleanup = cleanup
+FontStyles.main = main
+return FontStyles
+end)()
+RheaOps.Fades = (function()
+local Fades = {}
+local frameErrors = {
+    fade_err_frame_read = "The current video frame could not be read.",
+    fade_err_no_frame = "There is no active video frame.",
+    fade_err_frame_ms = "The current frame could not be converted to milliseconds.",
 }
-
-]====],
-    ["Shuffle Line Text"] = [====[
-local SharedEventOps = require("kite.EventOps")
-local SharedLineOps = require("kite.LineOps")
-local function main(subs, sel, active, context)
+local function translate(context, key, fallback, ...)
+    local value = fallback
+    if context and type(context.translate) == "function" then
+        local translated = context.translate(key)
+        if translated and translated ~= key then value = translated end
+    end
+    if select("#", ...) == 0 then return value end
+    return string.format(value, ...)
+end
+local function notify(context, key, fallback, ...)
+    local message = translate(context, key, fallback, ...)
+    if context and type(context.show) == "function" then
+        context.show(message)
+    elseif context and type(context.notify_message) == "function" then
+        context.notify_message(message)
+    elseif context and type(context.notify) == "function" then
+        context.notify(key, message)
+    elseif aegisub and aegisub.dialog and aegisub.dialog.display then
+        aegisub.dialog.display({
+            {class = "label", label = message, x = 0, y = 0, width = 45, height = 2},
+        }, {translate(context, "btn_ok", "OK")})
+    end
+    return message
+end
+local function editableIndices(subs, sel)
+    local indices = {}
+    for _, index in ipairs(EventOps.dialogueIndices(subs, sel)) do
+        if subs[index] and not subs[index].comment then indices[#indices + 1] = index end
+    end
+    return indices
+end
+local function currentFrameMs(context)
+    if context and type(context.current_frame_ms) == "function" then
+        return context.current_frame_ms()
+    end
+    return RheaFoundation.currentFrameMs()
+end
+local function undo(context, key, fallback, legacy)
+    if context and type(context.undo) == "function" then
+        context.undo(key, fallback)
+    elseif aegisub and aegisub.set_undo_point then
+        aegisub.set_undo_point(legacy)
+    end
+end
+function Fades.applyFrameFade(subs, sel, mode, context)
+    return Rhea.Lines.atomic(subs, function()
+        local indices = editableIndices(subs, sel)
+        if #indices == 0 then
+            notify(context, "fade_err_selection", "Select at least one dialogue line.")
+            return sel, false
+        end
+        local frameMs, frameError = currentFrameMs(context)
+        if not Core.finiteNumber(frameMs) then
+            notify(context, frameError, frameErrors[frameError] or frameErrors.fade_err_frame_read)
+            return sel, false
+        end
+        local updates = {}
+        for _, index in ipairs(indices) do
+            local line = subs[index]
+            local startTime, endTime = Core.finiteNumber(line.start_time), Core.finiteNumber(line.end_time)
+            if not startTime or not endTime or frameMs < startTime or frameMs >= endTime then
+                notify(context, "fade_err_frame_inside", "The current frame must be inside every selected line.")
+                return sel, false
+            end
+            local duration = mode == "in" and frameMs - startTime or endTime - frameMs
+            local updated, updateError = EventOps.setFadeComponent(line.text, mode, math.floor(duration + 0.5))
+            if not updated then
+                local fallback = updateError == "invalid_fad"
+                    and "Line %d contains an invalid \\fad tag."
+                    or "Line %d could not be updated."
+                notify(context, "fade_err_line", fallback, index)
+                return sel, false
+            end
+            updates[#updates + 1] = {index = index, text = updated}
+        end
+        for _, update in ipairs(updates) do
+            LineOps.checkCancelled()
+            local line = subs[update.index]
+            line.text = update.text
+            subs[update.index] = line
+        end
+        local intro = mode == "in"
+        undo(
+            context,
+            intro and "fade_undo_intro" or "fade_undo_outro",
+            intro and "Rhea Signs: fade in from current frame" or "Rhea Signs: fade out from current frame",
+            intro and "Fast Fades - fade in" or "Fast Fades - fade out"
+        )
+        return sel, true
+    end)
+end
+function Fades.cleanup(subs, sel, context)
+    local indices = EventOps.dialogueIndices(subs, sel)
+    local groups, count = {}, 0
+    for _, index in ipairs(indices) do
+        local line = subs[index]
+        local key = tostring(line.start_time) .. "\31" .. tostring(line.end_time)
+        if not groups[key] then groups[key], count = true, count + 1 end
+    end
+    if count < 2 then
+        notify(context, "fade_err_cleanup_groups", "Select at least two timing groups.")
+        return sel, false
+    end
+    local result, changed = LineOps.transaction(subs, "", function()
+        return EventOps.continuousFadeCleanup(subs, indices)
+    end)
+    if changed > 0 then
+        undo(context, "fade_undo_cleanup", "Rhea Signs: continuous fade cleanup", "Fast Fades - continuous cleanup")
+    end
+    return result, changed > 0
+end
+function Fades.run(subs, sel, action, context)
+    if action == Rhea.Actions.Fades.In then return Fades.applyFrameFade(subs, sel, "in", context) end
+    if action == Rhea.Actions.Fades.Out then return Fades.applyFrameFade(subs, sel, "out", context) end
+    if action == Rhea.Actions.Fades.Clean then return Fades.cleanup(subs, sel, context) end
+    return sel, false
+end
+function Fades.main(subs, sel, _, context)
+    local fadeIn = translate(context, "fade_action_intro", "In")
+    local fadeOut = translate(context, "fade_action_outro", "Out")
+    local clean = translate(context, "fade_action_cleanup", "Clean")
+    local cancel = translate(context, "fade_cancel", "Cancel")
+    local display = context and context.dialog or aegisub.dialog.display
+    local button = display({
+        {
+            class = "label",
+            label = translate(context, "fade_prompt", "Choose a fade operation:"),
+            x = 0, y = 0, width = 22, height = 1,
+        },
+    }, {fadeIn, fadeOut, clean, cancel}, {close = cancel})
+    if not button or button == cancel then return sel, false end
+    if button == fadeIn then return Fades.run(subs, sel, Rhea.Actions.Fades.In, context) end
+    if button == fadeOut then return Fades.run(subs, sel, Rhea.Actions.Fades.Out, context) end
+    if button == clean then return Fades.run(subs, sel, Rhea.Actions.Fades.Clean, context) end
+    return sel, false
+end
+return Fades
+end)()
+RheaOps.Shuffle = (function()
+local function main(subs, sel, _, context)
     context = context or {}
-    local indices = SharedEventOps.dialogueIndices(subs, sel)
+    local indices = EventOps.dialogueIndices(subs, sel)
     if #indices < 2 then
         if type(context.notify) == "function" then
             context.notify("tool_err_shuffle_lines", "Select at least two dialogue lines.")
         end
         return sel
     end
-    local result, changed = SharedLineOps.transaction(subs, "", function()
-        return SharedEventOps.shuffleLineText(subs, indices)
+    local result, changed = LineOps.transaction(subs, "", function()
+        return EventOps.shuffleLineText(subs, indices)
     end)
     if changed > 0 and type(context.undo) == "function" then
         context.undo("tool_undo_shuffle_line_text", "Rhea Signs: shuffle line text")
@@ -7802,50 +6963,27 @@ local function main(subs, sel, active, context)
     return result
 end
 return { main = main }
-]====],
+end)()
+RheaOps.StyleTags = {main=function(subs, sel, _, context) return AssContext.styleBake.run(subs,sel,context) end}
+Rhea.Actions.Tools.StyleTags = "Style to Tags"
+RheaOps.ToolboxActions = {
+    Rhea.Actions.Tools.StyleTags,
+    Rhea.Actions.Tools.FontStyles,
+    Rhea.Actions.Tools.Fades,
+    Rhea.Actions.Tools.Shuffle,
 }
-local TOOLBOX_ACTIONS = {
-    "Font and Style Manager",
-    "Fast Fades",
-    "Shuffle Line Text",
+RheaOps.Registry = {
+    [Rhea.Actions.Tools.StyleTags] = RheaOps.StyleTags,
+    [Rhea.Actions.Tools.Shapes] = RheaOps.Shapes,
+    [Rhea.Actions.Tools.FontStyles] = RheaOps.FontStyles,
+    [Rhea.Actions.Tools.Fades] = RheaOps.Fades,
+    [Rhea.Actions.Tools.Shuffle] = RheaOps.Shuffle,
 }
-local integratedToolCache = {}
-
-local function loadIntegratedTool(name)
-    if integratedToolCache[name] then return integratedToolCache[name] end
-    local source = INTEGRATED_TOOL_SOURCES[name]
-    if not source then return nil, name end
-
-    local chunk, err = loadstring(source, "@Rhea Signs/" .. name)
-    if not chunk then return nil, err end
-
-    local environment = setmetatable({
-        Rhea = Rhea,
-        RheaFoundation = RheaFoundation,
-        LineOps = LineOps,
-    }, {__index = _G})
-    setfenv(chunk, environment)
-    local ok, tool = pcall(chunk)
-    if not ok then return nil, tool end
-    if type(tool) ~= "table" or type(tool.main) ~= "function" then
-        return nil, "missing main entrypoint"
-    end
-    integratedToolCache[name] = tool
-    INTEGRATED_TOOL_SOURCES[name] = nil
-    return tool
-end
-
-local function integratedTool(name)
-    local tool, err = loadIntegratedTool(name)
-    if tool then return tool end
-    showMsg(string.format(L("err_tool_load"), choiceLabel(name), tostring(err)), nil, {width=60, height=6})
-end
-
-local function integratedToolContext()
+function RheaOps.context()
     return {
-        language = current_lang,
+        language = currentLang,
         translate = L,
-        current_frame_ms = RheaFoundation.currentFrameMs,
+        ["current_frame_ms"] = RheaFoundation.currentFrameMs,
         dialog = function(spec, buttons, options)
             return aegisub.dialog.display(spec, buttons, options)
         end,
@@ -7854,7 +6992,7 @@ local function integratedToolContext()
             if message == key then message = fallback end
             if aegisub and aegisub.log then pcall(aegisub.log, tostring(message or "") .. "\n") end
         end,
-        notify_message = function(message)
+        ["notify_message"] = function(message)
             if aegisub and aegisub.log then pcall(aegisub.log, tostring(message or "") .. "\n") end
         end,
         undo = function(key, fallback)
@@ -7874,8 +7012,7 @@ local function integratedToolContext()
         end,
     }
 end
-
-local SHAPE_DEFAULTS = {
+local shapeDefaults = {
     perimeter_mode = "Exterior contours only",
     optimizer_mode = "Auto",
     intensity = "Balanced",
@@ -7883,179 +7020,163 @@ local SHAPE_DEFAULTS = {
     max_bands = 8,
     show_summary = false,
 }
-local SHAPE_CONFIG = RheaConfig.section("sh", SHAPE_DEFAULTS)
-
-local tagops_gui, config_gui
-local function row_master_gui(subs, sel, active)
-    resolveConfig()
+local shapeConfig = RheaConfig.section("sh", shapeDefaults)
+function RheaOps.Tools.dropdownMenu(items)
+    local values, raw, shown = dropdownData(items)
+    return {items = values, raw = raw, shown = shown}
+end
+function RheaOps.Tools.main(subs, sel, active)
+    RheaConfig.resolve()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
-
     local pkc = RheaOps.Perspective.loadConfig()
-    local drc = FunctionalTable.union(RheaOps.Masks.loadConfig() or {}, RheaOps.Masks.defaults or {})
+    local drc = Functional.table.union(RheaOps.Masks.loadConfig() or {}, RheaOps.Masks.defaults or {})
     local soc = RheaOps.Sign.loadConfig()
-    local shc = SHAPE_CONFIG.read()
-
+    local shc = shapeConfig.read()
     local state = {
         pk_action = "", pk_map = pkc.map or "ABCD (exact copy)", pk_orgm = pkc.orgm or "3 minimize fax",
         pk_set_sx = pkc.set_sx or false, pk_sx = pkc.sx or 100,
         pk_set_sy = pkc.set_sy or false, pk_sy = pkc.sy or 100,
         pk_qscale = pkc.qscale or 100,
-
         dr_action = "", dr_mask_source = drc.mask_source or "from clip",
         dr_alignment = drc.alignment or "an7", dr_create_layer = drc.create_layer ~= false,
         dr_replace_mask = drc.replace_mask or false, dr_bicubic = drc.bicubic or false,
         dr_use_alpha = drc.use_alpha or false, dr_alpha_value = drc.alpha_value or "80",
         dr_use_color = drc.use_color ~= false, dr_mask_color = drc.color_value or "#000000", dr_save_name = "",
-
         so_action = "", so_type_mode = soc.type_mode or "Frame",
         so_vertical_gap = tonumber(soc.vertical_gap) or 0,
         so_circ_rot = soc.circ_rot or "Normal", so_circ_radio = soc.circ_radio or 0,
         so_circ_track = soc.circ_track or 0, so_circ_invert = soc.circ_invert or false,
         so_circ_delete = soc.circ_delete or false,
-
         shape_action = "",
-        shape_perimeter_mode = RheaFoundation.choose(shc.perimeter_mode, {"Exterior contours only", "Exterior contours and holes"}, SHAPE_DEFAULTS.perimeter_mode),
-        shape_optimizer_mode = RheaFoundation.choose(shc.optimizer_mode, SharedShapeOptimizer.modes, SHAPE_DEFAULTS.optimizer_mode),
-        shape_intensity = RheaFoundation.choose(shc.intensity, SharedShapeOptimizer.intensities, SHAPE_DEFAULTS.intensity),
-        shape_threshold = RheaFoundation.configNumber(shc.threshold, SHAPE_DEFAULTS.threshold, 0, 0.25),
-        shape_max_bands = RheaFoundation.configNumber(shc.max_bands, SHAPE_DEFAULTS.max_bands, 2, 64),
+        shape_perimeter_mode = RheaFoundation.choose(shc.perimeter_mode, Rhea.Actions.Shapes.PerimeterModes, shapeDefaults.perimeter_mode),
+        shape_optimizer_mode = RheaFoundation.choose(shc.optimizer_mode, ShapeOptimizer.modes, shapeDefaults.optimizer_mode),
+        shape_intensity = RheaFoundation.choose(shc.intensity, ShapeOptimizer.intensities, shapeDefaults.intensity),
+        shape_threshold = RheaFoundation.configNumber(shc.threshold, shapeDefaults.threshold, 0, 0.25),
+        shape_max_bands = RheaFoundation.configNumber(shc.max_bands, shapeDefaults.max_bands, 2),
         shape_show_summary = shc.show_summary == true,
-
         tool_action = "",
     }
     local function syncMainGlobalColors()
-        if current_config.mask_color ~= nil then state.dr_mask_color = current_config.mask_color end
+        if currentConfig.mask_color ~= nil then state.dr_mask_color = currentConfig.mask_color end
     end
     syncMainGlobalColors()
-
     while true do
-        local pkItems, pkMap, pkShown = dropdownData(RheaOps.Perspective.modes)
-        local pkMapItems, pkMapMap, pkMapShown = dropdownData(RheaOps.Perspective.mapNames())
-        local pkOrgItems, pkOrgMap, pkOrgShown = dropdownData(RheaOps.Perspective.orgModes)
-        local soActionItems, soActionMap, soActionShown = dropdownData({ "Typewriter", "Vertical Drop", "Circle Text", "Curve Text", "Clean SiO" })
-        local soTypeItems, soTypeMap, soTypeShown = dropdownData({ "Frame", "Duration" })
-        local soRotItems, soRotMap, soRotShown = dropdownData({ "Normal", "Invertido", "Vertical" })
-        local drActionItems, drActionMap, drActionShown = dropdownData({ "Apply Mask", "Create Layer", "Replace Mask", "Save Shape", "Delete Shape", "Clean DR" })
-        local drMaskItems, drMaskMap, drMaskShown = dropdownData(RheaOps.Masks.maskNames())
-        local drAlignItems, drAlignMap, drAlignShown = dropdownData({"an1", "an2", "an3", "an4", "an5", "an6", "an7", "an8", "an9"})
-        local drAlphaItems, drAlphaMap, drAlphaShown = dropdownData({"00", "20", "40", "60", "80", "A0", "C0", "E0", "FF"})
-        local shapeActionItems, shapeActionMap, shapeActionShown = dropdownData({"Unify Positions", "Place on Perimeter", "Shape Color Optimizer"})
-        local shapePerimeterItems, shapePerimeterMap, shapePerimeterShown = dropdownData({"Exterior contours only", "Exterior contours and holes"})
-        local shapeModeItems, shapeModeMap, shapeModeShown = dropdownData(SharedShapeOptimizer.modes)
-        local shapeIntensityItems, shapeIntensityMap, shapeIntensityShown = dropdownData(SharedShapeOptimizer.intensities)
-        local toolItems, toolMap, toolShown = dropdownData(TOOLBOX_ACTIONS)
-        local dropdownMaps = {
-            pk_action = pkMap, pk_map = pkMapMap, pk_orgm = pkOrgMap,
-            so_action = soActionMap, so_type_mode = soTypeMap, so_circ_rot = soRotMap,
-            dr_action = drActionMap, dr_mask_source = drMaskMap, dr_alignment = drAlignMap, dr_alpha_value = drAlphaMap,
-            shape_action = shapeActionMap, shape_perimeter_mode = shapePerimeterMap,
-            shape_optimizer_mode = shapeModeMap, shape_intensity = shapeIntensityMap,
-            tool_action = toolMap,
+        local menus = {
+            perspectiveAction = RheaOps.Tools.dropdownMenu(RheaOps.Perspective.modes),
+            perspectiveMap = RheaOps.Tools.dropdownMenu(RheaOps.Perspective.mapNames()),
+            perspectiveOrigin = RheaOps.Tools.dropdownMenu(RheaOps.Perspective.orgModes),
+            signAction = RheaOps.Tools.dropdownMenu(RheaOps.Sign.actionItems),
+            signType = RheaOps.Tools.dropdownMenu(RheaOps.Sign.typeModes),
+            signRotation = RheaOps.Tools.dropdownMenu(RheaOps.Sign.rotations),
+            maskAction = RheaOps.Tools.dropdownMenu(RheaOps.Masks.actionItems),
+            maskSource = RheaOps.Tools.dropdownMenu(RheaOps.Masks.maskNames()),
+            maskAlignment = RheaOps.Tools.dropdownMenu(RheaOps.Masks.alignments),
+            maskAlpha = RheaOps.Tools.dropdownMenu(RheaOps.Masks.alphaValues),
+            shapeAction = RheaOps.Tools.dropdownMenu(Rhea.Actions.Shapes.Items),
+            shapePerimeter = RheaOps.Tools.dropdownMenu(Rhea.Actions.Shapes.PerimeterModes),
+            shapeMode = RheaOps.Tools.dropdownMenu(ShapeOptimizer.modes),
+            shapeIntensity = RheaOps.Tools.dropdownMenu(ShapeOptimizer.intensities),
+            tool = RheaOps.Tools.dropdownMenu(RheaOps.ToolboxActions),
         }
-        local maskX, perspX, shapeX, signX = 0, 5, 0, 5
+        local dropdownMaps = {
+            pk_action = menus.perspectiveAction.raw, pk_map = menus.perspectiveMap.raw, pk_orgm = menus.perspectiveOrigin.raw,
+            so_action = menus.signAction.raw, so_type_mode = menus.signType.raw, so_circ_rot = menus.signRotation.raw,
+            dr_action = menus.maskAction.raw, dr_mask_source = menus.maskSource.raw, dr_alignment = menus.maskAlignment.raw, dr_alpha_value = menus.maskAlpha.raw,
+            shape_action = menus.shapeAction.raw, shape_perimeter_mode = menus.shapePerimeter.raw,
+            shape_optimizer_mode = menus.shapeMode.raw, shape_intensity = menus.shapeIntensity.raw,
+            tool_action = menus.tool.raw,
+        }
+        local columns = {mask = 0, perspective = 5, shape = 0, sign = 5}
         local d = {
-            { class="label", label=sectionTitle("title_masks"), x=maskX, y=0, width=5, height=1 },
-            { class="label", label=L("lbl_mask"), x=maskX, y=1, width=1, height=1 },
-            { class="dropdown", name="dr_action", items=drActionItems, value=shownChoice(drActionShown, state.dr_action), x=maskX + 1, y=1, width=4, height=1 },
-            { class="label", label=L("lbl_source"), x=maskX, y=2, width=1, height=1 },
-            { class="dropdown", name="dr_mask_source", items=drMaskItems, value=shownChoice(drMaskShown, state.dr_mask_source), x=maskX + 1, y=2, width=4, height=1 },
-            { class="label", label=L("lbl_align"), x=maskX, y=3, width=1, height=1 },
-            { class="dropdown", name="dr_alignment", items=drAlignItems, value=shownChoice(drAlignShown, state.dr_alignment), x=maskX + 1, y=3, width=1, height=1 },
-            { class="label", label=L("lbl_alpha"), x=maskX + 2, y=3, width=1, height=1 },
-            { class="dropdown", name="dr_alpha_value", items=drAlphaItems, value=shownChoice(drAlphaShown, state.dr_alpha_value), x=maskX + 3, y=3, width=2, height=1 },
-            { class="checkbox", name="dr_create_layer", label=L("lbl_layer"), value=state.dr_create_layer, x=maskX, y=4, width=2, height=1 },
-            { class="checkbox", name="dr_replace_mask", label=L("lbl_replace"), value=state.dr_replace_mask, x=maskX + 2, y=4, width=3, height=1 },
-            { class="checkbox", name="dr_bicubic", label="q2", value=state.dr_bicubic, x=maskX, y=5, width=1, height=1 },
-            { class="checkbox", name="dr_use_color", label=L("lbl_color"), value=state.dr_use_color, x=maskX + 1, y=5, width=1, height=1 },
-            { class="coloralpha", name="dr_mask_color", value=state.dr_mask_color, x=maskX + 2, y=5, width=2, height=1 },
-            { class="checkbox", name="dr_use_alpha", label="A", value=state.dr_use_alpha, x=maskX + 4, y=5, width=1, height=1 },
-            { class="label", label=L("lbl_name"), x=maskX, y=6, width=1, height=1 },
-            { class="edit", name="dr_save_name", value=state.dr_save_name, x=maskX + 1, y=6, width=4, height=1 },
-
-            { class="label", label=sectionTitle("title_perspectiva"), x=perspX, y=0, width=5, height=1 },
-            { class="label", label=L("lbl_mode"), x=perspX, y=1, width=1, height=1 },
-            { class="dropdown", name="pk_action", items=pkItems, value=shownChoice(pkShown, state.pk_action), x=perspX + 1, y=1, width=4, height=1 },
-            { class="label", label=L("lbl_map"), x=perspX, y=2, width=1, height=1 },
-            { class="dropdown", name="pk_map", items=pkMapItems, value=shownChoice(pkMapShown, state.pk_map), x=perspX + 1, y=2, width=4, height=1 },
-            { class="label", label=L("lbl_org"), x=perspX, y=3, width=1, height=1 },
-            { class="dropdown", name="pk_orgm", items=pkOrgItems, value=shownChoice(pkOrgShown, state.pk_orgm), x=perspX + 1, y=3, width=4, height=1 },
-            { class="checkbox", name="pk_set_sx", label=L("lbl_x"), value=state.pk_set_sx, x=perspX, y=4, width=1, height=1 },
-            { class="floatedit", name="pk_sx", value=state.pk_sx, min=1, x=perspX + 1, y=4, width=2, height=1 },
-            { class="checkbox", name="pk_set_sy", label=L("lbl_y"), value=state.pk_set_sy, x=perspX, y=5, width=1, height=1 },
-            { class="floatedit", name="pk_sy", value=state.pk_sy, min=1, x=perspX + 1, y=5, width=2, height=1 },
-            { class="label", label=L("lbl_quad"), x=perspX, y=6, width=1, height=1 },
-            { class="floatedit", name="pk_qscale", value=state.pk_qscale, min=1, x=perspX + 1, y=6, width=2, height=1 },
-
-            { class="label", label=sectionTitle("title_shapes"), x=shapeX, y=7, width=5, height=1 },
-            { class="label", label=L("lbl_action"), x=shapeX, y=8, width=1, height=1 },
-            { class="dropdown", name="shape_action", items=shapeActionItems, value=shownChoice(shapeActionShown, state.shape_action), hint=L("sh_hint_action"), x=shapeX + 1, y=8, width=4, height=1 },
-            { class="label", label=L("lbl_perimeter"), x=shapeX, y=9, width=1, height=1 },
-            { class="dropdown", name="shape_perimeter_mode", items=shapePerimeterItems, value=shownChoice(shapePerimeterShown, state.shape_perimeter_mode), hint=L("sh_hint_perimeter_mode"), x=shapeX + 1, y=9, width=4, height=1 },
-            { class="label", label=L("lbl_mode"), x=shapeX, y=10, width=1, height=1 },
-            { class="dropdown", name="shape_optimizer_mode", items=shapeModeItems, value=shownChoice(shapeModeShown, state.shape_optimizer_mode), hint=L("sh_hint_optimizer_mode"), x=shapeX + 1, y=10, width=4, height=1 },
-            { class="label", label=L("lbl_intensity"), x=shapeX, y=11, width=1, height=1 },
-            { class="dropdown", name="shape_intensity", items=shapeIntensityItems, value=shownChoice(shapeIntensityShown, state.shape_intensity), hint=L("sh_hint_intensity"), x=shapeX + 1, y=11, width=4, height=1 },
-            { class="label", label=L("lbl_threshold"), x=shapeX, y=12, width=1, height=1 },
-            { class="floatedit", name="shape_threshold", value=state.shape_threshold, min=0, max=0.25, step=0.005, hint=L("sh_hint_threshold"), x=shapeX + 1, y=12, width=1, height=1 },
-            { class="label", label=L("lbl_bands"), x=shapeX + 2, y=12, width=1, height=1 },
-            { class="intedit", name="shape_max_bands", value=state.shape_max_bands, min=2, max=64, hint=L("sh_hint_bands"), x=shapeX + 3, y=12, width=2, height=1 },
-            { class="checkbox", name="shape_show_summary", label=L("sh_show_summary"), value=state.shape_show_summary, x=shapeX, y=13, width=5, height=1 },
-
-            { class="label", label=sectionTitle("title_signlayout"), x=signX, y=7, width=5, height=1 },
-            { class="label", label=L("lbl_sign"), x=signX, y=8, width=1, height=1 },
-            { class="dropdown", name="so_action", items=soActionItems, value=shownChoice(soActionShown, state.so_action), x=signX + 1, y=8, width=4, height=1 },
-            { class="label", label=L("lbl_type"), x=signX, y=9, width=1, height=1 },
-            { class="dropdown", name="so_type_mode", items=soTypeItems, value=shownChoice(soTypeShown, state.so_type_mode), x=signX + 1, y=9, width=4, height=1 },
-            { class="label", label=L("lbl_rot"), x=signX, y=10, width=1, height=1 },
-            { class="dropdown", name="so_circ_rot", items=soRotItems, value=shownChoice(soRotShown, state.so_circ_rot), x=signX + 1, y=10, width=4, height=1 },
-            { class="label", label=L("lbl_radius"), x=signX, y=11, width=1, height=1 },
-            { class="floatedit", name="so_circ_radio", value=state.so_circ_radio, x=signX + 1, y=11, width=2, height=1 },
-            { class="checkbox", name="so_circ_invert", label=L("lbl_inv"), value=state.so_circ_invert, x=signX + 3, y=11, width=2, height=1 },
-            { class="label", label=L("lbl_track"), x=signX, y=12, width=1, height=1 },
-            { class="floatedit", name="so_circ_track", value=state.so_circ_track, x=signX + 1, y=12, width=2, height=1 },
-            { class="checkbox", name="so_circ_delete", label=L("lbl_del"), value=state.so_circ_delete, x=signX + 3, y=12, width=2, height=1 },
-            { class="label", label=L("lbl_vertical_gap"), x=signX, y=13, width=2, height=1 },
-            { class="floatedit", name="so_vertical_gap", value=state.so_vertical_gap, min=-10000, max=10000, step=0.1, x=signX + 2, y=13, width=3, height=1 },
-
+            { class="label", label=sectionTitle("title_masks"), x=columns.mask, y=0, width=5, height=1 },
+            { class="label", label=L("lbl_mask"), x=columns.mask, y=1, width=1, height=1 },
+            { class="dropdown", name="dr_action", items=menus.maskAction.items, value=shownChoice(menus.maskAction.shown, state.dr_action), x=columns.mask + 1, y=1, width=4, height=1 },
+            { class="label", label=L("lbl_source"), x=columns.mask, y=2, width=1, height=1 },
+            { class="dropdown", name="dr_mask_source", items=menus.maskSource.items, value=shownChoice(menus.maskSource.shown, state.dr_mask_source), x=columns.mask + 1, y=2, width=4, height=1 },
+            { class="label", label=L("lbl_align"), x=columns.mask, y=3, width=1, height=1 },
+            { class="dropdown", name="dr_alignment", items=menus.maskAlignment.items, value=shownChoice(menus.maskAlignment.shown, state.dr_alignment), x=columns.mask + 1, y=3, width=1, height=1 },
+            { class="label", label=L("lbl_alpha"), x=columns.mask + 2, y=3, width=1, height=1 },
+            { class="dropdown", name="dr_alpha_value", items=menus.maskAlpha.items, value=shownChoice(menus.maskAlpha.shown, state.dr_alpha_value), x=columns.mask + 3, y=3, width=2, height=1 },
+            { class="checkbox", name="dr_create_layer", label=L("lbl_layer"), value=state.dr_create_layer, x=columns.mask, y=4, width=2, height=1 },
+            { class="checkbox", name="dr_replace_mask", label=L("lbl_replace"), value=state.dr_replace_mask, x=columns.mask + 2, y=4, width=3, height=1 },
+            { class="checkbox", name="dr_bicubic", label="q2", value=state.dr_bicubic, x=columns.mask, y=5, width=1, height=1 },
+            { class="checkbox", name="dr_use_color", label=L("lbl_color"), value=state.dr_use_color, x=columns.mask + 1, y=5, width=1, height=1 },
+            { class="color", name="dr_mask_color", value=state.dr_mask_color, x=columns.mask + 2, y=5, width=2, height=1 },
+            { class="checkbox", name="dr_use_alpha", label="A", value=state.dr_use_alpha, x=columns.mask + 4, y=5, width=1, height=1 },
+            { class="label", label=L("lbl_name"), x=columns.mask, y=6, width=1, height=1 },
+            { class="edit", name="dr_save_name", value=state.dr_save_name, x=columns.mask + 1, y=6, width=4, height=1 },
+            { class="label", label=sectionTitle("title_perspectiva"), x=columns.perspective, y=0, width=5, height=1 },
+            { class="label", label=L("lbl_mode"), x=columns.perspective, y=1, width=1, height=1 },
+            { class="dropdown", name="pk_action", items=menus.perspectiveAction.items, value=shownChoice(menus.perspectiveAction.shown, state.pk_action), x=columns.perspective + 1, y=1, width=4, height=1 },
+            { class="label", label=L("lbl_map"), x=columns.perspective, y=2, width=1, height=1 },
+            { class="dropdown", name="pk_map", items=menus.perspectiveMap.items, value=shownChoice(menus.perspectiveMap.shown, state.pk_map), x=columns.perspective + 1, y=2, width=4, height=1 },
+            { class="label", label=L("lbl_org"), x=columns.perspective, y=3, width=1, height=1 },
+            { class="dropdown", name="pk_orgm", items=menus.perspectiveOrigin.items, value=shownChoice(menus.perspectiveOrigin.shown, state.pk_orgm), x=columns.perspective + 1, y=3, width=4, height=1 },
+            { class="checkbox", name="pk_set_sx", label=L("lbl_x"), value=state.pk_set_sx, x=columns.perspective, y=4, width=1, height=1 },
+            { class="floatedit", name="pk_sx", value=state.pk_sx, min=rheaDimensionEpsilon, x=columns.perspective + 1, y=4, width=2, height=1 },
+            { class="checkbox", name="pk_set_sy", label=L("lbl_y"), value=state.pk_set_sy, x=columns.perspective, y=5, width=1, height=1 },
+            { class="floatedit", name="pk_sy", value=state.pk_sy, min=rheaDimensionEpsilon, x=columns.perspective + 1, y=5, width=2, height=1 },
+            { class="label", label=L("lbl_quad"), x=columns.perspective, y=6, width=1, height=1 },
+            { class="floatedit", name="pk_qscale", value=state.pk_qscale, min=rheaDimensionEpsilon, x=columns.perspective + 1, y=6, width=2, height=1 },
+            { class="label", label=sectionTitle("title_shapes"), x=columns.shape, y=7, width=5, height=1 },
+            { class="label", label=L("lbl_action"), x=columns.shape, y=8, width=1, height=1 },
+            { class="dropdown", name="shape_action", items=menus.shapeAction.items, value=shownChoice(menus.shapeAction.shown, state.shape_action), hint=L("sh_hint_action"), x=columns.shape + 1, y=8, width=4, height=1 },
+            { class="label", label=L("lbl_perimeter"), x=columns.shape, y=9, width=1, height=1 },
+            { class="dropdown", name="shape_perimeter_mode", items=menus.shapePerimeter.items, value=shownChoice(menus.shapePerimeter.shown, state.shape_perimeter_mode), hint=L("sh_hint_perimeter_mode"), x=columns.shape + 1, y=9, width=4, height=1 },
+            { class="label", label=L("lbl_mode"), x=columns.shape, y=10, width=1, height=1 },
+            { class="dropdown", name="shape_optimizer_mode", items=menus.shapeMode.items, value=shownChoice(menus.shapeMode.shown, state.shape_optimizer_mode), hint=L("sh_hint_optimizer_mode"), x=columns.shape + 1, y=10, width=4, height=1 },
+            { class="label", label=L("lbl_intensity"), x=columns.shape, y=11, width=1, height=1 },
+            { class="dropdown", name="shape_intensity", items=menus.shapeIntensity.items, value=shownChoice(menus.shapeIntensity.shown, state.shape_intensity), hint=L("sh_hint_intensity"), x=columns.shape + 1, y=11, width=4, height=1 },
+            { class="label", label=L("lbl_threshold"), x=columns.shape, y=12, width=1, height=1 },
+            { class="floatedit", name="shape_threshold", value=state.shape_threshold, min=0, max=0.25, step=0.005, hint=L("sh_hint_threshold"), x=columns.shape + 1, y=12, width=1, height=1 },
+            { class="label", label=L("lbl_bands"), x=columns.shape + 2, y=12, width=1, height=1 },
+            { class="intedit", name="shape_max_bands", value=state.shape_max_bands, min=2, hint=L("sh_hint_bands"), x=columns.shape + 3, y=12, width=2, height=1 },
+            { class="checkbox", name="shape_show_summary", label=L("sh_show_summary"), value=state.shape_show_summary, x=columns.shape, y=13, width=5, height=1 },
+            { class="label", label=sectionTitle("title_signlayout"), x=columns.sign, y=7, width=5, height=1 },
+            { class="label", label=L("lbl_sign"), x=columns.sign, y=8, width=1, height=1 },
+            { class="dropdown", name="so_action", items=menus.signAction.items, value=shownChoice(menus.signAction.shown, state.so_action), x=columns.sign + 1, y=8, width=4, height=1 },
+            { class="label", label=L("lbl_type"), x=columns.sign, y=9, width=1, height=1 },
+            { class="dropdown", name="so_type_mode", items=menus.signType.items, value=shownChoice(menus.signType.shown, state.so_type_mode), x=columns.sign + 1, y=9, width=4, height=1 },
+            { class="label", label=L("lbl_rot"), x=columns.sign, y=10, width=1, height=1 },
+            { class="dropdown", name="so_circ_rot", items=menus.signRotation.items, value=shownChoice(menus.signRotation.shown, state.so_circ_rot), x=columns.sign + 1, y=10, width=4, height=1 },
+            { class="label", label=L("lbl_radius"), x=columns.sign, y=11, width=1, height=1 },
+            { class="floatedit", name="so_circ_radio", value=state.so_circ_radio, x=columns.sign + 1, y=11, width=2, height=1 },
+            { class="checkbox", name="so_circ_invert", label=L("lbl_inv"), value=state.so_circ_invert, x=columns.sign + 3, y=11, width=2, height=1 },
+            { class="label", label=L("lbl_track"), x=columns.sign, y=12, width=1, height=1 },
+            { class="floatedit", name="so_circ_track", value=state.so_circ_track, x=columns.sign + 1, y=12, width=2, height=1 },
+            { class="checkbox", name="so_circ_delete", label=L("lbl_del"), value=state.so_circ_delete, x=columns.sign + 3, y=12, width=2, height=1 },
+            { class="label", label=L("lbl_vertical_gap"), x=columns.sign, y=13, width=2, height=1 },
+            { class="floatedit", name="so_vertical_gap", value=state.so_vertical_gap, x=columns.sign + 2, y=13, width=3, height=1 },
             { class="label", label=sectionTitle("title_toolbox"), x=0, y=14, width=2, height=1 },
-            { class="dropdown", name="tool_action", items=toolItems, value=shownChoice(toolShown, state.tool_action), x=2, y=14, width=8, height=1 },
+            { class="dropdown", name="tool_action", items=menus.tool.items, value=shownChoice(menus.tool.shown, state.tool_action), x=2, y=14, width=8, height=1 },
         }
         local buttons = { L("btn_execute"), L("btn_mass_signs"), L("btn_fastsigns"), L("btn_tagops"), L("btn_config"), L("btn_help"), L("btn_cancel") }
         local b, r = aegisub.dialog.display(d, buttons)
         if not b or b == L("btn_cancel") then return end
-
         for k, v in pairs(r) do
             local m = dropdownMaps[k]
             state[k] = m and rawChoice(m, v) or v
         end
         r = state
-
         if b == L("btn_help") then
             aegisub.dialog.display({
                 { class="textbox", text=helpText(), x=0, y=0, width=50, height=22 }
             }, { L("btn_ok") })
-
         elseif b == L("btn_mass_signs") then
             if RheaOps.Tools.massSigns(subs, sel) then return end
-
         elseif b == L("btn_fastsigns") then
-            RheaOps.Tools.fastSigns(subs, sel)
-            return
-
+            return RheaOps.Tools.fastSigns(subs, sel)
         elseif b == L("btn_tagops") then
-            if tagops_gui(subs, sel) then return end
-
+            if RheaOps.Tools.tagOpsGui(subs, sel) then return end
         elseif b == L("btn_config") then
-            if config_gui() then syncMainGlobalColors() end
-
+            if RheaOps.Tools.configGui() then syncMainGlobalColors() end
         elseif b == L("btn_execute") then
             local tsel = sel
-            local any_run = (r.pk_action ~= "" or r.dr_action ~= "" or r.shape_action ~= "" or r.so_action ~= "" or r.tool_action ~= "")
-            if not any_run then return end
+            local anyRun = (r.pk_action ~= "" or r.dr_action ~= "" or r.shape_action ~= "" or r.so_action ~= "" or r.tool_action ~= "")
+            if not anyRun then return end
             local function updateChainSelection(result, changed)
                 if changed ~= false and type(result) == "table" then tsel = result end
             end
-
             if r.pk_action ~= "" then
                 local perspectiveResult = RheaOps.Perspective.run(subs, tsel, {
                     mode = r.pk_action, map = r.pk_map, orgm = r.pk_orgm,
@@ -8065,7 +7186,6 @@ local function row_master_gui(subs, sel, active)
                 })
                 if perspectiveResult ~= true then return end
             end
-
             if r.dr_action ~= "" then
                 local drcfg = {
                     mask_source = r.dr_mask_source, alignment = r.dr_alignment,
@@ -8074,18 +7194,18 @@ local function row_master_gui(subs, sel, active)
                     alpha_value = r.dr_alpha_value, use_color = r.dr_use_color,
                     color_value = r.dr_mask_color,
                 }
-                if r.dr_mask_color and r.dr_mask_color ~= current_config.mask_color then
-                    current_config.mask_color = r.dr_mask_color
-                    saveGlobalConfig()
+                if r.dr_mask_color and r.dr_mask_color ~= currentConfig.mask_color then
+                    currentConfig.mask_color = r.dr_mask_color
+                    RheaConfig.save()
                 end
-                if r.dr_action == "Save Shape" then
+                if r.dr_action == RheaOps.Masks.actions.Save then
                     local name = Rhea.trim(r.dr_save_name or "")
                     if name ~= "" and tsel[1] then
                         local ok, err = RheaOps.Masks.saveMask(name, subs[tsel[1]].text)
                         if not ok then showMsg(tostring(err or "No se pudo guardar la máscara.")) end
                     end
                     RheaOps.Masks.saveConfig(drcfg)
-                elseif r.dr_action == "Delete Shape" then
+                elseif r.dr_action == RheaOps.Masks.actions.Delete then
                     local name = Rhea.trim(r.dr_save_name or "")
                     if name ~= "" then
                         local ok, err = RheaOps.Masks.deleteMask(name)
@@ -8093,21 +7213,19 @@ local function row_master_gui(subs, sel, active)
                     end
                     RheaOps.Masks.saveConfig(drcfg)
                 else
-                    if r.dr_action == "Clean DR" then drcfg.op = "clean"
-                    elseif r.dr_action == "Create Layer" then drcfg.create_layer = true; drcfg.replace_mask = false
-                    elseif r.dr_action == "Replace Mask" then drcfg.replace_mask = true end
+                    if r.dr_action == RheaOps.Masks.actions.Create then drcfg.create_layer = true; drcfg.replace_mask = false
+                    elseif r.dr_action == RheaOps.Masks.actions.Replace then drcfg.replace_mask = true end
                     local result, changed = RheaOps.Masks.run(subs, tsel, drcfg)
                     updateChainSelection(result, changed)
                 end
             end
-
             if r.shape_action ~= "" then
-                SHAPE_CONFIG.write({
+                shapeConfig.write({
                     perimeter_mode = r.shape_perimeter_mode,
                     optimizer_mode = r.shape_optimizer_mode,
                     intensity = r.shape_intensity,
-                    threshold = tonumber(r.shape_threshold) or SHAPE_DEFAULTS.threshold,
-                    max_bands = tonumber(r.shape_max_bands) or SHAPE_DEFAULTS.max_bands,
+                    threshold = tonumber(r.shape_threshold) or shapeDefaults.threshold,
+                    max_bands = tonumber(r.shape_max_bands) or shapeDefaults.max_bands,
                     show_summary = r.shape_show_summary == true,
                 })
                 local shapeActive, activeSelected = tonumber(active), false
@@ -8115,7 +7233,7 @@ local function row_master_gui(subs, sel, active)
                     if index == shapeActive then activeSelected = true; break end
                 end
                 if not activeSelected then shapeActive = tsel and tsel[1] end
-                local tool = integratedTool("Shapes")
+                local tool = RheaOps.Registry[Rhea.Actions.Tools.Shapes]
                 if not tool then return end
                 local result, changed = tool.main(subs, tsel, shapeActive, {
                     action = r.shape_action,
@@ -8125,16 +7243,11 @@ local function row_master_gui(subs, sel, active)
                     threshold = tonumber(r.shape_threshold) or 0,
                     max_bands = tonumber(r.shape_max_bands) or 8,
                     show_summary = r.shape_show_summary == true,
-                }, integratedToolContext())
+                }, RheaOps.context())
                 updateChainSelection(result, changed)
             end
-
             if r.so_action ~= "" then
-                local sop = ({
-                    ["Typewriter"] = "typewriter", ["Vertical Drop"] = "vertical_drop",
-                    ["Circle Text"] = "circle_text", ["Curve Text"] = "curve_text",
-                    ["Clean SiO"] = "clean_sio",
-                })[r.so_action]
+                local sop = RheaOps.Sign.actions[r.so_action]
                 local result, changed = RheaOps.Sign.run(subs, tsel, {
                     op = sop, type_mode = r.so_type_mode,
                     vertical_gap = tonumber(r.so_vertical_gap) or 0,
@@ -8146,39 +7259,34 @@ local function row_master_gui(subs, sel, active)
                 })
                 updateChainSelection(result, changed)
             end
-
             if r.tool_action ~= "" then
-                local tool = integratedTool(r.tool_action)
-                if tool then return tool.main(subs, tsel, nil, integratedToolContext()) end
+                local tool = RheaOps.Registry[r.tool_action]
+                if tool then return tool.main(subs, tsel, nil, RheaOps.context()) end
             end
-
-            return
+            return tsel, tsel and tsel[1]
         end
     end
 end
-
-tagops_gui = function(subs, sel)
-    resolveConfig()
+function RheaOps.Tools.tagOpsGui(subs, sel)
+    RheaConfig.resolve()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return false end
-
     local actionItems, actionMap, actionShown = dropdownData(TagOps.actions)
     local modeItems, modeMap, modeShown = dropdownData({"Add", "Percent", "Transform"})
     local alignOrgItems, alignOrgMap, alignOrgShown = dropdownData({"Keep org", "Move org"})
-    local savedAction = tagopsNormalizeAction(current_config.tagops_action or "Resize / transform")
+    local savedAction = tagopsNormalizeAction(currentConfig.tagops_action or "Resize / transform")
     local state = {
         tagops_action = savedAction,
-        tagops_amount = current_config.tagops_amount or 0,
-        tagops_mode = current_config.tagops_mode or "Add",
-        tagops_align_org = current_config.tagops_align_org or "Keep org",
-        tagops_replace = current_config.tagops_replace ~= false,
-        tagops_all_blocks = current_config.tagops_all_blocks or false,
-        tagops_append = current_config.tagops_append or false,
-        tagops_info = current_config.tagops_info or false,
+        tagops_amount = currentConfig.tagops_amount or 0,
+        tagops_mode = currentConfig.tagops_mode or "Add",
+        tagops_align_org = currentConfig.tagops_align_org or "Keep org",
+        tagops_replace = currentConfig.tagops_replace ~= false,
+        tagops_all_blocks = currentConfig.tagops_all_blocks or false,
+        tagops_append = currentConfig.tagops_append or false,
+        tagops_info = currentConfig.tagops_info or false,
     }
     for _, def in ipairs(TagOps.defs) do
-        state["tagops_" .. def.key] = current_config["tagops_" .. def.key] or false
+        state["tagops_" .. def.key] = currentConfig["tagops_" .. def.key] or false
     end
-
     local d = {
         {class="label", label=L("tagops_title"), x=0, y=0, width=8, height=1},
         {class="label", label=L("lbl_action"), x=0, y=1, width=2, height=1},
@@ -8198,30 +7306,26 @@ tagops_gui = function(subs, sel)
         local row = math.floor((index - 1) / 6)
         d[#d + 1] = {class="checkbox", name="tagops_" .. def.key, label=def.label, value=state["tagops_" .. def.key], x=col, y=9 + row, width=1, height=1}
     end
-
     local b, r = aegisub.dialog.display(d, {L("btn_execute"), L("btn_copy_tags"), L("btn_keep_only"), L("btn_cancel")})
-    if b == L("btn_cancel") or not b then return false end
-
+    if b ~= L("btn_execute") and b ~= L("btn_copy_tags") and b ~= L("btn_keep_only") then return false end
     r.tagops_action = tagopsNormalizeAction(rawChoice(actionMap, r.tagops_action))
     r.tagops_mode = rawChoice(modeMap, r.tagops_mode)
     r.tagops_align_org = rawChoice(alignOrgMap, r.tagops_align_org)
-    current_config.tagops_action = r.tagops_action
-    current_config.tagops_amount = r.tagops_amount
-    current_config.tagops_mode = r.tagops_mode
-    current_config.tagops_align_org = r.tagops_align_org
-    current_config.tagops_replace = r.tagops_replace
-    current_config.tagops_all_blocks = r.tagops_all_blocks
-    current_config.tagops_append = r.tagops_append
-    current_config.tagops_info = r.tagops_info
-
+    currentConfig.tagops_action = r.tagops_action
+    currentConfig.tagops_amount = r.tagops_amount
+    currentConfig.tagops_mode = r.tagops_mode
+    currentConfig.tagops_align_org = r.tagops_align_org
+    currentConfig.tagops_replace = r.tagops_replace
+    currentConfig.tagops_all_blocks = r.tagops_all_blocks
+    currentConfig.tagops_append = r.tagops_append
+    currentConfig.tagops_info = r.tagops_info
     local selected = {}
     for _, def in ipairs(TagOps.defs) do
         local enabled = r["tagops_" .. def.key] or false
-        current_config["tagops_" .. def.key] = enabled
+        currentConfig["tagops_" .. def.key] = enabled
         if enabled then selected[def.key] = true end
     end
-    saveGlobalConfig()
-
+    RheaConfig.save()
     local opts = {
         selected = selected,
         amount = r.tagops_amount,
@@ -8244,49 +7348,42 @@ tagops_gui = function(subs, sel)
     end
     return applied == true
 end
-
-config_gui = function()
-    resolveConfig()
+function RheaOps.Tools.configGui()
+    RheaConfig.resolve()
     local langItems, langMap, langShown = dropdownData({"en", "es", "pt"})
-    local state = FunctionalTable.union(current_config, DEFAULT_CONFIG)
+    local state = Functional.table.union(currentConfig, defaultConfig)
     local d = {
         {class="label", label=L("btn_config"), x=0, y=0, width=8, height=1},
         {class="label", label=L("lbl_language"), x=0, y=1, width=2, height=1},
         {class="dropdown", name="language", items=langItems, value=shownChoice(langShown, state.language), x=2, y=1, width=2, height=1},
-
         {class="label", label=sectionTitle("title_colorbar"), x=0, y=2, width=4, height=1},
         {class="label", label=L("lbl_mask"), x=0, y=3, width=1, height=1},
-        {class="coloralpha", name="mask_color", value=state.mask_color, x=1, y=3, width=1, height=1},
-
+        {class="color", name="mask_color", value=state.mask_color, x=1, y=3, width=1, height=1},
         {class="label", label=L("btn_fastsigns"), x=0, y=4, width=8, height=1},
         {class="label", label=L("lbl_box"), x=0, y=5, width=1, height=1},
-        {class="coloralpha", name="fastsign_box_color", value=state.fastsign_box_color, x=1, y=5, width=1, height=1},
+        {class="color", name="fastsign_box_color", value=state.fastsign_box_color, x=1, y=5, width=1, height=1},
         {class="label", label=L("lbl_text"), x=2, y=5, width=1, height=1},
         {class="coloralpha", name="fastsign_text_color", value=state.fastsign_text_color, x=3, y=5, width=1, height=1},
         {class="label", label=L("lbl_glow"), x=4, y=5, width=1, height=1},
-        {class="coloralpha", name="fastsign_glow_color", value=state.fastsign_glow_color, x=5, y=5, width=1, height=1},
-
+        {class="color", name="fastsign_glow_color", value=state.fastsign_glow_color, x=5, y=5, width=1, height=1},
         {class="label", label=L("lbl_alpha"), x=0, y=6, width=2, height=1},
         {class="edit", name="fastsign_box_alpha", value=state.fastsign_box_alpha, x=2, y=6, width=2, height=1},
         {class="label", label=L("lbl_glow") .. " A", x=4, y=6, width=2, height=1},
         {class="edit", name="fastsign_glow_alpha", value=state.fastsign_glow_alpha, x=6, y=6, width=2, height=1},
         {class="label", label=L("lbl_fade"), x=8, y=6, width=2, height=1},
         {class="intedit", name="fastsign_fade_ms", value=state.fastsign_fade_ms, min=0, x=10, y=6, width=3, height=1},
-
         {class="label", label=L("lbl_pad_x"), x=0, y=7, width=2, height=1},
         {class="intedit", name="fastsign_margin_h", value=state.fastsign_margin_h, min=0, x=2, y=7, width=3, height=1},
         {class="label", label=L("lbl_pad_y"), x=5, y=7, width=2, height=1},
         {class="intedit", name="fastsign_margin_v", value=state.fastsign_margin_v, min=0, x=7, y=7, width=3, height=1},
         {class="label", label=L("lbl_top"), x=10, y=7, width=2, height=1},
         {class="intedit", name="fastsign_top_offset", value=state.fastsign_top_offset, min=0, x=12, y=7, width=3, height=1},
-
         {class="label", label=L("lbl_gap"), x=0, y=8, width=2, height=1},
         {class="intedit", name="fastsign_horz_gap", value=state.fastsign_horz_gap, min=0, x=2, y=8, width=3, height=1},
         {class="label", label=L("lbl_max_width"), x=5, y=8, width=2, height=1},
         {class="intedit", name="fastsign_max_width", value=state.fastsign_max_width, min=10, max=100, x=7, y=8, width=3, height=1},
         {class="label", label=L("lbl_box_blur"), x=10, y=8, width=3, height=1},
         {class="floatedit", name="fastsign_box_blur", value=state.fastsign_box_blur, min=0, x=13, y=8, width=3, height=1},
-
         {class="label", label=L("lbl_glow_border"), x=0, y=9, width=3, height=1},
         {class="floatedit", name="fastsign_glow_border", value=state.fastsign_glow_border, min=0, x=3, y=9, width=3, height=1},
         {class="label", label=L("lbl_glow_blur"), x=6, y=9, width=3, height=1},
@@ -8294,86 +7391,86 @@ config_gui = function()
         {class="label", label=L("lbl_text_blur"), x=0, y=10, width=3, height=1},
         {class="floatedit", name="fastsign_text_blur", value=state.fastsign_text_blur, min=0, x=3, y=10, width=3, height=1},
     }
-
     local b, r = aegisub.dialog.display(d, {L("btn_save"), L("btn_cancel")})
     if b ~= L("btn_save") then return false end
     r.language = rawChoice(langMap, r.language)
-    for key in pairs(DEFAULT_CONFIG) do
-        if r[key] ~= nil then current_config[key] = r[key] end
+    for key in pairs(defaultConfig) do
+        if r[key] ~= nil then currentConfig[key] = r[key] end
     end
-    current_lang = current_config.language or current_lang
-    saveGlobalConfig()
+    currentLang = currentConfig.language or currentLang
+    RheaConfig.save()
     return true
 end
-
-local function macroPath(name)
+function Rhea.Macros.path(name)
     if name == "" then return script_name end
     return script_name .. "/" .. name
 end
-
-local function hotkeyPath(name)
-    return HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT .. "/" .. name
+function Rhea.Macros.hotkeyPath(name)
+    return hotkeyMenuRoot .. "/" .. hotkeyMenuScript .. "/" .. name
 end
-
-local function fastsigns_macro(subs, sel)
-    return RheaOps.Tools.fastSigns(subs, sel)
-end
-
-local function signs_editor_macro(subs, sel)
-    return RheaOps.Tools.massSigns(subs, sel)
-end
-
-local function integrated_tool_macro(name)
-    return function(subs, sel)
-        resolveConfig()
+function Rhea.Macros.tool(name)
+    return function(subs, sel, active)
+        RheaConfig.resolve()
         if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
-        local tool = integratedTool(name)
-        if tool then return tool.main(subs, sel, nil, integratedToolContext()) end
+        local tool = RheaOps.Registry[name]
+        if tool then return tool.main(subs, sel, active, RheaOps.context()) end
     end
 end
-
-local function fade_macro(action)
+function Rhea.Macros.fade(action)
     return function(subs, sel)
-        resolveConfig()
+        RheaConfig.resolve()
         if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
-        local tool = integratedTool("Fast Fades")
+        local tool = RheaOps.Registry[Rhea.Actions.Tools.Fades]
         if tool and type(tool.run) == "function" then
-            return tool.run(subs, sel, action, integratedToolContext())
+            return tool.run(subs, sel, action, RheaOps.context())
         end
     end
 end
-
-local function shapes_macro(action)
+function Rhea.Macros.shapes(action)
     return function(subs, sel, active)
-        resolveConfig()
+        RheaConfig.resolve()
         if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
-        local cfg = SHAPE_CONFIG.read()
-        local tool = integratedTool("Shapes")
+        local cfg = shapeConfig.read()
+        local tool = RheaOps.Registry[Rhea.Actions.Tools.Shapes]
         if not tool then return end
         return tool.main(subs, sel, active, {
             action = action,
-            perimeter_mode = RheaFoundation.choose(cfg.perimeter_mode, {"Exterior contours only", "Exterior contours and holes"}, SHAPE_DEFAULTS.perimeter_mode),
-            mode = RheaFoundation.choose(cfg.optimizer_mode, SharedShapeOptimizer.modes, SHAPE_DEFAULTS.optimizer_mode),
-            intensity = RheaFoundation.choose(cfg.intensity, SharedShapeOptimizer.intensities, SHAPE_DEFAULTS.intensity),
-            threshold = RheaFoundation.configNumber(cfg.threshold, SHAPE_DEFAULTS.threshold, 0, 0.25),
-            max_bands = RheaFoundation.configNumber(cfg.max_bands, SHAPE_DEFAULTS.max_bands, 2, 64),
+            perimeter_mode = RheaFoundation.choose(cfg.perimeter_mode, Rhea.Actions.Shapes.PerimeterModes, shapeDefaults.perimeter_mode),
+            mode = RheaFoundation.choose(cfg.optimizer_mode, ShapeOptimizer.modes, shapeDefaults.optimizer_mode),
+            intensity = RheaFoundation.choose(cfg.intensity, ShapeOptimizer.intensities, shapeDefaults.intensity),
+            threshold = RheaFoundation.configNumber(cfg.threshold, shapeDefaults.threshold, 0, 0.25),
+            max_bands = RheaFoundation.configNumber(cfg.max_bands, shapeDefaults.max_bands, 2),
             show_summary = cfg.show_summary == true,
-        }, integratedToolContext())
+        }, RheaOps.context())
     end
 end
-
-depRec:registerMacros({
-    { macroPath(""), script_description, row_master_gui },
-    { hotkeyPath("TagOps"), "Tag operations", tagops_gui },
-    { hotkeyPath("Fast Signs"), "Generate fast signs", fastsigns_macro },
-    { hotkeyPath("Signs Editor"), "Edit repeated sign text", signs_editor_macro },
-    { hotkeyPath("Shapes/Unify Positions"), "Unify ASS drawing pivots", shapes_macro("Unify Positions") },
-    { hotkeyPath("Shapes/Place on Perimeter"), "Repeat multilayer shapes along a perimeter", shapes_macro("Place on Perimeter") },
-    { hotkeyPath("Shapes/Shape Color Optimizer"), "Optimize drawing colors", shapes_macro("Shape Color Optimizer") },
-    { hotkeyPath("Font and Style Manager"), "Manage fonts and styles", integrated_tool_macro("Font and Style Manager") },
-    { hotkeyPath("Fast Fades"), "Open frame fades and continuous cleanup", integrated_tool_macro("Fast Fades") },
-    { hotkeyPath("Fast Fades/In"), "Set fade in from the current frame", fade_macro("Fade In from Current Frame") },
-    { hotkeyPath("Fast Fades/Out"), "Set fade out from the current frame", fade_macro("Fade Out from Current Frame") },
-    { hotkeyPath("Fast Fades/Clean"), "Clean continuous fades", fade_macro("Continuous Fade Cleanup") },
-    { hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", integrated_tool_macro("Shuffle Line Text") },
-}, false)
+local rheaMacros = {
+    { Rhea.Macros.hotkeyPath("Tools/Style to Tags"), "Convert style values to override tags", Rhea.Macros.tool(Rhea.Actions.Tools.StyleTags) },
+    { Rhea.Macros.path(""), script_description, RheaOps.Tools.main },
+    { Rhea.Macros.hotkeyPath("TagOps"), "Tag operations", RheaOps.Tools.tagOpsGui },
+    { Rhea.Macros.hotkeyPath("Fast Signs"), "Generate fast signs", RheaOps.Tools.fastSigns },
+    { Rhea.Macros.hotkeyPath("Signs Editor"), "Edit repeated sign text", RheaOps.Tools.massSigns },
+    { Rhea.Macros.hotkeyPath("Shapes/Unify Positions"), "Unify ASS drawing pivots", Rhea.Macros.shapes(Rhea.Actions.Shapes.Unify) },
+    { Rhea.Macros.hotkeyPath("Shapes/Place on Perimeter"), "Repeat multilayer shapes along a perimeter", Rhea.Macros.shapes(Rhea.Actions.Shapes.Perimeter) },
+    { Rhea.Macros.hotkeyPath("Shapes/Shape Color Optimizer"), "Optimize drawing colors", Rhea.Macros.shapes(Rhea.Actions.Shapes.Optimize) },
+    { Rhea.Macros.hotkeyPath("Font and Style Manager"), "Manage fonts and styles", Rhea.Macros.tool(Rhea.Actions.Tools.FontStyles) },
+    { Rhea.Macros.hotkeyPath("Fast Fades"), "Open frame fades and continuous cleanup", Rhea.Macros.tool(Rhea.Actions.Tools.Fades) },
+    { Rhea.Macros.hotkeyPath("Fast Fades/In"), "Set fade in from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.In) },
+    { Rhea.Macros.hotkeyPath("Fast Fades/Out"), "Set fade out from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.Out) },
+    { Rhea.Macros.hotkeyPath("Fast Fades/Clean"), "Clean continuous fades", Rhea.Macros.fade(Rhea.Actions.Fades.Clean) },
+    { Rhea.Macros.hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", Rhea.Macros.tool(Rhea.Actions.Tools.Shuffle) },
+}
+for _, entry in ipairs(rheaMacros) do
+    local callback = entry[3]
+    entry[3] = function(subs, sel, active)
+        local result, nextActive = callback(subs, sel, active)
+        if type(result) ~= "table" then return end
+        local indices = RheaFoundation.selectionDialogueIndices(subs, result)
+        if #indices == 0 then return indices end
+        if type(nextActive) ~= "number" then nextActive = active end
+        for _, index in ipairs(indices) do if index == nextActive then return indices, nextActive end end
+        return indices, indices[1]
+    end
+end
+depRec:registerMacros(rheaMacros, false)
+require("kite.UI").publishActions()

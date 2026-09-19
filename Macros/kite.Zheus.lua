@@ -1,7 +1,7 @@
 script_name        = "Zheus Colormanager"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.5.3"
+script_version     = "4.7.3"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -13,72 +13,64 @@ local depRec = DependencyControl{
     namespace = script_namespace,
     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
-        { "kite.PyBridge", version = "1.4.4",
+        { "kite.PyBridge", version = "1.7.2",
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.Core", version = "1.1.0",
+          url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        { "kite.LineOps", version = "1.7.4",
+          url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+          feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+        {"kite.Color", version = "1.2.2"},
+        {"kite.UI", version = "1.5.1"},
+        {"kite.AssContext", version = "1.1.3"},
+        {"kite.Settings", version = "1.0.1"},
     },
 }
-local PyBridge = depRec:requireModules()
+local PyBridge, Core, LineOps = depRec:requireModules()
+local AssContext = require("kite.AssContext")
+local Color = require("kite.Color")
+local KiteUI = require("kite.UI")
+local Settings = require("kite.Settings")
 
-local MENU_PATH = "Zheus Colormanager"
-local HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-local HOTKEY_MENU_SCRIPT = script_name
-local HOTKEY_MENU_PATH = HOTKEY_MENU_ROOT .. "/" .. HOTKEY_MENU_SCRIPT
+local menuPath = "Zheus Colormanager"
+local hotkeyMenuRoot = ": Kite Hotkeys :"
+local hotkeyMenuScript = script_name
+local hotkeyMenuPath = hotkeyMenuRoot .. "/" .. hotkeyMenuScript
 
-local COLOR_WHITE = "&HFFFFFF&"
-local COLOR_BLACK = "&H000000&"
-local ASS_COLOR_MODULO = 0x1000000
-local ASS_ALPHA_MODULO = 4294967296
-local ASS_SIGNED_COLOR_MIN = -2147483648
-local ASS_UNSIGNED_COLOR_MAX = ASS_ALPHA_MODULO - 1
-local RGB_CHANNEL_MAX  = 255
-local UI_ACTORS_PER_PAGE = 8
-local PER_PAGE = UI_ACTORS_PER_PAGE
-local WCAG_FAIL = 3.0
-local WCAG_AA   = 4.5
-local CONTRAST_CRITICAL = 2.5
-local FALLBACK_FRAME_RATE = 24000 / 1001
-local INTERVAL_SUMMARY_LIMIT = 10
-local COLOR_CACHE_LIMIT = 4096
-local CONFIG_FILE_LIMIT = 512 * 1024
-local PALETTE_FILE_LIMIT = 4 * 1024 * 1024
-local CONFIG_HOOK_GRANULARITY = 1000
-local CONFIG_INSTRUCTION_LIMIT = 100000
-local CONFIG_MAX_DEPTH = 16
-local CONFIG_MAX_NODES = 10000
-local PALETTE_MAX_NODES = 200000
-local ACTOR_PALETTE_FORMAT_VERSION = 3
-local TRANSFORM_MIN_ACCEL = 0.000001
-local MAX_TIMELINE_FRAME = 2147483647
-local MAX_FADE_DURATION_MS = 2147483647
-local PROFILE_ID_LIMIT = 64
-local PROFILE_LABEL_LIMIT = 96
-local PROFILE_TEXT_LIMIT = 512
-local EMPTY_ACTOR_LABEL = "[Actor vacío]"
+local colorWhite = "&HFFFFFF&"
+local colorBlack = "&H000000&"
+local assColorModulo = 0x1000000
+local assAlphaModulo = 4294967296
+local assSignedColorMin = -2147483648
+local assUnsignedColorMax = assAlphaModulo - 1
+local uiActorsPerPage = 8
+local wcagFail = 3.0
+local wcagAa   = 4.5
+local contrastCritical = 2.5
+local intervalSummaryLimit = 10
+local colorCacheLimit = 4096
+local actorPaletteFormatVersion = 3
+local maxTimelineFrame = 2147483647
+local maxFadeDurationMs = 2147483647
+local emptyActorLabel = "[Actor vacío]"
 
 local UI = {
-    dashboard_width = 12,
-    audit_height = 6,
-    report_width = 8,
+    dashboard_width = 6,
+    audit_height = 5,
+    report_width = 36,
     report_height = 12,
-    help_width = 44,
-    help_height = 16,
+    help_width = 36,
+    help_height = 14,
     actor_label_chars = 12,
     vsf_actor_label_chars = 10,
 }
 
-local FALLBACK_STYLE = {
-    fontname = "Arial", fontsize = 48,
-    bold = false, italic = false, underline = false, strikeout = false,
-    scale_x = 100, scale_y = 100,
-    spacing = 0, angle = 0,
-    borderstyle = 1, outline = 2, shadow = 2, align = 2,
-    margin_l = 10, margin_r = 10, margin_t = 10, margin_b = 10,
-    encoding = 1,
-}
 
-local PALETTE_SCALE_FACTORS = { 1.15, 1.35, 1.55, 0.85, 0.70, 0.55 }
-local PALETTE_SCORE_WEIGHTS = {
+
+local paletteScaleFactors = { 1.15, 1.35, 1.55, 0.85, 0.70, 0.55 }
+local paletteScoreWeights = {
     contrast = 100,
     collision = 80,
     mono = 60,
@@ -86,20 +78,18 @@ local PALETTE_SCORE_WEIGHTS = {
     luma_drift = 20,
 }
 
-local function finiteNumber(value)
-    local n = tonumber(value)
-    if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
-    return n
-end
-
-local function trim(s)
-    s = tostring(s or "")
-    return (s:match("^%s*(.-)%s*$")) or ""
-end
+local finiteNumber = Core.finiteNumber
+local trim = Core.trim
 
 local function actorLabel(actor)
     actor = tostring(actor or "")
-    return actor == "" and EMPTY_ACTOR_LABEL or actor
+    return actor == "" and emptyActorLabel or actor
+end
+
+local function actorPreview(actor,limit)
+    local units=LineOps.graphemes(actorLabel(actor))
+    if #units<=limit then return table.concat(units) end
+    return table.concat(units,"",1,limit).."…"
 end
 
 local function isDialogueLine(line)
@@ -115,118 +105,15 @@ local function collectStyles(subs)
     return styles
 end
 
-local ColorUtil = {}
+local ColorUtil = Color
 
-function ColorUtil.normalizeStrict(c)
-    if c == nil or c == "" then return nil end
-    if type(c) == "number" then
-        if not finiteNumber(c) then return nil end
-        if c ~= math.floor(c) then return nil end
-        if c < ASS_SIGNED_COLOR_MIN or c > ASS_UNSIGNED_COLOR_MAX then return nil end
-        if c < 0 then c = c + ASS_ALPHA_MODULO end
-        return string.format("&H%06X&", c % ASS_COLOR_MODULO)
-    end
-    c = trim(c)
-    local hex = c:match("^&[Hh](%x+)&?$")
-    if hex and (#hex == 6 or #hex == 8) then
-        if #hex == 8 then hex = hex:sub(-6) end
-        return "&H" .. hex:upper() .. "&"
-    end
-    local r, g, b = c:match("^#?(%x%x)(%x%x)(%x%x)$")
-    if not r then r, g, b = c:match("^#(%x%x)(%x%x)(%x%x)%x%x$") end
-    if r then
-        return string.format("&H%s%s%s&", b:upper(), g:upper(), r:upper())
-    end
-    return nil
-end
+local patHexToken  = "&[Hh]%x+&?"
 
-function ColorUtil.normalize(c)
-    local n = ColorUtil.normalizeStrict(c)
-    if n then return n end
-    return COLOR_WHITE
-end
-
-function ColorUtil.fromStyle(n)
-    if type(n) == "string" then return ColorUtil.normalize(n) end
-    if type(n) ~= "number" or not finiteNumber(n) then return COLOR_WHITE end
-    n = math.floor(n)
-    if n < ASS_SIGNED_COLOR_MIN or n > ASS_UNSIGNED_COLOR_MAX then return COLOR_WHITE end
-    if n < 0 then n = n + ASS_ALPHA_MODULO end
-    return string.format("&H%06X&", n % ASS_COLOR_MODULO)
-end
-
-function ColorUtil.toNumber(c)
-    local hex = ColorUtil.normalize(c):match("&H(%x+)&")
-    if not hex then return 0xFFFFFF end
-    return tonumber(hex, 16) or 0xFFFFFF
-end
-
-function ColorUtil.toHex(c)
-    local n = ColorUtil.toNumber(c)
-    local b = math.floor(n / 0x10000) % (RGB_CHANNEL_MAX + 1)
-    local g = math.floor(n / 0x100) % (RGB_CHANNEL_MAX + 1)
-    local r = n % (RGB_CHANNEL_MAX + 1)
-    return string.format("#%02X%02X%02X", r, g, b)
-end
-
-function ColorUtil.luminance(c)
-    local n = ColorUtil.toNumber(c)
-    local b = (math.floor(n / 0x10000) % (RGB_CHANNEL_MAX + 1)) / RGB_CHANNEL_MAX
-    local g = (math.floor(n / 0x100) % (RGB_CHANNEL_MAX + 1)) / RGB_CHANNEL_MAX
-    local r = (n % (RGB_CHANNEL_MAX + 1)) / RGB_CHANNEL_MAX
-    local function f(v) return v <= 0.04045 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4 end
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
-end
-
-function ColorUtil.contrastRatio(c1, c2)
-    local l1 = ColorUtil.luminance(c1) + 0.05
-    local l2 = ColorUtil.luminance(c2) + 0.05
-    return (l1 > l2) and l1 / l2 or l2 / l1
-end
-
-function ColorUtil.toRGB(c)
-    local n = ColorUtil.toNumber(c)
-    local b = math.floor(n / 0x10000) % (RGB_CHANNEL_MAX + 1)
-    local g = math.floor(n / 0x100) % (RGB_CHANNEL_MAX + 1)
-    local r = n % (RGB_CHANNEL_MAX + 1)
-    return r, g, b
-end
-
-function ColorUtil.fromRGB(r, g, b)
-    local function clamp(v)
-        v = tonumber(v) or 0
-        if v ~= v then v = 0 end
-        v = math.floor(v + 0.5)
-        if v < 0 then return 0 end
-        if v > RGB_CHANNEL_MAX then return RGB_CHANNEL_MAX end
-        return v
-    end
-    return string.format("&H%02X%02X%02X&", clamp(b), clamp(g), clamp(r))
-end
-
-function ColorUtil.interpolate(c1, c2, factor)
-    factor = finiteNumber(factor) or 0
-    if factor <= 0 then return ColorUtil.normalize(c1) end
-    if factor >= 1 then return ColorUtil.normalize(c2) end
-    local r1, g1, b1 = ColorUtil.toRGB(c1)
-    local r2, g2, b2 = ColorUtil.toRGB(c2)
-    return ColorUtil.fromRGB(
-        r1 + (r2 - r1) * factor,
-        g1 + (g2 - g1) * factor,
-        b1 + (b2 - b1) * factor)
-end
-
-local PAT_COLOR_ANY  = "\\[1-4]?c&[Hh]%x+&?"
-local PAT_VC_ANY     = "\\[1-4]?vc%b()"
-local PAT_COLOR_CAP  = "\\([1-4]?)c(&[Hh]%x+&?)"
-local PAT_VC_CAP     = "\\([1-4]?)vc(%b())"
-local PAT_HEX_TOKEN  = "&[Hh]%x+&?"
-
-local SLOT_KEYS = { "1", "2", "3", "4" }
-local SLOT_LABELS = { ["1"] = "\\c", ["2"] = "\\2c", ["3"] = "\\3c", ["4"] = "\\4c" }
-local VSF_TAGS   = { "1vc", "2vc", "3vc", "4vc" }
-local QUICK_VSF_TAGS = VSF_TAGS
-local COLOR_KEYS = { ["1"] = "c", ["2"] = "2c", ["3"] = "3c", ["4"] = "4c" }
+local slotKeys = { "1", "2", "3", "4" }
+local slotLabels = { ["1"] = "\\c", ["2"] = "\\2c", ["3"] = "\\3c", ["4"] = "\\4c" }
+local vsfTags   = { "1vc", "2vc", "3vc", "4vc" }
+local quickVsfTags = vsfTags
+local colorKeys = { ["1"] = "c", ["2"] = "2c", ["3"] = "3c", ["4"] = "4c" }
 
 local function defaultSlotFilter()
     return { ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true }
@@ -236,7 +123,7 @@ local function slotFilterFromConfig(cfg, prefix)
     cfg = cfg or {}
     prefix = prefix or "replace_slot_"
     local out = {}
-    for _, slot in ipairs(SLOT_KEYS) do
+    for _, slot in ipairs(slotKeys) do
         local v = cfg[prefix .. slot]
         out[slot] = (v == nil) and true or v == true
     end
@@ -247,7 +134,7 @@ local function writeSlotFilterToTable(t, slots, prefix)
     t = t or {}
     slots = slots or defaultSlotFilter()
     prefix = prefix or "replace_slot_"
-    for _, slot in ipairs(SLOT_KEYS) do
+    for _, slot in ipairs(slotKeys) do
         t[prefix .. slot] = slots[slot] == true
     end
     return t
@@ -256,7 +143,7 @@ end
 local function sameSlotFilter(a, b)
     a = a or {}
     b = b or {}
-    for _, slot in ipairs(SLOT_KEYS) do
+    for _, slot in ipairs(slotKeys) do
         if (a[slot] == true) ~= (b[slot] == true) then return false end
     end
     return true
@@ -264,7 +151,7 @@ end
 
 local function anySlotSelected(slots)
     slots = slots or {}
-    for _, slot in ipairs(SLOT_KEYS) do
+    for _, slot in ipairs(slotKeys) do
         if slots[slot] then return true end
     end
     return false
@@ -273,201 +160,185 @@ end
 local function slotFilterLabel(slots)
     slots = slots or {}
     local out = {}
-    for _, slot in ipairs(SLOT_KEYS) do
-        if slots[slot] then table.insert(out, SLOT_LABELS[slot]) end
+    for _, slot in ipairs(slotKeys) do
+        if slots[slot] then table.insert(out, slotLabels[slot]) end
     end
     return #out > 0 and table.concat(out, ", ") or "ninguno"
 end
 
-local function tidyTBody(body)
-    local n
-    repeat
-        body, n = body:gsub(",%s*,", ",")
-    until n == 0
-    body = body:gsub("^%s*,", "")
-    body = body:gsub(",%s*$", "")
-    return trim(body)
-end
-
 local function cleanupTransforms(text)
-    return (text:gsub("\\t(%b())", function(parens)
-        local inner = tidyTBody(parens:sub(2, -2))
-        if not inner:find("\\") then return "" end
-        return "\\t(" .. inner .. ")"
-    end))
+    return LineOps.mapTagCalls(text, nil, function(call)
+        if call.name ~= "t" then return nil end
+        local body = cleanupTransforms("{\\" .. call.value:sub(2, -2) .. "}"):sub(3, -2)
+        if not body:find("\\", 1, true) then return "" end
+        return "\\t(" .. body .. ")"
+    end)
 end
 
-local function withoutTransforms(text)
-    return (tostring(text or ""):gsub("\\t%s*%b()", ""))
-end
 
-local function hasTopLevelStyleReset(text)
-    for block in tostring(text or ""):gmatch("{([^}]*)}") do
-        if block:match("^%s*\\") and withoutTransforms(block):find("\\r", 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
-local function firstSelectedStyleReset(subs, sel)
-    for _, index in ipairs(sel or {}) do
-        local line = subs[index]
-        if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then return index end
-    end
-    return nil
-end
-
-local function stripColorsFromBody(body)
-    body = body:gsub(PAT_VC_ANY, "")
-    body = body:gsub(PAT_COLOR_ANY, "")
-    return cleanupTransforms(body)
-end
 
 local TagStripper = {}
 
+function TagStripper.colorSlot(name)
+    local slot = name:match("^([1-4]?)c$") or name:match("^([1-4]?)vc$")
+    if slot then return slot == "" and "1" or slot end
+end
+
+function TagStripper.clearSlots(text, slots, firstBlock)
+    text = LineOps.mapTagCalls(tostring(text or ""), nil, function(call)
+        local slot = TagStripper.colorSlot(call.name)
+        if slot and (not slots or slots[slot]) and (not firstBlock or call.block_start == firstBlock) then
+            return ""
+        end
+    end, {top_level_only=false})
+    return (cleanupTransforms(text):gsub("{%s*}", ""))
+end
+
 function TagStripper.clearColors(text)
-    if not text then return "" end
-    text = tostring(text)
-    text = text:gsub("{([^}]*)}", function(block)
-        block = trim(stripColorsFromBody(block))
-        return block == "" and "" or "{" .. block .. "}"
+    return TagStripper.clearSlots(text)
+end
+
+local injectFirstTags = LineOps.prependTag
+
+function TagStripper.afterResets(text, payload)
+    return LineOps.mapTagCalls(text, nil, function(call)
+        if call.name == "r" then return call.raw .. payload end
     end)
-    return text
 end
 
-local function injectFirstTags(text, payload)
-    text = tostring(text or "")
-    if not payload or payload == "" then return text end
-    local head = text:match("^({[^}]*})")
-    if head then
-        return "{" .. payload .. head:sub(2, -2) .. "}" .. text:sub(#head + 1)
-    end
-    return "{" .. payload .. "}" .. text
+function TagStripper.setPalette(text, payload)
+    return injectFirstTags(TagStripper.afterResets(text, payload), payload)
 end
-
 
 local function stripSolidSlotsFromFirstBlock(text)
-    text = tostring(text or "")
-    local head = text:match("^({[^}]*})")
-    if not head then return text end
-    local body = head:sub(2, -2)
-    body = body:gsub("\\1?c&[Hh]%x+&?", "")
-    body = body:gsub("\\3c&[Hh]%x+&?", "")
-    body = body:gsub("\\4c&[Hh]%x+&?", "")
-    body = body:gsub("\\1?vc%b()", "")
-    body = body:gsub("\\3vc%b()", "")
-    body = body:gsub("\\4vc%b()", "")
-    body = cleanupTransforms(body)
-    if body:match("^%s*$") then
-        return text:sub(#head + 1)
+    for _, part in ipairs(LineOps.scanSections(text)) do
+        if part.type == "override" then
+            return TagStripper.clearSlots(text, {["1"]=true,["3"]=true,["4"]=true}, part.start)
+        elseif (part.type == "text" or part.type == "drawing") and part.text ~= "" then break end
     end
-    return "{" .. body .. "}" .. text:sub(#head + 1)
+    return text
 end
 
-local function stripSpecificColor(text, n)
-    local vcPat = (n == "1") and "\\1?vc%b()"      or ("\\" .. n .. "vc%b()")
-    local cPat  = (n == "1") and "\\1?c&[Hh]%x+&?" or ("\\" .. n .. "c&[Hh]%x+&?")
-    text = text:gsub(vcPat, "")
-    text = text:gsub(cPat, "")
-    text = cleanupTransforms(text)
-    text = text:gsub("{%s*}", "")
-    return text
+local function stripSpecificColor(text, slot)
+    return TagStripper.clearSlots(text, {[slot]=true})
 end
 
 function TagStripper.dedupeColors(text)
-    text = tostring(text or "")
-    return (text:gsub("{([^}]*)}", function(block)
-
-        local placeholders, pi = {}, 0
-        local protected = block:gsub("\\t%b()", function(match)
-            pi = pi + 1
-            placeholders[pi] = match
-            return "\1T" .. pi .. "\1"
-        end)
-
-        local lastC, lastV = {}, {}
-        for n, raw in protected:gmatch("\\([1-4]?)c(&[Hh]%x+&?)") do
-            if n == "" then n = "1" end
-            lastC[n] = raw
-        end
-        for n, parens in protected:gmatch("\\([1-4]?)vc(%b())") do
-            if n == "" then n = "1" end
-            lastV[n] = parens
-        end
-
-        if next(lastC) == nil and next(lastV) == nil then
-            return "{" .. block .. "}"
-        end
-
-        protected = protected:gsub("\\[1-4]?vc%b()", "")
-        protected = protected:gsub("\\[1-4]?c&[Hh]%x+&?", "")
-
-        protected = protected:gsub("\1T(%d+)\1", function(idx)
-            return placeholders[tonumber(idx)] or ""
-        end)
-
-        local prefix = ""
-        for _, n in ipairs({ "1", "2", "3", "4" }) do
-            if lastC[n] then
-                local p = (n == "1") and "\\c" or ("\\" .. n .. "c")
-                prefix = prefix .. p .. lastC[n]
+    local previous, removed, block = {}, {}, nil
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        if call.top_level then
+            if call.block_start ~= block or call.name == "r" or call.name == "t" then previous = {} end
+            block = call.block_start
+            local slot = TagStripper.colorSlot(call.name)
+            if slot then
+                local key = slot .. (call.name:find("vc", 1, true) and "vc" or "c")
+                if previous[key] then removed[previous[key]] = true end
+                previous[key] = call.start
+                previous[slot .. (key:find("vc", 1, true) and "c" or "vc")] = nil
             end
         end
-        for _, n in ipairs({ "1", "2", "3", "4" }) do
-            if lastV[n] then
-                prefix = prefix .. "\\" .. n .. "vc" .. lastV[n]
-            end
-        end
-
-        local final = trim(prefix .. trim(protected))
-        if final == "" then return "" end
-        return "{" .. final .. "}"
-    end))
+    end
+    return LineOps.mapTagCalls(text, nil, function(call)
+        if removed[call.start] then return "" end
+    end)
 end
 
-function TagStripper.harmonizeColors(text, newFill, newOutline, newShadow)
-    text = tostring(text or "")
-    local nF = ColorUtil.normalize(newFill)
-    local nO = ColorUtil.normalize(newOutline)
-    local nS = ColorUtil.normalize(newShadow)
-    local hasC, has3, has4 = false, false, false
-    text = text:gsub("(\\)([1-4]?)c(&[Hh]%x+&?)", function(slash, n, raw)
-        if n == "" then n = "1" end
-        if n == "1" then hasC = true; return slash .. "c" .. nF end
-        if n == "3" then has3 = true; return slash .. "3c" .. nO end
-        if n == "4" then has4 = true; return slash .. "4c" .. nS end
-        return slash .. n .. "c" .. raw
-    end)
-    local missing = ""
-    if not hasC then missing = missing .. "\\c" .. nF end
-    if not has3 then missing = missing .. "\\3c" .. nO end
-    if not has4 then missing = missing .. "\\4c" .. nS end
-    if missing ~= "" then
-        text = injectFirstTags(text, missing)
-    end
+function TagStripper.replaceSolidColors(text, fill, outline, shadow)
+    local colors = {["1"]=Color.normalize(fill),["3"]=Color.normalize(outline),["4"]=Color.normalize(shadow)}
+    text = LineOps.mapTagCalls(text, nil, function(call)
+        local slot = call.name:match("^([1-4]?)c$")
+        slot = slot == "" and "1" or slot
+        if colors[slot] then return "\\" .. call.name .. colors[slot] end
+    end, {top_level_only=false})
     return text
+end
+
+function UI.textHeight(text, maximum)
+    local rows = 0
+    for line in (tostring(text or "") .. "\n"):gmatch("(.-)\n") do
+        rows = rows + math.max(1, math.ceil(#line / 90))
+    end
+    return math.max(3, math.min(maximum, rows))
+end
+
+local ColorDialogs = {}
+
+function ColorDialogs.editMapping(title,colors,pending,options)
+    options=options or {}
+    local page=1
+    local slots=options.slots and Core.copy(options.slots)
+    local fade=options.fade
+    local pages=math.max(1,math.ceil(#colors/uiActorsPerPage))
+    while true do
+        local ui={
+            {class="label",label=title,x=0,y=0,width=8},
+            {class="label",label="Página "..page.."/"..pages.." · "..#colors.." colores",x=0,y=1,width=8},
+        }
+        local row=2
+        if slots then
+            for index,slot in ipairs(slotKeys) do
+                ui[#ui+1]={class="checkbox",name="replace_slot_"..slot,label=slotLabels[slot],value=slots[slot],x=(index-1)*2,y=row,width=2}
+            end
+            row=row+1
+        end
+        if fade then
+            ui[#ui+1]={class="label",label="Fundido (ms o Nf)",x=0,y=row,width=4}
+            ui[#ui+1]={class="edit",name="fade",text=fade,x=4,y=row,width=4}
+            row=row+1
+        end
+        ui[#ui+1]={class="label",label="Actual",x=0,y=row,width=4}
+        ui[#ui+1]={class="label",label="Nuevo",x=4,y=row,width=4}
+        local first,last=(page-1)*uiActorsPerPage+1,math.min(page*uiActorsPerPage,#colors)
+        for index=first,last do
+            local color=colors[index]
+            row=row+1
+            ui[#ui+1]={class="label",label=Color.toHex(color),x=0,y=row,width=4}
+            ui[#ui+1]={class="color",name="color"..index,value=Color.toHex(pending[color] or color),x=4,y=row,width=4}
+        end
+        if #colors==0 then ui[#ui+1]={class="label",label="No se detectaron colores en los canales activos.",x=0,y=row+1,width=8} end
+        local buttons={"Aplicar"}
+        if pages>1 then buttons[#buttons+1]="Anterior";buttons[#buttons+1]="Siguiente" end
+        if slots then buttons[#buttons+1]="Actualizar" end
+        buttons[#buttons+1]="Volver"
+        if options.skip then buttons[#buttons+1]="Omitir" end
+        buttons[#buttons+1]="Cancelar"
+        local button,result=aegisub.dialog.display(ui,buttons,{ok="Aplicar",cancel="Cancelar",close="Cancelar"})
+        result=result or {}
+        if not button or button=="Cancelar" then return "Cancelar",pending,{slots=slots,fade=fade} end
+        for index=first,last do
+            local color=Color.normalizeStrict(result["color"..index])
+            if color then pending[colors[index]]=color end
+        end
+        fade=result.fade or fade
+        if slots then
+            local changed=slotFilterFromConfig(result)
+            if not sameSlotFilter(slots,changed) then button="Actualizar" end
+            slots=changed
+        end
+        if button=="Anterior" then page=math.max(1,page-1)
+        elseif button=="Siguiente" then page=math.min(pages,page+1)
+        elseif button=="Aplicar" or button=="Actualizar" or button=="Volver" or button=="Omitir" then
+            return button,pending,{slots=slots,fade=fade}
+        else return "Cancelar",pending,{slots=slots,fade=fade} end
+    end
 end
 
 local ColorRelay = { name = "ColorRelay", menu_name = "ColorRelay" }
 
 function ColorRelay.showMessage(title, msg)
-    aegisub.dialog.display({
-        { class = "label", label = tostring(title or ColorRelay.name), x = 0, y = 0, width = 60 },
-        { class = "textbox", name = "msg", text = tostring(msg or ""), x = 0, y = 1, width = 60, height = 10 },
-    }, { "Aceptar" })
+    return KiteUI.message(msg, {title=title or ColorRelay.name, button="Aceptar", width=36, height=UI.textHeight(msg,14)})
 end
 
 function ColorRelay.normalizeColor(c, fallback)
-    return ColorUtil.normalizeStrict(c) or fallback or COLOR_WHITE
+    return ColorUtil.normalizeStrict(c) or fallback or colorWhite
 end
 
 function ColorRelay.styleState(style)
     return {
-        ColorRelay.normalizeColor(style and style.color1, COLOR_WHITE),
-        ColorRelay.normalizeColor(style and style.color2, COLOR_BLACK),
-        ColorRelay.normalizeColor(style and style.color3, COLOR_BLACK),
-        ColorRelay.normalizeColor(style and style.color4, COLOR_BLACK),
+        ColorRelay.normalizeColor(style and style.color1, colorWhite),
+        ColorRelay.normalizeColor(style and style.color2, colorBlack),
+        ColorRelay.normalizeColor(style and style.color3, colorBlack),
+        ColorRelay.normalizeColor(style and style.color4, colorBlack),
     }
 end
 
@@ -485,7 +356,7 @@ function ColorRelay.tagsFromState(state, slots)
     for slot = 1, 4 do
         if (not slots) or slots[slot] then
             out[#out + 1] = ColorRelay.slotTag(slot) ..
-                ColorRelay.normalizeColor(state[slot], slot == 1 and COLOR_WHITE or COLOR_BLACK)
+                ColorRelay.normalizeColor(state[slot], slot == 1 and colorWhite or colorBlack)
         end
     end
     return table.concat(out)
@@ -528,90 +399,28 @@ function ColorRelay.cleanEmptyBlocks(text)
 end
 
 function ColorRelay.stripColorSlots(text, slots)
-    if not slots then return text end
-    text = tostring(text or "")
-    text = text:gsub("{([^}]*)}", function(block)
-        local cleaned = block:gsub("(\\)([1-4]?)c(&[Hh]%x+&?)", function(slash, rawSlot, color)
-            local slot = tonumber(rawSlot)
-            if rawSlot == "" then slot = 1 end
-            if slots[slot] then return "" end
-            return slash .. rawSlot .. "c" .. color
-        end)
-        cleaned = cleanupTransforms(cleaned)
-        cleaned = trim(cleaned)
-        if cleaned == "" then return "" end
-        return "{" .. cleaned .. "}"
-    end)
-    return ColorRelay.cleanEmptyBlocks(text)
+    return TagStripper.clearSlots(text, ColorRelay.toZheusSlotFilter(slots))
 end
 
-function ColorRelay.applyColorTagsToState(state, text)
-    for rawSlot, rawColor in tostring(text or ""):gmatch("\\([1-4]?)c(&[Hh]%x+&?)") do
-        local slot = tonumber(rawSlot)
-        if rawSlot == "" then slot = 1 end
-        if slot and slot >= 1 and slot <= 4 then
-            state[slot] = ColorRelay.normalizeColor(rawColor, state[slot])
-        end
-    end
-end
-
-function ColorRelay.parseTransform(inner, lineDur)
-    local num = "([%+%-]?%d*%.?%d+)"
-    inner = trim(inner)
-    lineDur = math.max(0, finiteNumber(lineDur) or 0)
-    local t1, t2, accel, tags = inner:match("^" .. num .. "%s*,%s*" .. num .. "%s*,%s*" .. num .. "%s*,%s*(.+)$")
-    if t1 then
-        return finiteNumber(t1) or 0, finiteNumber(t2) or lineDur,
-            math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL), tags or ""
-    end
-    t1, t2, tags = inner:match("^" .. num .. "%s*,%s*" .. num .. "%s*,%s*(.+)$")
-    if t1 then
-        return finiteNumber(t1) or 0, finiteNumber(t2) or lineDur, 1, tags or ""
-    end
-    accel, tags = inner:match("^" .. num .. "%s*,%s*(.+)$")
-    if accel and tags and tags:find("\\", 1, true) then
-        return 0, lineDur, math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL), tags
-    end
-    return 0, lineDur, 1, inner
-end
-
-function ColorRelay.applyTransformAt(state, tags, offset, t1, t2, accel)
-    if offset < t1 then return end
-    local target = ColorRelay.copyState(state)
-    ColorRelay.applyColorTagsToState(target, tags)
-    if t2 <= t1 or offset >= t2 then
-        for slot = 1, 4 do state[slot] = target[slot] end
-        return
-    end
-    local factor = math.max(0, math.min(1, (offset - t1) / (t2 - t1)))
-    factor = factor ^ math.max(finiteNumber(accel) or 1, TRANSFORM_MIN_ACCEL)
-    for slot = 1, 4 do
-        state[slot] = ColorUtil.interpolate(state[slot], target[slot], factor)
-    end
-end
-
-function ColorRelay.originalStateAt(line, style, absMs)
+function ColorRelay.originalStateAt(line, style, absMs, styles)
     local state = ColorRelay.styleState(style)
-    local text = tostring(line.text or "")
     local lineDur = math.max(0, (line.end_time or 0) - (line.start_time or 0))
     local offset = math.max(0, math.min(lineDur, (absMs or line.start_time or 0) - (line.start_time or 0)))
-
-    for block in text:gmatch("{([^}]*)}") do
-        local transforms = {}
-        local base = block:gsub("\\t(%b())", function(paren)
-            transforms[#transforms + 1] = paren:sub(2, -2)
-            return ""
-        end)
-        ColorRelay.applyColorTagsToState(state, base)
-        for _, inner in ipairs(transforms) do
-            local t1, t2, accel, tags = ColorRelay.parseTransform(inner, lineDur)
-            t1 = math.max(0, math.min(lineDur, t1))
-            t2 = math.max(0, math.min(lineDur, t2))
-            if t2 < t1 then t1, t2 = t2, t1 end
-            ColorRelay.applyTransformAt(state, tags, offset, t1, t2, accel)
+    local currentStyle = style
+    AssContext.visitTags(line.text, lineDur, offset, function(token, factor, nested)
+        if token.name == "r" and not nested then
+            currentStyle = (styles and styles[trim(token.value)]) or style
+            state = ColorRelay.styleState(currentStyle)
+        else
+            local rawSlot = token.name:match("^([1-4]?)c$")
+            if rawSlot then
+                local slot = tonumber(rawSlot) or 1
+                local target = Color.parseTag(token.value)
+                    or ColorUtil.fromStyle(currentStyle and currentStyle["color" .. slot])
+                state[slot] = Color.interpolateAss(state[slot], target, factor)
+            end
         end
-    end
-
+    end)
     return state
 end
 
@@ -620,7 +429,7 @@ function ColorRelay.applyReplacementsToState(state, replacements, slots)
     local any = false
     for slot = 1, 4 do
         if (not slots) or slots[slot] then
-            local old = ColorRelay.normalizeColor(state[slot], slot == 1 and COLOR_WHITE or COLOR_BLACK)
+            local old = ColorRelay.normalizeColor(state[slot], slot == 1 and colorWhite or colorBlack)
             local new = replacements and replacements[old]
             if new and new ~= old then
                 state[slot] = new
@@ -638,29 +447,19 @@ function ColorRelay.frameFromMs(ms)
     if not ms then return nil end
     local ok, frame = pcall(aegisub.frame_from_ms, ms)
     frame = ok and finiteNumber(frame) or nil
-    if frame and frame >= 0 and frame <= MAX_TIMELINE_FRAME then return math.floor(frame) end
+    if frame and frame >= 0 and frame <= maxTimelineFrame then return math.floor(frame) end
     return nil
 end
 
 function ColorRelay.msFromFrame(frame)
     if not aegisub or type(aegisub.ms_from_frame) ~= "function" then return nil end
     frame = finiteNumber(frame)
-    if not frame or frame < 0 or frame > MAX_TIMELINE_FRAME then return nil end
+    if not frame or frame < 0 or frame > maxTimelineFrame then return nil end
     frame = math.floor(frame)
     local ok, ms = pcall(aegisub.ms_from_frame, frame)
     ms = ok and finiteNumber(ms) or nil
     if ms then return ms end
     return nil
-end
-
-function ColorRelay.frameDurationMs(frame)
-    frame = finiteNumber(frame)
-    if not frame then return 1000 / FALLBACK_FRAME_RATE end
-    frame = math.floor(frame)
-    local a = ColorRelay.msFromFrame(frame)
-    local b = ColorRelay.msFromFrame(frame + 1)
-    if a and b and b > a then return b - a end
-    return 1000 / FALLBACK_FRAME_RATE
 end
 
 function ColorRelay.currentVideoFrame()
@@ -669,16 +468,16 @@ function ColorRelay.currentVideoFrame()
     if not ok or not props then return nil end
     if props.video_position == nil then return nil end
     local frame = finiteNumber(props.video_position)
-    if not frame or frame < 0 or frame > MAX_TIMELINE_FRAME then return nil end
+    if not frame or frame < 0 or frame > maxTimelineFrame then return nil end
     return math.floor(frame)
 end
 
 function ColorRelay.collectDialogueSelection(subs, sel)
     local out = {}
-    for _, idx in ipairs(sel or {}) do
-        local line = subs[idx]
-        if isDialogueLine(line) and (line.end_time or 0) > (line.start_time or 0) then
-            out[#out + 1] = { index = idx, line = line }
+    local records = LineOps.selectedLines(subs, sel, isDialogueLine)
+    for _, record in ipairs(records) do
+        if (record.line.end_time or 0) > (record.line.start_time or 0) then
+            out[#out + 1] = record
         end
     end
     return out
@@ -721,7 +520,7 @@ end
 function ColorRelay.intervalsSummary(intervals)
     local out = {}
     for i, it in ipairs(intervals or {}) do
-        if i > INTERVAL_SUMMARY_LIMIT then
+        if i > intervalSummaryLimit then
             out[#out + 1] = "..."
             break
         end
@@ -768,7 +567,7 @@ function ColorRelay.parseFrameToken(token)
     if token == "" then return nil end
     local raw = token:match("^[Ff]?(%d+)[Ff]?$")
     local frame = raw and finiteNumber(raw) or nil
-    if frame and frame >= 0 and frame <= MAX_TIMELINE_FRAME then return math.floor(frame) end
+    if frame and frame >= 0 and frame <= maxTimelineFrame then return math.floor(frame) end
     return nil
 end
 
@@ -778,22 +577,22 @@ function ColorRelay.parseFadeToMs(raw, frame)
     local frames = raw:match("^(%d+)[Ff]$")
     if frames then
         frames = finiteNumber(frames)
-        if not frames or frames ~= math.floor(frames) or frames > MAX_TIMELINE_FRAME then return nil, nil end
+        if not frames or frames ~= math.floor(frames) or frames > maxTimelineFrame then return nil, nil end
         local a = ColorRelay.msFromFrame(frame)
         local b = ColorRelay.msFromFrame(frame + frames)
-        local duration = a and b and (b - a) or (frames * ColorRelay.frameDurationMs(frame))
+        local duration = a and b and (b - a)
         duration = finiteNumber(duration)
-        if not duration or duration < 0 or duration > MAX_FADE_DURATION_MS then return nil, nil end
+        if not duration or duration < 0 or duration > maxFadeDurationMs then return nil, nil end
         return math.floor(duration + 0.5), tostring(frames) .. "f"
     end
     local ms = raw:match("^(%d+)%s*[Mm][Ss]$")
     if ms then
         ms = finiteNumber(ms)
-        if not ms or ms > MAX_FADE_DURATION_MS then return nil, nil end
+        if not ms or ms > maxFadeDurationMs then return nil, nil end
         return ms, tostring(ms)
     end
     local numeric = finiteNumber(raw)
-    if numeric and numeric >= 0 and numeric <= MAX_FADE_DURATION_MS then return numeric, tostring(numeric) end
+    if numeric and numeric >= 0 and numeric <= maxFadeDurationMs then return numeric, tostring(numeric) end
     return nil, nil
 end
 
@@ -802,12 +601,12 @@ function ColorRelay.parseControlFrames(text, defaultFadeRaw, intervals)
     defaultFadeRaw = trim(defaultFadeRaw or "0")
 
     local function addEvent(frame, fadeRaw, source)
-        if not frame then return end
+        if not frame then errors[#errors + 1] = "Fotograma inválido: " .. tostring(source); return end
         if not ColorRelay.frameInIntervals(frame, intervals) then
             errors[#errors + 1] = "Fotograma fuera de la selección: " .. tostring(frame) .. " (" .. tostring(source or "") .. ")"
             return
         end
-        if seen[frame] then return end
+        if seen[frame] then errors[#errors + 1] = "Fotograma repetido: " .. tostring(frame); return end
         local ms = ColorRelay.msFromFrame(frame)
         if not ms then
             errors[#errors + 1] = "No se pudo convertir el fotograma a ms: " .. tostring(frame)
@@ -866,21 +665,21 @@ function ColorRelay.promptControls(defaultFrames, intervals, state)
     local slotFilter = ColorRelay.copySlotFilter(state.slots)
 
     while true do
+        local frameHeight = UI.textHeight(frameValue, 6)
         local btn, res = aegisub.dialog.display({
-            { class = "label", label = "ColorRelay - fotogramas de control", x = 0, y = 0, width = 50 },
-            { class = "label", label = "Línea temporal seleccionada: " .. ColorRelay.intervalsSummary(intervals), x = 0, y = 1, width = 50 },
-            { class = "label", label = "Lista: 120f, 130f o 120f fundido 6f. También acepta líneas tipo cadena: 120f > P1 fundido 6f.", x = 0, y = 2, width = 50 },
-            { class = "textbox", name = "frames", text = frameValue, x = 0, y = 3, width = 50, height = 8 },
-            { class = "label", label = "Fundido por defecto (ms o Nf):", x = 0, y = 11, width = 20 },
-            { class = "edit", name = "fade", text = fadeValue, x = 20, y = 11, width = 8 },
-            { class = "label", label = "Colores a cambiar:", x = 0, y = 13, width = 14 },
-            { class = "checkbox", name = "slot1", label = "Relleno \\c", value = slotFilter[1], x = 14, y = 13, width = 9 },
-            { class = "checkbox", name = "slot2", label = "2c", value = slotFilter[2], x = 23, y = 13, width = 5 },
-            { class = "checkbox", name = "slot3", label = "Borde \\3c", value = slotFilter[3], x = 28, y = 13, width = 9 },
-            { class = "checkbox", name = "slot4", label = "Sombra \\4c", value = slotFilter[4], x = 37, y = 13, width = 10 },
-        }, { "Siguiente", "Cancel" })
+            { class = "label", label = "ColorRelay - fotogramas de control", x = 0, y = 0, width = 8 },
+            { class = "label", label = "Selección: " .. ColorRelay.intervalsSummary(intervals), x = 0, y = 1, width = 8 },
+            { class = "label", label = "Ejemplos: 120f, 130f | 120f fundido 6f | 120f > P1 fundido 6f", x = 0, y = 2, width = 8 },
+            { class = "textbox", name = "frames", text = frameValue, x = 0, y = 3, width = 8, height = frameHeight },
+            { class = "label", label = "Fundido (ms o Nf):", x = 0, y = 3 + frameHeight, width = 4 },
+            { class = "edit", name = "fade", text = fadeValue, x = 4, y = 3 + frameHeight, width = 4 },
+            { class = "checkbox", name = "slot1", label = "Relleno \\c", value = slotFilter[1], x = 0, y = 4 + frameHeight, width = 2 },
+            { class = "checkbox", name = "slot2", label = "2c", value = slotFilter[2], x = 2, y = 4 + frameHeight, width = 2 },
+            { class = "checkbox", name = "slot3", label = "Borde \\3c", value = slotFilter[3], x = 4, y = 4 + frameHeight, width = 2 },
+            { class = "checkbox", name = "slot4", label = "Sombra \\4c", value = slotFilter[4], x = 6, y = 4 + frameHeight, width = 2 },
+        }, { "Siguiente", "Cancelar" })
 
-        if not btn or btn == "Cancel" then return nil end
+        if not btn or btn == "Cancelar" then return nil end
         res = res or {}
         frameValue = res.frames or ""
         fadeValue = res.fade or "0"
@@ -919,11 +718,11 @@ function ColorRelay.collectActiveColors(lines, styles, event, previousEvents, sl
     for _, item in ipairs(lines) do
         local line = item.line
         if event.time >= line.start_time and event.time < line.end_time then
-            local state = ColorRelay.originalStateAt(line, styles[line.style], event.time)
+            local state = ColorRelay.originalStateAt(line, styles[line.style], event.time, styles)
             ColorRelay.applyPreviousEventsToState(state, previousEvents, event.time)
             for slot = 1, 4 do
                 if (not slots) or slots[slot] then
-                    local color = ColorRelay.normalizeColor(state[slot], slot == 1 and COLOR_WHITE or COLOR_BLACK)
+                    local color = ColorRelay.normalizeColor(state[slot], slot == 1 and colorWhite or colorBlack)
                     if not seen[color] then
                         seen[color] = true
                         colors[#colors + 1] = color
@@ -935,67 +734,31 @@ function ColorRelay.collectActiveColors(lines, styles, event, previousEvents, sl
     return colors
 end
 
-function ColorRelay.promptReplacements(event, colors, slotFilter, index, total)
-    if #colors == 0 then
-        local btn = aegisub.dialog.display({
-            { class = "label", label = string.format("ColorRelay - fotograma %sf (%d/%d)", tostring(event.frame), index or 1, total or 1), x = 0, y = 0, width = 28 },
-        { class = "label", label = "Canales activos: " .. ColorRelay.slotFilterLabel(slotFilter), x = 0, y = 1, width = 28 },
-            { class = "label", label = "No hay colores activos para esos canales en este fotograma.", x = 0, y = 2, width = 28 },
-        }, { "Volver", "Omitir", "Cancel" })
-        if not btn or btn == "Cancel" then return "cancel" end
-        if btn == "Volver" then return "back" end
-        return "skip"
+function ColorRelay.promptReplacements(event,colors,slotFilter,index,total)
+    local pending=Core.copy(event.replacements or {})
+    local action,values,result=ColorDialogs.editMapping(
+        string.format("ColorRelay · %sf · control %d/%d · %s",tostring(event.frame),index or 1,total or 1,ColorRelay.slotFilterLabel(slotFilter)),
+        colors,pending,{fade=event.fade_label or "0",skip=true})
+    if action=="Cancelar" then return "cancel" end
+    event.replacements={}
+    for _, color in ipairs(colors) do
+        if values[color] and values[color]~=color then event.replacements[color]=values[color] end
     end
-    local ui = {
-        { class = "label", label = string.format("ColorRelay - fotograma %sf (%d/%d)", tostring(event.frame), index or 1, total or 1), x = 0, y = 0, width = 10 },
-        { class = "label", label = "Fundido (ms o Nf):", x = 10, y = 0, width = 8 },
-        { class = "edit", name = "fade", text = event.fade_label or "0", x = 18, y = 0, width = 6 },
-        { class = "label", label = "Canales activos: " .. ColorRelay.slotFilterLabel(slotFilter), x = 0, y = 1, width = 24 },
-        { class = "label", label = "Actual", x = 0, y = 2, width = 4 },
-        { class = "label", label = "Nuevo", x = 5, y = 2, width = 4 },
-    }
-    for i, color in ipairs(colors) do
-        local y = i + 2
-        local current = event.replacements and event.replacements[color] or color
-        ui[#ui + 1] = { class = "label", label = ColorUtil.toHex(color), x = 0, y = y, width = 4 }
-        ui[#ui + 1] = { class = "label", label = ">", x = 4, y = y, width = 1 }
-        ui[#ui + 1] = { class = "color", name = "new" .. i, value = ColorUtil.toHex(current), x = 5, y = y, width = 4 }
-    end
-
-    local btn, res = aegisub.dialog.display(ui, { "Execute", "Volver", "Omitir", "Cancel" })
-    if not btn or btn == "Cancel" then return "cancel" end
-    if btn == "Volver" then return "back" end
-    if btn == "Omitir" then return "skip" end
-    res = res or {}
-
-    local fadeMs, fadeLabel = ColorRelay.parseFadeToMs(res.fade or event.fade_label or "0", event.frame)
-    if not fadeMs then
-        ColorRelay.showMessage(ColorRelay.name, "Fundido inválido: " .. tostring(res.fade))
+    if action=="Volver" then return "back" end
+    if action=="Omitir" then return "skip" end
+    local duration,label=ColorRelay.parseFadeToMs(result.fade,event.frame)
+    if not duration then
+        event.fade_label=result.fade
+        ColorRelay.showMessage(ColorRelay.name,"Fundido inválido: "..tostring(result.fade))
         return "retry"
     end
-    event.fade_ms = fadeMs
-    event.fade_label = fadeLabel
-
-    local replacements, any = {}, false
-    for i, oldColor in ipairs(colors) do
-        local newColor = ColorUtil.normalizeStrict(res["new" .. i])
-        if not newColor then
-            ColorRelay.showMessage(ColorRelay.name, "Color inválido: " .. tostring(res["new" .. i]))
-            return "retry"
-        end
-        if newColor ~= oldColor then
-            replacements[oldColor] = newColor
-            any = true
-        end
-    end
-    event.replacements = replacements
-    if not any then return "skip" end
-    return "ok"
+    event.fade_ms,event.fade_label=duration,label
+    return next(event.replacements) and "ok" or "skip"
 end
 
 function ColorRelay.eventWindow(event)
     local fade = math.max(0, tonumber(event.fade_ms) or 0)
-    if fade <= 0 then return event.time, event.time + 1 end
+    if fade <= 0 then return event.time, event.time end
     return event.time - math.floor(fade / 2), event.time + math.ceil(fade / 2)
 end
 
@@ -1033,38 +796,27 @@ function ColorRelay.validateEventWindows(events)
 end
 
 function ColorRelay.transformTouchesSlots(text, slots)
-    for parens in tostring(text or ""):gmatch("\\t%s*(%b())") do
-        for rawSlot in parens:gmatch("\\([1-4]?)c%s*&[Hh]%x+&?") do
-            local slot = rawSlot == "" and 1 or tonumber(rawSlot)
-            if slot and slots[slot] then return true, slot end
-        end
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        local slot = TagStripper.colorSlot(call.name)
+        if slot and not call.top_level and slots[tonumber(slot)] then return true, tonumber(slot) end
     end
-    return false, nil
+    return false
 end
 
 function ColorRelay.hasLateColorRun(text, slots)
-    text = tostring(text or "")
-    local cursor, visibleStarted = 1, false
-    while cursor <= #text do
-        local open = text:find("{", cursor, true)
-        local segmentEnd = open and (open - 1) or #text
-        local segment = text:sub(cursor, segmentEnd)
-        if segment:gsub("\\[Nnh]", ""):match("%S") then visibleStarted = true end
-        if not open then break end
-        local close = text:find("}", open + 1, true)
-        if not close then return true end
-        local block = text:sub(open + 1, close - 1)
-        if block:match("^%s*\\") then
-            local static = block:gsub("\\t%s*%b()", "")
-            if static:find("\\r", 1, true) then return true end
-            if visibleStarted then
-                for rawSlot in static:gmatch("\\([1-4]?)c%s*&[Hh]%x+&?") do
-                    local slot = rawSlot == "" and 1 or tonumber(rawSlot)
-                    if slot and slots[slot] then return true end
+    local visible = false
+    for _, part in ipairs(LineOps.scanSections(text)) do
+        if part.type == "text" or part.type == "drawing" then
+            if part.text ~= "" then visible = true end
+        elseif part.type == "override" then
+            for _, call in ipairs(LineOps.tagCalls("{" .. part.text .. "}")) do
+                if call.top_level then
+                    local slot = TagStripper.colorSlot(call.name)
+                    if visible and (call.name == "r" or (slot and slots[tonumber(slot)])) then return true end
+                    if slot and slots[tonumber(slot)] and call.name:find("vc", 1, true) then return true end
                 end
             end
         end
-        cursor = close + 1
     end
     return false
 end
@@ -1081,12 +833,9 @@ function ColorRelay.applyEventsToSelection(subs, sel, events)
             if (not event.slots) or event.slots[slot] then selectedSlots[slot] = true end
         end
     end
-    for _, idx in ipairs(sel or {}) do
+    for _, idx in ipairs(LineOps.normalizeIndices(subs, sel)) do
         local line = subs[idx]
         if isDialogueLine(line) then
-            if hasTopLevelStyleReset(line.text) then
-                return nil, "La línea " .. tostring(idx) .. " usa \\r. ColorRelay no puede resolver todavía colores de estilos reiniciados; divide la línea en runs uniformes."
-            end
             local touches, slot = ColorRelay.transformTouchesSlots(line.text, selectedSlots)
             if touches then
                 return nil, "La línea " .. tostring(idx) .. " ya anima el canal de color " .. tostring(slot) .. " dentro de \\t. Divídela o fija ese color antes de usar ColorRelay."
@@ -1097,118 +846,41 @@ function ColorRelay.applyEventsToSelection(subs, sel, events)
         end
     end
 
-    local count = 0
-    for _, idx in ipairs(sel or {}) do
-        local line = subs[idx]
-        if isDialogueLine(line) and (line.end_time or 0) > (line.start_time or 0) then
-            local lineStart = line.start_time
-            local lineEnd = line.end_time
-            local lineDur = lineEnd - lineStart
-            local originalStartState = ColorRelay.originalStateAt(line, styles[line.style], lineStart)
-            local touchedSlots = {}
-            local transforms = {}
-            local plans = {}
-            local previousEvents = {}
-
-            for _, event in ipairs(effective) do
-                local winStart, winEnd = ColorRelay.eventWindow(event)
-                local sampledAt = math.max(lineStart, math.min(lineEnd, event.time))
-                local before = ColorRelay.originalStateAt(line, styles[line.style], sampledAt)
-                ColorRelay.applyPreviousEventsToState(before, previousEvents, event.time)
-                local after = ColorRelay.copyState(before)
-                local _, changed, anyChanged = ColorRelay.applyReplacementsToState(
-                    after, event.replacements, event.slots
-                )
-
-                if anyChanged then
-                    plans[#plans + 1] = {
-                        event = event,
-                        winStart = winStart,
-                        winEnd = winEnd,
-                        before = before,
-                        after = after,
-                        changed = changed,
-                    }
-                    if winEnd <= lineStart then
-                        for slot = 1, 4 do
-                            if changed[slot] then touchedSlots[slot] = true end
-                        end
-                    elseif winStart < lineEnd and winEnd > lineStart then
-                        local relStart = math.max(0, winStart - lineStart)
-                        local relEnd = math.min(lineDur, winEnd - lineStart)
-                        if relEnd <= relStart then relEnd = math.min(lineDur, relStart + 1) end
-                        if relEnd <= relStart then relEnd = relStart + 1 end
-
-                        local payloadSlots = {}
-                        for slot = 1, 4 do
-                            if changed[slot] then
-                                payloadSlots[slot] = true
-                                touchedSlots[slot] = true
-                            end
-                        end
-                        local target = ColorRelay.copyState(after)
-                        if winEnd > winStart and lineEnd < winEnd then
-                            local targetFactor = math.max(0, math.min(1, (lineEnd - winStart) / (winEnd - winStart)))
-                            for slot = 1, 4 do
-                                if changed[slot] then
-                                    target[slot] = ColorUtil.interpolate(before[slot], after[slot], targetFactor)
-                                end
-                            end
-                        end
-                        transforms[#transforms + 1] = {
-                            t1 = relStart,
-                            t2 = relEnd,
-                            tags = ColorRelay.tagsFromState(target, payloadSlots),
-                        }
-                    elseif event.time < lineStart then
-                        for slot = 1, 4 do
-                            if changed[slot] then touchedSlots[slot] = true end
+    return LineOps.transaction(subs, function()
+        local count = 0
+        for _, idx in ipairs(LineOps.normalizeIndices(subs, sel)) do
+            LineOps.checkCancelled()
+            local source = subs[idx]
+            if isDialogueLine(source) and source.end_time > source.start_time then
+                local base = ColorRelay.originalStateAt(source, styles[source.style], source.start_time, styles)
+                local state, touched, transforms = ColorRelay.copyState(base), {}, {}
+                for _, event in ipairs(effective) do
+                    local first, last = ColorRelay.eventWindow(event)
+                    local _, changed, any = ColorRelay.applyReplacementsToState(state, event.replacements, event.slots)
+                    if any and first < source.end_time then
+                        for slot in pairs(changed) do touched[slot] = true end
+                        if last <= source.start_time then
+                            for slot in pairs(changed) do base[slot] = state[slot] end
+                        else
+                            transforms[#transforms + 1] = "\\t(" .. Core.formatNumber(first-source.start_time,6) .. "," ..
+                                Core.formatNumber(last-source.start_time,6) .. ",1," .. ColorRelay.tagsFromState(state,changed) .. ")"
                         end
                     end
                 end
-                previousEvents[#previousEvents + 1] = event
-            end
-
-            if next(touchedSlots) then
-                local base = ColorRelay.copyState(originalStartState)
-                for _, plan in ipairs(plans) do
-                    if plan.winEnd <= lineStart or plan.winEnd <= plan.winStart then
-                        for slot = 1, 4 do
-                            if plan.changed[slot] then base[slot] = plan.after[slot] end
-                        end
-                    elseif plan.winStart < lineStart then
-                        local factor = math.max(0, math.min(1,
-                            (lineStart - plan.winStart) / (plan.winEnd - plan.winStart)))
-                        for slot = 1, 4 do
-                            if plan.changed[slot] then
-                                base[slot] = ColorUtil.interpolate(plan.before[slot], plan.after[slot], factor)
-                            end
-                        end
-                    end
+                if next(touched) then
+                    local line = Core.copy(source)
+                    local payload = ColorRelay.tagsFromState(base,touched) .. table.concat(transforms)
+                    line.text = TagStripper.setPalette(ColorRelay.stripColorSlots(line.text,touched),payload)
+                    subs[idx] = line
+                    count = count + 1
                 end
-
-                local payload = ColorRelay.tagsFromState(base, touchedSlots)
-                table.sort(transforms, function(a, b)
-                    if a.t1 == b.t1 then return a.t2 < b.t2 end
-                    return a.t1 < b.t1
-                end)
-                for _, tr in ipairs(transforms) do
-                    local t1 = math.max(0, math.floor(tr.t1 + 0.5))
-                    local t2 = math.max(t1 + 1, math.floor(tr.t2 + 0.5))
-                    payload = payload .. string.format("\\t(%d,%d,1,%s)", t1, t2, tr.tags)
-                end
-
-                line.text = ColorRelay.stripColorSlots(line.text, touchedSlots)
-                line.text = injectFirstTags(line.text, payload)
-                line.text = ColorRelay.cleanEmptyBlocks(line.text)
-                subs[idx] = line
-                count = count + 1
             end
         end
-    end
-
-    return count
+        return count
+    end)
 end
+
+
 
 function ColorRelay.run(subs, sel)
     if not sel or #sel == 0 then
@@ -1310,16 +982,14 @@ end
 
 local StyleScanner = {}
 
-local function copyFallbackStyle(ns)
-    for k, v in pairs(FALLBACK_STYLE) do ns[k] = v end
-end
+
 
 local function styleColors(style)
     return {
-        c = style and ColorUtil.fromStyle(style.color1) or COLOR_WHITE,
-        ["2c"] = style and ColorUtil.fromStyle(style.color2) or COLOR_BLACK,
-        ["3c"] = style and ColorUtil.fromStyle(style.color3) or COLOR_BLACK,
-        ["4c"] = style and ColorUtil.fromStyle(style.color4) or COLOR_BLACK,
+        c = style and ColorUtil.fromStyle(style.color1) or colorWhite,
+        ["2c"] = style and ColorUtil.fromStyle(style.color2) or colorBlack,
+        ["3c"] = style and ColorUtil.fromStyle(style.color3) or colorBlack,
+        ["4c"] = style and ColorUtil.fromStyle(style.color4) or colorBlack,
     }
 end
 
@@ -1365,7 +1035,7 @@ end
 
 local function parseVSFTuple(parens)
     local cols = {}
-    for col in tostring(parens or ""):sub(2, -2):gmatch(PAT_HEX_TOKEN) do
+    for col in tostring(parens or ""):sub(2, -2):gmatch(patHexToken) do
         local n = ColorUtil.normalizeStrict(col)
         if n then table.insert(cols, n) end
     end
@@ -1380,119 +1050,93 @@ local function parseVSFTuple(parens)
 end
 
 function StyleScanner.scanActors(subs, sel, styleMap)
-    styleMap = styleMap or {}
+    styleMap = styleMap or collectStyles(subs)
     local data, actors = {}, {}
-    for _, i in ipairs(sel) do
-        local l = subs[i]
-        if isDialogueLine(l) then
-            local actor = trim(l.actor)
-            if not data[actor] then
-                local s   = styleMap[l.style] or styleMap["Default"]
-                local baseColors = styleColors(s)
-                data[actor] = {
-                    ids        = {},
-                    colors     = { c = baseColors.c, ["2c"] = baseColors["2c"], ["3c"] = baseColors["3c"], ["4c"] = baseColors["4c"] },
-                    vsf_corners = {
-                        ["1vc"] = { baseColors.c, baseColors.c, baseColors.c, baseColors.c },
-                        ["2vc"] = { baseColors["2c"], baseColors["2c"], baseColors["2c"], baseColors["2c"] },
-                        ["3vc"] = { baseColors["3c"], baseColors["3c"], baseColors["3c"], baseColors["3c"] },
-                        ["4vc"] = { baseColors["4c"], baseColors["4c"], baseColors["4c"], baseColors["4c"] },
-                    },
-                    has_vsf     = false,
-                    has_mixed   = false,
-                    has_vsf_mixed = false,
-                    line_count = 0,
-                    conflicts  = {},
-                    vsf_conflicts = {},
-                    _line_colors = {},
-                    _line_vsf = {},
-                    _color_counts = { ["1"] = {}, ["2"] = {}, ["3"] = {}, ["4"] = {} },
-                    _vsf_counts = { ["1vc"] = {}, ["2vc"] = {}, ["3vc"] = {}, ["4vc"] = {} },
-                }
-                table.insert(actors, actor)
-            end
+    for _, index in ipairs(LineOps.normalizeIndices(subs,sel)) do
+        LineOps.checkCancelled()
+        local line = subs[index]
+        if isDialogueLine(line) then
+            local actor = tostring(line.actor or "")
+            local baseStyle = styleMap[line.style] or styleMap.Default
+            local currentStyle, colors, corners = baseStyle, styleColors(baseStyle), {}
             local entry = data[actor]
-            table.insert(entry.ids, i)
-            entry.line_count = entry.line_count + 1
-            local text = tostring(l.text or "")
-            local staticText = withoutTransforms(text)
-            local s = styleMap[l.style] or styleMap["Default"]
-            local lineColors = styleColors(s)
-            local lineVSF = {}
-
-            for n, raw in staticText:gmatch(PAT_COLOR_CAP) do
-                if n == "" then n = "1" end
-                local k = COLOR_KEYS[n]
-                local v = ColorUtil.normalizeStrict(raw)
-                if k and v then lineColors[k] = v end
+            if not entry then
+                entry = {ids={}, colors=Core.copy(colors), vsf_corners={}, has_vsf=false, has_mixed=false,
+                    has_vsf_mixed=false, line_count=0, conflicts={}, vsf_conflicts={}, color_runs={},vsf_present={},
+                    colorCounts={}, vsfCounts={}}
+                for _, slot in ipairs(slotKeys) do
+                    local color = colors[colorKeys[slot]]
+                    entry.vsf_corners[slot.."vc"] = {color,color,color,color}
+                    entry.colorCounts[slot],entry.vsfCounts[slot.."vc"] = {},{}
+                end
+                data[actor],actors[#actors+1] = entry,actor
             end
-
-            for n, parens in staticText:gmatch(PAT_VC_CAP) do
-                if n == "" then n = "1" end
-                local key = n .. "vc"
-                entry.has_vsf = true
-                local tuple = parseVSFTuple(parens)
-                if tuple and entry.vsf_corners[key] then lineVSF[key] = tuple end
+            entry.ids[#entry.ids+1],entry.line_count = index,entry.line_count+1
+            local recorded = false
+            local function record()
+                recorded = true
+                entry.color_runs[#entry.color_runs+1] = {line=index,colors=Core.copy(colors),vsf=Core.deepCopy(corners),style=currentStyle}
+                for _, slot in ipairs(slotKeys) do addCount(entry.colorCounts[slot],colors[colorKeys[slot]],index) end
+                for tag, tuple in pairs(corners) do addCount(entry.vsfCounts[tag],tupleKey(tuple),index) end
             end
-
-            entry._line_colors[i] = lineColors
-            entry._line_vsf[i] = lineVSF
-            for _, slot in ipairs(SLOT_KEYS) do
-                addCount(entry._color_counts[slot], lineColors[COLOR_KEYS[slot]], i)
+            for _, part in ipairs(LineOps.scanSections(line.text)) do
+                if part.type == "override" then
+                    for _, call in ipairs(LineOps.tagCalls("{"..part.text.."}")) do
+                        if call.top_level then
+                            if call.name == "r" then
+                                currentStyle = styleMap[call.value] or baseStyle
+                                colors,corners = styleColors(currentStyle),{}
+                            else
+                                local slot = TagStripper.colorSlot(call.name)
+                                if slot then
+                                    if call.name:find("vc",1,true) then
+                                        local tuple = parseVSFTuple(call.value)
+                                        if tuple then
+                                            corners[slot.."vc"],entry.has_vsf=tuple,true
+                                            entry.vsf_present[slot.."vc"]=true
+                                        end
+                                    else
+                                        colors[colorKeys[slot]] = Color.parseTag(call.value) or styleColors(currentStyle)[colorKeys[slot]]
+                                    end
+                                end
+                            end
+                        elseif TagStripper.colorSlot(call.name) then entry.has_animated = true end
+                    end
+                elseif (part.type == "text" or part.type == "drawing") and part.text ~= "" then record() end
             end
-            for _, tag in ipairs(VSF_TAGS) do
-                if lineVSF[tag] then addCount(entry._vsf_counts[tag], tupleKey(lineVSF[tag]), i) end
-            end
+            if not recorded then record() end
         end
     end
     table.sort(actors)
     for _, actor in ipairs(actors) do
         local entry = data[actor]
-        for _, slot in ipairs(SLOT_KEYS) do
-            local key = COLOR_KEYS[slot]
-            local dom = dominantKey(entry._color_counts[slot], entry.colors[key])
-            entry.colors[key] = dom
-            if countSize(entry._color_counts[slot]) > 1 then
+        for _, slot in ipairs(slotKeys) do
+            local key = colorKeys[slot]
+            entry.colors[key] = dominantKey(entry.colorCounts[slot],entry.colors[key])
+            if countSize(entry.colorCounts[slot]) > 1 then
                 entry.has_mixed = true
-                for _, id in ipairs(entry.ids) do
-                    local lineColors = entry._line_colors[id]
-                    local value = lineColors and lineColors[key]
-                    if value and value ~= dom then
-                        table.insert(entry.conflicts, {
-                            ln = id,
-                            tag = SLOT_LABELS[slot],
-                            old = dom,
-                            new = value,
-                        })
+                for _, run in ipairs(entry.color_runs) do
+                    if run.colors[key] ~= entry.colors[key] then
+                        entry.conflicts[#entry.conflicts+1] = {ln=run.line,tag=slotLabels[slot],old=entry.colors[key],new=run.colors[key]}
                     end
                 end
             end
         end
-        for _, tag in ipairs(VSF_TAGS) do
-            local domTuple = tupleFromKey(dominantKey(entry._vsf_counts[tag], nil))
-            if domTuple then entry.vsf_corners[tag] = domTuple end
-            if countSize(entry._vsf_counts[tag]) > 1 then
+        for _, tag in ipairs(vsfTags) do
+            local tuple = tupleFromKey(dominantKey(entry.vsfCounts[tag]))
+            if tuple then entry.vsf_corners[tag] = tuple end
+            if countSize(entry.vsfCounts[tag]) > 1 then
                 entry.has_vsf_mixed = true
-                for _, id in ipairs(entry.ids) do
-                    local lineVSF = entry._line_vsf[id]
-                    local tuple = lineVSF and lineVSF[tag]
-                    if tuple and domTuple and tupleKey(tuple) ~= tupleKey(domTuple) then
-                        table.insert(entry.vsf_conflicts, {
-                            ln = id,
-                            tag = "\\" .. tag,
-                            old = domTuple,
-                            new = tuple,
-                        })
+                for _, run in ipairs(entry.color_runs) do
+                    if run.vsf[tag] and tupleKey(run.vsf[tag]) ~= tupleKey(tuple) then
+                        entry.vsf_conflicts[#entry.vsf_conflicts+1] = {ln=run.line,tag="\\"..tag,old=tuple,new=run.vsf[tag]}
                     end
                 end
             end
         end
-        entry._line_colors = nil
-        entry._line_vsf = nil
-        entry._color_counts = nil
-        entry._vsf_counts = nil
+        entry.colorCounts,entry.vsfCounts = nil,nil
     end
-    return data, actors
+    return data,actors
 end
 
 local ActorReport = {}
@@ -1503,15 +1147,15 @@ function ActorReport.summary(actors, data)
         local info = data[a]
         local ratio = ColorUtil.contrastRatio(info.colors.c, info.colors["3c"])
         local flag = info.has_mixed and "MIXTO " or ""
-        if ratio < CONTRAST_CRITICAL then
+        if ratio < contrastCritical then
             flag = flag .. "URGENTE RC:" .. string.format("%.1f", ratio)
-        elseif ratio < WCAG_AA then
+        elseif ratio < wcagAa then
             flag = flag .. "REVISAR RC:" .. string.format("%.1f", ratio)
         else
             flag = flag .. "BIEN RC:" .. string.format("%.1f", ratio)
         end
         table.insert(lines, string.format("%-15s  c:%s  3c:%s  [%s]",
-            actorLabel(a):sub(1, 15), ColorUtil.toHex(info.colors.c), ColorUtil.toHex(info.colors["3c"]), flag))
+            actorLabel(a), ColorUtil.toHex(info.colors.c), ColorUtil.toHex(info.colors["3c"]), flag))
     end
     return table.concat(lines, "\n")
 end
@@ -1536,7 +1180,7 @@ function ActorReport.conflicts(actors, data)
             table.insert(lines, "- " .. actorLabel(a) .. " (" .. info.line_count .. " líneas):")
             for _, c in ipairs(info.conflicts) do
                 table.insert(lines, string.format("   Linea %d: %s cambio %s -> %s",
-                    c.ln, c.tag, ColorUtil.toHex(c.old or COLOR_WHITE), ColorUtil.toHex(c.new)))
+                    c.ln, c.tag, ColorUtil.toHex(c.old or colorWhite), ColorUtil.toHex(c.new)))
                 totalChanges = totalChanges + 1
             end
             table.insert(lines, "")
@@ -1572,9 +1216,9 @@ function ActorReport.conflicts(actors, data)
         local info = data[a]
         local ratio = ColorUtil.contrastRatio(info.colors.c, info.colors["3c"])
         local label
-        if ratio < CONTRAST_CRITICAL then
+        if ratio < contrastCritical then
             label = "URGENTE"; totalLowCR = totalLowCR + 1
-        elseif ratio < WCAG_AA then
+        elseif ratio < wcagAa then
             label = "AJUSTAR"; totalLowCR = totalLowCR + 1
         else
             label = "BIEN"
@@ -1582,7 +1226,7 @@ function ActorReport.conflicts(actors, data)
         local dup = ""
         if info.colors.c == info.colors["3c"] then dup = " [c = 3c DUPLICADO]"; totalDup = totalDup + 1 end
         if info.colors.c == info.colors["4c"] then dup = dup .. " [c = 4c]" end
-        table.insert(lines, string.format("  %-12s  CR:%.1f %s%s", actorLabel(a):sub(1, 12), ratio, label, dup))
+        table.insert(lines, string.format("  %-12s  CR:%.1f %s%s", actorLabel(a), ratio, label, dup))
     end
     table.insert(lines, "")
     table.insert(lines, "== VSF ==")
@@ -1620,23 +1264,27 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
     local pages = math.max(1, math.ceil(total / perPage))
 
     if view == "summary" then
+        local text = ActorReport.summary(actors, data)
+        local height = UI.textHeight(text, UI.report_height)
         return {
             { class = "label",   label = "Lista de actores", x = 0, y = 0, width = UI.report_width },
-            { class = "textbox", name = "tb", text = ActorReport.summary(actors, data), x = 0, y = 1, width = UI.report_width, height = UI.report_height },
-            { class = "label",   label = "Formato: Actor  c:#RRGGBB  3c:#RRGGBB  [Estado]", x = 0, y = 13, width = UI.report_width },
+            { class = "textbox", name = "tb", text = text, x = 0, y = 1, width = UI.report_width, height = height, readonly = true },
+            { class = "label",   label = "Formato: Actor  c:#RRGGBB  3c:#RRGGBB  [Estado]", x = 0, y = height + 1, width = UI.report_width },
         }, 0
     elseif view == "conflicts" then
+        local text = ActorReport.conflicts(actors, data)
+        local height = UI.textHeight(text, UI.report_height)
         return {
             { class = "label",   label = "Reporte de conflictos", x = 0, y = 0, width = UI.report_width },
-            { class = "textbox", name = "tb", text = ActorReport.conflicts(actors, data), x = 0, y = 1, width = UI.report_width, height = UI.report_height },
-            { class = "label",   label = "Dominante por actor: color más frecuente; empates por primera aparición.", x = 0, y = 13, width = UI.report_width },
+            { class = "textbox", name = "tb", text = text, x = 0, y = 1, width = UI.report_width, height = height, readonly = true },
+            { class = "label",   label = "Dominante por actor: color más frecuente; empates por primera aparición.", x = 0, y = height + 1, width = UI.report_width },
         }, 0
     elseif view == "vsf" then
         local activeTag = vsfTag or "1vc"
         local g = {
             { class = "label",    label = "4 esquinas", x = 0, y = 0, width = 6 },
             { class = "label",    label = "Pág " .. page .. "/" .. pages .. "  |  " .. total .. " actores", x = 0, y = 1, width = 4 },
-            { class = "dropdown", name = "vctag", items = VSF_TAGS, value = activeTag, x = 4, y = 1, width = 2, hint = "Etiqueta a editar" },
+            { class = "dropdown", name = "vctag", items = vsfTags, value = activeTag, x = 4, y = 1, width = 2, hint = "Etiqueta a editar" },
             { class = "label",    label = "Actor", x = 0, y = 2 },
             { class = "label",    label = "Esq1", x = 1, y = 2, hint = "Esquina sup-izq" },
             { class = "label",    label = "Esq2", x = 2, y = 2, hint = "Esquina sup-der" },
@@ -1650,7 +1298,7 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
             local r = k - s + 3
             local info = data[a]
             local vc = info.vsf_corners[activeTag]
-            table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.vsf_actor_label_chars), x = 0, y = r, hint = actorLabel(a) })
+            table.insert(g, { class = "label",      label = actorPreview(a,UI.vsf_actor_label_chars), x = 0, y = r, hint = actorLabel(a) })
             table.insert(g, { class = "color", name = "V_" .. k .. "_1", value = ColorUtil.toHex(vc[1]), x = 1, y = r })
             table.insert(g, { class = "color", name = "V_" .. k .. "_2", value = ColorUtil.toHex(vc[2]), x = 2, y = r })
             table.insert(g, { class = "color", name = "V_" .. k .. "_3", value = ColorUtil.toHex(vc[3]), x = 3, y = r })
@@ -1674,7 +1322,7 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
         local a = actors[k]
         local r = k - s + 3
         local info = data[a]
-        table.insert(g, { class = "label",      label = actorLabel(a):sub(1, UI.actor_label_chars), x = 0, y = r, hint = actorLabel(a) .. " (" .. info.line_count .. " líneas)" })
+        table.insert(g, { class = "label",      label = actorPreview(a,UI.actor_label_chars), x = 0, y = r, hint = actorLabel(a) .. " (" .. info.line_count .. " líneas)" })
         table.insert(g, { class = "color", name = "C_" .. k .. "_c",  value = ColorUtil.toHex(info.colors.c),     x = 1, y = r })
         table.insert(g, { class = "color", name = "C_" .. k .. "_3c", value = ColorUtil.toHex(info.colors["3c"]), x = 2, y = r })
         table.insert(g, { class = "color", name = "C_" .. k .. "_4c", value = ColorUtil.toHex(info.colors["4c"]), x = 3, y = r })
@@ -1682,8 +1330,8 @@ function ManagerDialog.build(page, perPage, actors, data, view, vsfTag)
         local status = info.has_mixed and "MIXTO " or ""
         if info.has_vsf then status = status .. "VSF " end
         if info.has_vsf_mixed then status = status .. "VSF-MIXTO " end
-        if ratio < CONTRAST_CRITICAL then status = status .. "URGENTE " .. string.format("%.1f", ratio)
-        elseif ratio < WCAG_AA then status = status .. string.format("%.1f", ratio)
+        if ratio < contrastCritical then status = status .. "URGENTE " .. string.format("%.1f", ratio)
+        elseif ratio < wcagAa then status = status .. string.format("%.1f", ratio)
         else status = status .. "BIEN " .. string.format("%.1f", ratio) end
         table.insert(g, { class = "label", label = status, x = 4, y = r })
     end
@@ -1698,10 +1346,12 @@ function ManagerDialog.sync(data, actors, res, page, perPage, mode, vsfTag)
             local v1 = res["V_" .. k .. "_1"]
             if v1 then
                 local vc = data[a].vsf_corners[vsfTag]
+                local previous=table.concat(vc,"|")
                 vc[1] = ColorUtil.normalizeStrict(v1) or vc[1]
                 vc[2] = ColorUtil.normalizeStrict(res["V_" .. k .. "_2"]) or vc[2]
                 vc[3] = ColorUtil.normalizeStrict(res["V_" .. k .. "_3"]) or vc[3]
                 vc[4] = ColorUtil.normalizeStrict(res["V_" .. k .. "_4"]) or vc[4]
+                if previous~=table.concat(vc,"|") then data[a].has_vsf=true end
             end
         elseif not mode then
             local cv = res["C_" .. k .. "_c"]
@@ -1732,6 +1382,13 @@ local function generatedStyleInventory(subs)
         elseif isDialogueLine(item) and type(item.style) == "string" then
             usage[item.style] = usage[item.style] or {}
             usage[item.style][i] = true
+            for _,call in ipairs(LineOps.tagCalls(item.text,{"r"})) do
+                local name=trim(call.value)
+                if call.top_level and name~="" then
+                    usage[name]=usage[name] or {}
+                    usage[name][i]=true
+                end
+            end
         end
     end
     return styleIndex, usage
@@ -1759,8 +1416,6 @@ local function generatedStyleCandidate(rawName, suffix)
     return rawName .. "_" .. tostring(suffix)
 end
 
--- Prefer the style already used exclusively by the actor's target lines. This
--- makes repeated runs idempotent without modifying a style shared elsewhere.
 local function chooseGeneratedStyleName(rawName, subs, styleIndex, usage, targets, claimed)
     local unusedName
     for suffix = 1, #subs + 1 do
@@ -1784,9 +1439,9 @@ local function styleColorWithInheritedAlpha(color, inherited, preserveAlpha)
     if preserveAlpha then
         if type(inherited) == "number" then
             local numeric = finiteNumber(inherited)
-            if numeric and numeric == math.floor(numeric) and numeric >= ASS_SIGNED_COLOR_MIN and numeric <= ASS_UNSIGNED_COLOR_MAX then
-                if numeric < 0 then numeric = numeric + ASS_ALPHA_MODULO end
-                alpha = string.format("%02X", math.floor(numeric / ASS_COLOR_MODULO) % 256)
+            if numeric and numeric == math.floor(numeric) and numeric >= assSignedColorMin and numeric <= assUnsignedColorMax then
+                if numeric < 0 then numeric = numeric + assAlphaModulo end
+                alpha = string.format("%02X", math.floor(numeric / assColorModulo) % 256)
             end
         else
             local hex = tostring(inherited or ""):match("^&[Hh](%x+)&?$")
@@ -1796,154 +1451,129 @@ local function styleColorWithInheritedAlpha(color, inherited, preserveAlpha)
     return string.format("&H%s%06X&", alpha, ColorUtil.toNumber(color))
 end
 
+local function applyActorPalettes(subs, data, actors, styleMap, options)
+    local plans, groups, groupOrder, selection = {}, {}, {}, {}
+    local skipped = 0
+    for _, actor in ipairs(actors) do
+        local info = data[actor]
+        local palette = options.palette(info)
+        for _, id in ipairs(info.ids or {}) do
+            local source = subs[id]
+            if isDialogueLine(source) then
+                selection[#selection+1] = id
+                if palette and (options.includeDrawings ~= false or not LineOps.hasDrawing(source.text)) then
+                    LineOps.checkCancelled()
+                    local line = Core.copy(source)
+                    local text = tostring(line.text or "")
+                    if options.cleanOnly then text = TagStripper.clearColors(text)
+                    else
+                        if options.autoClean or options.styles then
+                            text = TagStripper.clearSlots(text,options.slots)
+                        elseif not options.vsfTag then
+                            text = stripSolidSlotsFromFirstBlock(text)
+                        end
+                        if options.vsfTag then text=stripSpecificColor(text,options.vsfTag:sub(1,1)) end
+                        if options.harmonize then
+                            text=TagStripper.replaceSolidColors(text,palette.c,palette["3c"],palette["4c"])
+                        end
+                        if options.vsfRemap then
+                            text=LineOps.mapTagCalls(text, nil, function(call)
+                                local tuple=palette.vsf and palette.vsf[call.name]
+                                if tuple then return buildVSFTag(call.name,tuple) end
+                            end,{top_level_only=false})
+                        elseif not options.vsfTag then
+                            text=cleanupTransforms(LineOps.mapTagCalls(text, nil, function(call)
+                                local slot=call.name:match("^([1-4]?)vc$")
+                                slot=slot=="" and "1" or slot
+                                if slot and options.slots[slot] then return "" end
+                            end,{top_level_only=false}))
+                        end
+                        local payload = options.vsfTag and buildVSFTag(options.vsfTag,palette.vsf[options.vsfTag]) or
+                            ("\\c"..palette.c.."\\3c"..palette["3c"].."\\4c"..palette["4c"])
+                        if options.opaque then
+                            text=cleanupTransforms(LineOps.removeTagCalls(text,{"alpha","1a","2a","3a","4a"},{top_level_only=false}))
+                            payload=payload.."\\alpha&H00&"
+                        end
+                        if options.bord ~= nil then
+                            text=cleanupTransforms(LineOps.removeTagCalls(text,{"bord","xbord","ybord","shad","xshad","yshad"},{top_level_only=false}))
+                            payload=payload.."\\bord"..Core.formatNumber(options.bord,6).."\\shad"..Core.formatNumber(options.shad,6)
+                        end
+                        if options.styles then
+                            text=TagStripper.afterResets(text,payload)
+                            groups[actor]=groups[actor] or {}
+                            local group=groups[actor][source.style]
+                            if not group then
+                                local base=styleMap[source.style] or styleMap.Default
+                                if not base then return 0,0,"Falta el estilo de la línea "..id..": "..tostring(source.style) end
+                                group={actor=actor,base=base,ids={},palette=palette}
+                                groups[actor][source.style]=group
+                                groupOrder[#groupOrder+1]=group
+                            end
+                            group.ids[#group.ids+1]=id
+                        else text=TagStripper.setPalette(text,payload) end
+                    end
+                    line.text=TagStripper.dedupeColors(text):gsub("{%s*}","")
+                    plans[#plans+1]={id=id,line=line}
+                else skipped=skipped+1 end
+            end
+        end
+    end
+    local newStyles, replacements, claimed, names = {}, {}, {}, {}
+    local styleIndex,usage=generatedStyleInventory(subs)
+    local insertAt=1
+    for i=1,#subs do if subs[i].class=="style" then insertAt=i+1 end end
+    if insertAt==1 then
+        while insertAt<=#subs and not isDialogueLine(subs[insertAt]) do insertAt=insertAt+1 end
+    end
+    for _, group in ipairs(groupOrder) do
+        local rawName=(actorLabel(group.actor):gsub("[^%w_]","_"))..options.suffix
+        local name,existing=chooseGeneratedStyleName(rawName,subs,styleIndex,usage,idsAsSet(group.ids),claimed)
+        if not name then return 0,0,"No se pudo reservar un estilo para "..actorLabel(group.actor) end
+        claimed[name]=true
+        local style=Core.copy(group.base)
+        style.name=name
+        for _, slot in ipairs({1,3,4}) do
+            local field="color"..slot
+            local value=group.palette[slot==1 and "c" or slot.."c"]
+            style[field]=styleColorWithInheritedAlpha(value,group.base[field],not options.opaque)
+        end
+        if options.opaque then
+            style.color2=styleColorWithInheritedAlpha(Color.fromStyle(group.base.color2),nil,false)
+            for slot=1,4 do style["alpha"..slot]=0 end
+        end
+        if options.bord~=nil then style.outline,style.shadow=options.bord,options.shad end
+        if existing then replacements[existing]=style else newStyles[#newStyles+1]=style end
+        for _, id in ipairs(group.ids) do names[id]=name end
+    end
+    return LineOps.transaction(subs,function()
+        for id, style in pairs(replacements) do subs[id]=style end
+        for i=#newStyles,1,-1 do subs.insert(insertAt,newStyles[i]) end
+        for _, plan in ipairs(plans) do
+            LineOps.checkCancelled()
+            if names[plan.id] then plan.line.style=names[plan.id] end
+            subs[plan.id>=insertAt and plan.id+#newStyles or plan.id]=plan.line
+        end
+        for i,id in ipairs(selection) do if id>=insertAt then selection[i]=id+#newStyles end end
+        table.sort(selection)
+        return #plans,skipped,nil,selection
+    end)
+end
+
 local ManagerApply = {}
 
-function ManagerApply.execute(subs, data, actors, styleMap, op, autoClean, vsfMode, vsfTag)
-    styleMap = styleMap or {}
-    local count = 0
-
-    for _, actor in ipairs(actors or {}) do
-        for _, index in ipairs((data[actor] and data[actor].ids) or {}) do
-            local line = subs[index]
-            if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then
-                return nil, "La línea " .. tostring(index) .. " usa \\r. El gestor no modifica líneas con reinicios de estilo hasta poder resolver sus colores por run."
-            end
-        end
-    end
-
-    if op == "Estilos" and vsfMode then
-        return nil, "Los colores VSFilterMod requieren el modo Etiquetas."
-    end
-
-    if op == "Estilos" then
-        local nameMap, newStyles, claimedNames = {}, {}, {}
-        local styleIndex, styleUsage = generatedStyleInventory(subs)
-        local insertPos, lastNonDialoguePos, foundStyle = 1, 0, false
-        for si = 1, #subs do
-            local cls = subs[si].class
-            if cls == "style" then
-                insertPos = si + 1
-                foundStyle = true
-            elseif cls ~= "dialogue" then
-                lastNonDialoguePos = si
-            end
-        end
-
-        if not foundStyle and lastNonDialoguePos > 0 then
-            insertPos = lastNonDialoguePos + 1
-        end
-        for _, a in ipairs(actors) do
-            local sc1 = ColorUtil.normalize(data[a].colors.c)
-            local sc2 = ColorUtil.normalize(data[a].colors["2c"])
-            local sc3 = ColorUtil.normalize(data[a].colors["3c"])
-            local sc4 = ColorUtil.normalize(data[a].colors["4c"])
-            local firstId = data[a].ids[1]
-            if firstId and isDialogueLine(subs[firstId]) then
-                local base    = styleMap[subs[firstId].style]
-                local rawName = (actorLabel(a):gsub("[^%w_]", "_")) .. "_Z"
-                local name, existingIndex = chooseGeneratedStyleName(
-                    rawName, subs, styleIndex, styleUsage,
-                    idsAsSet(data[a].ids), claimedNames
-                )
-                if not name then return nil, "No se pudo reservar un nombre de estilo para '" .. tostring(a) .. "'." end
-                claimedNames[name] = true
-                local ns = { class = "style", name = name }
-                if base then
-                    for k, v in pairs(base) do
-                        if k ~= "name" and k ~= "class" then ns[k] = v end
-                    end
-                else
-                    copyFallbackStyle(ns)
-                end
-                ns.color1 = styleColorWithInheritedAlpha(sc1, base and base.color1, true)
-                ns.color2 = styleColorWithInheritedAlpha(sc2, base and base.color2, true)
-                ns.color3 = styleColorWithInheritedAlpha(sc3, base and base.color3, true)
-                ns.color4 = styleColorWithInheritedAlpha(sc4, base and base.color4, true)
-
-                if existingIndex then
-                    subs[existingIndex] = ns
-                else
-                    table.insert(newStyles, ns)
-                end
-                nameMap[a] = name
-            end
-        end
-        for si = #newStyles, 1, -1 do subs.insert(insertPos, newStyles[si]) end
-        local offset = #newStyles
-        for _, a in ipairs(actors) do
-            local sname = nameMap[a]
-            if sname then
-                for _, id in ipairs(data[a].ids) do
-                    local idx = id >= insertPos and id + offset or id
-                    local l = subs[idx]
-                    if isDialogueLine(l) then
-                        l.style = sname
-
-                        l.text = TagStripper.clearColors(l.text)
-                        subs[idx] = l
-                        count = count + 1
-                    end
-                end
-            end
-        end
-        return count
-    end
-
-    for _, a in ipairs(actors) do
-        local c1 = ColorUtil.normalize(data[a].colors.c)
-        local c3 = ColorUtil.normalize(data[a].colors["3c"])
-        local c4 = ColorUtil.normalize(data[a].colors["4c"])
-
-        if op == "Etiquetas" or op == "Tags" then
-            for _, id in ipairs(data[a].ids) do
-                local l = subs[id]
-                if isDialogueLine(l) then
-                    l.text = tostring(l.text or "")
-                    if autoClean then
-                        l.text = TagStripper.clearColors(l.text)
-                    end
-
-                    local tags
-                    if vsfMode and vsfTag then
-                        tags = buildVSFTag(vsfTag, data[a].vsf_corners[vsfTag])
-
-                        l.text = stripSpecificColor(l.text, vsfTag:sub(1, 1))
-                    else
-                        tags = "\\c" .. c1 .. "\\3c" .. c3 .. "\\4c" .. c4
-                        if not autoClean then
-                            l.text = stripSolidSlotsFromFirstBlock(l.text)
-                        end
-
-                        l.text = (l.text:gsub("{([^}]*)}", function(block)
-                            block = block:gsub("\\1?vc%b()", "")
-                            block = block:gsub("\\3vc%b()", "")
-                            block = block:gsub("\\4vc%b()", "")
-                            block = cleanupTransforms(block)
-                            block = trim(block)
-                            if block == "" then return "" end
-                            return "{" .. block .. "}"
-                        end))
-                    end
-
-                    l.text = injectFirstTags(l.text, tags)
-                    l.text = TagStripper.dedupeColors(l.text)
-                    l.text = l.text:gsub("{%s*}", "")
-                    subs[id] = l
-                    count = count + 1
-                end
-            end
-        elseif op == "Limpiar" then
-            for _, id in ipairs(data[a].ids) do
-                local l = subs[id]
-                if isDialogueLine(l) then
-                    l.text = TagStripper.clearColors(l.text)
-                    subs[id] = l
-                    count = count + 1
-                end
-            end
-        end
-    end
-    return count
+function ManagerApply.execute(subs,data,actors,styleMap,op,autoClean,vsfMode,vsfTag)
+    if op=="Estilos" and vsfMode then return nil,"Los colores VSFilterMod requieren el modo Etiquetas." end
+    if op~="Estilos" and op~="Limpiar" and op~="Etiquetas" and op~="Tags" then return nil,"Operación desconocida." end
+    local count,_,err,selection=applyActorPalettes(subs,data,actors,styleMap or {},{
+        styles=op=="Estilos",suffix="_Z",autoClean=autoClean,cleanOnly=op=="Limpiar",
+        slots=vsfMode and {[vsfTag:sub(1,1)]=true} or {["1"]=true,["3"]=true,["4"]=true},
+        vsfTag=vsfMode and vsfTag or nil,
+        palette=function(info)
+            return {c=Color.normalize(info.colors.c),["3c"]=Color.normalize(info.colors["3c"]),
+                ["4c"]=Color.normalize(info.colors["4c"]),vsf=info.vsf_corners}
+        end,
+    })
+    return not err and count or nil,err,selection
 end
 
 local ActorColorFile = {}
@@ -1972,23 +1602,23 @@ function ActorColorFile.io(data, actors, mode)
             if data[a].has_vsf then hasAnyVSF = true; break end
         end
         local ok, err = PyBridge.withAtomicFile(fp, function(f)
-            f:write("# Zheus Colormanager\n")
-            f:write("# Exportación de paleta de color por actor\n")
-            f:write("# Versión de formato: " .. ACTOR_PALETTE_FORMAT_VERSION .. "\n")
-            f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n")
-            f:write("# Esquema: Actor-porcentaje-codificado|c,3c,4c[|1vc:c1,c2,c3,c4|...]\n\n")
+            assert(f:write("# Zheus Colormanager\n"))
+            assert(f:write("# Exportación de paleta de color por actor\n"))
+            assert(f:write("# Versión de formato: " .. actorPaletteFormatVersion .. "\n"))
+            assert(f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n"))
+            assert(f:write("# Esquema: Actor-porcentaje-codificado|c,3c,4c[|1vc:c1,c2,c3,c4|...]\n\n"))
             for _, a in ipairs(actors) do
                 local info = data[a]
                 local line = encodePaletteField(a) .. "|" .. info.colors.c .. "," .. info.colors["3c"] .. "," .. info.colors["4c"]
                 if info.has_vsf then
-                    for _, tag in ipairs(VSF_TAGS) do
+                    for _, tag in ipairs(vsfTags) do
                         local vc = info.vsf_corners[tag]
                         if vc then
                             line = line .. "|" .. tag .. ":" .. vc[1] .. "," .. vc[2] .. "," .. vc[3] .. "," .. vc[4]
                         end
                     end
                 end
-                f:write(line .. "\n")
+                assert(f:write(line .. "\n"))
             end
             return true
         end, "wb")
@@ -1998,64 +1628,49 @@ function ActorColorFile.io(data, actors, mode)
 
     local fn = aegisub.dialog.open("Importar paleta de colores - Zheus Colormanager", "", "", "*.txt", false, true)
     if not fn then return nil end
-    local content, readError = PyBridge.readFile(fn, PALETTE_FILE_LIMIT + 1)
+    local content, readError = PyBridge.readFile(fn)
     if not content then return "Error al leer: " .. tostring(readError) end
-    if #content > PALETTE_FILE_LIMIT then return "La paleta supera el límite de tamaño permitido." end
     local fileVersion = tonumber(content:match("#%s*Versión de formato:%s*(%d+)")) or 2
-    if fileVersion < 2 or fileVersion > ACTOR_PALETTE_FORMAT_VERSION then
+    if fileVersion < 2 or fileVersion > actorPaletteFormatVersion then
         return "Versión de paleta no compatible: " .. tostring(fileVersion)
     end
-    local imported, missing, invalid, has_vsf_data = 0, {}, {}, false
+    local imported, missing, invalid, hasVsfData = 0, {}, {}, false
     local updated = {}
-    for l in content:gmatch("[^\r\n]+") do
-        if not l:match("^#") and l ~= "" then
-            local actorField, remainder = l:match("^(.-)|(.+)$")
-            local parts = actorField and { actorField } or {}
-            for p in tostring(remainder or ""):gmatch("[^|]+") do table.insert(parts, p) end
-            if #parts >= 2 then
-                local actor = fileVersion >= 3 and decodePaletteField(parts[1]) or trim(parts[1])
-                if not actor then
-                    table.insert(invalid, "actor codificado")
-                    actor = ""
+    for row in content:gmatch("[^\r\n]+") do
+        if not row:match("^%s*#") and trim(row) ~= "" then
+            LineOps.checkCancelled()
+            local field,body=row:match("^(.-)|(.*)$")
+            local actor
+            if field then
+                if fileVersion>=3 then actor=decodePaletteField(field) else actor=trim(field) end
+            end
+            if actor==nil then invalid[#invalid+1]="actor codificado"
+            elseif not data[actor] then missing[#missing+1]=actorLabel(actor)
+            else
+                local parts={}
+                for part in (body.."|"):gmatch("(.-)|") do parts[#parts+1]=part end
+                local colors=LineOps.splitArguments(parts[1] or "")
+                local solid,vsf,valid={},{},#colors==3
+                for index=1,3 do
+                    solid[index]=Color.normalizeStrict(colors[index])
+                    if not solid[index] then valid=false end
                 end
-                if data[actor] then
-                    local t = {}
-                    for x in parts[2]:gmatch("[^,]+") do table.insert(t, x) end
-                    if #t == 3 then
-                        local c1 = ColorUtil.normalizeStrict(t[1])
-                        local c3 = ColorUtil.normalizeStrict(t[2])
-                        local c4 = ColorUtil.normalizeStrict(t[3])
-                        if c1 and c3 and c4 then
-                            data[actor].colors.c     = c1
-                            data[actor].colors["3c"] = c3
-                            data[actor].colors["4c"] = c4
-                            imported = imported + 1
-                            updated[actor] = true
-                        else
-                            table.insert(invalid, actor .. " sólidos")
-                        end
+                for index=2,#parts do
+                    local tag,values=parts[index]:match("^([1-4]vc):(.+)$")
+                    local tuple=values and LineOps.splitArguments(values) or {}
+                    if not tag or #tuple~=4 then valid=false
+                    else
+                        for corner=1,4 do tuple[corner]=Color.normalizeStrict(tuple[corner]);if not tuple[corner] then valid=false end end
+                        vsf[tag]=tuple
                     end
-                    for pi = 3, #parts do
-                        local tag, cols = parts[pi]:match("^([1-4]vc):(.+)$")
-                        if tag and cols and data[actor].vsf_corners[tag] then
-                            local vc = {}
-                            local okTuple = true
-                            for x in cols:gmatch("[^,]+") do
-                                local n = ColorUtil.normalizeStrict(x)
-                                if n then table.insert(vc, n) else okTuple = false end
-                            end
-                            if okTuple and #vc == 4 then
-                                data[actor].vsf_corners[tag] = { vc[1], vc[2], vc[3], vc[4] }
-                                data[actor].has_vsf = true
-                                has_vsf_data = true
-                            else
-                                table.insert(invalid, actor .. " " .. tag)
-                            end
-                        end
-                    end
-                else
-                    table.insert(missing, actor)
                 end
+                if valid then
+                    local info=data[actor]
+                    info.colors.c,info.colors["3c"],info.colors["4c"]=solid[1],solid[2],solid[3]
+                    for tag,tuple in pairs(vsf) do info.vsf_corners[tag]=tuple;info.has_vsf=true;hasVsfData=true end
+                    if not updated[actor] then imported=imported+1 end
+                    updated[actor]=true
+                else invalid[#invalid+1]=actorLabel(actor) end
             end
         end
     end
@@ -2066,20 +1681,17 @@ function ActorColorFile.io(data, actors, mode)
     local msg = "Importados: " .. imported .. "/" .. #actors
     if #invalid > 0 then
         local il = table.concat(invalid, ", ")
-        msg = msg .. "\nEntradas inválidas omitidas: " .. il:sub(1, 80)
-        if #il > 80 then msg = msg .. "..." end
+        msg = msg .. "\nEntradas inválidas omitidas: " .. il
     end
     if #missing > 0 then
         local ml = table.concat(missing, ", ")
-        msg = msg .. "\nArchivo con actores fuera de selección: " .. ml:sub(1, 60)
-        if #ml > 60 then msg = msg .. "..." end
+        msg = msg .. "\nArchivo con actores fuera de selección: " .. ml
     end
     if #noData > 0 then
         local nl = table.concat(noData, ", ")
-        msg = msg .. "\nActores pendientes en archivo: " .. nl:sub(1, 60)
-        if #nl > 60 then msg = msg .. "..." end
+        msg = msg .. "\nActores pendientes en archivo: " .. nl
     end
-    return msg, has_vsf_data
+    return msg, hasVsfData
 end
 
 local VSFCornerEditor = {}
@@ -2087,7 +1699,7 @@ local VSFCornerEditor = {}
 function VSFCornerEditor.applyGradient(subs, sel, cfg)
     local payload = {}
     local activeSlots = {}
-    for _, tagName in ipairs(QUICK_VSF_TAGS) do
+    for _, tagName in ipairs(quickVsfTags) do
         local prefix = "vc" .. tagName:sub(1, 1)
         if cfg[prefix .. "_use"] then
             local c1 = ColorUtil.normalizeStrict(cfg[prefix .. "_1"])
@@ -2103,16 +1715,18 @@ function VSFCornerEditor.applyGradient(subs, sel, cfg)
     end
     if #payload == 0 then return 0, "Selecciona al menos un tag VSF." end
     local tag = table.concat(payload)
+    return LineOps.transaction(subs,function()
     local count, linesWithSolid = 0, 0
 
-    for _, i in ipairs(sel) do
-        local l = subs[i]
+    for _, i in ipairs(LineOps.normalizeIndices(subs, sel)) do
+        local l = Core.copy(subs[i])
+        LineOps.checkCancelled()
         if isDialogueLine(l) then
             l.text = tostring(l.text or "")
             local hadSolidConflict = false
 
             if cfg.vcl then
-                l.text = l.text:gsub(PAT_VC_ANY, "")
+                l.text = cleanupTransforms(LineOps.removeTagCalls(l.text,{"vc","1vc","2vc","3vc","4vc"}))
                 l.text = l.text:gsub("{%s*}", "")
             end
 
@@ -2122,7 +1736,7 @@ function VSFCornerEditor.applyGradient(subs, sel, cfg)
                 if l.text ~= before then hadSolidConflict = true end
             end
 
-            l.text = injectFirstTags(l.text, tag)
+            l.text = TagStripper.setPalette(l.text, tag)
             l.text = TagStripper.dedupeColors(l.text)
             l.text = l.text:gsub("{%s*}", "")
             subs[i] = l
@@ -2135,27 +1749,22 @@ function VSFCornerEditor.applyGradient(subs, sel, cfg)
         return count, nil, linesWithSolid
     end
     return count
+    end)
 end
 
 local ColorReplacer = {}
 
-function ColorReplacer.collect(subs, sel, slots)
-    local seen, found = {}, {}
-    for _, i in ipairs(sel) do
-        local line = subs[i]
+function ColorReplacer.collect(subs,sel,slots)
+    local seen,found={},{}
+    for _,id in ipairs(LineOps.normalizeIndices(subs,sel)) do
+        local line=subs[id]
         if isDialogueLine(line) then
-            local txt = tostring(line.text or "")
-            for n, raw in txt:gmatch(PAT_COLOR_CAP) do
-                if n == "" then n = "1" end
-                local norm = slots[n] and ColorUtil.normalizeStrict(raw) or nil
-                if norm and not seen[norm] then seen[norm] = true; table.insert(found, norm) end
-            end
-            for n, parens in txt:gmatch(PAT_VC_CAP) do
-                if n == "" then n = "1" end
-                if slots[n] then
-                    for col in parens:gmatch(PAT_HEX_TOKEN) do
-                        local norm = ColorUtil.normalizeStrict(col)
-                        if norm and not seen[norm] then seen[norm] = true; table.insert(found, norm) end
+            for _,call in ipairs(LineOps.tagCalls(line.text)) do
+                local slot=TagStripper.colorSlot(call.name)
+                if slot and slots[slot] then
+                    for raw in call.value:gmatch(patHexToken) do
+                        local color=Color.parseTag(raw)
+                        if color and not seen[color] then seen[color]=true;found[#found+1]=color end
                     end
                 end
             end
@@ -2165,185 +1774,70 @@ function ColorReplacer.collect(subs, sel, slots)
     return found
 end
 
-function ColorReplacer.run(subs, sel, cfg)
-    local slots = slotFilterFromConfig(cfg)
-    local status = ""
-    local pending = {}
-    while true do
-        local found = anySlotSelected(slots) and ColorReplacer.collect(subs, sel, slots) or {}
-        local g = {
-            { class = "label", label = "Cambiar colores", x = 0, y = 0, width = 8 },
-            { class = "label", label = "Canales activos: " .. slotFilterLabel(slots), x = 0, y = 1, width = 8 },
-            { class = "checkbox", name = "replace_slot_1", label = "\\c",  value = slots["1"], x = 0, y = 2, width = 2 },
-            { class = "checkbox", name = "replace_slot_2", label = "\\2c", value = slots["2"], x = 2, y = 2, width = 2 },
-            { class = "checkbox", name = "replace_slot_3", label = "\\3c", value = slots["3"], x = 4, y = 2, width = 2 },
-            { class = "checkbox", name = "replace_slot_4", label = "\\4c", value = slots["4"], x = 6, y = 2, width = 2 },
-        }
-        local baseY = 3
-        if status ~= "" then
-            table.insert(g, { class = "label", label = status, x = 0, y = baseY, width = 8 })
-            baseY = baseY + 1
+function ColorReplacer.apply(subs,sel,replacements,slots)
+    return LineOps.transaction(subs,function()
+        local count=0
+        for _,id in ipairs(LineOps.normalizeIndices(subs,sel)) do
+            LineOps.checkCancelled()
+            local source=subs[id]
+            if isDialogueLine(source) then
+                local text=LineOps.mapTagCalls(source.text,nil,function(call)
+                    local slot=TagStripper.colorSlot(call.name)
+                    if not slot or not slots[slot] then return nil end
+                    local value=call.value:gsub(patHexToken,function(raw)
+                        local target=replacements[Color.parseTag(raw)]
+                        if not target then return raw end
+                        return target
+                    end)
+                    if value~=call.value then return "\\"..call.raw_name..value end
+                end,{top_level_only=false})
+                if text~=source.text then
+                    local line=Core.copy(source)
+                    line.text=TagStripper.dedupeColors(text)
+                    subs[id]=line;count=count+1
+                end
+            end
         end
+        return count
+    end)
+end
 
-        if #found == 0 then
-            table.insert(g, { class = "label", label = anySlotSelected(slots) and "Colores detectados: 0" or "Selecciona al menos un canal.", x = 0, y = baseY, width = 8 })
-            local btn, res = aegisub.dialog.display(g, { "Actualizar", "Volver", "Cancel" })
-            res = res or {}
-            local nextSlots = slotFilterFromConfig(res)
-            if btn == "Volver" then return 0, nil, "back", writeSlotFilterToTable({}, nextSlots) end
-            if btn ~= "Actualizar" then return 0, nil, "cancel", writeSlotFilterToTable({}, nextSlots) end
-            slots = nextSlots
-            status = "Filtros actualizados."
-        else
-            table.insert(g, { class = "label", label = "Actual", x = 0, y = baseY, width = 3 })
-            table.insert(g, { class = "label", label = "Nuevo",  x = 4, y = baseY, width = 3 })
-            for i, v in ipairs(found) do
-                local y = baseY + i
-                table.insert(g, { class = "label", label = ColorUtil.toHex(v), x = 0, y = y, width = 3 })
-                table.insert(g, { class = "label",      label = ">", x = 3, y = y, width = 1 })
-                table.insert(g, { class = "color", name = "n" .. i, value = ColorUtil.toHex(pending[v] or v), x = 4, y = y, width = 3 })
+function ColorReplacer.run(subs,sel,cfg)
+    local slots,pending=slotFilterFromConfig(cfg),{}
+    while true do
+        local colors=ColorReplacer.collect(subs,sel,slots)
+        local action,_,result=ColorDialogs.editMapping("Cambiar colores",colors,pending,{slots=slots})
+        slots=result.slots
+        if action=="Cancelar" then return 0,nil,"cancel",writeSlotFilterToTable({},slots) end
+        if action=="Volver" then return 0,nil,"back",writeSlotFilterToTable({},slots) end
+        if action=="Aplicar" then
+            local replacements={}
+            for _,color in ipairs(colors) do if pending[color] and pending[color]~=color then replacements[color]=pending[color] end end
+            if next(replacements) then
+                return ColorReplacer.apply(subs,sel,replacements,slots),nil,"applied",writeSlotFilterToTable({},slots)
             end
-            local btn, res = aegisub.dialog.display(g, { "Execute", "Actualizar", "Volver", "Cancel" })
-            res = res or {}
-            local nextSlots = slotFilterFromConfig(res)
-            if btn == "Volver" then return 0, nil, "back", writeSlotFilterToTable({}, nextSlots) end
-            if btn == "Cancel" or not btn then return 0, nil, "cancel", writeSlotFilterToTable({}, nextSlots) end
-            local parsed, invalid = {}, nil
-            for i, v in ipairs(found) do
-                local nv = ColorUtil.normalizeStrict(res["n" .. i])
-                if not nv then
-                    invalid = "Color inválido: " .. tostring(res["n" .. i])
-                    break
-                end
-                parsed[v] = nv
-            end
-            if invalid then
-                status = invalid
-            else
-                for v, nv in pairs(parsed) do pending[v] = nv end
-                if btn == "Actualizar" or not sameSlotFilter(slots, nextSlots) then
-                    slots = nextSlots
-                    status = "Filtros actualizados; revisa los colores y ejecuta de nuevo."
-                else
-                    local replacements, anyChange = {}, false
-                    for _, v in ipairs(found) do
-                        local nv = pending[v] or v
-                        if v ~= nv then replacements[v] = nv; anyChange = true end
-                    end
-                    if not anyChange then
-                        status = "No hay cambios de color por aplicar."
-                    else
-                        local count = 0
-                        local function replaceToken(color)
-                            local rep = replacements[ColorUtil.normalize(color)]
-                            if not rep then return nil end
-                            local hex = tostring(color):match("&[Hh](%x+)&?")
-                            if hex and #hex > 6 then
-                                local alpha = hex:sub(1, #hex - 6):upper()
-                                local rgb = rep:match("&H(%x+)&")
-                                return "&H" .. alpha .. rgb .. "&"
-                            end
-                            return rep
-                        end
-                        for _, i in ipairs(sel) do
-                            local l = subs[i]
-                            if isDialogueLine(l) then
-                                l.text = tostring(l.text or "")
-                                local changed = false
-                                l.text = l.text:gsub("(\\)([1-4]?)c(&[Hh]%x+&?)", function(slash, rawSlot, color)
-                                    local slot = rawSlot == "" and "1" or rawSlot
-                                    if not slots[slot] then return slash .. rawSlot .. "c" .. color end
-                                    local rep = replaceToken(color)
-                                    if rep then changed = true; return slash .. rawSlot .. "c" .. rep end
-                                    return slash .. rawSlot .. "c" .. color
-                                end)
-                                l.text = l.text:gsub("\\([1-4]?)vc(%b())", function(rawSlot, parens)
-                                    local slot = rawSlot == "" and "1" or rawSlot
-                                    if not slots[slot] then return "\\" .. rawSlot .. "vc" .. parens end
-                                    local newParens = parens:gsub(PAT_HEX_TOKEN, function(color)
-                                        local rep = replaceToken(color)
-                                        if rep then changed = true; return rep end
-                                        return color
-                                    end)
-                                    return "\\" .. rawSlot .. "vc" .. newParens
-                                end)
-                                if changed then
-                                    l.text = TagStripper.dedupeColors(l.text)
-                                    subs[i] = l
-                                    count = count + 1
-                                end
-                            end
-                        end
-                        return count, nil, "applied", writeSlotFilterToTable({}, slots)
-                    end
-                end
-            end
+            return 0,nil,"nochange",writeSlotFilterToTable({},slots)
         end
     end
 end
 
-local AlphaUtil = {}
-
-function AlphaUtil.expandEmbeddedColorAlpha(text)
-    return (tostring(text or ""):gsub("\\([1-4]?)c&[Hh](%x%x)(%x%x%x%x%x%x)&?", function(rawSlot, alpha, rgb)
-        local alphaSlot = rawSlot == "" and "1" or rawSlot
-        return "\\" .. alphaSlot .. "a&H" .. alpha:upper() .. "&\\" .. rawSlot .. "c&H" .. rgb:upper() .. "&"
-    end))
-end
-
 local ColorSpace = {}
 
-function ColorSpace.srgb8ToLinear(v)
-    v = (tonumber(v) or 0) / RGB_CHANNEL_MAX
-    if v <= 0 then return 0 end
-    if v >= 1 then return 1 end
-    if v <= 0.04045 then return v / 12.92 end
-    return ((v + 0.055) / 1.055) ^ 2.4
-end
+ColorSpace.srgb8ToLinear = Color.srgb8ToLinear
+ColorSpace.linearToSrgb8 = Color.linearToSrgb8
+ColorSpace.rgbToOklab = Color.rgbToOklab
 
-function ColorSpace.linearToSrgb8(v)
-    v = tonumber(v) or 0
-    if v <= 0 then return 0 end
-    if v >= 1 then return RGB_CHANNEL_MAX end
-    local s
-    if v <= 0.0031308 then s = v * 12.92
-    else s = 1.055 * (v ^ (1.0 / 2.4)) - 0.055 end
-    s = math.floor(s * RGB_CHANNEL_MAX + 0.5)
-    if s < 0 then return 0 end
-    if s > RGB_CHANNEL_MAX then return RGB_CHANNEL_MAX end
-    return s
-end
-
-local function _cbrt(x)
-    if x >= 0 then return x ^ (1.0 / 3.0) end
-    return -((-x) ^ (1.0 / 3.0))
-end
-
-function ColorSpace.rgbToOklab(r, g, b)
-    local lr = ColorSpace.srgb8ToLinear(r)
-    local lg = ColorSpace.srgb8ToLinear(g)
-    local lb = ColorSpace.srgb8ToLinear(b)
-    local lp = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb
-    local mp = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb
-    local sp = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb
-    local lc, mc, sc = _cbrt(lp), _cbrt(mp), _cbrt(sp)
-    local L = 0.2104542553 * lc + 0.7936177850 * mc - 0.0040720468 * sc
-    local A = 1.9779984951 * lc - 2.4285922050 * mc + 0.4505937099 * sc
-    local B = 0.0259040371 * lc + 0.7827717662 * mc - 0.8086757660 * sc
-    return L, A, B
-end
-
-local _oklabMemo, _oklabMemoN = {}, 0
+local oklabMemo, oklabMemoCount = {}, 0
 
 function ColorSpace.colorToOklab(c)
-    local key = tostring(c)
-    local hit = _oklabMemo[key]
+    local key = Color.normalize(c)
+    local hit = oklabMemo[key]
     if hit then return hit[1], hit[2], hit[3] end
     local r, g, b = ColorUtil.toRGB(c)
     local L, A, B = ColorSpace.rgbToOklab(r, g, b)
-    if _oklabMemoN >= COLOR_CACHE_LIMIT then _oklabMemo, _oklabMemoN = {}, 0 end
-    _oklabMemo[key] = { L, A, B }
-    _oklabMemoN = _oklabMemoN + 1
+    if oklabMemoCount >= colorCacheLimit then oklabMemo, oklabMemoCount = {}, 0 end
+    oklabMemo[key] = { L, A, B }
+    oklabMemoCount = oklabMemoCount + 1
     return L, A, B
 end
 
@@ -2378,7 +1872,7 @@ CVDSim.matrices = {
     },
 }
 
-local function _applyMatrix(r, g, b, m, severity)
+local function applyMatrix(r, g, b, m, severity)
     local lr = ColorSpace.srgb8ToLinear(r)
     local lg = ColorSpace.srgb8ToLinear(g)
     local lb = ColorSpace.srgb8ToLinear(b)
@@ -2393,16 +1887,16 @@ local function _applyMatrix(r, g, b, m, severity)
     return ColorSpace.linearToSrgb8(rr), ColorSpace.linearToSrgb8(gg), ColorSpace.linearToSrgb8(bb)
 end
 
-local _cvdMemo, _cvdMemoN = {}, 0
+local cvdMemo, cvdMemoCount = {}, 0
 
 function CVDSim.simulate(color, cvdType, severity)
-    if color == nil or color == "" then return COLOR_WHITE end
+    if color == nil or color == "" then return colorWhite end
     severity = finiteNumber(severity)
     if severity == nil then severity = 1.0 end
     if severity < 0 then severity = 0 end
     if severity > 1 then severity = 1 end
-    local key = tostring(color) .. "|" .. tostring(cvdType) .. "|" .. string.format("%.4f", severity)
-    local hit = _cvdMemo[key]
+    local key = Color.normalize(color) .. "|" .. tostring(cvdType) .. "|" .. string.format("%.17g", severity)
+    local hit = cvdMemo[key]
     if hit then return hit end
     local result
     if cvdType == "mono" then
@@ -2413,13 +1907,13 @@ function CVDSim.simulate(color, cvdType, severity)
             result = ColorUtil.normalize(color)
         else
             local r, g, b = ColorUtil.toRGB(color)
-            local r2, g2, b2 = _applyMatrix(r, g, b, m, severity)
+            local r2, g2, b2 = applyMatrix(r, g, b, m, severity)
             result = ColorUtil.fromRGB(r2, g2, b2)
         end
     end
-    if _cvdMemoN >= COLOR_CACHE_LIMIT then _cvdMemo, _cvdMemoN = {}, 0 end
-    _cvdMemo[key] = result
-    _cvdMemoN = _cvdMemoN + 1
+    if cvdMemoCount >= colorCacheLimit then cvdMemo, cvdMemoCount = {}, 0 end
+    cvdMemo[key] = result
+    cvdMemoCount = cvdMemoCount + 1
     return result
 end
 
@@ -2501,13 +1995,13 @@ AccessibilityProfiles.list = {
         thresholds = { min_text_contrast = 7.0, min_actor_delta = 0.0, min_mono_luma_delta = 0.0 },
         policy = {
             preserve_hue = false, destructive = true,
-            force_fill = COLOR_WHITE, force_outline = COLOR_BLACK, force_shadow = COLOR_BLACK,
+            force_fill = colorWhite, force_outline = colorBlack, force_shadow = colorBlack,
             add_bord_shad = true, bord = 3, shad = 1,
         },
     },
 }
 
-local BUILTIN_PROFILE_IDS = {
+local builtinProfileIds = {
     NORMAL = true, DALTONICO = true, UNIVERSAL_SAFE = true,
     PROTAN_SAFE = true, DEUTAN_SAFE = true, TRITAN_SAFE = true,
     MONOCHROME = true, HIGH_CONTRAST = true,
@@ -2518,9 +2012,9 @@ function AccessibilityProfiles.get(id)
     return AccessibilityProfiles.list[id] or AccessibilityProfiles.list.DALTONICO or AccessibilityProfiles.list.UNIVERSAL_SAFE
 end
 
-local function boundedProfileString(value, fallback, limit)
+local function profileString(value, fallback)
     if value == nil then return fallback end
-    if type(value) ~= "string" or #value > limit then return nil end
+    if type(value) ~= "string" then return nil end
     return value
 end
 
@@ -2534,10 +2028,10 @@ end
 function AccessibilityProfiles.sanitize(p, forcedId)
     if type(p) ~= "table" then return nil end
     local id = forcedId or p.id
-    if type(id) ~= "string" or id == "" or #id > PROFILE_ID_LIMIT or not id:match("^[%w_.%-]+$") then return nil end
-    local label = boundedProfileString(p.label, id, PROFILE_LABEL_LIMIT)
-    local description = boundedProfileString(p.description, "", PROFILE_TEXT_LIMIT)
-    local criteria = boundedProfileString(p.criteria, "", PROFILE_TEXT_LIMIT)
+    if type(id) ~= "string" or id == "" or not id:match("^[%w_.%-]+$") then return nil end
+    local label = profileString(p.label, id)
+    local description = profileString(p.description, "")
+    local criteria = profileString(p.criteria, "")
     if not label or not description or not criteria or (p.simulate ~= nil and type(p.simulate) ~= "table") or
         (p.thresholds ~= nil and type(p.thresholds) ~= "table") or
         (p.policy ~= nil and type(p.policy) ~= "table") then return nil end
@@ -2554,7 +2048,9 @@ function AccessibilityProfiles.sanitize(p, forcedId)
         min_actor_delta = boundedProfileNumber(sourceThresholds.min_actor_delta, 0.055, 0, 1),
         min_mono_luma_delta = boundedProfileNumber(sourceThresholds.min_mono_luma_delta, 0.12, 0, 1),
     }
-    for _, value in pairs(thresholds) do if value == nil then return nil end end
+    for _, key in ipairs({"min_text_contrast","min_cvd_text_contrast","min_actor_delta","min_mono_luma_delta"}) do
+        if thresholds[key] == nil then return nil end
+    end
 
     local sourcePolicy, policy = p.policy or {}, {}
     for _, key in ipairs({
@@ -2568,12 +2064,12 @@ function AccessibilityProfiles.sanitize(p, forcedId)
     end
     for _, key in ipairs({ "bord", "shad" }) do
         if sourcePolicy[key] ~= nil then
-            policy[key] = boundedProfileNumber(sourcePolicy[key], nil, 0, 100)
+            policy[key] = boundedProfileNumber(sourcePolicy[key], nil, 0, math.huge)
             if policy[key] == nil then return nil end
         end
     end
     if sourcePolicy.use_palette ~= nil then
-        policy.use_palette = boundedProfileString(sourcePolicy.use_palette, nil, PROFILE_ID_LIMIT)
+        policy.use_palette = profileString(sourcePolicy.use_palette, nil)
         if not policy.use_palette then return nil end
     end
     for _, key in ipairs({ "force_fill", "force_outline", "force_shadow" }) do
@@ -2600,7 +2096,7 @@ function AccessibilityProfiles.register(p, forcedId)
     return true, sanitized
 end
 
-local _BUILTIN_PROFILE_ORDER = {
+local builtinProfileOrder = {
     "NORMAL",
     "DALTONICO", "UNIVERSAL_SAFE", "PROTAN_SAFE", "DEUTAN_SAFE",
     "TRITAN_SAFE", "MONOCHROME", "HIGH_CONTRAST",
@@ -2608,7 +2104,7 @@ local _BUILTIN_PROFILE_ORDER = {
 
 function AccessibilityProfiles.ids()
     local out, seen = {}, {}
-    for _, id in ipairs(_BUILTIN_PROFILE_ORDER) do
+    for _, id in ipairs(builtinProfileOrder) do
         if AccessibilityProfiles.list[id] then
             table.insert(out, id); seen[id] = true
         end
@@ -2649,7 +2145,7 @@ function AccessibilityProfiles.idFromChoice(choice)
     return AccessibilityProfiles.get(choice).id
 end
 
-local PROFILE_SIM_LABELS = {
+local profileSimLabels = {
     { "protan", "protanopia" },
     { "deutan", "deuteranopia" },
     { "tritan", "tritanopia" },
@@ -2660,7 +2156,7 @@ function AccessibilityProfiles.simulationText(profile)
     profile = AccessibilityProfiles.get(profile)
     local simulate = profile.simulate or {}
     local parts = {}
-    for _, item in ipairs(PROFILE_SIM_LABELS) do
+    for _, item in ipairs(profileSimLabels) do
         local sev = tonumber(simulate[item[1]]) or 0
         if sev > 0 then table.insert(parts, string.format("%s %.0f%%", item[2], sev * 100)) end
     end
@@ -2668,7 +2164,7 @@ function AccessibilityProfiles.simulationText(profile)
     return table.concat(parts, ", ")
 end
 
-local PALETTE_LABELS = {
+local paletteLabels = {
     okabe_ito           = "Okabe-Ito (CUD)",
     subtitle_cvd        = "Subtítulos CVD",
     protan_palette      = "Optimizada para protanopia",
@@ -2693,7 +2189,7 @@ function AccessibilityProfiles.describe(id)
     if pol.force_mono then table.insert(lines, "Salida: relleno monocromo.") end
     if pol.force_fill then table.insert(lines, "Salida: relleno blanco, borde y sombra negros.") end
     if pol.use_palette then
-        local label = PALETTE_LABELS[pol.use_palette] or pol.use_palette
+        local label = paletteLabels[pol.use_palette] or pol.use_palette
         table.insert(lines, "Paleta: " .. label .. ".")
     end
     if pol.calibrated then table.insert(lines, "Calibración: personalizada.") end
@@ -2720,9 +2216,9 @@ end
 
 local AccessibilityMetrics = {}
 
-local CVD_KINDS = { "protan", "deutan", "tritan", "mono" }
+local cvdKinds = { "protan", "deutan", "tritan", "mono" }
 
-local function _pickWorst(t)
+local function pickWorst(t)
     local worst, name = math.huge, nil
     for k, v in pairs(t) do
         if v < worst then worst, name = v, k end
@@ -2734,11 +2230,12 @@ function AccessibilityMetrics.auditTextContrast(colors, profile)
     profile = AccessibilityProfiles.get(profile)
     local thr = profile.thresholds or {}
     local minC = thr.min_text_contrast or 7.0
+    local minCvd = thr.min_cvd_text_contrast or minC
 
-    local c  = ColorUtil.normalize(colors.c or COLOR_WHITE)
-    local c2 = ColorUtil.normalize(colors["2c"] or COLOR_BLACK)
-    local c3 = ColorUtil.normalize(colors["3c"] or COLOR_BLACK)
-    local c4 = ColorUtil.normalize(colors["4c"] or COLOR_BLACK)
+    local c  = ColorUtil.normalize(colors.c or colorWhite)
+    local c2 = ColorUtil.normalize(colors["2c"] or colorBlack)
+    local c3 = ColorUtil.normalize(colors["3c"] or colorBlack)
+    local c4 = ColorUtil.normalize(colors["4c"] or colorBlack)
 
     local lum = {
         [c]  = ColorUtil.luminance(c)  + 0.05,
@@ -2758,7 +2255,7 @@ function AccessibilityMetrics.auditTextContrast(colors, profile)
     result.contrast["2c_c"]  = ratioFromLum(c2, c)
 
     local simulate = profile.simulate or {}
-    for _, cvd in ipairs(CVD_KINDS) do
+    for _, cvd in ipairs(cvdKinds) do
         local sev = simulate[cvd] or 0
         if sev > 0 then
             local sc  = CVDSim.simulate(c,  cvd, sev)
@@ -2776,28 +2273,28 @@ function AccessibilityMetrics.auditTextContrast(colors, profile)
     end
 
     local v = result.contrast.c_3c
-    if v < WCAG_FAIL then
+    if v < wcagFail then
         table.insert(result.flags, "LOW_C_3C_CONTRAST"); bump("CRITICAL")
-    elseif v < WCAG_AA then
+    elseif v < wcagAa then
         table.insert(result.flags, "LOW_C_3C_CONTRAST"); bump("FAIL")
     elseif v < minC then
         table.insert(result.flags, "LOW_C_3C_CONTRAST"); bump("WARN")
     end
 
     v = result.contrast.c_4c
-    if v < WCAG_FAIL then table.insert(result.flags, "LOW_C_4C_CONTRAST"); bump("FAIL") end
+    if v < wcagFail then table.insert(result.flags, "LOW_C_4C_CONTRAST"); bump("FAIL") end
 
     v = result.contrast["2c_3c"]
-    if v < WCAG_FAIL then table.insert(result.flags, "LOW_2C_3C_CONTRAST"); bump("WARN") end
+    if v < wcagFail then table.insert(result.flags, "LOW_2C_3C_CONTRAST"); bump("WARN") end
 
-    for _, cvd in ipairs(CVD_KINDS) do
+    for _, cvd in ipairs(cvdKinds) do
         local key = cvd .. "_c_3c"
         local cv = result.contrast[key]
         if cv then
             local flag = cvd:upper() .. "_CONTRAST_RISK"
-            if cv < WCAG_FAIL then
+            if cv < wcagFail then
                 table.insert(result.flags, flag); bump("FAIL")
-            elseif cv < minC then
+            elseif cv < minCvd then
                 table.insert(result.flags, flag); bump("WARN")
             end
         end
@@ -2808,24 +2305,26 @@ end
 
 local AccessibilityAudit = {}
 
-local function _hasDrawing(text)
-    if not text then return false end
-    return tostring(text):find("\\p%s*[1-9]") ~= nil
-end
+local hasDrawing = LineOps.hasDrawing
 
-local function _hasAlphaTag(text)
-    if not text then return false end
-    text = tostring(text)
-    if text:find("{[^}]*\\[1-4]?a&[Hh]%x+&") then return true end
-    if text:find("\\alpha&[Hh]%x+&") then return true end
-    for slot in text:gmatch("\\[1-4]?c(&[Hh]%x+)") do
-        if #slot > 8 then return true end
+local function hasAlphaTag(text,style)
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        if call.name=="alpha" or call.name:match("^[1-4]a$") then return true end
+    end
+    for slot=1,4 do
+        if style then
+            local alpha=finiteNumber(style["alpha"..slot])
+            if alpha and alpha~=0 then return true end
+            local color=style["color"..slot]
+            if type(color)=="number" and math.floor(color/assColorModulo)%256~=0 then return true end
+            local hex=tostring(color or ""):match("^&[Hh](%x+)&?$")
+            if hex and #hex==8 and tonumber(hex:sub(1,2),16)~=0 then return true end
+        end
     end
     return false
 end
 
-function AccessibilityAudit.run(subs, sel, profileId, options)
-    options = options or {}
+function AccessibilityAudit.run(subs, sel, profileId)
     local styleMap = collectStyles(subs)
     local data, actors = StyleScanner.scanActors(subs, sel, styleMap)
     local profile = AccessibilityProfiles.get(profileId or "DALTONICO")
@@ -2846,17 +2345,29 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
         local info = data[a]
         lineCount = lineCount + (info.line_count or 0)
 
-        report.actors[a] = AccessibilityMetrics.auditTextContrast(info.colors, profile)
+        local metrics=AccessibilityMetrics.auditTextContrast(info.colors,profile)
+        local flags={}
+        for _,flag in ipairs(metrics.flags) do flags[flag]=true end
+        local rank={OK=0,WARN=1,FAIL=2,CRITICAL=3}
+        for _,run in ipairs(info.color_runs or {}) do
+            local current=AccessibilityMetrics.auditTextContrast(run.colors,profile)
+            for key,value in pairs(current.contrast) do metrics.contrast[key]=math.min(metrics.contrast[key] or value,value) end
+            if rank[current.status]>rank[metrics.status] then metrics.status=current.status end
+            for _,flag in ipairs(current.flags) do if not flags[flag] then flags[flag]=true;metrics.flags[#metrics.flags+1]=flag end end
+            if hasAlphaTag("",run.style) then report.alphaRisks[a]=true end
+        end
+        if info.has_animated then metrics.flags[#metrics.flags+1]="ANIMATED_COLOR" end
+        report.actors[a] = metrics
 
         for _, lid in ipairs(info.ids or {}) do
             if report.drawingActors[a] and report.alphaRisks[a] then break end
             local l = subs[lid]
             if l and isDialogueLine(l) then
                 local txt = tostring(l.text or "")
-                if not report.drawingActors[a] and _hasDrawing(txt) then
+                if not report.drawingActors[a] and hasDrawing(txt) then
                     report.drawingActors[a] = true
                 end
-                if not report.alphaRisks[a] and _hasAlphaTag(txt) then
+                if not report.alphaRisks[a] and hasAlphaTag(txt,styleMap[l.style]) then
                     report.alphaRisks[a] = true
                 end
             end
@@ -2865,7 +2376,7 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
 
     local simulate = profile.simulate or {}
     local cvdActive = {}
-    for _, cvd in ipairs(CVD_KINDS) do
+    for _, cvd in ipairs(cvdKinds) do
         local sev = simulate[cvd] or 0
         if sev > 0 then cvdActive[#cvdActive + 1] = { kind = cvd, sev = sev } end
     end
@@ -2890,6 +2401,7 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
     end
 
     for i = 1, #actors do
+        LineOps.checkCancelled()
         local labA = oklabPerActor[actors[i]]
         for j = i + 1, #actors do
             local labB = oklabPerActor[actors[j]]
@@ -2897,7 +2409,7 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
             for _, c in ipairs(cvdActive) do
                 deltas[c.kind] = deltaFrom(labA[c.kind], labB[c.kind])
             end
-            local worst, kind = _pickWorst(deltas)
+            local worst, kind = pickWorst(deltas)
             if worst < minD then
                 table.insert(report.pairs, { a = actors[i], b = actors[j], worst = worst, kind = kind, deltas = deltas })
             end
@@ -2907,9 +2419,9 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
     for _, a in ipairs(actors) do
         local info = data[a]
         if info.has_vsf then
-            for _, tag in ipairs(VSF_TAGS) do
+            for _, tag in ipairs(vsfTags) do
                 local vc = info.vsf_corners[tag]
-                if vc then
+                if vc and (not info.vsf_present or info.vsf_present[tag]) then
                     local lo, hi = math.huge, -math.huge
                     for k = 1, 4 do
                         local lum = ColorUtil.luminance(vc[k])
@@ -2919,8 +2431,8 @@ function AccessibilityAudit.run(subs, sel, profileId, options)
                     if (hi - lo) < minMono then
                         table.insert(report.vsf, { a = a, tag = tag, kind = "mono_collapse", value = hi - lo })
                     end
-                    local cr = ColorUtil.contrastRatio(vc[1], info.colors["3c"] or COLOR_BLACK)
-                    if cr < WCAG_FAIL then
+                    local cr = ColorUtil.contrastRatio(vc[1], info.colors["3c"] or colorBlack)
+                    if cr < wcagFail then
                         table.insert(report.vsf, { a = a, tag = tag, kind = "outline_low", value = cr })
                     end
                 end
@@ -2942,7 +2454,8 @@ end
 
 local AccessibilityReport = {}
 
-local REPORT_FLAG_TEXT = {
+local reportFlagText = {
+    ANIMATED_COLOR = "Hay colores animados; el informe describe los tramos estáticos y no evalúa cada instante del fundido.",
     C_EQUALS_3C = "Relleno y borde comparten color; el contorno pierde separación.",
     C_EQUALS_4C = "Relleno y sombra comparten color; la profundidad queda plana.",
     LOW_C_3C_CONTRAST = "Relleno y borde quedan por debajo del objetivo de contraste.",
@@ -2954,7 +2467,7 @@ local REPORT_FLAG_TEXT = {
     MONO_CONTRAST_RISK = "Lectura sensible en monocromo o baja saturación.",
 }
 
-local REPORT_KIND_TEXT = {
+local reportKindText = {
     normal = "visión normal",
     protan = "protanopia",
     deutan = "deuteranopia",
@@ -2965,13 +2478,13 @@ local REPORT_KIND_TEXT = {
 }
 
 function AccessibilityReport.flagText(code)
-    local text = REPORT_FLAG_TEXT[code]
+    local text = reportFlagText[code]
     if text then return text end
     return tostring(code or ""):gsub("_", " "):lower()
 end
 
 function AccessibilityReport.kindText(kind)
-    return REPORT_KIND_TEXT[kind] or tostring(kind or "")
+    return reportKindText[kind] or tostring(kind or "")
 end
 
 function AccessibilityReport.format(report, actors)
@@ -2980,6 +2493,7 @@ function AccessibilityReport.format(report, actors)
     local statusLabels = { OK = "BIEN", WARN = "REVISAR", FAIL = "AJUSTAR", CRITICAL = "URGENTE" }
 
     w("# INFORME DE ACCESIBILIDAD DE COLOR")
+    w("Contraste entre colores de tramos estáticos. Las simulaciones son aproximadas; el fondo del vídeo, la opacidad y el grosor visible requieren revisión de la escena.")
     w("")
     w("Perfil: " .. AccessibilityProfiles.label(report.profile.id))
     w("Actores: " .. report.summary.actors)
@@ -2990,8 +2504,8 @@ function AccessibilityReport.format(report, actors)
     for _, a in ipairs(actors) do
         local m = report.actors[a]
         if m then
-            local line = string.format("  %-14s CR:%-5.1f", actorLabel(a):sub(1, 14), m.contrast.c_3c or 0)
-            for _, cvd in ipairs(CVD_KINDS) do
+            local line = string.format("  %-14s CR:%-5.1f", actorLabel(a), m.contrast.c_3c or 0)
+            for _, cvd in ipairs(cvdKinds) do
                 local v = m.contrast[cvd .. "_c_3c"]
                 if v then
                     local tag = cvd:sub(1, 1):upper() .. cvd:sub(2, 3)
@@ -3102,7 +2616,7 @@ PaletteEngine.palettes = {
 function PaletteEngine.contrastAcrossVision(c1, c2, profile)
     profile = AccessibilityProfiles.get(profile)
     local worst = ColorUtil.contrastRatio(c1, c2)
-    for _, cvd in ipairs(CVD_KINDS) do
+    for _, cvd in ipairs(cvdKinds) do
         local sev = (profile.simulate or {})[cvd] or 0
         if sev > 0 then
             local cr = ColorUtil.contrastRatio(CVDSim.simulate(c1, cvd, sev), CVDSim.simulate(c2, cvd, sev))
@@ -3112,22 +2626,14 @@ function PaletteEngine.contrastAcrossVision(c1, c2, profile)
     return worst
 end
 
-function PaletteEngine.pickOutline(fill, profile)
-    profile = AccessibilityProfiles.get(profile)
-    local minC = (profile.thresholds and profile.thresholds.min_text_contrast) or 4.5
-    local black, white = COLOR_BLACK, COLOR_WHITE
-    local crB = PaletteEngine.contrastAcrossVision(fill, black, profile)
-    local crW = PaletteEngine.contrastAcrossVision(fill, white, profile)
-    if crB >= minC and crW >= minC then return crB >= crW and black or white end
-    if crB >= minC then return black end
-    if crW >= minC then return white end
-    if crB >= crW then return black end
-    return white
+function PaletteEngine.pickOutline(fill,profile)
+    return PaletteEngine.contrastAcrossVision(fill,colorBlack,profile)>=PaletteEngine.contrastAcrossVision(fill,colorWhite,profile)
+        and colorBlack or colorWhite
 end
 
-local function _scaleRGB(c, k)
-    local r, g, b = ColorUtil.toRGB(c)
-    return ColorUtil.fromRGB(r * k, g * k, b * k)
+local function scaleRgb(color,factor)
+    local r,g,b=Color.toRGB(color)
+    return Color.fromRGB(r*factor,g*factor,b*factor)
 end
 
 function PaletteEngine.makeCandidates(actorInfo, profile)
@@ -3148,8 +2654,8 @@ function PaletteEngine.makeCandidates(actorInfo, profile)
         add(actorInfo.colors.c)
         for _, hex in ipairs(PaletteEngine.palettes.subtitle_safe_light) do add(hex) end
         for _, hex in ipairs(PaletteEngine.palettes.okabe_ito) do add(hex) end
-        for _, k in ipairs(PALETTE_SCALE_FACTORS) do
-            add(_scaleRGB(actorInfo.colors.c, k))
+        for _, k in ipairs(paletteScaleFactors) do
+            add(scaleRgb(actorInfo.colors.c, k))
         end
     end
     return cands
@@ -3166,10 +2672,10 @@ function PaletteEngine.scoreCandidate(cand, actor, actorInfo, assigned, profile)
     local outline = PaletteEngine.pickOutline(cand, profile)
     local cr = ColorUtil.contrastRatio(cand, outline)
     local cvdCr = PaletteEngine.contrastAcrossVision(cand, outline, profile)
-    if cr < WCAG_FAIL or cvdCr < WCAG_FAIL then return math.huge end
+    if cr < wcagFail or cvdCr < wcagFail then return math.huge end
 
     local contrastPenalty = 0
-    if cr < WCAG_AA then contrastPenalty = 2 + (WCAG_AA - cr)
+    if cr < wcagAa then contrastPenalty = 2 + (wcagAa - cr)
     elseif cr < minC then contrastPenalty = (minC - cr) / minC end
     if cvdCr < minCvd then
         contrastPenalty = contrastPenalty + 2 + ((minCvd - cvdCr) / minCvd)
@@ -3206,11 +2712,11 @@ function PaletteEngine.scoreCandidate(cand, actor, actorInfo, assigned, profile)
     local hueDrift  = ColorSpace.deltaOklab(cand, actorInfo.colors.c)
     local lumaDrift = math.abs(ColorUtil.luminance(cand) - ColorUtil.luminance(actorInfo.colors.c))
 
-    return contrastPenalty * PALETTE_SCORE_WEIGHTS.contrast
-        + collisionPenalty * PALETTE_SCORE_WEIGHTS.collision
-        + monoPenalty * PALETTE_SCORE_WEIGHTS.mono
-        + hueDrift * PALETTE_SCORE_WEIGHTS.hue_drift
-        + lumaDrift * PALETTE_SCORE_WEIGHTS.luma_drift
+    return contrastPenalty * paletteScoreWeights.contrast
+        + collisionPenalty * paletteScoreWeights.collision
+        + monoPenalty * paletteScoreWeights.mono
+        + hueDrift * paletteScoreWeights.hue_drift
+        + lumaDrift * paletteScoreWeights.luma_drift
 end
 
 function PaletteEngine.sortActors(data, actors)
@@ -3228,9 +2734,9 @@ function PaletteEngine.sortActors(data, actors)
     return sorted
 end
 
-function PaletteEngine.highContrastFallback(actorInfo, profile)
+function PaletteEngine.highContrastFallback(actorInfo)
     local origLum = ColorUtil.luminance(actorInfo.colors.c)
-    return origLum > 0.4 and COLOR_BLACK or COLOR_WHITE
+    return origLum > 0.4 and colorBlack or colorWhite
 end
 
 function PaletteEngine.remapVSFCorners(actorInfo, profile)
@@ -3243,8 +2749,10 @@ function PaletteEngine.remapVSFCorners(actorInfo, profile)
 
     local result = {}
     for tag, vc in pairs(actorInfo.vsf_corners or {}) do
+        local targetColor=tag=="3vc" and acc.outline or tag=="4vc" and acc.shadow or
+            tag=="2vc" and actorInfo.colors["2c"] or acc.fill
         if pol.force_fill then
-            local f = ColorUtil.normalize(pol.force_fill)
+            local f = ColorUtil.normalize(targetColor)
             result[tag] = { f, f, f, f }
         elseif pol.force_mono then
             local out = {}
@@ -3261,10 +2769,10 @@ function PaletteEngine.remapVSFCorners(actorInfo, profile)
             local varies = origRange > 1e-4
 
             if not varies then
-                local f = acc.fill
+                local f = targetColor
                 result[tag] = { f, f, f, f }
             else
-                local baseLum = ColorUtil.luminance(acc.fill)
+                local baseLum = ColorUtil.luminance(targetColor)
                 local desiredRange = math.max(origRange, minMono * 1.5)
                 local lowL = baseLum - desiredRange / 2
                 local highL = baseLum + desiredRange / 2
@@ -3275,13 +2783,17 @@ function PaletteEngine.remapVSFCorners(actorInfo, profile)
                     else                  highL = math.min(1, lowL + minMono * 1.5) end
                 end
 
-                local r, g, b = ColorUtil.toRGB(acc.fill)
+                local r, g, b = ColorUtil.toRGB(targetColor)
+                r,g,b=Color.srgb8ToLinear(r),Color.srgb8ToLinear(g),Color.srgb8ToLinear(b)
                 local out = {}
                 for i = 1, 4 do
                     local t = (lums[i] - lo) / origRange
                     local targetL = lowL + t * (highL - lowL)
-                    local k = (baseLum > 1e-3) and (targetL / baseLum) or (targetL > 0.5 and 2 or 1)
-                    out[i] = ColorUtil.fromRGB(r * k, g * k, b * k)
+                    local function channel(value)
+                        if targetL<=baseLum then return Color.linearToSrgb8(baseLum>0 and value*targetL/baseLum or 0) end
+                        return Color.linearToSrgb8(value+(1-value)*(targetL-baseLum)/(1-baseLum))
+                    end
+                    out[i] = ColorUtil.fromRGB(channel(r),channel(g),channel(b))
                 end
                 result[tag] = out
             end
@@ -3300,7 +2812,7 @@ function PaletteEngine.remapActors(data, actors, profile)
 
     if pol.force_fill then
         local fill    = ColorUtil.normalize(pol.force_fill)
-        local outline = ColorUtil.normalize(pol.force_outline or COLOR_BLACK)
+        local outline = ColorUtil.normalize(pol.force_outline or colorBlack)
         local shadow  = ColorUtil.normalize(pol.force_shadow or outline)
         for _, a in ipairs(actors) do
             data[a].accessibility = {
@@ -3343,7 +2855,7 @@ function PaletteEngine.remapActors(data, actors, profile)
             if cost < bestCost then best, bestCost = c, cost end
         end
         if not best or bestCost == math.huge then
-            best = PaletteEngine.highContrastFallback(data[a], profile)
+            best = PaletteEngine.highContrastFallback(data[a])
         end
         local outline = PaletteEngine.pickOutline(best, profile)
         data[a].accessibility = {
@@ -3362,235 +2874,50 @@ end
 
 local AccessibilityApply = {}
 
-local function _replaceVSFInLine(text, vsfRemap)
-    if not vsfRemap then return text end
-    return (text:gsub("\\([1-4]?)vc(%b())", function(n, parens)
-        if n == "" then n = "1" end
-        local key = n .. "vc"
-        local vc = vsfRemap[key]
-        if not vc then return nil end
-        return "\\" .. n .. "vc(" .. vc[1] .. "," .. vc[2] .. "," .. vc[3] .. "," .. vc[4] .. ")"
-    end))
-end
-
-local function _lineHasAnyVSF(text)
-    if not text then return false end
-    return tostring(text):find("\\[1-4]?vc%b()") ~= nil
-end
-
-local function _stripAlphaTags(text)
-    if not text then return "" end
-    return (tostring(text):gsub("{([^}]*)}", function(block)
-        block = block:gsub("\\alpha&[Hh]%x+&", "")
-        block = block:gsub("\\[1-4]a&[Hh]%x+&", "")
-        block = cleanupTransforms(block)
-        block = trim(block)
-        if block == "" then return "" end
-        return "{" .. block .. "}"
-    end))
-end
-
-local function _sanitizeStyleName(actor)
-    local s = tostring(actor or ""):gsub("[^%w_]", "_")
-    s = s:gsub("^_+", ""):gsub("_+$", "")
-    if s == "" then s = "Actor" end
-    return s
-end
-
-local function _styleColorFromAss(c, inherited, preserveAlpha)
-    return styleColorWithInheritedAlpha(c, inherited, preserveAlpha)
-end
-
-function AccessibilityApply.execute(subs, data, actors, styleMap, profile, options)
-    profile = AccessibilityProfiles.get(profile)
-    options = options or {}
-    styleMap = styleMap or {}
-
-    for _, actor in ipairs(actors or {}) do
-        for _, index in ipairs((data[actor] and data[actor].ids) or {}) do
-            local line = subs[index]
-            if isDialogueLine(line) and hasTopLevelStyleReset(line.text) then
-                return 0, 0, "La línea " .. tostring(index) .. " usa \\r. La paleta accesible no se aplicó porque aún no resuelve colores por run de estilo."
-            end
-        end
+local function lineHasAnyVsf(text)
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        if call.name:match("^[1-4]?vc$") then return true end
     end
+    return false
+end
 
-    local applyMode      = options.apply_mode or "Tags"
-    local preserveAlpha  = options.preserve_alpha ~= false
-    local addBordShad    = options.add_bord_shad
-    local includeDraw    = options.include_drawings == true
-    local profileBord    = (profile.policy and profile.policy.bord) or 3
-    local profileShad    = (profile.policy and profile.policy.shad) or 1
-    if addBordShad == nil then
-        addBordShad = (profile.policy and profile.policy.add_bord_shad) or false
-    end
-
-    if profile.policy and profile.policy.audit_only then
-        return 0, 0, "El perfil " .. tostring(profile.id) .. " genera informe de evaluación."
-    end
-
-    local count, skipped = 0, 0
-
-    if applyMode == "Styles" then
-        for _, a in ipairs(actors) do
-            local rawVSF = false
-            for _, id in ipairs((data[a] and data[a].ids) or {}) do
-                local candidate = subs[id]
-                if isDialogueLine(candidate) and _lineHasAnyVSF(candidate.text) then
-                    rawVSF = true
-                    break
-                end
-            end
-            if data[a] and (data[a].has_vsf or rawVSF) then
-                return 0, 0, "El actor '" .. actorLabel(a) .. "' usa colores VSF; aplica como Etiquetas."
-            end
-        end
-        local suffix = "_Z_ACC"
-        if profile.id == "HIGH_CONTRAST" then suffix = "_Z_ACC_HC" end
-        local nameMap, newStyles, claimedNames = {}, {}, {}
-        local styleIndex, styleUsage = generatedStyleInventory(subs)
-        local insertPos, lastNonDialoguePos, foundStyle = 1, 0, false
-        for si = 1, #subs do
-            local cls = subs[si].class
-            if cls == "style" then
-                insertPos = si + 1
-                foundStyle = true
-            elseif cls ~= "dialogue" then
-                lastNonDialoguePos = si
-            end
-        end
-        if not foundStyle and lastNonDialoguePos > 0 then insertPos = lastNonDialoguePos + 1 end
-
-        for _, a in ipairs(actors) do
-            local acc = data[a].accessibility
-            local modifiableIds = {}
-            for _, id in ipairs(data[a].ids or {}) do
-                local candidate = subs[id]
-                if isDialogueLine(candidate) and (includeDraw or not _hasDrawing(candidate.text)) then
-                    modifiableIds[#modifiableIds + 1] = id
-                end
-            end
-            local firstId = modifiableIds[1]
-            if acc and firstId and isDialogueLine(subs[firstId]) then
-                local base = styleMap[subs[firstId].style]
-                local rawName = _sanitizeStyleName(a) .. suffix
-                local name, existingIndex = chooseGeneratedStyleName(
-                    rawName, subs, styleIndex, styleUsage,
-                    idsAsSet(modifiableIds), claimedNames
-                )
-                if not name then
-                    return 0, 0, "No se pudo reservar un nombre de estilo para '" .. tostring(a) .. "'."
-                end
-                claimedNames[name] = true
-
-                local ns = { class = "style", name = name }
-                if base then
-                    for k, v in pairs(base) do
-                        if k ~= "name" and k ~= "class" then ns[k] = v end
-                    end
-                else
-                    copyFallbackStyle(ns)
-                end
-
-                ns.color1 = _styleColorFromAss(acc.fill, base and base.color1, preserveAlpha)
-                ns.color3 = _styleColorFromAss(acc.outline, base and base.color3, preserveAlpha)
-                ns.color4 = _styleColorFromAss(acc.shadow, base and base.color4, preserveAlpha)
-                if addBordShad then
-                    ns.outline = profileBord
-                    ns.shadow  = profileShad
-                end
-
-                if existingIndex then
-                    subs[existingIndex] = ns
-                else
-                    table.insert(newStyles, ns)
-                end
-                nameMap[a] = name
-            end
-        end
-
-        for si = #newStyles, 1, -1 do subs.insert(insertPos, newStyles[si]) end
-        local offset = #newStyles
-        for _, a in ipairs(actors) do
-            local sname = nameMap[a]
-            if sname then
-                for _, id in ipairs(data[a].ids or {}) do
-                    local idx = id >= insertPos and id + offset or id
-                    local l = subs[idx]
-                    if isDialogueLine(l) then
-                        if (not includeDraw) and _hasDrawing(l.text) then
-                            skipped = skipped + 1
-                        else
-                            local origText = tostring(l.text or "")
-                            if preserveAlpha then origText = AlphaUtil.expandEmbeddedColorAlpha(origText) end
-                            l.style = sname
-                            l.text  = TagStripper.clearColors(origText)
-                            if not preserveAlpha then
-
-                                l.text = _stripAlphaTags(l.text)
-                            end
-                            subs[idx] = l
-                            count = count + 1
-                        end
-                    end
-                end
-            end
-        end
-        return count, skipped
-    end
-
-    for _, a in ipairs(actors) do
-        local acc = data[a].accessibility
-        if acc then
-            local vsfRemap = acc.vsf
-            for _, id in ipairs(data[a].ids or {}) do
-                local l = subs[id]
-                if isDialogueLine(l) then
-                    local txt = tostring(l.text or "")
-                    if (not includeDraw) and _hasDrawing(txt) then
-                        skipped = skipped + 1
-                    else
-
-                        local fill, outline, shadow = acc.fill, acc.outline, acc.shadow
-                        if preserveAlpha then
-                            txt = AlphaUtil.expandEmbeddedColorAlpha(txt)
-                        else
-
-                            txt = _stripAlphaTags(txt)
-                        end
-
-                        if _lineHasAnyVSF(txt) and vsfRemap then
-                            txt = _replaceVSFInLine(txt, vsfRemap)
-                        end
-
-                        txt = TagStripper.harmonizeColors(txt, fill, outline, shadow)
-
-                        if addBordShad then
-                            txt = txt:gsub("{([^}]*)}", function(block)
-                                block = block:gsub("\\bord[%d%.]+", "")
-                                block = block:gsub("\\shad[%d%.]+", "")
-                                if block:match("^%s*$") then return "" end
-                                return "{" .. block .. "}"
-                            end, 1)
-                            txt = injectFirstTags(txt, "\\bord" .. profileBord .. "\\shad" .. profileShad)
-                        end
-
-                        txt = TagStripper.dedupeColors(txt)
-                        txt = txt:gsub("{%s*}", "")
-                        l.text = txt
-                        subs[id] = l
-                        count = count + 1
-                    end
+function AccessibilityApply.execute(subs,data,actors,styleMap,profile,options)
+    profile=AccessibilityProfiles.get(profile)
+    options=options or {}
+    local policy=profile.policy or {}
+    if policy.audit_only then return 0,0,"El perfil "..profile.id.." genera informe de evaluación." end
+    local styles=options.apply_mode=="Styles"
+    if styles then
+        for _, actor in ipairs(actors) do
+            for _, id in ipairs(data[actor].ids or {}) do
+                local line=subs[id]
+                if isDialogueLine(line) and (options.include_drawings or not LineOps.hasDrawing(line.text)) and lineHasAnyVsf(line.text) then
+                    return 0,0,"El actor '"..actorLabel(actor).."' usa colores VSF; aplica como Etiquetas."
                 end
             end
         end
     end
-    return count, skipped
+    local addBord=options.add_bord_shad
+    if addBord==nil then addBord=policy.add_bord_shad end
+    return applyActorPalettes(subs,data,actors,styleMap or {},{
+        styles=styles,suffix=profile.id=="HIGH_CONTRAST" and "_Z_ACC_HC" or "_Z_ACC",
+        autoClean=styles,harmonize=not styles,vsfRemap=true,
+        slots={["1"]=true,["3"]=true,["4"]=true},opaque=options.preserve_alpha==false,
+        bord=addBord and (policy.bord or 3) or nil,shad=policy.shad or 1,
+        includeDrawings=options.include_drawings==true,
+        palette=function(info)
+            local acc=info.accessibility
+            if acc then return {c=Color.normalize(acc.fill),["3c"]=Color.normalize(acc.outline),
+                ["4c"]=Color.normalize(acc.shadow),vsf=acc.vsf} end
+        end,
+    })
 end
 
 local AccessibilityConfig = {}
+local getSettings
 
-local ACCESS_CONFIG_DEFAULTS = {
+local accessConfigDefaults = {
+    custom_profiles = {},
     active_profile   = "DALTONICO",
     apply_mode       = "Tags",
     preserve_alpha   = true,
@@ -3598,13 +2925,13 @@ local ACCESS_CONFIG_DEFAULTS = {
     include_drawings = false,
 }
 
-local VALID_APPLY_MODES = { Tags = true, Styles = true }
+local validApplyModes = { Tags = true, Styles = true }
 
-local function _accessConfigPath()
+local function accessibilityConfigPath()
     return aegisub.decode_path("?user") .. "/zheus_accessibility.lua"
 end
 
-local function _serializeLua(v, indent)
+local function serializeLua(v, indent)
     indent = indent or ""
     local t = type(v)
     if t == "string" then return string.format("%q", v) end
@@ -3616,7 +2943,7 @@ local function _serializeLua(v, indent)
     local isArray = (#v > 0)
     if isArray then
         for _, x in ipairs(v) do
-            table.insert(parts, nextIndent .. _serializeLua(x, nextIndent) .. ",")
+            table.insert(parts, nextIndent .. serializeLua(x, nextIndent) .. ",")
         end
     else
         local keys = {}
@@ -3627,101 +2954,39 @@ local function _serializeLua(v, indent)
             if type(k) == "string" and k:match("^[%a_][%w_]*$") then
                 key = k
             else
-                key = "[" .. _serializeLua(k, nextIndent) .. "]"
+                key = "[" .. serializeLua(k, nextIndent) .. "]"
             end
-            table.insert(parts, nextIndent .. key .. " = " .. _serializeLua(v[k], nextIndent) .. ",")
+            table.insert(parts, nextIndent .. key .. " = " .. serializeLua(v[k], nextIndent) .. ",")
         end
     end
     table.insert(parts, indent .. "}")
     return table.concat(parts, "\n")
 end
 
-local function _safeLoadLuaTable(content, sizeLimit, maxNodes)
-    if not content or content == "" then return nil end
-    if #content > (sizeLimit or CONFIG_FILE_LIMIT) then return nil end
-
-    local stripped = tostring(content):gsub("^%s+", ""):gsub("%s+$", "")
-    if stripped == "" then return nil end
-    local src = stripped:match("^return[%s%c]") and stripped or ("return " .. stripped)
-    local chunk
-    if setfenv and loadstring then
-        chunk = loadstring(src, "zheus_access_cfg")
-        if chunk then setfenv(chunk, {}) end
-    elseif load then
-        chunk = load(src, "zheus_access_cfg", "t", {})
-    end
-    if not chunk then return nil end
-    if not debug or type(debug.sethook) ~= "function" then return nil end
-
-    local oldHook, oldMask, oldCount
-    if type(debug.gethook) == "function" then
-        oldHook, oldMask, oldCount = debug.gethook()
-    end
-    local instructions = 0
-    local hookActive = true
-    local function instructionGuard()
-        if not hookActive then return end
-        instructions = instructions + CONFIG_HOOK_GRANULARITY
-        if instructions > CONFIG_INSTRUCTION_LIMIT then error("configuration instruction limit exceeded", 0) end
-    end
-    local hookOk = pcall(debug.sethook, instructionGuard, "", CONFIG_HOOK_GRANULARITY)
-    if not hookOk then return nil end
-    local ok, t = pcall(chunk)
-    hookActive = false
-    if oldHook then
-        pcall(debug.sethook, oldHook, oldMask or "", oldCount or 0)
-    else
-        pcall(debug.sethook)
-    end
-    if not ok or type(t) ~= "table" then return nil end
-
-    local seen, nodes = {}, 0
-    local function plain(value, depth)
-        local valueType = type(value)
-        if valueType == "nil" or valueType == "string" or valueType == "boolean" then return true end
-        if valueType == "number" then return finiteNumber(value) ~= nil end
-        if valueType ~= "table" or depth > CONFIG_MAX_DEPTH or seen[value] then return false end
-        seen[value] = true
-        for key, child in pairs(value) do
-            nodes = nodes + 1
-            if nodes > (maxNodes or CONFIG_MAX_NODES) then return false end
-            local keyType = type(key)
-            if (keyType ~= "string" and keyType ~= "number") or
-                (keyType == "number" and not finiteNumber(key)) or
-                not plain(child, depth + 1) then return false end
-        end
-        seen[value] = nil
-        return true
-    end
-    if not plain(t, 1) then return nil end
-    return t
-end
+local safeLoadLuaTable = Settings.parseLiteralTable
 
 function AccessibilityConfig.load()
     local merged = {}
-    for k, v in pairs(ACCESS_CONFIG_DEFAULTS) do merged[k] = v end
-    local content = PyBridge.readFile(_accessConfigPath(), CONFIG_FILE_LIMIT + 1)
-    if not content then return merged end
-    local stored = _safeLoadLuaTable(content)
-    if not stored then return merged end
+    for k, v in pairs(accessConfigDefaults) do merged[k] = v end
+    local stored = getSettings():values("accessibility")
 
     if type(stored.custom_profiles) == "table" then
         local validProfiles = {}
         for id, p in pairs(stored.custom_profiles) do
-            if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
+            if type(p) == "table" and not builtinProfileIds[id] then
                 local registered, sanitized = AccessibilityProfiles.register(p, id)
                 if registered then validProfiles[id] = sanitized end
             end
         end
         merged.custom_profiles = validProfiles
     end
-    for k, def in pairs(ACCESS_CONFIG_DEFAULTS) do
+    for k, def in pairs(accessConfigDefaults) do
         local v = stored[k]
-        if v ~= nil and type(v) == type(def) then
+        if k ~= "custom_profiles" and v ~= nil and type(v) == type(def) then
             if k == "active_profile" then
                 if AccessibilityProfiles.list[v] then merged[k] = v end
             elseif k == "apply_mode" then
-                if VALID_APPLY_MODES[v] then merged[k] = v end
+                if validApplyModes[v] then merged[k] = v end
             else
                 merged[k] = v
             end
@@ -3736,41 +3001,30 @@ function AccessibilityConfig.save(t)
     if type(t.custom_profiles) == "table" then
         local validProfiles = {}
         for id, p in pairs(t.custom_profiles) do
-            if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
+            if type(p) == "table" and not builtinProfileIds[id] then
                 local registered, sanitized = AccessibilityProfiles.register(p, id)
                 if registered then validProfiles[id] = sanitized end
             end
         end
         current.custom_profiles = validProfiles
     end
-    for k, def in pairs(ACCESS_CONFIG_DEFAULTS) do
+    for k, def in pairs(accessConfigDefaults) do
         local v = t[k]
-        if v ~= nil and type(v) == type(def) then
+        if k ~= "custom_profiles" and v ~= nil and type(v) == type(def) then
             if k == "active_profile" then
                 if AccessibilityProfiles.list[v] then current[k] = v end
             elseif k == "apply_mode" then
-                if VALID_APPLY_MODES[v] then current[k] = v end
+                if validApplyModes[v] then current[k] = v end
             else
                 current[k] = v
             end
         end
     end
-    local serialized = "return " .. _serializeLua(current)
-    if #serialized > CONFIG_FILE_LIMIT then return false, "configuration exceeds the size limit" end
-    return PyBridge.writeFile(_accessConfigPath(), serialized)
+    getSettings():update("accessibility",current)
+    return getSettings():write()
 end
 
-local function _registerCustomProfilesFromDisk()
-    local ok, cfg = pcall(AccessibilityConfig.load)
-    if not ok or type(cfg) ~= "table" then return end
-    if type(cfg.custom_profiles) ~= "table" then return end
-    for id, p in pairs(cfg.custom_profiles) do
-        if type(p) == "table" and not BUILTIN_PROFILE_IDS[id] then
-            AccessibilityProfiles.register(p, id)
-        end
-    end
-end
-_registerCustomProfilesFromDisk()
+
 
 local AccessibilityExportFile = {}
 
@@ -3814,16 +3068,15 @@ function AccessibilityExportFile.export(data, actors, profile)
         end
         if info.has_vsf then
             row.vsf = {}
-            for _, tag in ipairs(VSF_TAGS) do
-                local vc = info.vsf_corners[tag]
+            for _, tag in ipairs(vsfTags) do
+                local vc = acc and acc.vsf and acc.vsf[tag] or info.vsf_corners[tag]
                 if vc then row.vsf[tag] = { vc[1], vc[2], vc[3], vc[4] } end
             end
         end
         out.actors[a] = row
     end
 
-    local serialized = "return " .. _serializeLua(out)
-    if #serialized > PALETTE_FILE_LIMIT then return "La paleta accesible supera el límite de tamaño." end
+    local serialized = "return " .. serializeLua(out)
     local ok, err = PyBridge.writeFile(fp, serialized)
     if not ok then return "Error al escribir: " .. tostring(err) end
     return "Exportados " .. #actors .. " actores -> " .. fp
@@ -3832,13 +3085,12 @@ end
 function AccessibilityExportFile.import(data, actors)
     local fp = aegisub.dialog.open("Importar paleta accesible - Zheus Colormanager", "", "", "*.txt;*.lua", false, true)
     if not fp then return nil end
-    local content, readError = PyBridge.readFile(fp, PALETTE_FILE_LIMIT + 1)
+    local content, readError = PyBridge.readFile(fp)
     if not content then return "Error al leer el archivo: " .. tostring(readError) end
-    if #content > PALETTE_FILE_LIMIT then return "La paleta accesible supera el límite de tamaño." end
 
-    local imported, invalid, missing, updated = 0, 0, {}, {}
+    local imported, invalid, missing = 0, 0, {}
 
-    local v3 = _safeLoadLuaTable(content, PALETTE_FILE_LIMIT, PALETTE_MAX_NODES)
+    local v3 = safeLoadLuaTable(content)
     if type(v3) == "table" then
         if v3.version ~= 3 then
             return "Versión de paleta accesible no compatible: " .. tostring(v3.version)
@@ -3898,7 +3150,6 @@ function AccessibilityExportFile.import(data, actors)
                         data[actor].has_vsf = true
                     end
                     imported = imported + 1
-                    updated[actor] = true
                 else
                     invalid = invalid + 1
                 end
@@ -3923,7 +3174,7 @@ function AccessibilityExportFile.import(data, actors)
     for l in content:gmatch("[^\r\n]+") do
         if not l:match("^#") and l ~= "" then
             local parts = {}
-            for p in l:gmatch("[^|]+") do table.insert(parts, p) end
+            for part in (l.."|"):gmatch("(.-)|") do table.insert(parts,part) end
             if #parts >= 2 then
                 local actor = trim(parts[1])
                 if data[actor] then
@@ -3937,7 +3188,6 @@ function AccessibilityExportFile.import(data, actors)
                         data[actor].colors["3c"] = c3
                         data[actor].colors["4c"] = c4
                         imported = imported + 1
-                        updated[actor] = true
                     else
                         invalid = invalid + 1
                     end
@@ -4005,7 +3255,7 @@ function CalibrationWizard.computeProfile(responses)
         id = "CUSTOM",
         label = "Personalizado",
         description = "Ajusta la paleta con los pares calibrados.",
-        criteria = "Severidad CVD y contraste desde la calibración registrada.",
+        criteria = "Preferencias de simulación y contraste según los pares seleccionados.",
         simulate = sev,
         thresholds = {
             min_text_contrast     = maxSev >= 0.50 and 7.0 or 4.5,
@@ -4045,7 +3295,7 @@ function CalibrationWizard.run()
     end
     table.insert(ui, { class = "label", label = "Destino: perfil Personalizado.", x = 0, y = y, width = 6 })
 
-    local btn, res = aegisub.dialog.display(ui, { "Calibrar", "Cancel" })
+    local btn, res = aegisub.dialog.display(ui, { "Calibrar", "Cancelar" })
     if btn ~= "Calibrar" then return nil end
 
     local custom = CalibrationWizard.computeProfile(res or {})
@@ -4059,7 +3309,7 @@ function CalibrationWizard.run()
 end
 
 local Config = {}
-local CONFIG_DEFAULTS = {
+local configDefaults = {
     vcl = false,
     vc1_use = true,
     vc2_use = false,
@@ -4083,51 +3333,31 @@ local function configPath()
     return aegisub.decode_path("?user") .. "/zheus_color_manager.lua"
 end
 
-local function readConfigFile()
-    local content = PyBridge.readFile(configPath(), CONFIG_FILE_LIMIT + 1)
-    return content and (_safeLoadLuaTable(content) or {}) or {}
-end
-
-local function writeConfigFile(t)
-    local parts = {"return {\n"}
-    local keys = {}
-    for key in pairs(t) do keys[#keys + 1] = key end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-    for _, k in ipairs(keys) do
-        local v = t[k]
-        if type(v) == "string" then
-            parts[#parts + 1] = string.format("  [%q] = %q,\n", k, v)
-        elseif type(v) == "boolean" or type(v) == "number" then
-            parts[#parts + 1] = string.format("  [%q] = %s,\n", k, tostring(v))
-        end
+local settingsStore
+getSettings = function()
+    if not settingsStore then
+        settingsStore = Settings.open(script_namespace,script_version,{main=configDefaults,accessibility=accessConfigDefaults},{
+            {path=configPath(),format="lua_literal",target="main"},
+            {path=accessibilityConfigPath(),format="lua_literal",target="accessibility"},
+        })
     end
-    parts[#parts + 1] = "}\n"
-    return PyBridge.writeFile(configPath(), table.concat(parts))
+    return settingsStore
 end
 
 function Config.load()
-    local stored = readConfigFile()
-    local merged = {}
-    for k, v in pairs(CONFIG_DEFAULTS) do merged[k] = v end
-    for k, v in pairs(stored) do
-        local def = CONFIG_DEFAULTS[k]
-        if def ~= nil and type(v) == type(def) then merged[k] = v end
-    end
-    return merged
+    return getSettings():values("main")
 end
 
-function Config.save(t)
-    local current = Config.load()
-    for k, def in pairs(CONFIG_DEFAULTS) do
-        local v = t[k]
-        if v ~= nil and type(v) == type(def) then
-            current[k] = v
-        end
-    end
-    return writeConfigFile(current)
+function Config.save(values)
+    getSettings():update("main",values)
+    local ok,err=getSettings():write()
+    if not ok then KiteUI.message("No se pudo guardar la configuración: "..tostring(err),{button="Aceptar",width=36,height=UI.textHeight(err,14)}) end
+    return ok,err
 end
 
-local HELP_TEXT = "ZHEUS COLORMANAGER " .. script_version .. [[
+pcall(AccessibilityConfig.load)
+
+local helpText = "ZHEUS COLORMANAGER " .. script_version .. [[
 
 Panel principal
 Gestores:
@@ -4155,61 +3385,62 @@ El informe superior solo resume la selección actual.
 ]]
 
 local function showMsg(msg)
-    aegisub.dialog.display({ { class = "label", label = tostring(msg or ""), x = 0, y = 0, width = 40, height = 4 } }, { "Aceptar" })
+    return KiteUI.message(msg, {button="Aceptar", width=36, height=UI.textHeight(msg,14)})
 end
 
-local function textoNormalizado(v)
-    if type(v) == "string" then return v end
-    if v == nil then return "" end
-    return tostring(v)
-end
-
-local function gestorDeActores(subs, sel)
-    local unique, seen = {}, {}
-    for _, i in ipairs(sel) do
-        local line = subs[i]
+local function gestorDeActores(subs,sel)
+    local actors,seen,targets={},{},{}
+    for _,id in ipairs(LineOps.normalizeIndices(subs,sel)) do
+        local line=subs[id]
         if isDialogueLine(line) then
-            local a = textoNormalizado(line.actor)
-            if not seen[a] then seen[a] = true; table.insert(unique, a) end
+            local actor=tostring(line.actor or "")
+            if not seen[actor] then actors[#actors+1]=actor;seen[actor]=true;targets[actor]=actor end
         end
     end
-    table.sort(unique)
-    local originalText = table.concat(unique, "\n")
-    local dlg = {
-        { class = "label",   label = "Original",                  x = 0,  y = 0, width = 15, height = 1 },
-        { class = "label",   label = "Nuevo (vacío = conservar)", x = 15, y = 0, width = 15, height = 1 },
-        { class = "textbox", name = "src",  text = originalText,  x = 0,  y = 1, width = 15, height = 20, readonly = true },
-        { class = "textbox", name = "dest", text = originalText,  x = 15, y = 1, width = 15, height = 20 },
-    }
-    local btn, res = aegisub.dialog.display(dlg, { "Execute", "Cancel" })
-    if btn ~= "Execute" then return "cancel" end
-    local function parseMl(s)
-        local t = {}; s = s:gsub("\r\n", "\n"):gsub("\r", "\n")
-        local i = 1
-        while true do
-            local n = s:find("\n", i)
-            if not n then table.insert(t, s:sub(i)); break end
-            table.insert(t, s:sub(i, n - 1)); i = n + 1
+    table.sort(actors)
+    local page,pages=1,math.max(1,math.ceil(#actors/uiActorsPerPage))
+    while true do
+        local ui={
+            {class="label",label="Actores · página "..page.."/"..pages,x=0,y=0,width=8},
+            {class="label",label="Escribe el mismo destino para fusionar. Vacío quita el actor.",x=0,y=1,width=8},
+            {class="label",label="Original",x=0,y=2,width=4},
+            {class="label",label="Destino",x=4,y=2,width=4},
+        }
+        local first,last=(page-1)*uiActorsPerPage+1,math.min(page*uiActorsPerPage,#actors)
+        for index=first,last do
+            ui[#ui+1]={class="label",label=actorPreview(actors[index],28),hint=actorLabel(actors[index]),x=0,y=index-first+3,width=4}
+            ui[#ui+1]={class="edit",name="actor"..index,text=targets[actors[index]],x=4,y=index-first+3,width=4}
         end
-        return t
-    end
-    local newActors = parseMl(res.dest)
-    local map = {}
-    for i, original in ipairs(unique) do
-        local new = newActors[i]
-        if new ~= nil and trim(new) ~= "" and new ~= original then map[original] = new end
-    end
-    local changed = 0
-    for _, idx in ipairs(sel) do
-        local l = subs[idx]
-        if isDialogueLine(l) then
-            local original = textoNormalizado(l.actor)
-            if map[original] ~= nil then l.actor = map[original]; subs[idx] = l; changed = changed + 1 end
+        local buttons={"Aplicar"}
+        if pages>1 then buttons[#buttons+1]="Anterior";buttons[#buttons+1]="Siguiente" end
+        buttons[#buttons+1]="Cancelar"
+        local action,result=aegisub.dialog.display(ui,buttons,{ok="Aplicar",cancel="Cancelar",close="Cancelar"})
+        if not action or action=="Cancelar" then return "cancel" end
+        result=result or {}
+        for index=first,last do
+            local target=result["actor"..index]
+            if type(target)=="string" then targets[actors[index]]=target end
         end
+        if action=="Anterior" then page=math.max(1,page-1)
+        elseif action=="Siguiente" then page=math.min(pages,page+1)
+        elseif action=="Aplicar" then
+            local count=LineOps.transaction(subs,function()
+                local changed=0
+                for _,id in ipairs(LineOps.normalizeIndices(subs,sel)) do
+                    LineOps.checkCancelled()
+                    local source=subs[id]
+                    if isDialogueLine(source) then
+                        local target=targets[tostring(source.actor or "")]
+                        if target~=source.actor then
+                            local line=Core.copy(source);line.actor=target;subs[id]=line;changed=changed+1
+                        end
+                    end
+                end
+                return changed
+            end)
+            return count>0 and "applied" or "nochange",count
+        else return "cancel" end
     end
-    local uc = 0; for _ in pairs(map) do uc = uc + 1 end
-    showMsg(string.format("Se actualizaron %d actores en %d líneas.", uc, changed))
-    return "done", changed, uc
 end
 
 local function ejecutarGestorDeActores(subs, sel)
@@ -4236,34 +3467,37 @@ function SelectionReport.collect(subs, sel)
         anyVSF          = false,
         anySolid        = false,
     }
-    for _, i in ipairs(sel or {}) do
+    for _, i in ipairs(LineOps.normalizeIndices(subs, sel)) do
         local l = subs[i]
         if isDialogueLine(l) then
             stats.lineCount = stats.lineCount + 1
-            local actor = trim(l.actor or "")
+            local actor = tostring(l.actor or "")
             if actor == "" then
                 stats.emptyActorLines = stats.emptyActorLines + 1
             end
             stats.actorLines[actor] = (stats.actorLines[actor] or 0) + 1
             local text = tostring(l.text or "")
-            for _, raw in text:gmatch(PAT_COLOR_CAP) do
-                stats.solidColors[ColorUtil.normalize(raw)] = true
-                stats.anySolid = true
-            end
-            for _, parens in text:gmatch(PAT_VC_CAP) do
-                for col in parens:sub(2, -2):gmatch(PAT_HEX_TOKEN) do
-                    stats.vsfColors[ColorUtil.normalize(col)] = true
+            for _,call in ipairs(LineOps.tagCalls(text)) do
+                local slot=TagStripper.colorSlot(call.name)
+                if slot then
+                    local vsf=call.name:find("vc",1,true)~=nil
+                    for raw in call.value:gmatch(patHexToken) do
+                        local color=Color.parseTag(raw)
+                        if color then
+                            if vsf then stats.vsfColors[color],stats.anyVSF=true,true
+                            else stats.solidColors[color],stats.anySolid=true,true end
+                        end
+                    end
                 end
-                stats.anyVSF = true
             end
         end
     end
     return stats
 end
 
-local function _contrastStatus(minCR)
-    if minCR < WCAG_FAIL then return "AJUSTAR" end
-    if minCR < WCAG_AA   then return "REVISAR" end
+local function contrastStatus(minCR)
+    if minCR < wcagFail then return "AJUSTAR" end
+    if minCR < wcagAa   then return "REVISAR" end
     return "OK"
 end
 
@@ -4310,13 +3544,13 @@ function SelectionReport.format(subs, sel)
         local info = data[a]
         local cr3 = ColorUtil.contrastRatio(info.colors.c, info.colors["3c"])
         local cr4 = ColorUtil.contrastRatio(info.colors.c, info.colors["4c"])
-        local status = _contrastStatus(math.min(cr3, cr4))
+        local status = contrastStatus(math.min(cr3, cr4))
         if     status == "OK"      then nOK   = nOK   + 1
         elseif status == "REVISAR" then nWarn = nWarn + 1
         else                            nFail = nFail + 1 end
         local visibleStatus = status == "OK" and "BIEN" or status
         w(string.format("  %-18s %7.1f %7.1f   %s",
-            actorLabel(a):sub(1, 18), cr3, cr4, visibleStatus))
+            actorLabel(a), cr3, cr4, visibleStatus))
     end
     w("")
     w(string.format("  %d BIEN   ·   %d REVISAR   ·   %d AJUSTAR",
@@ -4347,11 +3581,11 @@ end
 
 local function addReplaceSlotControls(ui, cfg, baseY)
     local slots = slotFilterFromConfig(cfg)
-    table.insert(ui, { class = "label", label = "Canales para cambiar:", x = 0, y = baseY, width = 3 })
-    table.insert(ui, { class = "checkbox", name = "replace_slot_1", label = "\\c",  value = slots["1"], x = 3, y = baseY, width = 2 })
-    table.insert(ui, { class = "checkbox", name = "replace_slot_2", label = "\\2c", value = slots["2"], x = 5, y = baseY, width = 2 })
-    table.insert(ui, { class = "checkbox", name = "replace_slot_3", label = "\\3c", value = slots["3"], x = 7, y = baseY, width = 2 })
-    table.insert(ui, { class = "checkbox", name = "replace_slot_4", label = "\\4c", value = slots["4"], x = 9, y = baseY, width = 3 })
+    table.insert(ui, { class = "label", label = "Canales para cambiar:", x = 0, y = baseY, width = 2 })
+    table.insert(ui, { class = "checkbox", name = "replace_slot_1", label = "\\c",  value = slots["1"], x = 2, y = baseY, width = 1 })
+    table.insert(ui, { class = "checkbox", name = "replace_slot_2", label = "\\2c", value = slots["2"], x = 3, y = baseY, width = 1 })
+    table.insert(ui, { class = "checkbox", name = "replace_slot_3", label = "\\3c", value = slots["3"], x = 4, y = baseY, width = 1 })
+    table.insert(ui, { class = "checkbox", name = "replace_slot_4", label = "\\4c", value = slots["4"], x = 5, y = baseY, width = 1 })
 end
 
 local function buildVSFGradientPanel(cfg, auditText, status)
@@ -4361,18 +3595,19 @@ local function buildVSFGradientPanel(cfg, auditText, status)
         { class = "label",    label = "Gestores:", x = 0, y = 1, width = 2 },
         { class = "dropdown", name = "gestores", items = { "Colores por Actor", "Actores" }, value = "Colores por Actor", x = 2, y = 1, width = 4 },
         { class = "label",    label = "Cambios:", x = 0, y = 2, width = 2 },
-        { class = "dropdown", name = "cambios", items = { "De colores", "De colores en secuencia" }, value = "De colores", x = 2, y = 2, width = 4 },
+        { class = "dropdown", name = "cambios", items = { "De colores", "De colores en secuencia", "Por tramos" }, value = "De colores", x = 2, y = 2, width = 4 },
         { class = "textbox", name = "audit_preview", text = auditText or "", x = 0, y = 3, width = UI.dashboard_width, height = UI.audit_height, readonly = true },
-        { class = "label",    label = "Degradados VSFilterMod", x = 0, y = vsfY, width = 4 },
-        { class = "checkbox", name = "vcl", label = "Limpiar \\vc previos", value = cfg.vcl, x = 4, y = vsfY, width = 4 },
-        { class = "label",    label = "Requiere VSFilterMod para renderizar \\vc.", x = 8, y = vsfY, width = 4 },
+        { class = "label",    label = "Degradados VSFilterMod", x = 0, y = vsfY, width = 3, hint = "Requiere VSFilterMod para renderizar \\vc." },
+        { class = "checkbox", name = "vcl", label = "Limpiar \\vc previos", value = cfg.vcl, x = 3, y = vsfY, width = 3 },
     }
     addVSFBlock(ui, cfg, "1vc", "\\1vc relleno", 0, vsfY + 1)
     addVSFBlock(ui, cfg, "2vc", "\\2vc secund.", 3, vsfY + 1)
-    addVSFBlock(ui, cfg, "3vc", "\\3vc borde",   6, vsfY + 1)
-    addVSFBlock(ui, cfg, "4vc", "\\4vc sombra",  9, vsfY + 1)
-    addReplaceSlotControls(ui, cfg, vsfY + 4)
-    table.insert(ui, { class = "label", label = status or "", x = 0, y = vsfY + 5, width = UI.dashboard_width })
+    addVSFBlock(ui, cfg, "3vc", "\\3vc borde",   0, vsfY + 4)
+    addVSFBlock(ui, cfg, "4vc", "\\4vc sombra",  3, vsfY + 4)
+    addReplaceSlotControls(ui, cfg, vsfY + 7)
+    if status and status ~= "" then
+        table.insert(ui, { class = "label", label = status, x = 0, y = vsfY + 8, width = UI.dashboard_width })
+    end
     return ui
 end
 
@@ -4381,22 +3616,18 @@ local openAccessibilityApply
 local openCalibrationWizard
 local openAccessibilityExport
 
-local function MainController(subs, sel, init_mode, data_in, actors_in)
+local function mainController(subs, sel, initMode, dataIn, actorsIn)
     if not sel or #sel == 0 then
         showMsg("Selecciona líneas.")
-        return
-    end
-    local resetLine = firstSelectedStyleReset(subs, sel)
-    if resetLine then
-        showMsg("La línea " .. tostring(resetLine) .. " usa \\r. Zheus no puede auditar ni reasignar fielmente colores de estilos reiniciados; divide la línea en runs uniformes.")
         return
     end
 
     local styleMap = collectStyles(subs)
     local cfg      = Config.load()
-    local mode     = (type(init_mode) == "string" and init_mode) or "DASH"
-    local data, actors = data_in, actors_in
+    local mode     = (type(initMode) == "string" and initMode) or "DASH"
+    local data, actors = dataIn, actorsIn
     local page, status = 1, ""
+    local editorOptions={ARCH={op="Etiquetas",cl=true},ARCHVSF={op="Etiquetas",cl=true}}
     local vsfTag = "1vc"
 
     local auditCache = nil
@@ -4409,7 +3640,7 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
         styleMap = collectStyles(subs)
         data, actors = StyleScanner.scanActors(subs, sel, styleMap)
         invalidateAudit()
-        local maxPage = math.max(1, math.ceil((actors and #actors or 1) / PER_PAGE))
+        local maxPage = math.max(1, math.ceil((actors and #actors or 1) / uiActorsPerPage))
         if page > maxPage then page = maxPage end
     end
 
@@ -4418,40 +3649,58 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
 
         if mode == "DASH" then
             ui = buildVSFGradientPanel(cfg, getAuditText(), status)
-            btns = { "Gestor", "Cambio", "VSF", "Daltonismo", "Ayuda", "Cancel" }
+            btns = { "Gestor", "Cambio", "VSF", "Daltonismo", "Ayuda", "Cancelar" }
         elseif mode == "ARCH" then
-            ui, shown = ManagerDialog.build(page, PER_PAGE, actors, data, nil, nil)
+            ui, shown = ManagerDialog.build(page, uiActorsPerPage, actors, data, nil, nil)
             local y = 3 + (shown or 0)
-            table.insert(ui, { class = "dropdown", name = "op", items = { "Etiquetas", "Estilos", "Limpiar" }, value = "Etiquetas", x = 0, y = y, width = 2 })
-            table.insert(ui, { class = "checkbox", name = "cl", label = "Auto-limpiar (forzado en Estilos)", value = true, x = 2, y = y, width = 3 })
-            table.insert(ui, { class = "label",    label = status, x = 0, y = y + 1, width = 5 })
-            btns = { "Execute", "←", "→", "VSF", "Lista", "Conflictos", "Exportar", "Importar", "Volver" }
+            table.insert(ui, { class = "dropdown", name = "op", items = { "Etiquetas", "Estilos", "Limpiar" }, value = editorOptions[mode].op, x = 0, y = y, width = 2 })
+            table.insert(ui, { class = "checkbox", name = "cl", label = "Auto-limpiar (forzado en Estilos)", value = editorOptions[mode].cl, x = 2, y = y, width = 3 })
+            if status ~= "" then
+                table.insert(ui, { class = "label", label = status, x = 0, y = y + 1, width = 5 })
+                y = y + 1
+            end
+            table.insert(ui,{class="dropdown",name="more",items={"VSF","Lista","Conflictos","Exportar","Importar"},value="Lista",x=0,y=y+1,width=5})
+            btns = #actors>uiActorsPerPage and { "Aplicar", "←", "→", "Abrir", "Volver", "Cancelar" }
+                or { "Aplicar", "Abrir", "Volver", "Cancelar" }
         elseif mode == "ARCHVSF" then
             displayedVSFTag = vsfTag
-            ui, shown = ManagerDialog.build(page, PER_PAGE, actors, data, "vsf", displayedVSFTag)
+            ui, shown = ManagerDialog.build(page, uiActorsPerPage, actors, data, "vsf", displayedVSFTag)
             local y = 3 + (shown or 0)
             table.insert(ui, { class = "label",    label = "VSF (\\" .. displayedVSFTag .. ") - modo Etiquetas", x = 0, y = y, width = 6 })
-            table.insert(ui, { class = "dropdown", name = "op", items = { "Etiquetas", "Limpiar" }, value = "Etiquetas", x = 0, y = y + 1, width = 2 })
-            table.insert(ui, { class = "checkbox", name = "cl", label = "Auto-limpiar", value = true, x = 2, y = y + 1, width = 2 })
-            table.insert(ui, { class = "label",    label = status, x = 0, y = y + 2, width = 6 })
-            btns = { "Execute", "←", "→", "Exportar", "Importar", "Normal", "Volver" }
+            table.insert(ui, { class = "dropdown", name = "op", items = { "Etiquetas", "Limpiar" }, value = editorOptions[mode].op, x = 0, y = y + 1, width = 2 })
+            table.insert(ui, { class = "checkbox", name = "cl", label = "Auto-limpiar", value = editorOptions[mode].cl, x = 2, y = y + 1, width = 2 })
+            if status ~= "" then
+                table.insert(ui, { class = "label", label = status, x = 0, y = y + 2, width = 6 })
+                y = y + 1
+            end
+            table.insert(ui,{class="dropdown",name="more",items={"Exportar","Importar","Normal"},value="Normal",x=0,y=y+2,width=6})
+            btns = #actors>uiActorsPerPage and { "Aplicar", "←", "→", "Abrir", "Volver", "Cancelar" }
+                or { "Aplicar", "Abrir", "Volver", "Cancelar" }
         elseif mode == "LIST" then
-            ui = ManagerDialog.build(page, PER_PAGE, actors, data, "summary", nil)
+            ui = ManagerDialog.build(page, uiActorsPerPage, actors, data, "summary", nil)
             btns = { "Volver" }
         elseif mode == "CONF" then
-            ui = ManagerDialog.build(page, PER_PAGE, actors, data, "conflicts", nil)
+            ui = ManagerDialog.build(page, uiActorsPerPage, actors, data, "conflicts", nil)
             btns = { "Volver" }
         elseif mode == "HELP" then
-            ui = { { class = "textbox", text = HELP_TEXT, x = 0, y = 0, width = UI.help_width, height = UI.help_height, readonly = true } }
+            ui = { { class = "textbox", text = helpText, x = 0, y = 0, width = UI.help_width, height = UI.help_height, readonly = true } }
             btns = { "Volver" }
         end
 
         local btn, res = aegisub.dialog.display(ui, btns)
-        if not btn or btn == "Cancel" then break end
+        if not btn or btn == "Cancelar" then break end
         res = res or {}
+        if btn=="Abrir" then btn=res.more end
+
+        if mode=="DASH" then
+            for key,default in pairs(configDefaults) do if type(res[key])==type(default) then cfg[key]=res[key] end end
+        elseif editorOptions[mode] then
+            if res.op then editorOptions[mode].op=res.op end
+            if res.cl~=nil then editorOptions[mode].cl=res.cl end
+        end
 
         if mode == "ARCHVSF" and res.vctag and res.vctag ~= displayedVSFTag then
-            ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", displayedVSFTag)
+            ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", displayedVSFTag)
             vsfTag = res.vctag
             status = "Editando \\" .. vsfTag .. "."
         elseif btn == "Gestor" then
@@ -4474,23 +3723,23 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
         elseif btn == "Ayuda" then
             mode = "HELP"
         elseif btn == "Lista" then
-            ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+            ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             mode = "LIST"
         elseif btn == "Conflictos" then
-            ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+            ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             mode = "CONF"
         elseif btn == "VSF" and mode == "ARCH" then
-            ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+            ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             mode = "ARCHVSF"
         elseif btn == "Normal" then
-            ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+            ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
             mode = "ARCH"
         elseif btn == "Volver" then
             if mode == "ARCH" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
                 mode = "DASH"
             elseif mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
                 mode = "ARCH"
             elseif mode == "LIST" or mode == "CONF" then
                 mode = "ARCH"
@@ -4499,25 +3748,25 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
             end
         elseif btn == "←" or btn == "◁" then
             if mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
             else
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             end
             page = math.max(1, page - 1)
         elseif btn == "→" or btn == "▷" then
             if mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
             else
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             end
             local totalActors = actors and #actors or 0
-            page = math.min(math.max(1, math.ceil(math.max(1, totalActors) / PER_PAGE)), page + 1)
-        elseif btn == "Execute" then
+            page = math.min(math.max(1, math.ceil(math.max(1, totalActors) / uiActorsPerPage)), page + 1)
+        elseif btn == "Aplicar" then
 
-            local applied = false
+            local applied, changedSelection = false, nil
             if mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
-                local cnt, err = ManagerApply.execute(subs, data, actors, styleMap, res.op, res.cl, true, vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
+                local cnt, err, selected = ManagerApply.execute(subs, data, actors, styleMap, res.op, res.cl, true, vsfTag)
                 if not cnt then
                     showMsg(err)
                     status = "Error: " .. (err or "Error al aplicar VSF.")
@@ -4525,10 +3774,11 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
                     aegisub.set_undo_point("Zheus Colormanager VSF")
                     status = cnt .. " líneas con \\" .. vsfTag .. " aplicadas."
                     applied = cnt > 0
+                    changedSelection = selected
                 end
             else
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
-                local cnt, err = ManagerApply.execute(subs, data, actors, styleMap, res.op, res.cl, false, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
+                local cnt, err, selected = ManagerApply.execute(subs, data, actors, styleMap, res.op, res.cl, false, nil)
                 if not cnt then
                     showMsg(err)
                     status = "Error: " .. (err or "Error al aplicar.")
@@ -4536,28 +3786,28 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
                     aegisub.set_undo_point("Zheus Colormanager")
                     status = cnt .. " líneas procesadas."
                     applied = cnt > 0
+                    changedSelection = selected
                 end
             end
-            if applied then return end
-            rescan()
+            if applied then return changedSelection end
         elseif btn == "Exportar" then
             if mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
             else
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             end
             local msg = ActorColorFile.io(data, actors, "Export")
             if msg then status = msg end
         elseif btn == "Importar" then
             if mode == "ARCHVSF" then
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, "vsf", vsfTag)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", vsfTag)
             else
-                ManagerDialog.sync(data, actors, res, page, PER_PAGE, nil, nil)
+                ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             end
-            local msg, has_vsf_data = ActorColorFile.io(data, actors, "Import")
+            local msg, hasVsfData = ActorColorFile.io(data, actors, "Import")
             if msg then
                 status = msg
-                if has_vsf_data and mode ~= "ARCHVSF" then
+                if hasVsfData and mode ~= "ARCHVSF" then
                     status = msg .. " · cambiando a VSF."
                     mode = "ARCHVSF"
                 end
@@ -4577,7 +3827,9 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
                 status = (n or 0) .. " líneas con etiquetas VSF aplicadas."
             end
         elseif btn == "Cambio" then
-            if res.cambios == "De colores en secuencia" then
+            if res.cambios == "Por tramos" then
+                return ColorUtil.segments.run(subs, sel)
+            elseif res.cambios == "De colores en secuencia" then
                 local _, relayAction = ColorRelay.run(subs, sel)
                 if relayAction == "done" then
                     return
@@ -4605,9 +3857,9 @@ local function MainController(subs, sel, init_mode, data_in, actors_in)
                 end
             end
         elseif btn == "Daltonismo" then
-            local action, count, skipped, label = openAccessibilityApply(subs, sel, nil, true)
+            local action, _, _, label, selected = openAccessibilityApply(subs, sel, nil, true)
             if action == "done" then
-                if label then return end
+                if label then return selected end
                 invalidateAudit()
                 status = "Daltonismo: operación completada."
             end
@@ -4622,7 +3874,7 @@ local function openChromaManagerDirect(subs, sel)
     if #actors == 0 then
         showMsg("La selección está vacía de actores.")
     else
-        MainController(subs, sel, "ARCH", data, actors)
+        return mainController(subs, sel, "ARCH", data, actors)
     end
 end
 
@@ -4633,7 +3885,7 @@ local function openVSFManagerDirect(subs, sel)
     if #actors == 0 then
         showMsg("La selección está vacía de actores.")
     else
-        MainController(subs, sel, "ARCHVSF", data, actors)
+        return mainController(subs, sel, "ARCHVSF", data, actors)
     end
 end
 
@@ -4653,8 +3905,6 @@ end
 
 openAccessibilityAudit = function(subs, sel)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para auditar."); return end
-    local resetLine = firstSelectedStyleReset(subs, sel)
-    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; la auditoría no puede resolver aún colores por run de estilo."); return end
     local cfg = AccessibilityConfig.load()
     local report = AccessibilityAudit.run(subs, sel, cfg.active_profile)
     local text = AccessibilityReport.format(report, (function()
@@ -4664,12 +3914,12 @@ openAccessibilityAudit = function(subs, sel)
         return out
     end)())
     aegisub.dialog.display({
-        { class = "label",   label = "Auditoría de accesibilidad de color", x = 0, y = 0, width = 80 },
-        { class = "textbox", name = "audit", text = text, x = 0, y = 1, width = 80, height = 28 },
+        { class = "label",   label = "Auditoría de accesibilidad de color", x = 0, y = 0, width = 36 },
+        { class = "textbox", name = "audit", text = text, x = 0, y = 1, width = 36, height = UI.textHeight(text, 16), readonly = true },
     }, { "Aceptar" })
 end
 
-local function _profileApplyPanel(cfg, profileId, audit, viewMode, subs, sel)
+local function profileApplyPanel(cfg, profileId, audit, viewMode)
     local profileChoices = AccessibilityProfiles.choices()
     if profileId and not AccessibilityProfiles.list[profileId] then profileId = nil end
     profileId = profileId or cfg.active_profile or "DALTONICO"
@@ -4689,7 +3939,7 @@ local function _profileApplyPanel(cfg, profileId, audit, viewMode, subs, sel)
 
     local pol = audit.profile.policy or {}
     local defaultBordShad = cfg.add_bord_shad
-    if pol.add_bord_shad then defaultBordShad = true end
+    if defaultBordShad==nil then defaultBordShad=pol.add_bord_shad==true end
 
     return {
         { class = "label",      label = "Paleta accesible",              x = 0, y = 0, width = 12 },
@@ -4701,14 +3951,12 @@ local function _profileApplyPanel(cfg, profileId, audit, viewMode, subs, sel)
         { class = "checkbox",   name = "add_bord_shad",    label = "Forzar bord y shad",   value = defaultBordShad,      x = 3, y = 2, width = 4 },
         { class = "checkbox",   name = "include_drawings", label = "Incluir dibujos",      value = cfg.include_drawings, x = 7, y = 2, width = 3 },
         { class = "label",      label = headerLabel,                     x = 0, y = 3, width = 12 },
-        { class = "textbox",    name = "profiles", text = bodyText,       x = 0, y = 4, width = 12, height = 18, readonly = true },
+        { class = "textbox",    name = "profiles", text = bodyText,       x = 0, y = 4, width = 12, height = UI.textHeight(bodyText, 12), readonly = true },
     }
 end
 
 openAccessibilityApply = function(subs, sel, profileId, silent)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para aplicar Daltonismo."); return end
-    local resetLine = firstSelectedStyleReset(subs, sel)
-    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; la paleta no se aplicó porque aún no resuelve colores por run de estilo."); return end
     local cfg = AccessibilityConfig.load()
     local styleMap = collectStyles(subs)
 
@@ -4735,9 +3983,9 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
                 end
             end
         end
-        local panel = _profileApplyPanel(cfg, currentProfileId, audit, viewMode, subs, sel)
-        local btn, res = aegisub.dialog.display(panel, { "Execute", "Calibrar", "Exportar", "Importar", "Cancel" })
-        if not btn or btn == "Cancel" then return nil end
+        local panel = profileApplyPanel(cfg, currentProfileId, audit, viewMode)
+        local btn, res = aegisub.dialog.display(panel, { "Aplicar", "Calibrar", "Exportar", "Importar", "Cancelar" })
+        if not btn or btn == "Cancelar" then return nil end
         res = res or {}
 
         local chosenProfileId = AccessibilityProfiles.idFromChoice(res.profile)
@@ -4770,7 +4018,7 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
                     for k, v in pairs(entry.colors) do row.colors[k] = v end
                     if entry.has_vsf then
                         row.vsf = {}
-                        for _, tag in ipairs(VSF_TAGS) do
+                        for _, tag in ipairs(vsfTags) do
                             local vc = entry.vsf_corners[tag]
                             if vc then row.vsf[tag] = { vc[1], vc[2], vc[3], vc[4] } end
                         end
@@ -4815,7 +4063,7 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
             add_bord_shad    = res.add_bord_shad and true or false,
             include_drawings = res.include_drawings and true or false,
         }
-        local count, skipped, applyErr = AccessibilityApply.execute(subs, data, actors, styleMap, profile, options)
+        local count, skipped, applyErr, selected = AccessibilityApply.execute(subs, data, actors, styleMap, profile, options)
         if applyErr then
             showMsg(applyErr)
             return "retry", chosenProfileId
@@ -4826,14 +4074,14 @@ openAccessibilityApply = function(subs, sel, profileId, silent)
             if skipped and skipped > 0 then msg = msg .. "\n" .. skipped .. " línea(s) de dibujo gestionadas por la opción Incluir dibujos." end
             showMsg(msg)
         end
-        return "done", count, skipped, AccessibilityProfiles.label(profile.id)
+        return "done", count, skipped, AccessibilityProfiles.label(profile.id), selected
     end
 
     local current = profileId or cfg.active_profile or "DALTONICO"
     while true do
-        local action, p1, p2, p3 = runCycle(current)
+        local action, p1, p2, p3, selected = runCycle(current)
         if action == "retry" then current = p1
-        else return action, p1, p2, p3 end
+        else return action, p1, p2, p3, selected end
     end
 end
 
@@ -4847,7 +4095,7 @@ openCalibrationWizard = function()
         string.format("  tritan: %.2f", custom.simulate.tritan),
         string.format("  mono:   %.2f", custom.simulate.mono),
         "",
-        ok and ("Guardado como perfil activo en:\n  " .. _accessConfigPath())
+        ok and ("Guardado como perfil activo en:\n  " .. accessibilityConfigPath())
             or ("Error al guardar: " .. tostring(err)),
         "",
         "Comprueba la escena con el perfil activo.",
@@ -4857,10 +4105,8 @@ end
 
 openAccessibilityExport = function(subs, sel)
     if not sel or #sel == 0 then showMsg("Selecciona líneas para exportar."); return end
-    local resetLine = firstSelectedStyleReset(subs, sel)
-    if resetLine then showMsg("La línea " .. tostring(resetLine) .. " usa \\r; no se exportó una paleta potencialmente incorrecta."); return end
     local cfg = AccessibilityConfig.load()
-    local audit, data, actors = AccessibilityAudit.run(subs, sel, cfg.active_profile)
+    local _, data, actors = AccessibilityAudit.run(subs, sel, cfg.active_profile)
     if #actors == 0 then showMsg("La selección está vacía de actores."); return end
 
     local profileChoices = AccessibilityProfiles.choices()
@@ -4870,7 +4116,7 @@ openAccessibilityExport = function(subs, sel)
         { class = "label",    label = "Perfil:",                 x = 0, y = 1, width = 1 },
         { class = "dropdown", name = "profile", items = profileChoices, value = profileChoice, x = 1, y = 1, width = 3 },
         { class = "label",    label = "Actores en selección: " .. #actors, x = 0, y = 2, width = 4 },
-    }, { "Exportar", "Cancel" })
+    }, { "Exportar", "Cancelar" })
     if btn ~= "Exportar" then return end
 
     local profile = AccessibilityProfiles.get(AccessibilityProfiles.idFromChoice(res.profile))
@@ -4879,15 +4125,16 @@ openAccessibilityExport = function(subs, sel)
     if msg then showMsg(msg) end
 end
 
-local function _macroApply(profileId)
-    return function(subs, sel) openAccessibilityApply(subs, sel, profileId) end
+local function macroApply(profileId)
+    return function(subs, sel) return openAccessibilityApply(subs, sel, profileId) end
 end
 
 local macroEntries = {
-    { MENU_PATH,                                   script_description,                    MainController },
+    { menuPath,                                   script_description,                    mainController },
 }
 
 local hotkeyMacroEntries = {
+    { "Editor de tramos", "Editar colores por tramos conservando texto y tags", ColorUtil.segments.run },
     { "Colores",            "Atajo: abrir gestor de color por actor",       openChromaManagerDirect },
     { "VSF",                "Atajo: abrir gestor de 4 esquinas por actor",  openVSFManagerDirect },
     { "Actores",            "Atajo: renombrar o fusionar actores",          ejecutarGestorDeActores },
@@ -4895,23 +4142,34 @@ local hotkeyMacroEntries = {
     { "ColorRelay",         "Atajo: cambios de color persistentes por \\t",  ColorRelay.run },
     { "Daltonismo",                  "Atajo: abrir panel de Daltonismo",            openAccessibilityApply },
     { "Daltonismo/Auditar",          "Atajo: auditar accesibilidad de color",        openAccessibilityAudit },
-    { "Daltonismo/Aplicar Daltonismo", "Atajo: aplicar perfil Daltonismo",           _macroApply("DALTONICO") },
-    { "Daltonismo/Universal",        "Atajo: aplicar perfil Universal accesible",    _macroApply("UNIVERSAL_SAFE") },
-    { "Daltonismo/Protanopia",       "Atajo: aplicar perfil Protanopia",             _macroApply("PROTAN_SAFE") },
-    { "Daltonismo/Deuteranopia",     "Atajo: aplicar perfil Deuteranopia",           _macroApply("DEUTAN_SAFE") },
-    { "Daltonismo/Tritanopia",       "Atajo: aplicar perfil Tritanopia",             _macroApply("TRITAN_SAFE") },
-    { "Daltonismo/Monocromo",        "Atajo: aplicar perfil Monocromo",              _macroApply("MONOCHROME") },
-    { "Daltonismo/Alto contraste",   "Atajo: aplicar perfil Alto contraste",         _macroApply("HIGH_CONTRAST") },
+    { "Daltonismo/Aplicar Daltonismo", "Atajo: aplicar perfil Daltonismo",           macroApply("DALTONICO") },
+    { "Daltonismo/Universal",        "Atajo: aplicar perfil Universal accesible",    macroApply("UNIVERSAL_SAFE") },
+    { "Daltonismo/Protanopia",       "Atajo: aplicar perfil Protanopia",             macroApply("PROTAN_SAFE") },
+    { "Daltonismo/Deuteranopia",     "Atajo: aplicar perfil Deuteranopia",           macroApply("DEUTAN_SAFE") },
+    { "Daltonismo/Tritanopia",       "Atajo: aplicar perfil Tritanopia",             macroApply("TRITAN_SAFE") },
+    { "Daltonismo/Monocromo",        "Atajo: aplicar perfil Monocromo",              macroApply("MONOCHROME") },
+    { "Daltonismo/Alto contraste",   "Atajo: aplicar perfil Alto contraste",         macroApply("HIGH_CONTRAST") },
     { "Daltonismo/Calibrar perfil",  "Atajo: crear perfil Personalizado",            openCalibrationWizard },
     { "Daltonismo/Exportar accesible", "Atajo: exportar paleta accesible v3",        openAccessibilityExport },
 }
 
 for _, entry in ipairs(hotkeyMacroEntries) do
     macroEntries[#macroEntries + 1] = {
-        HOTKEY_MENU_PATH .. "/" .. entry[1],
+        hotkeyMenuPath .. "/" .. entry[1],
         entry[2],
         entry[3],
     }
 end
 
+for _, entry in ipairs(macroEntries) do
+    local callback=entry[3]
+    entry[3]=function(subs,selection)
+        local result,_,_,_,selected=callback(subs,selection)
+        if type(selected)=="table" then return selected end
+        if type(result)=="table" then return result end
+    end
+end
+
 depRec:registerMacros(macroEntries, false)
+
+require("kite.UI").publishActions()

@@ -1,21 +1,25 @@
 export script_name        = "Wave2json"
 export script_description = "Export the active audio waveform to JSON."
 export script_author      = "Kiterow"
-export script_version     = "1.3.2"
+export script_version     = "1.3.6"
 export script_namespace   = "kite.Wave2json"
 
-SAMPLE_RATE       = 48000
-CHANNELS          = 1
-BITS              = 16
-BYTES_PER_SAMPLE  = 2
-BASE_POINT_MS     = 1
-SAMPLES_PER_POINT = SAMPLE_RATE / 1000
-READ_BYTES        = 262144
-MAX_STREAM_INDEX  = 63
+sampleRate = 48000
+channels = 1
+bits = 16
+bytesPerSample = bits / 8
+basePointMs = 1
+samplesPerPoint = sampleRate * basePointMs / 1000
+readBytes = 262144
+sampleModulus = 2 ^ bits
+sampleMidpoint = sampleModulus / 2
+amplitudeMin = -sampleMidpoint
+amplitudeMax = sampleMidpoint - 1
+byteBase = 256
 
 haveDepCtrl, DependencyControl = pcall require, "l0.DependencyControl"
 depctrl = nil
-local PyBridge, LineOps
+local PyBridge, LineOps, Media, Core
 if haveDepCtrl and DependencyControl
   depctrl = DependencyControl{
     name: script_name
@@ -25,239 +29,228 @@ if haveDepCtrl and DependencyControl
     namespace: script_namespace
     feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
     {
-      {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-      {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.PyBridge", version: "1.7.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.LineOps", version: "1.7.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.Media", version: "1.4.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+      {"kite.Core", version: "1.1.0"}
+      {"kite.UI", version: "1.5.1"}
     }
   }
 
 if depctrl
-  PyBridge, LineOps = depctrl\requireModules!
+  PyBridge, LineOps, Media, Core = depctrl\requireModules!
 else
   PyBridge = require "kite.PyBridge"
   LineOps = require "kite.LineOps"
+  Media = require "kite.Media"
+  Core = require "kite.Core"
+
+sharedUI = require "kite.UI"
 
 trim = LineOps.trim
-round_int = LineOps.round
-file_exists = PyBridge.fileExists
-join_path = PyBridge.joinPath
-write_file = PyBridge.writeFile
-remove_file = PyBridge.removeFile
+roundInt = LineOps.round
+fileExists = PyBridge.fileExists
+joinPath = PyBridge.joinPath
+removeFile = PyBridge.removeFile
 
-write_checked = (file, ...) ->
+writeChecked = (file, ...) ->
   written, message = file\write ...
   error message or "Could not write output." unless written
   written
 
-ffmpeg_time = (ms) ->
-  string.format "%.3f", math.max(0, tonumber(ms) or 0) / 1000
+ffmpegTime = (ms) ->
+  string.format "%.3f", math.max(0, Core.finiteNumber(ms) or 0) / 1000
 
-dir_name = (path) ->
+dirName = (path) ->
   tostring(path or "")\match("^(.*)[\\/]") or ""
 
-base_name = (path) ->
+baseName = (path) ->
   name = tostring(path or "")\match("([^\\/]+)$") or tostring(path or "")
   name = name\gsub "%.[^%.\\/]*$", ""
   if name == "" then "waveform" else name
 
-safe_name = (value, fallback = "wave2json") ->
-  out = trim(value)\gsub("[\\/:*?\"<>|]+", "_")\gsub("%s+", "_")
+safeName = (value, fallback = "wave2json") ->
+  out = trim(value)\gsub("[%z\1-\31\\/:*?\"<>|]+", "_")\gsub("%s+", "_")
   out = out\gsub "_+", "_"
   out = out\gsub "^_+", ""
   out = out\gsub "_+$", ""
   out = out\gsub "[%.%s]+$", ""
-  lower = out\lower!
+  lower = out\lower!\match("^[^%.]+") or ""
   reserved = lower == "con" or lower == "prn" or lower == "aux" or lower == "nul" or lower\match("^com[1-9]$") or lower\match("^lpt[1-9]$")
   return fallback if out == "" or out == "." or out == ".." or out\match("^%.+$") or reserved
   out
 
-decoded_path = (spec) ->
-  LineOps.decodedPath(spec) or ""
-
-project_props = ->
-  LineOps.projectProperties!
-
-script_file_path = ->
-  LineOps.subtitlePath! or ""
-
-selected_line_ranges = (subs, sel) ->
+selectedLineRanges = (subs, sel) ->
   records, rejected = LineOps.selectedLines subs, sel, ((line) ->
-    line and line.class == "dialogue" and not line.comment and tonumber(line.end_time) and tonumber(line.start_time) and tonumber(line.end_time) > tonumber(line.start_time)
+    return false unless line and line.class == "dialogue" and not line.comment
+    startTime, endTime = Core.finiteNumber(line.start_time), Core.finiteNumber(line.end_time)
+    startTime and endTime and endTime > startTime
   ), true
   unless records and #records > 0
     suffix = if rejected and #rejected > 0 then " Invalid rows: " .. table.concat(rejected, ", ") else ""
     return nil, "Select only uncommented dialogue lines with valid timing." .. suffix
   ranges = {}
   for record in *records
-    start_ms = math.max 0, round_int record.line.start_time
-    end_ms = math.max start_ms, round_int record.line.end_time
+    startMs = math.max 0, roundInt record.line.start_time
+    endMs = roundInt record.line.end_time
+    return nil, "Line #{record.index} has no positive duration after clipping to the media start." if endMs <= startMs
     ranges[#ranges + 1] = {
-      :start_ms
-      :end_ms
-      duration_ms: end_ms - start_ms
-      line_count: 1
-      line_index: record.index
+      :startMs
+      :endMs
+      durationMs: endMs - startMs
+      lineCount: 1
+      lineIndex: record.index
     }
   ranges
 
-selection_range = (subs, sel) ->
-  ranges, message = selected_line_ranges subs, sel
+selectionRange = (subs, sel) ->
+  ranges, message = selectedLineRanges subs, sel
   return nil, message unless ranges
-  start_ms, end_ms = ranges[1].start_ms, ranges[1].end_ms
+  startMs, endMs = ranges[1].startMs, ranges[1].endMs
   for range in *ranges
-    start_ms = range.start_ms if range.start_ms < start_ms
-    end_ms = range.end_ms if range.end_ms > end_ms
+    startMs = range.startMs if range.startMs < startMs
+    endMs = range.endMs if range.endMs > endMs
   {
-    :start_ms
-    :end_ms
-    duration_ms: end_ms - start_ms
-    line_count: #ranges
+    :startMs
+    :endMs
+    durationMs: endMs - startMs
+    lineCount: #ranges
   }
 
-media_candidate = ->
-  props = project_props!
-  audio = trim props.audio_file
-  return audio, "audio" if audio != "" and file_exists audio
-  path = decoded_path "?audio"
-  return path, "audio" if path != "" and file_exists path
+mediaCandidate = ->
+  path = Media.projectPath "audio", {fallbackVideo: true}
+  return path, "audio" if path
   "", "manual"
 
-range_suffix = (range) ->
+rangeSuffix = (range) ->
   return "" unless range
-  "_#{round_int range.start_ms}-#{round_int range.end_ms}ms"
+  "_#{roundInt range.startMs}-#{roundInt range.endMs}ms"
 
-default_output_path = (media, range = nil) ->
-  ass = script_file_path!
-  root = if ass != "" then dir_name ass else dir_name media
+defaultOutputPath = (media, range = nil) ->
+  ass = LineOps.subtitlePath! or ""
+  root = if ass != "" then dirName ass else dirName media
   source = if ass != "" then ass else media
-  join_path root, "#{safe_name base_name(source), "waveform"}#{range_suffix range}.waveform.json"
+  joinPath root, "#{safeName baseName(source), "waveform"}#{rangeSuffix range}.waveform.json"
 
-output_stem = (path) ->
+outputStem = (path) ->
   name = tostring(path or "")\match("([^\\/]+)$") or ""
   name = name\gsub "%.waveform%.json$", ""
   name = name\gsub "%.[^%.\\/]*$", ""
-  safe_name name, "waveform"
+  safeName name, "waveform"
 
-output_root = (output_path, media) ->
-  folder = dir_name output_path
+outputRoot = (outputPath, media) ->
+  folder = dirName outputPath
   return folder if folder != ""
-  folder = dir_name media
-  if folder != "" then folder else decoded_path("?temp")
+  folder = dirName media
+  if folder != "" then folder else (LineOps.decodedPath("?temp") or "")
 
-line_output_path = (base_output, media, range, order) ->
-  folder = dir_name base_output
-  folder = output_root base_output, media if folder == ""
-  stem = output_stem base_output
-  line_no = string.format "%03d", math.max(1, tonumber(order) or 1)
-  join_path folder, "#{stem}_line#{line_no}#{range_suffix range}.waveform.json"
+lineOutputPath = (baseOutput, media, range, order) ->
+  folder = dirName baseOutput
+  folder = outputRoot baseOutput, media if folder == ""
+  stem = outputStem baseOutput
+  lineNumber = string.format "%03d", math.max(1, tonumber(order) or 1)
+  joinPath folder, "#{stem}_line#{lineNumber}#{rangeSuffix range}.waveform.json"
 
-progress_title = (text) ->
+progressTitle = (text) ->
   if aegisub and aegisub.progress and aegisub.progress.title
     pcall aegisub.progress.title, tostring(text or "")
   LineOps.checkCancelled!
 
-progress_task = (text) ->
+progressTask = (text) ->
   LineOps.progress text
 
-progress_set = (value) ->
+progressSet = (value) ->
   LineOps.progress nil, value
 
-progress_cancelled = ->
+progressCancelled = ->
   return false unless aegisub and aegisub.progress and aegisub.progress.is_cancelled
   ok, cancelled = pcall aegisub.progress.is_cancelled
   ok and cancelled == true
 
-show_message = (text) ->
-  if aegisub and aegisub.dialog and aegisub.dialog.display
-    aegisub.dialog.display {
-      {class: "textbox", value: tostring(text or ""), x: 0, y: 0, width: 60, height: 12}
-    }, {"OK"}
-  elseif aegisub and aegisub.log
-    pcall aegisub.log, tostring(text or "") .. "\n"
+showMessage = (text) ->
+  sharedUI.message text
 
-run_ffmpeg = (cfg, pcm_path, log_path) ->
-  stream = math.max 0, math.min MAX_STREAM_INDEX, math.floor(tonumber(cfg.stream) or 0)
-  arguments = {
-    "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", cfg.media
-  }
-  if cfg.range and (tonumber(cfg.range.duration_ms) or 0) > 0
+runFfmpeg = (cfg, pcmPath) ->
+  stream = Core.finiteNumber cfg.stream or 0
+  return false, "The audio stream must be a non-negative integer." unless stream and stream >= 0 and stream == math.floor(stream)
+  executable = trim cfg.ffmpeg
+  executable = "ffmpeg" if executable == ""
+  executable = executable\sub(2, -2) if executable\match('^".*"$') or executable\match("^'.*'$")
+  arguments = {"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
+  table.insert arguments, "-i"
+  table.insert arguments, cfg.media
+  if cfg.range
+    startMs, durationMs = Core.finiteNumber(cfg.range.startMs), Core.finiteNumber(cfg.range.durationMs)
+    return false, "The audio range must have a finite start and positive duration." unless startMs and startMs >= 0 and durationMs and durationMs > 0
     table.insert arguments, "-ss"
-    table.insert arguments, ffmpeg_time cfg.range.start_ms
+    table.insert arguments, ffmpegTime startMs
     table.insert arguments, "-t"
-    table.insert arguments, ffmpeg_time cfg.range.duration_ms
+    table.insert arguments, ffmpegTime cfg.range.durationMs
   for value in *{
-    "-map", "0:a:#{stream}", "-vn", "-ac", tostring(CHANNELS), "-ar", tostring(SAMPLE_RATE), "-f", "s16le", pcm_path
+    "-map", "0:a:#{stream}", "-vn", "-ac", tostring(channels), "-ar", tostring(sampleRate), "-f", "s16le", pcmPath
   }
     table.insert arguments, value
-  command = PyBridge.commandLine cfg.ffmpeg, arguments
-  ok, output = PyBridge.run command
-  write_file log_path, output or ""
-  ok, output
+  PyBridge.runProcess {executable: executable, args: arguments}
 
-read_config = ->
-  media = media_candidate!
+readConfig = ->
+  media = mediaCandidate!
   return nil, "No active audio file is loaded." if trim(media) == ""
   {
     media: media
-    output: default_output_path media
+    output: defaultOutputPath media
     ffmpeg: "ffmpeg"
     stream: 0
     range: nil
   }
 
-new_pyramid = (temp_prefix) ->
+newPyramid = (tempPrefix) ->
   pyramid = {
     levels: {}
-    temp_prefix: temp_prefix
+    tempPrefix: tempPrefix
   }
 
-  pyramid.ensure_level = (self, index) ->
+  pyramid.ensureLevel = (self, index) ->
     state = self.levels[index]
     unless state
       scale = 2 ^ (index - 1)
-      path = "#{self.temp_prefix}_level_#{index}.tmp"
+      path = "#{self.tempPrefix}_level_#{index}.tmp"
       file = io.open path, "wb"
       error "Could not create temporary level file: #{path}" unless file
       state = {
         index: index
         scale: scale
-        point_ms: BASE_POINT_MS * scale
-        samples_per_point: SAMPLES_PER_POINT * scale
+        pointMs: basePointMs * scale
+        samplesPerPoint: samplesPerPoint * scale
         points: 0
         path: path
         file: file
-        pending_count: 0
-        pending_min: 0
-        pending_max: 0
+        pendingCount: 0
       }
       self.levels[index] = state
     state
 
-  pyramid.emit_pair = (self, index, min_value, max_value) ->
-    state = self\ensure_level index
-    write_checked state.file, tostring(round_int(min_value)), ",", tostring(round_int(max_value)), "\n"
+  pyramid.emitPair = (self, index, minValue, maxValue) ->
+    state = self\ensureLevel index
+    writeChecked state.file, tostring(roundInt(minValue)), ",", tostring(roundInt(maxValue)), "\n"
     state.points += 1
-    if state.pending_count == 0
-      state.pending_min = min_value
-      state.pending_max = max_value
-      state.pending_count = 1
+    if state.pendingCount == 0
+      state.pendingMin = minValue
+      state.pendingMax = maxValue
+      state.pendingCount = 1
     else
-      cmin = math.min state.pending_min, min_value
-      cmax = math.max state.pending_max, max_value
-      state.pending_count = 0
-      state.pending_min = 0
-      state.pending_max = 0
-      self\emit_pair index + 1, cmin, cmax
+      cmin = math.min state.pendingMin, minValue
+      cmax = math.max state.pendingMax, maxValue
+      state.pendingCount = 0
+      self\emitPair index + 1, cmin, cmax
 
   pyramid.flush = (self) ->
     index = 1
     while index <= #self.levels
       state = self.levels[index]
-      if state and state.pending_count == 1 and index < #self.levels
-        min_value, max_value = state.pending_min, state.pending_max
-        state.pending_count = 0
-        state.pending_min = 0
-        state.pending_max = 0
-        self\emit_pair index + 1, min_value, max_value
+      if state and state.pendingCount == 1 and index < #self.levels
+        minValue, maxValue = state.pendingMin, state.pendingMax
+        state.pendingCount = 0
+        self\emitPair index + 1, minValue, maxValue
       index += 1
     for state in *self.levels
       if state.file
@@ -268,61 +261,64 @@ new_pyramid = (temp_prefix) ->
   pyramid.cleanup = (self) ->
     for state in *(self.levels or {})
       pcall -> state.file\close! if state.file
-      remove_file state.path
+      removeFile state.path
 
   pyramid
 
-process_pcm = (pcm_path, temp_prefix, total_bytes = nil) ->
-  input = io.open pcm_path, "rb"
+processPcm = (pcmPath, tempPrefix, totalBytes = nil) ->
+  input = io.open pcmPath, "rb"
   return nil, "Could not open decoded PCM." unless input
 
-  pyramid = new_pyramid temp_prefix
-  current_min, current_max = 32767, -32768
-  samples_in_point = 0
-  total_samples = 0
-  bytes_read = 0
+  pyramid = newPyramid tempPrefix
+  currentMin, currentMax = amplitudeMax, amplitudeMin
+  samplesInPoint = 0
+  totalSamples = 0
+  bytesRead = 0
   leftover = ""
 
   ok, result, failure = pcall ->
-    progress_task "Reading PCM and building waveform"
+    progressTask "Reading PCM and building waveform"
     while true
-      return nil, "Cancelled." if progress_cancelled!
-      data = input\read READ_BYTES
+      return nil, "Cancelled." if progressCancelled!
+      data, readError = input\read readBytes
+      error readError if readError
       break unless data and #data > 0
       if leftover != ""
         data = leftover .. data
         leftover = ""
-      if (#data % BYTES_PER_SAMPLE) == 1
+      if (#data % bytesPerSample) == 1
         leftover = data\sub #data
         data = data\sub 1, #data - 1
-      bytes_read += #data
-      if total_bytes and total_bytes > 0
-        progress_set 20 + 70 * math.min(1, bytes_read / total_bytes)
+      bytesRead += #data
+      if totalBytes and totalBytes > 0
+        progressSet 20 + 70 * math.min(1, bytesRead / totalBytes)
 
       pos = 1
       limit = #data
       while pos < limit
         lo = data\byte(pos)
         hi = data\byte(pos + 1)
-        sample = lo + hi * 256
-        sample -= 65536 if sample >= 32768
-        current_min = sample if sample < current_min
-        current_max = sample if sample > current_max
-        samples_in_point += 1
-        total_samples += 1
-        if samples_in_point >= SAMPLES_PER_POINT
-          pyramid\emit_pair 1, current_min, current_max
-          current_min, current_max = 32767, -32768
-          samples_in_point = 0
-        pos += 2
+        sample = lo + hi * byteBase
+        sample -= sampleModulus if sample >= sampleMidpoint
+        currentMin = sample if sample < currentMin
+        currentMax = sample if sample > currentMax
+        samplesInPoint += 1
+        totalSamples += 1
+        if samplesInPoint >= samplesPerPoint
+          pyramid\emitPair 1, currentMin, currentMax
+          currentMin, currentMax = amplitudeMax, amplitudeMin
+          samplesInPoint = 0
+        pos += bytesPerSample
 
     error "Decoded PCM ended with an incomplete sample." if leftover != ""
-    if samples_in_point > 0
-      pyramid\emit_pair 1, current_min, current_max
+    error "Decoded PCM size changed while reading." if totalBytes and bytesRead != totalBytes
+    error "Decoded PCM contains no samples." if totalSamples == 0
+    if samplesInPoint > 0
+      pyramid\emitPair 1, currentMin, currentMax
     pyramid\flush!
 
-    duration_ms = round_int(total_samples * 1000 / SAMPLE_RATE)
-    { :pyramid, :duration_ms, :total_samples }, nil
+    durationMs = totalSamples * 1000 / sampleRate
+    { :pyramid, :durationMs, :totalSamples }, nil
 
   pcall -> input\close!
   unless ok
@@ -333,174 +329,174 @@ process_pcm = (pcm_path, temp_prefix, total_bytes = nil) ->
     return nil, failure
   result, nil
 
-copy_level_peaks = (out, level) ->
+copyLevelPeaks = (out, level) ->
   file = io.open level.path, "rb"
   return false, "Could not read temporary level file." unless file
-  first = true
-  failure = nil
-  while true
-    line = file\read "*l"
-    break unless line
-    unless first
-      written, failure = out\write ","
-      break unless written
-    first = false
-    written, failure = out\write line
-    break unless written
+  ok, failure = pcall ->
+    first, count = true, 0
+    buffer, bytes = {}, 0
+    flush = ->
+      return if #buffer == 0
+      LineOps.checkCancelled!
+      writeChecked out, (if first then "" else ","), table.concat(buffer, ",")
+      first, buffer, bytes = false, {}, 0
+    while true
+      line, readError = file\read "*l"
+      error readError if readError
+      break unless line
+      buffer[#buffer + 1] = line
+      bytes += #line + 1
+      count += 1
+      flush! if bytes >= readBytes
+    error "Temporary waveform level is incomplete." unless count == level.points
+    flush!
   file\close!
-  return false, failure or "Could not write waveform peaks." if failure
-  true, nil
+  return false, tostring(failure) unless ok
+  true
 
-write_json = (output_path, result) ->
-  PyBridge.withAtomicFile output_path, (out) ->
+writeJson = (outputPath, result) ->
+  PyBridge.withAtomicFile outputPath, (out) ->
     pyramid = result.pyramid
-    write_checked out, "{\n"
-    write_checked out, '  "type": "waveform",\n'
-    write_checked out, '  "version": 1,\n'
-    write_checked out, '  "sampleRate": ', tostring(SAMPLE_RATE), ",\n"
-    write_checked out, '  "channels": ', tostring(CHANNELS), ",\n"
-    write_checked out, '  "bits": ', tostring(BITS), ",\n"
-    write_checked out, '  "amplitudeFormat": "s16",\n'
-    write_checked out, '  "amplitudeMin": -32768,\n'
-    write_checked out, '  "amplitudeMax": 32767,\n'
-    write_checked out, '  "pointLayout": "interleavedMinMax",\n'
+    writeChecked out, "{\n"
+    writeChecked out, '  "type": "waveform",\n'
+    writeChecked out, '  "version": 1,\n'
+    writeChecked out, '  "sampleRate": ', tostring(sampleRate), ",\n"
+    writeChecked out, '  "channels": ', tostring(channels), ",\n"
+    writeChecked out, '  "bits": ', tostring(bits), ",\n"
+    writeChecked out, '  "amplitudeFormat": "s16",\n'
+    writeChecked out, '  "amplitudeMin": ', tostring(amplitudeMin), ',\n'
+    writeChecked out, '  "amplitudeMax": ', tostring(amplitudeMax), ',\n'
+    writeChecked out, '  "pointLayout": "interleavedMinMax",\n'
     if result.range
-      write_checked out, '  "sourceStartMs": ', tostring(result.range.start_ms), ",\n"
-      write_checked out, '  "sourceEndMs": ', tostring(result.range.end_ms), ",\n"
-      write_checked out, '  "sourceDurationMs": ', tostring(result.range.duration_ms), ",\n"
-      write_checked out, '  "sourceLineCount": ', tostring(result.range.line_count), ",\n"
-    write_checked out, '  "durationMs": ', tostring(result.duration_ms), ",\n"
-    write_checked out, '  "totalSamples": ', tostring(result.total_samples), ",\n"
-    write_checked out, '  "levels": [\n'
+      writeChecked out, '  "sourceStartMs": ', tostring(result.range.startMs), ",\n"
+      writeChecked out, '  "sourceEndMs": ', tostring(result.range.endMs), ",\n"
+      writeChecked out, '  "sourceDurationMs": ', tostring(result.range.durationMs), ",\n"
+      writeChecked out, '  "sourceLineCount": ', tostring(result.range.lineCount), ",\n"
+    writeChecked out, '  "durationMs": ', Core.formatNumber(result.durationMs, 6), ",\n"
+    writeChecked out, '  "totalSamples": ', tostring(result.totalSamples), ",\n"
+    writeChecked out, '  "levels": [\n'
     for i, level in ipairs pyramid.levels
-      write_checked out, ",\n" if i > 1
-      write_checked out, "    {\n"
-      write_checked out, '      "scale": ', tostring(level.scale), ",\n"
-      write_checked out, '      "pointMs": ', tostring(level.point_ms), ",\n"
-      write_checked out, '      "samplesPerPoint": ', tostring(level.samples_per_point), ",\n"
-      write_checked out, '      "points": ', tostring(level.points), ",\n"
-      write_checked out, '      "peaks": ['
-      copied, copy_error = copy_level_peaks out, level
-      error copy_error unless copied
-      write_checked out, "]\n"
-      write_checked out, "    }"
-    write_checked out, "\n  ]\n"
-    write_checked out, "}\n"
+      writeChecked out, ",\n" if i > 1
+      writeChecked out, "    {\n"
+      writeChecked out, '      "scale": ', tostring(level.scale), ",\n"
+      writeChecked out, '      "pointMs": ', tostring(level.pointMs), ",\n"
+      writeChecked out, '      "samplesPerPoint": ', tostring(level.samplesPerPoint), ",\n"
+      writeChecked out, '      "points": ', tostring(level.points), ",\n"
+      writeChecked out, '      "peaks": ['
+      copied, copyError = copyLevelPeaks out, level
+      error copyError unless copied
+      writeChecked out, "]\n"
+      writeChecked out, "    }"
+    writeChecked out, "\n  ]\n"
+    writeChecked out, "}\n"
 
-file_size = (path) ->
-  file = io.open path, "rb"
-  return 0 unless file
-  size = file\seek "end"
-  file\close!
-  tonumber(size) or 0
-
-export_waveform = (cfg) ->
+exportWaveform = (cfg) ->
   return false, "Choose an audio or video file." if trim(cfg.media) == ""
-  return false, "Media file does not exist:\n#{cfg.media}" unless file_exists cfg.media
+  return false, "Media file does not exist:\n#{cfg.media}" unless fileExists cfg.media
   return false, "Choose a JSON output path." if trim(cfg.output) == ""
-  root = output_root cfg.output, cfg.media
+  root = outputRoot cfg.output, cfg.media
   return false, "Could not resolve an output folder." if trim(root) == ""
-  cfg.output = join_path root, cfg.output if dir_name(cfg.output) == ""
-  made, make_error = PyBridge.ensureDir root
-  return false, "Could not create output folder: #{make_error or root}" unless made
-  paths, path_error = PyBridge.tempPaths "wave2json", {pcm: ".s16le", log: ".ffmpeg.log", prefix: ""}
-  return false, path_error or "Could not create temporary paths." unless paths
+  cfg.output = joinPath root, cfg.output if dirName(cfg.output) == ""
+  made, makeError = PyBridge.ensureDir root
+  return false, "Could not create output folder: #{makeError or root}" unless made
+  paths, pathError = PyBridge.tempPaths "wave2json", {pcm: ".s16le", prefix: ""}
+  return false, pathError or "Could not create temporary paths." unless paths
   pyramid = nil
-  pcall_ok, success, message = pcall ->
-    progress_title script_name
-    progress_task "Decoding audio with FFmpeg"
-    progress_set 5
-    ok_ffmpeg = run_ffmpeg cfg, paths.pcm, paths.log
-    unless ok_ffmpeg
-      detail = PyBridge.readFile(paths.log, 65536) or ""
-      return false, "FFmpeg could not decode the selected audio stream.\n#{detail}"
-    size = file_size paths.pcm
+  pcallOk, success, message = pcall ->
+    progressTitle script_name
+    progressTask "Decoding audio with FFmpeg"
+    progressSet 5
+    okFfmpeg, detail, code = runFfmpeg cfg, paths.pcm
+    return false, "Cancelled." if code == 130
+    unless okFfmpeg
+      return false, "FFmpeg could not decode the selected audio stream.\n#{detail or ""}"
+    size = Media.fileSize(paths.pcm) or 0
     return false, "FFmpeg produced an empty PCM file." if size <= 0
-    progress_set 20
-    result, err = process_pcm paths.pcm, paths.prefix, size
+    progressSet 20
+    result, err = processPcm paths.pcm, paths.prefix, size
     return false, err if err
     pyramid = result.pyramid
     result.range = cfg.range
-    progress_task "Writing JSON"
-    progress_set 95
-    ok_json, json_err = write_json cfg.output, result
-    return false, json_err unless ok_json
-    progress_set 100
-    range_text = if cfg.range then "\nRange: #{cfg.range.start_ms} ms - #{cfg.range.end_ms} ms" else ""
-    true, "Waveform JSON written:\n#{cfg.output}#{range_text}\n\nDuration: #{result.duration_ms} ms\nLevels: #{#result.pyramid.levels}"
+    progressTask "Writing JSON"
+    progressSet 95
+    okJson, jsonErr = writeJson cfg.output, result
+    return false, jsonErr unless okJson
+    progressSet 100
+    rangeText = if cfg.range then "\nRange: #{cfg.range.startMs} ms - #{cfg.range.endMs} ms" else ""
+    true, "Waveform JSON written:\n#{cfg.output}#{rangeText}\n\nDuration: #{result.durationMs} ms\nLevels: #{#result.pyramid.levels}"
   PyBridge.cleanup paths
   pyramid\cleanup! if pyramid
-  if pcall_ok then success, message else false, tostring success
+  if pcallOk then success, message else false, tostring success
 
-export_line_ranges = (cfg, ranges) ->
+exportLineRanges = (cfg, ranges) ->
   return false, "Select at least one subtitle line with valid timing." unless ranges and #ranges > 0
-  first_output, last_output = nil, nil
+  firstOutput, lastOutput = nil, nil
   for i, range in ipairs ranges
-    output = line_output_path cfg.output, cfg.media, range, i
-    line_cfg = {
+    output = lineOutputPath cfg.output, cfg.media, range, i
+    lineCfg = {
       media: cfg.media
       output: output
       ffmpeg: cfg.ffmpeg
       stream: cfg.stream
       range: range
     }
-    ok, message = export_waveform line_cfg
+    ok, message = exportWaveform lineCfg
     unless ok
-      return false, "Line #{range.line_index or i} failed:\n#{message}"
-    first_output = output unless first_output
-    last_output = output
-  folder = dir_name(first_output or cfg.output)
-  true, "Waveform JSON files written: #{#ranges}\nFolder: #{folder}\nFirst: #{first_output}\nLast: #{last_output}"
+      return false, "Line #{range.lineIndex or i} failed:\n#{message}"
+    firstOutput = output unless firstOutput
+    lastOutput = output
+  folder = dirName(firstOutput or cfg.output)
+  true, "Waveform JSON files written: #{#ranges}\nFolder: #{folder}\nFirst: #{firstOutput}\nLast: #{lastOutput}"
 
-read_base_config = ->
-  cfg, message = read_config!
+readBaseConfig = ->
+  cfg, message = readConfig!
   unless cfg
-    show_message message
+    showMessage message
     return nil
   cfg
 
-main_full = (subs, sel) ->
-  cfg = read_base_config!
+mainFull = ->
+  cfg = readBaseConfig!
   return unless cfg
-  ok, message = export_waveform cfg
-  show_message message
+  _, message = exportWaveform cfg
+  showMessage message
 
-main_selection = (subs, sel) ->
-  cfg = read_base_config!
+mainSelection = (subs, sel) ->
+  cfg = readBaseConfig!
   return unless cfg
-  range, range_error = selection_range subs, sel
+  range, rangeError = selectionRange subs, sel
   unless range
-    show_message range_error
+    showMessage rangeError
     return
   cfg.range = range
-  cfg.output = default_output_path cfg.media, range
-  ok, message = export_waveform cfg
-  show_message message
+  cfg.output = defaultOutputPath cfg.media, range
+  _, message = exportWaveform cfg
+  showMessage message
 
-main_each = (subs, sel) ->
-  cfg = read_base_config!
+mainEach = (subs, sel) ->
+  cfg = readBaseConfig!
   return unless cfg
-  ranges, range_error = selected_line_ranges subs, sel
+  ranges, rangeError = selectedLineRanges subs, sel
   unless ranges
-    show_message range_error
+    showMessage rangeError
     return
   first = ranges[1]
-  cfg.output = default_output_path cfg.media, first
-  ok, message = export_line_ranges cfg, ranges
-  show_message message
+  cfg.output = defaultOutputPath cfg.media, first
+  _, message = exportLineRanges cfg, ranges
+  showMessage message
 
-can_run_full = ->
-  media = media_candidate!
+canRunFull = ->
+  media = mediaCandidate!
   trim(media) != ""
 
-can_run_selection = (subs, sel) ->
-  ranges = selected_line_ranges subs, sel
-  ranges != nil and can_run_full!
+canRunSelection = (subs, sel) ->
+  ranges = selectedLineRanges subs, sel
+  ranges != nil and canRunFull!
 
 macros = {
-  {"Full audio", "Export the complete active audio waveform to JSON.", main_full, can_run_full}
-  {"Selected span", "Export one waveform covering the selected subtitle span.", main_selection, can_run_selection}
-  {"Each selected line", "Export one waveform JSON per selected subtitle line.", main_each, can_run_selection}
+  {"Full audio", "Export the complete active audio waveform to JSON.", mainFull, canRunFull}
+  {"Selected span", "Export one waveform covering the selected subtitle span.", mainSelection, canRunSelection}
+  {"Each selected line", "Export one waveform JSON per selected subtitle line.", mainEach, canRunSelection}
 }
 
 if aegisub and aegisub.register_macro
@@ -509,3 +505,5 @@ if aegisub and aegisub.register_macro
   else
     for macro in *macros
       aegisub.register_macro "#{script_name}/#{macro[1]}", macro[2], macro[3], macro[4]
+
+sharedUI.publishActions!

@@ -1,77 +1,79 @@
 export script_name = "Selesub"
 export script_description = "Filters, imports, exports, and manages subtitle events"
 export script_author = "Kiterow"
-export script_version = "2.1.3"
+export script_version = "2.1.8"
 export script_namespace = "kite.Selesub"
 
-HOTKEY_MENU_ROOT = ": Kite Hotkeys :"
-EMPTY_VALUE = "<empty>"
+HotkeyMenuRoot = ": Kite Hotkeys :"
+EmptyValue = "<empty>"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
   feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
   {
-    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.5.1", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
     {"aegisub.re"}
     {"aegisub.unicode"}
     {"myaa.ASSParser", version: "0.0.4", url: "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.7.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.PyBridge", version: "1.4.4", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.PyBridge", version: "1.7.1", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+      feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.Core", version: "1.1.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
   }
 }
-KiteUI, re, unicode, ASSParser, LineOps, PyBridge = depctrl\requireModules!
-unicode_lower = unicode.to_lower_case
+KiteUI, re, unicode, ASSParser, LineOps, PyBridge, Core = depctrl\requireModules!
+unicodeLower = unicode.to_lower_case
 
-visible_text = (value) -> LineOps.visibleText value
-
-ass_comments = (value) ->
+assComments = (value) ->
   comments = {}
   for section in *LineOps.scanSections(value)
     comments[#comments + 1] = section.text if section.type == "comment"
   table.concat comments, "\n"
 
-word_count = (value) ->
+wordCount = (value) ->
   count = 0
-  count += 1 for _ in visible_text(value)\gmatch "%S+"
+  count += 1 for _ in LineOps.visibleText(value)\gmatch "%S+"
   count
 
-character_count = (value) ->
-  text = visible_text(value)\gsub "[%s%.,%?!'\"—]", ""
-  unicode.len text
+characterCount = (value) ->
+  count = 0
+  for unit in *LineOps.graphemes(LineOps.visibleText(value), re)
+    count += 1 unless unit == "—" or unit\match "^[%s%.,%?!'\"]+$"
+  count
 
-blur_value = (value) ->
+blurValue = (value) ->
   number = LineOps.tagNumber value, "blur", 0, true
   number
 
-DIRECT_FIELDS = {
+DirectFields = {
   {label: "Effect", key: "effect", kind: "string"}
   {label: "Actor", key: "actor", kind: "string"}
   {label: "Layer", key: "layer", kind: "number"}
   {label: "Style", key: "style", kind: "string"}
 }
 
-MANAGER_FIELDS = {
+ManagerFields = {
   {label: "Style", key: "style", kind: "string"}
   {label: "Actor", key: "actor", kind: "string"}
   {label: "Effect", key: "effect", kind: "string"}
   {label: "Layer", key: "layer", kind: "number"}
 }
 
-MANAGER_BY_LABEL = {}
-MANAGER_LABELS = {}
-for field in *MANAGER_FIELDS
-  MANAGER_BY_LABEL[field.label] = field
-  MANAGER_LABELS[#MANAGER_LABELS + 1] = field.label
+ManagerByLabel = {}
+ManagerLabels = {}
+for field in *ManagerFields
+  ManagerByLabel[field.label] = field
+  ManagerLabels[#ManagerLabels + 1] = field.label
 
-SEARCH_FIELDS = {
+SearchFields = {
   {label: "None", kind: "none"}
   {label: "Text", kind: "text", value: (line) -> tostring(line.text or "")}
-  {label: "Visible Text", kind: "text", value: (line) -> visible_text line.text}
-  {label: "ASS Comments", kind: "text", value: (line) -> ass_comments line.text}
+  {label: "Visible Text", kind: "text", value: (line) -> LineOps.visibleText line.text}
+  {label: "ASS Comments", kind: "text", value: (line) -> assComments line.text}
   {label: "Style", kind: "text", value: (line) -> tostring(line.style or "")}
   {label: "Actor", kind: "text", value: (line) -> tostring(line.actor or "")}
   {label: "Effect", kind: "text", value: (line) -> tostring(line.effect or "")}
@@ -83,132 +85,128 @@ SEARCH_FIELDS = {
   {label: "Layer", kind: "number", value: (line) -> tonumber(line.layer) or 0}
   {label: "Duration", kind: "number", value: (line) ->
     (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0)}
-  {label: "Word Count", kind: "number", value: (line) -> word_count line.text}
-  {label: "Character Count", kind: "number", value: (line) -> character_count line.text}
+  {label: "Word Count", kind: "number", value: (line) -> wordCount line.text}
+  {label: "Character Count", kind: "number", value: (line) -> characterCount line.text}
   {label: "CPS", kind: "number", value: (line) ->
     duration = (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0)
-    if duration <= 0 then 0 else math.ceil(character_count(line.text) * 1000 / duration)}
-  {label: "Blur", kind: "number", value: (line) -> blur_value line.text}
+    if duration <= 0 then 0 else math.ceil(characterCount(line.text) * 1000 / duration)}
+  {label: "Blur", kind: "number", value: (line) -> blurValue line.text}
   {label: "Margin L", kind: "number", value: (line) -> tonumber(line.margin_l) or 0}
   {label: "Margin R", kind: "number", value: (line) -> tonumber(line.margin_r) or 0}
   {label: "Margin V", kind: "number", value: (line) -> tonumber(line.margin_t or line.margin_v) or 0}
   {label: "Start", kind: "time", value: (line) -> tonumber(line.start_time) or 0}
   {label: "End", kind: "time", value: (line) -> tonumber(line.end_time) or 0}
-  {label: "Event Number", kind: "number", value: (_line, context) -> context.event_no}
+  {label: "Event Number", kind: "number", value: (_line, context) -> context.eventNo}
 }
 
-SEARCH_BY_LABEL = {}
-SEARCH_LABELS = {}
-for field in *SEARCH_FIELDS
-  SEARCH_BY_LABEL[field.label] = field
-  SEARCH_LABELS[#SEARCH_LABELS + 1] = field.label
+SearchByLabel = {}
+SearchLabels = {}
+for field in *SearchFields
+  SearchByLabel[field.label] = field
+  SearchLabels[#SearchLabels + 1] = field.label
 
-TEXT_OPERATORS = {"Contains", "Exact", "Regex", "All Words", "Starts With"}
-NUMBER_OPERATORS = {"=", ">=", "<=", "Range", "Nonzero <=", "Even", "Odd"}
-ALL_OPERATORS = {}
-ALL_OPERATORS[#ALL_OPERATORS + 1] = item for item in *TEXT_OPERATORS
-ALL_OPERATORS[#ALL_OPERATORS + 1] = item for item in *NUMBER_OPERATORS
-SCOPES = {"All", "Selection"}
-ACTIONS = {"Select", "Comment", "Delete"}
-MANAGER_SCOPES = {"Selection", "All"}
+TextOperators = {"Contains", "Exact", "Regex", "All Words", "Starts With"}
+NumberOperators = {"=", ">=", "<=", "Range", "Nonzero <=", "Even", "Odd"}
+AllOperators = {}
+AllOperators[#AllOperators + 1] = item for item in *TextOperators
+AllOperators[#AllOperators + 1] = item for item in *NumberOperators
+Scopes = {"All", "Selection"}
+Actions = {"Select", "Comment", "Delete"}
+ManagerScopes = {"Selection", "All"}
 
-is_event = (line) ->
+isEvent = (line) ->
   type(line) == "table" and line.class == "dialogue"
 
-raw_field_value = (line, field) ->
+rawFieldValue = (line, field) ->
   return field.value line if field.value
   value = line[field.key]
-  value = line[field.alt_key] if value == nil and field.alt_key
+  value = line[field.altKey] if value == nil and field.altKey
   value
 
-canonical_key = (line, field) ->
-  value = raw_field_value line, field
+canonicalKey = (line, field) ->
+  value = rawFieldValue line, field
   switch field.kind
     when "number"
       "n:" .. tostring(tonumber(value) or 0)
     else
       "s:" .. tostring(value or "")
 
-display_value = (line, field) ->
-  value = raw_field_value line, field
+displayValue = (line, field) ->
+  value = rawFieldValue line, field
   switch field.kind
     when "number"
       tostring(tonumber(value) or 0)
     else
       text = tostring(value or "")
-      if text == "" then EMPTY_VALUE else text
+      if text == "" then EmptyValue else text
 
-field_entry_sorter = (field) ->
+fieldEntrySorter = (field) ->
   (a, b) ->
     if field.kind == "number"
-      return a.sort_value < b.sort_value if a.sort_value != b.sort_value
+      return a.sortValue < b.sortValue if a.sortValue != b.sortValue
     else
-      a_lower = unicode_lower a.label
-      b_lower = unicode_lower b.label
-      return a_lower < b_lower if a_lower != b_lower
+      aLower = unicodeLower a.label
+      bLower = unicodeLower b.label
+      return aLower < bLower if aLower != bLower
     return a.label < b.label if a.label != b.label
     a.key < b.key
 
-collect_field_options = (subs, field) ->
+collectFieldOptions = (subs, field) ->
   entries = {}
   seen = {}
   for index = 1, #subs
+    LineOps.checkCancelled!
     line = subs[index]
-    if is_event line
-      key = canonical_key line, field
+    if isEvent line
+      key = canonicalKey line, field
       unless seen[key]
         seen[key] = true
-        value = raw_field_value line, field
+        value = rawFieldValue line, field
         entries[#entries + 1] = {
           :key
-          label: display_value line, field
-          sort_value: if field.kind == "number" then tonumber(value) or 0 else 0
+          label: displayValue line, field
+          sortValue: if field.kind == "number" then tonumber(value) or 0 else 0
         }
-  table.sort entries, field_entry_sorter field
+  table.sort entries, fieldEntrySorter field
 
   items = {""}
-  key_by_label = {}
-  label_by_key = {}
-  used_labels = {[""]: true}
+  keyByLabel = {}
+  labelByKey = {}
+  usedLabels = {[""]: true}
   for entry in *entries
     base = entry.label
     label = base
     suffix = 2
-    while used_labels[label]
+    while usedLabels[label]
       label = "#{base} [#{suffix}]"
       suffix += 1
-    used_labels[label] = true
-    key_by_label[label] = entry.key
-    label_by_key[entry.key] = label
+    usedLabels[label] = true
+    keyByLabel[label] = entry.key
+    labelByKey[entry.key] = label
     items[#items + 1] = label
-  {:items, :key_by_label, :label_by_key}
+  {:items, :keyByLabel, :labelByKey}
 
-collect_options = (subs) ->
+collectOptions = (subs) ->
   options = {}
-  options[field.key] = collect_field_options(subs, field) for field in *DIRECT_FIELDS
+  options[field.key] = collectFieldOptions(subs, field) for field in *DirectFields
   options
 
 contains = (items, value) ->
   return true for item in *items when item == value
   false
 
-trim = (value) ->
-  text = tostring(value or "")
-  text = text\gsub "^%s+", ""
-  return (text\gsub "%s+$", "")
-
-blank_values = ->
+blankValues = ->
   values = {}
-  values[field.key] = "" for field in *DIRECT_FIELDS
+  values[field.key] = "" for field in *DirectFields
   values
 
-default_state = ->
+defaultState = ->
   {
-    values: blank_values!
+    values: blankValues!
     scope: "All"
     action: "Select"
-    search_field: SEARCH_FIELDS[1].label
-    operator: TEXT_OPERATORS[1]
+    search_field: SearchFields[1].label
+    operator: TextOperators[1]
     query: ""
     exclude: ""
     negate: false
@@ -217,49 +215,49 @@ default_state = ->
     only_first: false
   }
 
-SELECTOR_SETTINGS = KiteUI.settings script_namespace, script_version, {
+SelectorSettings = KiteUI.settings script_namespace, script_version, {
   main: {
     scope: "All"
     action: "Select"
-    search_field: SEARCH_FIELDS[1].label
-    operator: TEXT_OPERATORS[1]
+    search_field: SearchFields[1].label
+    operator: TextOperators[1]
     negate: false
     case_sensitive: false
     include_comments: true
     only_first: false
   }
   manager: {
-    nature: MANAGER_FIELDS[1].label
-    scope: MANAGER_SCOPES[1]
-    action: ACTIONS[1]
+    nature: ManagerFields[1].label
+    scope: ManagerScopes[1]
+    action: Actions[1]
   }
 }, {}
-SELECTOR_SETTINGS\load!
+SelectorSettings\load!
 
-normalize_operator = (field, operator) ->
+normalizeOperator = (field, operator) ->
   if field.kind == "text"
-    if contains(TEXT_OPERATORS, operator) then operator else TEXT_OPERATORS[1]
+    if contains(TextOperators, operator) then operator else TextOperators[1]
   elseif field.kind == "number" or field.kind == "time"
-    if contains(NUMBER_OPERATORS, operator) then operator else NUMBER_OPERATORS[1]
+    if contains(NumberOperators, operator) then operator else NumberOperators[1]
   else
-    TEXT_OPERATORS[1]
+    TextOperators[1]
 
-normalize_state = (incoming) ->
+normalizeState = (incoming) ->
   source = incoming or {}
-  state = default_state!
-  state.values = blank_values!
-  for field in *DIRECT_FIELDS
-    saved_value = source.values and source.values[field.key] or ""
-    saved_value = saved_value[1] if type(saved_value) == "table"
-    state.values[field.key] = tostring(saved_value or "")
+  state = defaultState!
+  state.values = blankValues!
+  for field in *DirectFields
+    savedValue = source.values and source.values[field.key] or ""
+    savedValue = savedValue[1] if type(savedValue) == "table"
+    state.values[field.key] = tostring(savedValue or "")
   scope = source.scope
   action = source.action
-  search_label = source.search_field
-  state.scope = scope if contains SCOPES, scope
-  state.action = action if contains ACTIONS, action
-  state.search_field = search_label if SEARCH_BY_LABEL[search_label]
-  search_field = SEARCH_BY_LABEL[state.search_field]
-  state.operator = normalize_operator search_field, source.operator
+  searchLabel = source.search_field
+  state.scope = scope if contains Scopes, scope
+  state.action = action if contains Actions, action
+  state.search_field = searchLabel if SearchByLabel[searchLabel]
+  searchField = SearchByLabel[state.search_field]
+  state.operator = normalizeOperator searchField, source.operator
   state.query = tostring(source.query or "")
   state.exclude = tostring(source.exclude or "")
   state.negate = source.negate == true
@@ -268,9 +266,9 @@ normalize_state = (incoming) ->
   state.only_first = source.only_first == true
   state
 
-initial_state = ->
-  state = default_state!
-  saved = SELECTOR_SETTINGS\values "main"
+initialState = ->
+  state = defaultState!
+  saved = SelectorSettings\values "main"
   state.scope = saved.scope
   state.action = saved.action
   state.search_field = saved.search_field
@@ -279,51 +277,51 @@ initial_state = ->
   state.case_sensitive = saved.case_sensitive
   state.include_comments = saved.include_comments
   state.only_first = saved.only_first
-  normalize_state state
+  normalizeState state
 
-persist_main = (state) ->
-  SELECTOR_SETTINGS\update "main", state, {
+saveSettings = ->
+  ok, written, failure = pcall -> SelectorSettings\write!
+  KiteUI.message "Could not save preferences: #{if ok then failure or "write failed" else written}" if not ok or written == false
+
+persistMain = (state) ->
+  SelectorSettings\update "main", state, {
     "scope", "action", "search_field", "operator", "negate",
     "case_sensitive", "include_comments", "only_first"
   }
-  SELECTOR_SETTINGS\write!
+  saveSettings!
 
-manager_state = ->
-  saved = SELECTOR_SETTINGS\values "manager"
+managerState = ->
+  saved = SelectorSettings\values "manager"
   nature = saved.nature
   scope = saved.scope
   action = saved.action
   {
-    nature: if MANAGER_BY_LABEL[nature] then nature else MANAGER_FIELDS[1].label
-    scope: if contains(MANAGER_SCOPES, scope) then scope else MANAGER_SCOPES[1]
-    action: if contains(ACTIONS, action) then action else ACTIONS[1]
+    nature: if ManagerByLabel[nature] then nature else ManagerFields[1].label
+    scope: if contains(ManagerScopes, scope) then scope else ManagerScopes[1]
+    action: if contains(Actions, action) then action else Actions[1]
   }
 
-persist_manager = (state) ->
-  SELECTOR_SETTINGS\update "manager", state, {"nature", "scope", "action"}
-  SELECTOR_SETTINGS\write!
+persistManager = (state) ->
+  SelectorSettings\update "manager", state, {"nature", "scope", "action"}
+  saveSettings!
 
-show_message = (message) ->
-  text = tostring message
-  width = math.max 20, math.min 48, #text + 2
-  aegisub.dialog.display {
-    {class: "label", label: text, x: 0, y: 0, width: width, height: 2}
-  }, {"OK"}, close: "OK"
+showMessage = (message) ->
+  KiteUI.message message
 
-build_dialog = (state, options) ->
+buildDialog = (state, options) ->
   gui = {}
   gui[#gui + 1] = {class: "label", label: "Scope", x: 0, y: 0, width: 5, height: 1}
   gui[#gui + 1] = {class: "label", label: "Action", x: 5, y: 0, width: 5, height: 1}
-  gui[#gui + 1] = {class: "dropdown", name: "scope", items: SCOPES, value: state.scope, x: 0, y: 1, width: 5}
-  gui[#gui + 1] = {class: "dropdown", name: "action", items: ACTIONS, value: state.action, x: 5, y: 1, width: 5}
+  gui[#gui + 1] = {class: "dropdown", name: "scope", items: Scopes, value: state.scope, x: 0, y: 1, width: 5}
+  gui[#gui + 1] = {class: "dropdown", name: "action", items: Actions, value: state.action, x: 5, y: 1, width: 5}
 
   gui[#gui + 1] = {class: "label", label: "Exact", x: 0, y: 2, width: 20, height: 1}
   columns = {0, 5, 10, 15}
-  for position, field in ipairs DIRECT_FIELDS
+  for position, field in ipairs DirectFields
     x = columns[position]
     gui[#gui + 1] = {class: "label", label: field.label, :x, y: 3, width: 5, height: 1}
-    selected_key = state.values[field.key]
-    value = options[field.key].label_by_key[selected_key] or ""
+    selectedKey = state.values[field.key]
+    value = options[field.key].labelByKey[selectedKey] or ""
     gui[#gui + 1] = {
       class: "dropdown"
       name: field.key
@@ -336,30 +334,30 @@ build_dialog = (state, options) ->
     }
 
   gui[#gui + 1] = {class: "label", label: "Advanced", x: 0, y: 5, width: 20, height: 1}
-  advanced_labels = {
+  advancedLabels = {
     {"Field", 0, 5}
     {"Match", 5, 5}
     {"Find", 10, 5}
     {"Exclude", 15, 5}
   }
-  for entry in *advanced_labels
+  for entry in *advancedLabels
     label, x, width = entry[1], entry[2], entry[3]
     gui[#gui + 1] = {class: "label", :label, :x, y: 6, :width, height: 1}
-  gui[#gui + 1] = {class: "dropdown", name: "search_field", items: SEARCH_LABELS, value: state.search_field, x: 0, y: 7, width: 5}
-  gui[#gui + 1] = {class: "dropdown", name: "operator", items: ALL_OPERATORS, value: state.operator, x: 5, y: 7, width: 5}
+  gui[#gui + 1] = {class: "dropdown", name: "search_field", items: SearchLabels, value: state.search_field, x: 0, y: 7, width: 5}
+  gui[#gui + 1] = {class: "dropdown", name: "operator", items: AllOperators, value: state.operator, x: 5, y: 7, width: 5}
   gui[#gui + 1] = {class: "edit", name: "query", value: state.query, x: 10, y: 7, width: 5}
   gui[#gui + 1] = {class: "edit", name: "exclude", value: state.exclude, x: 15, y: 7, width: 5}
-  gui[#gui + 1] = {class: "checkbox", name: "negate", label: "Invert", value: state.negate, x: 0, y: 8, width: 5}
-  gui[#gui + 1] = {class: "checkbox", name: "case_sensitive", label: "Case", value: state.case_sensitive, x: 5, y: 8, width: 5}
-  gui[#gui + 1] = {class: "checkbox", name: "include_comments", label: "Comments", value: state.include_comments, x: 10, y: 8, width: 5}
-  gui[#gui + 1] = {class: "checkbox", name: "only_first", label: "First", value: state.only_first, x: 15, y: 8, width: 5}
+  gui[#gui + 1] = {class: "checkbox", name: "negate", label: "Invert advanced", value: state.negate, x: 0, y: 8, width: 5}
+  gui[#gui + 1] = {class: "checkbox", name: "case_sensitive", label: "Match case", value: state.case_sensitive, x: 5, y: 8, width: 5}
+  gui[#gui + 1] = {class: "checkbox", name: "include_comments", label: "Include comments", value: state.include_comments, x: 10, y: 8, width: 5}
+  gui[#gui + 1] = {class: "checkbox", name: "only_first", label: "First match", value: state.only_first, x: 15, y: 8, width: 5}
   gui
 
-read_state = (result, previous, options) ->
-  state = normalize_state previous
-  for field in *DIRECT_FIELDS
+readState = (result, previous, options) ->
+  state = normalizeState previous
+  for field in *DirectFields
     label = result[field.key] or ""
-    state.values[field.key] = options[field.key].key_by_label[label] or ""
+    state.values[field.key] = options[field.key].keyByLabel[label] or ""
   state.scope = result.scope
   state.action = result.action
   state.search_field = result.search_field
@@ -370,28 +368,29 @@ read_state = (result, previous, options) ->
   state.case_sensitive = result.case_sensitive == true
   state.include_comments = result.include_comments == true
   state.only_first = result.only_first == true
-  normalize_state state
+  normalizeState state
 
-selected_criteria = (state) ->
+selectedCriteria = (state) ->
   criteria = {}
-  active_fields = 0
-  for field in *DIRECT_FIELDS
+  activeFields = 0
+  for field in *DirectFields
     key = state.values[field.key]
     if key and key != ""
       criteria[field.key] = {[key]: true}
-      active_fields += 1
-  criteria, active_fields
+      activeFields += 1
+  criteria, activeFields
 
-parse_time = (value) ->
-  text = trim value
+parseTime = (value) ->
+  text = LineOps.trim value
   return tonumber(text) if text\match "^%d+$"
 
   hours, minutes, seconds, fraction = text\match "^(%d+):(%d%d):(%d%d)%.(%d+)$"
+  hasHours = hours != nil
   unless hours
     minutes, seconds, fraction = text\match "^(%d+):(%d%d)%.(%d+)$"
     hours = "0" if minutes
   if hours
-    return nil if tonumber(minutes) >= 60 or tonumber(seconds) >= 60
+    return nil if (hasHours and tonumber(minutes) >= 60) or tonumber(seconds) >= 60
     milliseconds = tonumber(("0." .. fraction)) * 1000
     return ((tonumber(hours) * 60 + tonumber(minutes)) * 60 + tonumber(seconds)) * 1000 + milliseconds
 
@@ -407,40 +406,37 @@ parse_time = (value) ->
   return tonumber(seconds) * 1000 if seconds
   nil
 
-finite_number = (value) ->
-  number = tonumber value
-  return nil unless number and number == number and number != math.huge and number != -math.huge
-  number
+finiteNumber = Core.finiteNumber
 
-parse_number = (value, kind) ->
-  raw = if kind == "time" then parse_time(value) else trim(value)
-  finite_number raw
+parseNumber = (value, kind) ->
+  raw = if kind == "time" then parseTime(value) else LineOps.trim(value)
+  finiteNumber raw
 
-parse_range = (value, kind) ->
+parseRange = (value, kind) ->
   text = tostring(value or "")
   for position = 1, #text
     if text\sub(position, position) == "-"
-      low = parse_number text\sub(1, position - 1), kind
-      high = parse_number text\sub(position + 1), kind
+      low = parseNumber text\sub(1, position - 1), kind
+      high = parseNumber text\sub(position + 1), kind
       return low, high if low != nil and high != nil
   nil, nil
 
-compile_number_matcher = (field, state) ->
-  operator = normalize_operator field, state.operator
+compileNumberMatcher = (field, state) ->
+  operator = normalizeOperator field, state.operator
   if operator == "Even"
     return ((value) -> value % 2 == 0), nil
   if operator == "Odd"
-    return ((value) -> value % 2 != 0), nil
+    return ((value) -> value % 2 == 1), nil
 
-  if trim(state.query) == ""
+  if LineOps.trim(state.query) == ""
     return nil, "Enter an advanced value."
   if operator == "Range"
-    low, high = parse_range state.query, field.kind
+    low, high = parseRange state.query, field.kind
     return nil, "Use a valid range, such as 3-8." unless low != nil and high != nil
     low, high = high, low if low > high
     return ((value) -> value >= low and value <= high), nil
 
-  target = parse_number state.query, field.kind
+  target = parseNumber state.query, field.kind
   return nil, "Invalid number or time." unless target
   matcher = switch operator
     when ">=" then (value) -> value >= target
@@ -449,15 +445,15 @@ compile_number_matcher = (field, state) ->
     else (value) -> value == target
   matcher, nil
 
-plain_contains = (haystack, needle, case_sensitive) ->
-  unless case_sensitive
-    haystack = unicode_lower haystack
-    needle = unicode_lower needle
+plainContains = (haystack, needle, caseSensitive) ->
+  unless caseSensitive
+    haystack = unicodeLower haystack
+    needle = unicodeLower needle
   haystack\find(needle, 1, true) != nil
 
-compile_text_matcher = (operator, query, case_sensitive) ->
+compileTextMatcher = (operator, query, caseSensitive) ->
   if operator == "Regex"
-    flags = if case_sensitive then nil else re.ICASE
+    flags = if caseSensitive then nil else re.ICASE
     ok, regex = if flags
       pcall -> re.compile query, flags
     else
@@ -469,80 +465,84 @@ compile_text_matcher = (operator, query, case_sensitive) ->
     words = [word for word in query\gmatch "%S+"]
     return ((value) ->
       for word in *words
-        return false unless plain_contains value, word, case_sensitive
+        return false unless plainContains value, word, caseSensitive
       true), nil
 
   if operator == "Exact"
     return ((value) ->
-      if case_sensitive then value == query else unicode_lower(value) == unicode_lower(query)), nil
+      if caseSensitive then value == query else unicodeLower(value) == unicodeLower(query)), nil
 
   if operator == "Starts With"
     return ((value) ->
-      if case_sensitive
+      if caseSensitive
         value\sub(1, #query) == query
       else
-        unicode_lower(value)\sub(1, #unicode_lower(query)) == unicode_lower(query)), nil
+        unicodeLower(value)\sub(1, #unicodeLower(query)) == unicodeLower(query)), nil
 
-  ((value) -> plain_contains value, query, case_sensitive), nil
+  ((value) -> plainContains value, query, caseSensitive), nil
 
-compile_search = (state) ->
-  field = SEARCH_BY_LABEL[state.search_field]
+compileSearch = (state) ->
+  field = SearchByLabel[state.search_field]
   return nil, nil if not field or field.kind == "none"
-  operator = normalize_operator field, state.operator
+  operator = normalizeOperator field, state.operator
 
   if field.kind == "text"
-    return nil, "Enter advanced text." if trim(state.query) == ""
-    include_matcher, err = compile_text_matcher operator, state.query, state.case_sensitive
+    return nil, "Enter advanced text." if LineOps.trim(state.query) == ""
+    includeMatcher, err = compileTextMatcher operator, state.query, state.case_sensitive
     return nil, err if err
-    exclude_matcher = nil
+    excludeMatcher = nil
     if state.exclude != ""
       if operator == "Regex"
-        exclude_matcher, err = compile_text_matcher operator, state.exclude, state.case_sensitive
+        excludeMatcher, err = compileTextMatcher operator, state.exclude, state.case_sensitive
       else
-        exclude_matcher = (value) -> plain_contains value, state.exclude, state.case_sensitive
+        excludeMatcher = (value) -> plainContains value, state.exclude, state.case_sensitive
       return nil, err if err
     matcher = (line, context) ->
       value = tostring(field.value(line, context) or "")
-      matched = include_matcher(value) and (not exclude_matcher or not exclude_matcher(value))
+      matched = includeMatcher(value) and (not excludeMatcher or not excludeMatcher(value))
       if state.negate then not matched else matched
     return matcher, nil
 
-  number_matcher, err = compile_number_matcher field, state
+  numberMatcher, err = compileNumberMatcher field, state
   return nil, err if err
   matcher = (line, context) ->
-    matched = number_matcher(tonumber(field.value(line, context)) or 0)
+    value = finiteNumber field.value(line, context)
+    return false unless value
+    matched = numberMatcher value
     if state.negate then not matched else matched
   matcher, nil
 
-line_matches = (line, criteria, state, search_matcher, context) ->
+lineMatches = (line, criteria, state, searchMatcher, context) ->
   return false if not state.include_comments and line.comment
-  for field in *DIRECT_FIELDS
+  for field in *DirectFields
     selected = criteria[field.key]
-    return false if selected and not selected[canonical_key(line, field)]
-  return false if search_matcher and not search_matcher(line, context)
+    return false if selected and not selected[canonicalKey(line, field)]
+  return false if searchMatcher and not searchMatcher(line, context)
   true
 
-matching_indexes = (subs, state, criteria, search_matcher, selection) ->
+matchingIndexes = (subs, state, criteria, searchMatcher, selection) ->
   allowed = nil
   if state.scope == "Selection"
     allowed = {}
-    allowed[index] = true for index in *(selection or {})
+    allowed[index] = true for index in *LineOps.normalizeIndices(subs, selection, isEvent)
 
   indexes = {}
-  event_no = 0
+  eventNo = 0
   for index = 1, #subs
+    LineOps.checkCancelled!
     line = subs[index]
-    if is_event line
-      event_no += 1
-      if (not allowed or allowed[index]) and line_matches(line, criteria, state, search_matcher, {:index, :event_no})
+    if isEvent line
+      eventNo += 1
+      if (not allowed or allowed[index]) and lineMatches(line, criteria, state, searchMatcher, {:index, :eventNo})
         indexes[#indexes + 1] = index
         break if state.only_first
   indexes
 
-apply_comment = (subs, indexes, undo_name) ->
+applyComment = (subs, indexes, undoName) ->
   changes = {}
   changed = 0
   for index in *indexes
+    LineOps.checkCancelled!
     line = subs[index]
     unless line.comment
       candidate = LineOps.copy line
@@ -550,120 +550,123 @@ apply_comment = (subs, indexes, undo_name) ->
       changes[#changes + 1] = {index: index, line: candidate}
       changed += 1
   if changed > 0
-    LineOps.transaction subs, undo_name, ->
-      subs[change.index] = change.line for change in *changes
+    LineOps.transaction subs, undoName, ->
+      for change in *changes
+        LineOps.checkCancelled!
+        subs[change.index] = change.line
   changed
 
-apply_delete = (subs, indexes, undo_name) ->
-  return 0 if #indexes == 0
-  LineOps.transaction subs, undo_name, ->
-    for position = #indexes, 1, -1
-      subs.delete indexes[position]
-  #indexes
+applyDelete = (subs, indexes, undoName) ->
+  normalized = LineOps.normalizeIndices subs, indexes
+  return 0 if #normalized == 0
+  LineOps.transaction subs, undoName, ->
+    LineOps.deleteIndices subs, normalized
+  #normalized
 
-manager_indexes = (subs, selection, scope) ->
+managerIndexes = (subs, selection, scope) ->
   allowed = nil
   if scope == "Selection"
     allowed = {}
-    allowed[index] = true for index in *(selection or {})
-  [index for index = 1, #subs when is_event(subs[index]) and (not allowed or allowed[index])]
+    allowed[index] = true for index in *LineOps.normalizeIndices(subs, selection, isEvent)
+  [index for index = 1, #subs when isEvent(subs[index]) and (not allowed or allowed[index])]
 
-collect_manager_data = (subs, selection, state) ->
-  field = MANAGER_BY_LABEL[state.nature] or MANAGER_FIELDS[1]
-  groups_by_key = {}
-  source_indexes = manager_indexes subs, selection, state.scope
-  for index in *source_indexes
+collectManagerData = (subs, selection, state) ->
+  field = ManagerByLabel[state.nature] or ManagerFields[1]
+  groupsByKey = {}
+  sourceIndexes = managerIndexes subs, selection, state.scope
+  for index in *sourceIndexes
+    LineOps.checkCancelled!
     line = subs[index]
-    key = canonical_key line, field
-    group = groups_by_key[key]
+    key = canonicalKey line, field
+    group = groupsByKey[key]
     unless group
-      value = raw_field_value line, field
+      value = rawFieldValue line, field
       group = {
         :key
-        label: display_value line, field
-        sort_value: if field.kind == "number" then tonumber(value) or 0 else 0
+        label: displayValue line, field
+        sortValue: if field.kind == "number" then tonumber(value) or 0 else 0
         indexes: {}
         count: 0
       }
-      groups_by_key[key] = group
+      groupsByKey[key] = group
     group.indexes[#group.indexes + 1] = index
     group.count += 1
 
-  groups = [group for _, group in pairs groups_by_key]
-  table.sort groups, field_entry_sorter field
-  key_by_label = {}
-  used_labels = {}
-  keep_lines = {}
-  count_lines = {}
+  groups = [group for _, group in pairs groupsByKey]
+  table.sort groups, fieldEntrySorter field
+  keyByLabel = {}
+  usedLabels = {}
+  keepLines = {}
+  countLines = {}
   for group in *groups
     base = group.label
     label = base
     suffix = 2
-    while used_labels[label]
+    while usedLabels[label]
       label = "#{base} [#{suffix}]"
       suffix += 1
-    used_labels[label] = true
-    group.list_label = label
-    key_by_label[label] = group.key
-    keep_lines[#keep_lines + 1] = label
-    count_lines[#count_lines + 1] = tostring group.count
+    usedLabels[label] = true
+    group.listLabel = label
+    keyByLabel[label] = group.key
+    keepLines[#keepLines + 1] = label
+    countLines[#countLines + 1] = tostring group.count
   {
     :field
     :groups
-    :key_by_label
-    :source_indexes
-    keep_text: table.concat keep_lines, "\n"
-    count_text: table.concat count_lines, "\n"
+    :keyByLabel
+    :sourceIndexes
+    keepText: table.concat keepLines, "\n"
+    countText: table.concat countLines, "\n"
   }
 
-build_manager_dialog = (state, data, keep_text) ->
+buildManagerDialog = (state, data, keepText) ->
   {
     {class: "label", label: "Nature", x: 0, y: 0, width: 12, height: 1}
     {class: "label", label: "Scope", x: 12, y: 0, width: 12, height: 1}
     {class: "label", label: "Action", x: 24, y: 0, width: 12, height: 1}
-    {class: "dropdown", name: "nature", items: MANAGER_LABELS, value: state.nature, x: 0, y: 1, width: 12, height: 1}
-    {class: "dropdown", name: "scope", items: MANAGER_SCOPES, value: state.scope, x: 12, y: 1, width: 12, height: 1}
-    {class: "dropdown", name: "action", items: ACTIONS, value: state.action, x: 24, y: 1, width: 12, height: 1}
-    {class: "label", label: "Targets", x: 0, y: 2, width: 36, height: 1}
-    {class: "label", label: "Values", x: 0, y: 3, width: 30, height: 1}
+    {class: "dropdown", name: "nature", items: ManagerLabels, value: state.nature, x: 0, y: 1, width: 12, height: 1}
+    {class: "dropdown", name: "scope", items: ManagerScopes, value: state.scope, x: 12, y: 1, width: 12, height: 1}
+    {class: "dropdown", name: "action", items: Actions, value: state.action, x: 24, y: 1, width: 12, height: 1}
+    {class: "label", label: "Keep these values; the action affects omitted values. Refresh after changing Nature or Scope.", x: 0, y: 2, width: 36, height: 1}
+    {class: "label", label: "Values to keep", x: 0, y: 3, width: 30, height: 1}
     {class: "label", label: "Lines", x: 30, y: 3, width: 6, height: 1}
-    {class: "textbox", name: "keep", text: keep_text, x: 0, y: 4, width: 30, height: 12}
-    {class: "textbox", name: "counts", text: data.count_text, x: 30, y: 4, width: 6, height: 12}
+    {class: "textbox", name: "keep", text: keepText, x: 0, y: 4, width: 30, height: 12}
+    {class: "textbox", name: "counts", text: data.countText, x: 30, y: 4, width: 6, height: 12}
     {class: "label", label: "Values #{#data.groups}", x: 0, y: 16, width: 15, height: 1}
-    {class: "label", label: "Lines #{#data.source_indexes}", x: 15, y: 16, width: 15, height: 1}
+    {class: "label", label: "Lines #{#data.sourceIndexes}", x: 15, y: 16, width: 15, height: 1}
   }
 
-parse_manager_keep = (text, data) ->
+parseManagerKeep = (text, data) ->
   kept = {}
   unknown = {}
-  seen_unknown = {}
+  seenUnknown = {}
   for line in tostring(text or "")\gmatch "[^\r\n]+"
-    label = trim line
+    label = if data.keyByLabel[line] then line else LineOps.trim line
     if label != ""
-      key = data.key_by_label[label]
+      key = data.keyByLabel[label]
       if key
         kept[key] = true
-      elseif not seen_unknown[label]
-        seen_unknown[label] = true
+      elseif not seenUnknown[label]
+        seenUnknown[label] = true
         unknown[#unknown + 1] = label
   kept, unknown
 
-manager_targets = (data, kept) ->
+managerTargets = (data, kept) ->
   targets = {}
-  kept_count = 0
+  keptCount = 0
   for group in *data.groups
     if kept[group.key]
-      kept_count += group.count
+      keptCount += group.count
     else
       targets[#targets + 1] = index for index in *group.indexes
   table.sort targets
-  targets, kept_count
+  targets, keptCount
 
-confirm_manager_action = (action, kept_count, target_count) ->
-  warning = if kept_count == 0
-    "The list is empty: all #{target_count} scoped lines will be affected."
+confirmManagerAction = (action, keptCount, targetCount) ->
+  warning = if keptCount == 0
+    "The list is empty: all #{targetCount} scoped lines will be affected."
   else
-    "#{kept_count} lines will remain and #{target_count} will be affected."
+    "#{keptCount} lines will remain and #{targetCount} will be affected."
   pressed = aegisub.dialog.display {
     {
       class: "label"
@@ -673,94 +676,94 @@ confirm_manager_action = (action, kept_count, target_count) ->
   }, {action, "Cancel"}, close: "Cancel"
   pressed == action
 
-confirm_selection_delete = (target_count) ->
+confirmSelectionDelete = (targetCount) ->
   pressed = aegisub.dialog.display {
     {
       class: "label"
-      label: "#{target_count} selected lines will be deleted.\nUse Ctrl+Z to undo."
+      label: "#{targetCount} selected lines will be deleted.\nUse Ctrl+Z to undo."
       x: 0, y: 0, width: 36, height: 3
     }
   }, {"Delete", "Cancel"}, close: "Cancel"
   pressed == "Delete"
 
-selection_events = (subs, selection) ->
-  LineOps.normalizeIndices subs, selection, is_event
+selectionEvents = (subs, selection) ->
+  LineOps.normalizeIndices subs, selection, isEvent
 
-manage_values = (subs, selection, initial_action = nil) ->
-  state = manager_state!
-  state.action = initial_action if contains ACTIONS, initial_action
-  keep_text = nil
+manageValues = (subs, selection, initialAction = nil) ->
+  state = managerState!
+  state.action = initialAction if contains Actions, initialAction
+  keepText = nil
   buttons = {"Apply", "Current", "Refresh", "Close"}
 
   while true
-    data = collect_manager_data subs, selection, state
-    shown_keep = if keep_text == nil then data.keep_text else keep_text
-    button, result = aegisub.dialog.display build_manager_dialog(state, data, shown_keep), buttons, {
+    data = collectManagerData subs, selection, state
+    shownKeep = if keepText == nil then data.keepText else keepText
+    button, result = aegisub.dialog.display buildManagerDialog(state, data, shownKeep), buttons, {
       close: "Close"
     }
-    return selection, false unless button and button != "Close"
+    return selection, false unless button == "Apply" or button == "Current" or button == "Refresh"
 
-    next_state = {
-      nature: if MANAGER_BY_LABEL[result.nature] then result.nature else state.nature
-      scope: if contains(MANAGER_SCOPES, result.scope) then result.scope else state.scope
-      action: if contains(ACTIONS, result.action) then result.action else state.action
+    nextState = {
+      nature: if ManagerByLabel[result.nature] then result.nature else state.nature
+      scope: if contains(ManagerScopes, result.scope) then result.scope else state.scope
+      action: if contains(Actions, result.action) then result.action else state.action
     }
-    changed_source = next_state.nature != state.nature or next_state.scope != state.scope
-    state = next_state
-    persist_manager state
+    changedSource = nextState.nature != state.nature or nextState.scope != state.scope
+    state = nextState
+    persistManager state
 
     if button == "Current"
-      targets = selection_events subs, selection
+      targets = selectionEvents subs, selection
       if #targets == 0
-        show_message "The selection has no subtitle lines."
+        showMessage "The selection has no subtitle lines."
       elseif state.action == "Select"
         return targets, true
       elseif state.action == "Comment"
-        changed = apply_comment subs, targets, "#{script_name}: comment selection"
+        applyComment subs, targets, "#{script_name}: comment selection"
         return targets, true
-      elseif confirm_selection_delete #targets
-        apply_delete subs, targets, "#{script_name}: delete selection"
+      elseif confirmSelectionDelete #targets
+        applyDelete subs, targets, "#{script_name}: delete selection"
         return {}, true
       continue
 
-    if button == "Refresh" or changed_source
-      keep_text = nil
+    if button == "Refresh" or changedSource
+      keepText = nil
       continue
 
-    keep_text = result.keep or ""
-    kept, unknown = parse_manager_keep keep_text, data
+    keepText = result.keep or ""
+    kept, unknown = parseManagerKeep keepText, data
     if #unknown > 0
-      show_message "Unknown values found. Refresh or restore their names."
+      showMessage "Unknown values found. Refresh or restore their names."
       continue
 
-    targets, kept_count = manager_targets data, kept
+    targets, keptCount = managerTargets data, kept
     if #targets == 0
-      show_message "No values were removed."
+      showMessage "No values were removed."
       continue
 
     switch button
       when "Apply"
         if state.action == "Select"
           return targets, true
-        if state.action == "Comment" and confirm_manager_action "Comment", kept_count, #targets
-          changed = apply_comment subs, targets, "#{script_name}: comment values"
+        if state.action == "Comment" and confirmManagerAction "Comment", keptCount, #targets
+          applyComment subs, targets, "#{script_name}: comment values"
           return targets, true
-        if state.action == "Delete" and confirm_manager_action "Delete", kept_count, #targets
-          apply_delete subs, targets, "#{script_name}: delete values"
+        if state.action == "Delete" and confirmManagerAction "Delete", keptCount, #targets
+          applyDelete subs, targets, "#{script_name}: delete values"
           return {}, true
 
-execute_state = (subs, selection, state) ->
-  criteria, active_fields = selected_criteria state
-  search_matcher, err = compile_search state
+executeState = (subs, selection, state) ->
+  criteria, activeFields = selectedCriteria state
+  searchMatcher, err = compileSearch state
   return nil, err if err
-  if active_fields == 0 and not search_matcher
+  if activeFields == 0 and not searchMatcher
     return nil, "Choose a filter or advanced search."
 
-  matches = matching_indexes subs, state, criteria, search_matcher, selection
+  matches = matchingIndexes subs, state, criteria, searchMatcher, selection
   return nil, "No events matched." if #matches == 0
 
   if state.action == "Comment"
-    changed = apply_comment subs, matches, "#{script_name}: comment"
+    applyComment subs, matches, "#{script_name}: comment"
     return matches, nil
 
   if state.action == "Delete"
@@ -768,181 +771,187 @@ execute_state = (subs, selection, state) ->
       {class: "label", label: "#{#matches} lines will be deleted. Use Ctrl+Z to undo.", x: 0, y: 0, width: 36, height: 2}
     }, {"Delete", "Cancel"}, close: "Cancel"
     return selection, nil unless confirm == "Delete"
-    apply_delete subs, matches, "#{script_name}: delete"
+    applyDelete subs, matches, "#{script_name}: delete"
     return {}, nil
 
   matches, nil
 
-collect_ass_sections = (subs) ->
-  script_info = {}
+collectAssSections = (subs) ->
+  scriptInfo = {}
   garbage = {}
   styles = {}
   for index = 1, #subs
+    LineOps.checkCancelled!
     line = subs[index]
     if type(line) == "table"
       if line.class == "style"
-        styles[#styles + 1] = KiteUI.copy line
+        styles[#styles + 1] = LineOps.copy line
       elseif line.class == "info"
-        target = if line.section == "[Aegisub Project Garbage]" then garbage else script_info
-        target[#target + 1] = KiteUI.copy line
-  script_info, garbage, styles
+        target = if line.section == "[Aegisub Project Garbage]" then garbage else scriptInfo
+        target[#target + 1] = LineOps.copy line
+  scriptInfo, garbage, styles
 
-export_ass = (subs, selection) ->
-  indexes = selection_events subs, selection
+exportAss = (subs, selection) ->
+  indexes = selectionEvents subs, selection
   if #indexes == 0
-    show_message "Select subtitle lines first."
+    showMessage "Select subtitle lines first."
     return selection, false
 
   path = aegisub.dialog.save "Export ASS", "", "selection.ass", "ASS (*.ass)|*.ass", false
   return selection, false unless path and path != ""
-  path ..= ".ass" unless unicode_lower(path)\match "%.ass$"
+  path ..= ".ass" unless unicodeLower(path)\match "%.ass$"
 
-  script_info, garbage, styles = collect_ass_sections subs
-  events = [KiteUI.copy(subs[index]) for index in *indexes]
+  scriptInfo, garbage, styles = collectAssSections subs
+  events = [LineOps.copy(subs[index]) for index in *indexes]
   ok, failure = PyBridge.withAtomicFile path, (file) ->
-    ASSParser.generate_file script_info, garbage, styles, events, {}, (chunk) ->
-      written, write_error = file\write chunk
-      error write_error or "Could not write ASS output." unless written
+    ASSParser.generate_file scriptInfo, garbage, styles, events, {}, (chunk) ->
+      LineOps.checkCancelled!
+      written, writeError = file\write chunk
+      error writeError or "Could not write ASS output." unless written
   unless ok
-    show_message "Export failed: #{failure}"
+    showMessage "Export failed: #{failure}"
     return selection, false
-  show_message "Exported #{#events} lines."
+  showMessage "Exported #{#events} lines."
   selection, true
 
-import_ass = (subs, selection) ->
+importAss = (subs, selection) ->
   path = aegisub.dialog.open "Import ASS", "", "", "ASS (*.ass)|*.ass", false, true
   return selection, false unless path and path != ""
 
-  file, open_error = io.open path, "rb"
+  file, openError = io.open path, "rb"
   unless file
-    show_message "Import failed: #{open_error or "unknown error"}"
+    showMessage "Import failed: #{openError or "unknown error"}"
     return selection, false
   ok, parsed = pcall -> ASSParser.parse_file file
   file\close!
   unless ok and type(parsed) == "table" and type(parsed.events) == "table" and type(parsed.styles) == "table"
-    show_message "Import failed: #{parsed or "invalid ASS"}"
+    showMessage "Import failed: #{parsed or "invalid ASS"}"
     return selection, false
   if #parsed.events == 0
-    show_message "No events found."
+    showMessage "No events found."
     return selection, false
 
-  styles_by_key = {}
-  first_event = #subs + 1
+  stylesByKey = {}
+  firstEvent = #subs + 1
   for index = 1, #subs
+    LineOps.checkCancelled!
     line = subs[index]
     if line.class == "style"
-      styles_by_key[unicode_lower(tostring(line.name or ""))] = tostring(line.name or "")
-    elseif is_event(line) and first_event == #subs + 1
-      first_event = index
+      stylesByKey[unicodeLower(tostring(line.name or ""))] = tostring(line.name or "")
+    elseif isEvent(line) and firstEvent == #subs + 1
+      firstEvent = index
 
-  imported, added_styles = LineOps.transaction subs, "#{script_name}: import", ->
-    added_styles = 0
-    for source_style in *parsed.styles
-      name = tostring(source_style.name or "")
-      key = unicode_lower name
-      unless styles_by_key[key]
-        subs.insert first_event, KiteUI.copy(source_style)
-        first_event += 1
-        added_styles += 1
-        styles_by_key[key] = name
+  local imported, addedStyles
+  imported, addedStyles = LineOps.transaction subs, "#{script_name}: import", ->
+    addedStyles = 0
+    for sourceStyle in *parsed.styles
+      LineOps.checkCancelled!
+      name = tostring(sourceStyle.name or "")
+      key = unicodeLower name
+      unless stylesByKey[key]
+        subs.insert firstEvent, LineOps.copy(sourceStyle)
+        firstEvent += 1
+        addedStyles += 1
+        stylesByKey[key] = name
 
-    insert_at = #subs + 1
+    insertAt = #subs + 1
     imported = {}
-    for source_line in *parsed.events
-      line = KiteUI.copy source_line
-      mapped_style = styles_by_key[unicode_lower(tostring(line.style or ""))]
-      line.style = mapped_style if mapped_style
-      subs.insert insert_at, line
-      imported[#imported + 1] = insert_at
-      insert_at += 1
-    imported, added_styles
-  show_message "Imported #{#imported} lines and #{added_styles} styles."
+    for sourceLine in *parsed.events
+      LineOps.checkCancelled!
+      line = LineOps.copy sourceLine
+      mappedStyle = stylesByKey[unicodeLower(tostring(line.style or ""))]
+      line.style = mappedStyle if mappedStyle
+      subs.insert insertAt, line
+      imported[#imported + 1] = insertAt
+      insertAt += 1
+    imported, addedStyles
+  showMessage "Imported #{#imported} lines and #{addedStyles} styles."
   imported, true
 
-subtitle_selector = (subs, selection) ->
-  options = collect_options subs
-  state = initial_state!
+subtitleSelector = (subs, selection) ->
+  options = collectOptions subs
+  state = initialState!
   buttons = {"Run", "Values", "Import", "Export", "Cancel"}
 
   while true
-    button, result = aegisub.dialog.display build_dialog(state, options), buttons, {
+    button, result = aegisub.dialog.display buildDialog(state, options), buttons, {
       ok: "Run"
       close: "Cancel"
     }
-    return selection unless button and button != "Cancel"
-    state = read_state result, state, options
+    return selection unless button == "Run" or button == "Values" or button == "Import" or button == "Export"
+    state = readState result, state, options
 
     switch button
       when "Values"
-        output, changed = manage_values subs, selection, state.action
+        output, changed = manageValues subs, selection, state.action
         return output if changed
       when "Import"
-        output, changed = import_ass subs, selection
+        output, changed = importAss subs, selection
         return output if changed
       when "Export"
-        output, changed = export_ass subs, selection
+        output, changed = exportAss subs, selection
         return output if changed
       when "Run"
-        output, err = execute_state subs, selection, state
+        output, err = executeState subs, selection, state
         if err
-          show_message err
+          showMessage err
         else
-          persist_main state
+          persistMain state
           return output
 
-can_run = -> true
+canRun = -> true
 
-HOTKEY_FIELDS = {
+HotkeyFields = {
   {label: "Style", key: "style"}
   {label: "Actor", key: "actor"}
   {label: "Effect", key: "effect"}
 }
 
-active_value = (subs, active, field) ->
+activeValue = (subs, active, field) ->
   line = active and subs[active] or nil
-  return nil unless is_event line
+  return nil unless isEvent line
   tostring(line[field.key] or "")
 
-select_current_value = (field) ->
+selectCurrentValue = (field) ->
   (subs, selection, active) ->
-    value = active_value subs, active, field
+    value = activeValue subs, active, field
     return selection, active unless value != nil
-    matches = [index for index = 1, #subs when is_event(subs[index]) and tostring(subs[index][field.key] or "") == value]
+    matches = [index for index = 1, #subs when isEvent(subs[index]) and tostring(subs[index][field.key] or "") == value]
     matches, active
 
-jump_current_value = (field, direction) ->
+jumpCurrentValue = (field, direction) ->
   (subs, selection, active) ->
-    value = active_value subs, active, field
+    value = activeValue subs, active, field
     return selection, active unless value != nil
     index = active + direction
     while index >= 1 and index <= #subs
       line = subs[index]
-      if is_event(line) and tostring(line[field.key] or "") == value
+      if isEvent(line) and tostring(line[field.key] or "") == value
         return {index}, index
       index += direction
     selection, active
 
-block_bounds = (subs, active, field) ->
-  value = active_value subs, active, field
+blockBounds = (subs, active, field) ->
+  value = activeValue subs, active, field
   return nil unless value != nil
   first, last = active, active
   index = active - 1
   while index >= 1
     line = subs[index]
-    break unless is_event(line) and tostring(line[field.key] or "") == value
+    break unless isEvent(line) and tostring(line[field.key] or "") == value
     first = index
     index -= 1
   index = active + 1
   while index <= #subs
     line = subs[index]
-    break unless is_event(line) and tostring(line[field.key] or "") == value
+    break unless isEvent(line) and tostring(line[field.key] or "") == value
     last = index
     index += 1
   first, last
 
-block_action = (field, action) ->
+blockAction = (field, action) ->
   (subs, selection, active) ->
-    first, last = block_bounds subs, active, field
+    first, last = blockBounds subs, active, field
     return selection, active unless first
     switch action
       when "first"
@@ -952,30 +961,32 @@ block_action = (field, action) ->
       else
         [index for index = first, last], active
 
-until_action = (direction) ->
+untilAction = (direction) ->
   (subs, selection, active) ->
-    return selection, active unless active and is_event subs[active]
+    return selection, active unless active and isEvent subs[active]
     if direction < 0
-      [index for index = 1, active when is_event subs[index]], active
+      [index for index = 1, active when isEvent subs[index]], active
     else
-      [index for index = active, #subs when is_event subs[index]], active
+      [index for index = active, #subs when isEvent subs[index]], active
 
-hotkey_path = (section, action) ->
-  "#{HOTKEY_MENU_ROOT}/#{script_name}/#{section}/#{action}"
+hotkeyPath = (section, action) ->
+  "#{HotkeyMenuRoot}/#{script_name}/#{section}/#{action}"
 
-register_macro = (name, description, process, validate = can_run) ->
+registerMacro = (name, description, process, validate = canRun) ->
   depctrl\registerMacro name, description, process, validate, nil, false
 
-register_macro script_name, script_description, subtitle_selector
-for field in *HOTKEY_FIELDS
+registerMacro script_name, script_description, subtitleSelector
+for field in *HotkeyFields
   section = field.label
   description = field.label\lower!
-  register_macro hotkey_path(section, "Select All"), "Selects every line with the current #{description}.", select_current_value(field)
-  register_macro hotkey_path(section, "Previous"), "Jumps to the previous line with the same #{description}.", jump_current_value(field, -1)
-  register_macro hotkey_path(section, "Next"), "Jumps to the next line with the same #{description}.", jump_current_value(field, 1)
-  register_macro hotkey_path(section, "Block Start"), "Jumps to the start of the matching block.", block_action(field, "first")
-  register_macro hotkey_path(section, "Block End"), "Jumps to the end of the matching block.", block_action(field, "last")
-  register_macro hotkey_path(section, "Select Block"), "Selects the contiguous matching block.", block_action(field, "select")
+  registerMacro hotkeyPath(section, "Select All"), "Selects every line with the current #{description}.", selectCurrentValue(field)
+  registerMacro hotkeyPath(section, "Previous"), "Jumps to the previous line with the same #{description}.", jumpCurrentValue(field, -1)
+  registerMacro hotkeyPath(section, "Next"), "Jumps to the next line with the same #{description}.", jumpCurrentValue(field, 1)
+  registerMacro hotkeyPath(section, "Block Start"), "Jumps to the start of the matching block.", blockAction(field, "first")
+  registerMacro hotkeyPath(section, "Block End"), "Jumps to the end of the matching block.", blockAction(field, "last")
+  registerMacro hotkeyPath(section, "Select Block"), "Selects the contiguous matching block.", blockAction(field, "select")
 
-register_macro hotkey_path("Range", "To Start"), "Selects from the start through the active line.", until_action(-1)
-register_macro hotkey_path("Range", "To End"), "Selects from the active line through the end.", until_action(1)
+registerMacro hotkeyPath("Range", "To Start"), "Selects from the start through the active line.", untilAction(-1)
+registerMacro hotkeyPath("Range", "To End"), "Selects from the active line through the end.", untilAction(1)
+
+require("kite.UI").publishActions()

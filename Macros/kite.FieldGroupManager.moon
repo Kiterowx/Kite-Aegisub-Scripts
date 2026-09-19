@@ -1,27 +1,29 @@
 export script_name        = "Field Group Manager"
 export script_description = "Group unique dialogue field values and write mapped values into another field"
 export script_author      = "Kiterow"
-export script_version     = "1.1.3"
+export script_version     = "1.1.8"
 export script_namespace   = "kite.FieldGroupManager"
 
 DependencyControl = require "l0.DependencyControl"
 depctrl = DependencyControl{
   feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
   {
-    {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.UI", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-    {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    {"kite.LineOps", version: "1.7.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+    {"kite.Core", version: "1.1.0"}
   }
 }
 KiteUI, LineOps = depctrl\requireModules!
+finiteNumber = require("kite.Core").finiteNumber
 
-MIXED_MARK = "<mixed>"
-ESCAPED_MIXED_MARK = "\\<mixed>"
-EMPTY_MARK = "<empty>"
-NO_GROUPS_MARK = "<no groups>"
+mixedMark = "<mixed>"
+escapedMixedMark = "\\<mixed>"
+emptyMark = "<empty>"
+noGroupsMark = "<no groups>"
 
-FIELDS = {
+fields = {
   { label: "Effect",   key: "effect",     kind: "string" }
   { label: "Layer",    key: "layer",      kind: "number", min: 0 }
   { label: "Actor",    key: "actor",      kind: "string" }
@@ -31,17 +33,17 @@ FIELDS = {
   { label: "End",      key: "end_time",   kind: "time" }
   { label: "Margin L", key: "margin_l",   kind: "number", min: 0 }
   { label: "Margin R", key: "margin_r",   kind: "number", min: 0 }
-  { label: "Margin V", key: "margin_t",   kind: "number", min: 0, alt_key: "margin_v" }
+  { label: "Margin V", key: "margin_t",   kind: "number", min: 0, altKey: "margin_v" }
   { label: "Comment",  key: "comment",    kind: "bool" }
 }
 
-FIELD_LABELS = {}
-for field in *FIELDS
-  table.insert FIELD_LABELS, field.label
+fieldLabels = {}
+for field in *fields
+  table.insert fieldLabels, field.label
 
-SCOPES = { "Selection", "Whole script" }
-MODES = { "Parallel list", "Single value" }
-FIELD_SETTINGS = KiteUI.settings script_namespace, script_version, {
+scopes = { "Selection", "Whole script" }
+modes = { "Parallel list", "Single value" }
+fieldSettings = KiteUI.settings script_namespace, script_version, {
   main: {
     source: "Effect"
     target: "Layer"
@@ -51,169 +53,166 @@ FIELD_SETTINGS = KiteUI.settings script_namespace, script_version, {
     include_empty_source: false
   }
 }, {}
-FIELD_SETTINGS\load!
+fieldSettings\load!
 
-trim = (value) ->
-  text = tostring(value or "")
-  text = text\gsub "^%s+", ""
-  text = text\gsub "%s+$", ""
-  text
-
-string_value = (value) ->
+stringValue = (value) ->
   if value == nil then "" else tostring value
 
-bool_key = (value) ->
+boolKey = (value) ->
   if value then "1" else "0"
 
-choice_or_default = (value, items, default_value) ->
+choiceOrDefault = (value, items, defaultValue) ->
   for item in *items
     return item if value == item
-  default_value
+  defaultValue
 
-find_field = (label) ->
-  for field in *FIELDS
+findField = (label) ->
+  for field in *fields
     return field if field.label == label
-  FIELDS[1]
+  fields[1]
 
-is_dialogue = (line) ->
+isDialogue = (line) ->
   type(line) == "table" and line.class == "dialogue"
 
-ass_time = (ms) ->
-  total_cs = math.max 0, math.floor(((tonumber(ms) or 0) / 10) + 0.5)
-  cs = total_cs % 100
-  total_s = math.floor total_cs / 100
-  s = total_s % 60
-  total_m = math.floor total_s / 60
-  m = total_m % 60
-  h = math.floor total_m / 60
+assTime = (ms) ->
+  totalCentiseconds = math.max 0, math.floor(((tonumber(ms) or 0) / 10) + 0.5)
+  cs = totalCentiseconds % 100
+  totalSeconds = math.floor totalCentiseconds / 100
+  s = totalSeconds % 60
+  totalMinutes = math.floor totalSeconds / 60
+  m = totalMinutes % 60
+  h = math.floor totalMinutes / 60
   string.format "%d:%02d:%02d.%02d", h, m, s, cs
 
-parse_time = (value) ->
-  text = trim value
+parseTime = (value) ->
+  text = LineOps.trim value
   return 0 if text == ""
-  return tonumber text if text\match "^%d+$"
+  local parsed
+  if text\match "^%d+$"
+    parsed = tonumber text
+  else
+    h, m, seconds, cs = text\match "^(%d+):(%d%d):(%d%d)%.(%d%d)$"
+    if h
+      return nil, "use minutes and seconds below 60" if tonumber(m) >= 60 or tonumber(seconds) >= 60
+      parsed = (((tonumber(h) * 60 + tonumber(m)) * 60 + tonumber(seconds)) * 1000) + tonumber(cs) * 10
+    else
+      m, seconds, cs = text\match "^(%d+):(%d%d)%.(%d%d)$"
+      return nil, "use h:mm:ss.cc, mm:ss.cc, or milliseconds" unless m
+      return nil, "use seconds below 60" if tonumber(seconds) >= 60
+      parsed = ((tonumber(m) * 60 + tonumber(seconds)) * 1000) + tonumber(cs) * 10
+  return nil, "use a finite time value" unless finiteNumber parsed
+  parsed
 
-  h, m, s, cs = text\match "^(%d+):(%d%d):(%d%d)%.(%d%d)$"
-  if h
-    return nil, "use minutes and seconds below 60" if tonumber(m) >= 60 or tonumber(s) >= 60
-    return (((tonumber(h) * 60 + tonumber(m)) * 60 + tonumber(s)) * 1000) + tonumber(cs) * 10
-
-  m2, s2, cs2 = text\match "^(%d+):(%d%d)%.(%d%d)$"
-  if m2
-    return nil, "use seconds below 60" if tonumber(s2) >= 60
-    return ((tonumber(m2) * 60 + tonumber(s2)) * 1000) + tonumber(cs2) * 10
-
-  nil, "use h:mm:ss.cc, mm:ss.cc, or milliseconds"
-
-parse_bool = (value) ->
-  text = trim(value)\lower!
+parseBool = (value) ->
+  text = LineOps.trim(value)\lower!
   return true if text == "1" or text == "true" or text == "yes" or text == "y" or text == "si" or text == "comment" or text == "commented"
   return false if text == "0" or text == "false" or text == "no" or text == "n" or text == "dialogue" or text == "dialog"
   nil, "use Comment/Dialogue, yes/no, true/false, or 1/0"
 
-read_raw_field = (line, field) ->
+readRawField = (line, field) ->
   value = line[field.key]
-  if value == nil and field.alt_key
-    value = line[field.alt_key]
+  if value == nil and field.altKey
+    value = line[field.altKey]
   value
 
-field_text = (line, field) ->
-  value = read_raw_field line, field
+fieldText = (line, field) ->
+  value = readRawField line, field
   if field.kind == "time"
-    ass_time value
+    assTime value
   elseif field.kind == "number"
     tostring(tonumber(value) or 0)
   elseif field.kind == "bool"
     if value then "Comment" else "Dialogue"
   else
-    string_value value
+    stringValue value
 
-display_group_value = (value) ->
-  if value == "" then EMPTY_MARK else value
+displayGroupValue = (value) ->
+  if value == "" then emptyMark else value
 
-parse_target_value = (field, value) ->
+parseTargetValue = (field, value) ->
   if field.kind == "time"
-    parsed, err = parse_time value
+    parsed, err = parseTime value
     return nil, err unless parsed != nil
     parsed, nil
   elseif field.kind == "number"
-    text = trim value
+    text = LineOps.trim value
     text = "0" if text == ""
     return nil, "use a numeric value" unless text\match "^%-?%d+$"
-    number = tonumber text
+    number = finiteNumber text
+    return nil, "use a finite numeric value" unless number
     if field.min != nil and number < field.min
       return nil, "use a value of #{field.min} or higher"
     number, nil
   elseif field.kind == "bool"
-    parsed, err = parse_bool value
+    parsed, err = parseBool value
     return nil, err unless parsed != nil
     parsed, nil
   else
-    string_value(value), nil
+    stringValue(value), nil
 
-write_field = (line, field, value) ->
+writeField = (line, field, value) ->
   line[field.key] = value
   if field.key == "margin_t"
     line.margin_v = value
   line
 
-parse_lines = (value) ->
+parseLines = (value) ->
   text = tostring(value or "")
   text = text\gsub "\r\n", "\n"
   text = text\gsub "\r", "\n"
   rows = {}
   pos = 1
   while true
-    next_pos = text\find "\n", pos, true
-    unless next_pos
+    nextPos = text\find "\n", pos, true
+    unless nextPos
       table.insert rows, text\sub(pos)
       break
-    table.insert rows, text\sub(pos, next_pos - 1)
-    pos = next_pos + 1
+    table.insert rows, text\sub(pos, nextPos - 1)
+    pos = nextPos + 1
   rows
 
-collect_indexes = (subs, sel, state) ->
+collectIndexes = (subs, sel, state) ->
   indexes = {}
-  add_index = (idx) ->
+  addIndex = (idx) ->
     line = subs[idx]
-    if is_dialogue(line) and (state.include_comments or not line.comment)
+    if isDialogue(line) and (state.include_comments or not line.comment)
       table.insert indexes, idx
 
   if state.scope == "Whole script"
     for idx = 1, #subs
-      add_index idx
+      addIndex idx
   else
     for idx in *LineOps.normalizeIndices(subs, sel)
-      add_index idx
+      addIndex idx
   indexes
 
-group_compare = (field) ->
+groupCompare = (field) ->
   (a, b) ->
     if field.kind == "number" or field.kind == "time"
-      return (tonumber(a.sort_value) or 0) < (tonumber(b.sort_value) or 0)
+      return (tonumber(a.sortValue) or 0) < (tonumber(b.sortValue) or 0)
     a.value < b.value
 
-collect_groups = (subs, indexes, source_field, state) ->
+collectGroups = (subs, indexes, sourceField, state) ->
   groups = {}
   seen = {}
   for idx in *indexes
     line = subs[idx]
-    source = field_text line, source_field
+    source = fieldText line, sourceField
     if source != "" or state.include_empty_source
       group = seen[source]
       unless group
-        group = { value: source, sort_value: read_raw_field(line, source_field), indexes: {} }
+        group = { value: source, sortValue: readRawField(line, sourceField), indexes: {} }
         seen[source] = group
         table.insert groups, group
       table.insert group.indexes, idx
-  table.sort groups, group_compare source_field
+  table.sort groups, groupCompare sourceField
   groups
 
-target_summary = (subs, group, target_field) ->
+targetSummary = (subs, group, targetField) ->
   values = {}
   seen = {}
   for idx in *group.indexes
-    value = field_text subs[idx], target_field
+    value = fieldText subs[idx], targetField
     unless seen[value]
       seen[value] = true
       table.insert values, value
@@ -222,224 +221,220 @@ target_summary = (subs, group, target_field) ->
   elseif #values == 1
     values[1], false
   else
-    MIXED_MARK, true
+    mixedMark, true
 
-build_list_texts = (subs, groups, target_field) ->
-  source_rows = {}
-  target_rows = {}
+buildListTexts = (subs, groups, targetField) ->
+  sourceRows = {}
+  targetRows = {}
   if #groups == 0
-    return NO_GROUPS_MARK, ""
+    return noGroupsMark, ""
   for group in *groups
-    table.insert source_rows, display_group_value group.value
-    summary = target_summary subs, group, target_field
-    table.insert target_rows, summary
-  table.concat(source_rows, "\n"), table.concat(target_rows, "\n")
+    table.insert sourceRows, displayGroupValue group.value
+    summary = targetSummary subs, group, targetField
+    table.insert targetRows, summary
+  table.concat(sourceRows, "\n"), table.concat(targetRows, "\n")
 
-state_signature = (state) ->
+stateSignature = (state) ->
   table.concat {
     state.source
     state.target
     state.scope
-    bool_key state.include_comments
-    bool_key state.include_empty_source
+    boolKey state.include_comments
+    boolKey state.include_empty_source
   }, "\t"
 
-read_state = (res, previous) ->
+readState = (res, previous) ->
   {
-    source: choice_or_default(res.source, FIELD_LABELS, previous.source)
-    target: choice_or_default(res.target, FIELD_LABELS, previous.target)
-    scope: choice_or_default(res.scope, SCOPES, previous.scope)
-    mode: choice_or_default(res.mode, MODES, previous.mode)
+    source: choiceOrDefault(res.source, fieldLabels, previous.source)
+    target: choiceOrDefault(res.target, fieldLabels, previous.target)
+    scope: choiceOrDefault(res.scope, scopes, previous.scope)
+    mode: choiceOrDefault(res.mode, modes, previous.mode)
     include_comments: res.include_comments == true
     include_empty_source: res.include_empty_source == true
-    single_value: string_value res.single_value
+    singleValue: stringValue res.single_value
   }
 
-show_message = (message) ->
-  msg = tostring message
-  lines = 0
-  max_len = 0
-  for line in (msg .. "\n")\gmatch "(.-)\n"
-    lines += 1
-    max_len = #line if #line > max_len
-  if lines > 4 or max_len > 70 or #msg > 180
-    width = math.max 45, math.min(90, math.floor(max_len / 2) + 8)
-    height = math.max 8, math.min(26, lines + 4)
-    aegisub.dialog.display { { class: "textbox", text: msg, x: 0, y: 0, width: width, height: height } }, { "OK" }
-  else
-    width = math.max 30, math.min(70, max_len + 4)
-    height = math.max 3, math.min(8, lines + 2)
-    aegisub.dialog.display { { class: "label", label: msg, x: 0, y: 0, width: width, height: height } }, { "OK" }
+showMessage = (message) ->
+  KiteUI.message message
 
-build_dialog = (state, source_text, target_text, group_count, line_count) ->
-  list_height = math.max 8, math.min 20, math.max(group_count, 1)
-  y_lists = 4
-  y_single = y_lists + list_height + 1
+buildDialog = (state, sourceText, targetText, groupCount, lineCount) ->
+  listHeight = math.max 8, math.min 20, math.max(groupCount, 1)
+  listsY = 4
+  singleY = listsY + listHeight + 1
   {
     { class: "label",    label: "Group by",       x: 0,  y: 0, width: 3, height: 1 }
-    { class: "dropdown", name: "source",          x: 3,  y: 0, width: 5, height: 1, items: FIELD_LABELS, value: state.source }
+    { class: "dropdown", name: "source",          x: 3,  y: 0, width: 5, height: 1, items: fieldLabels, value: state.source }
     { class: "label",    label: "Write field",    x: 8,  y: 0, width: 4, height: 1 }
-    { class: "dropdown", name: "target",          x: 12, y: 0, width: 5, height: 1, items: FIELD_LABELS, value: state.target }
+    { class: "dropdown", name: "target",          x: 12, y: 0, width: 5, height: 1, items: fieldLabels, value: state.target }
     { class: "label",    label: "Mode",           x: 17, y: 0, width: 2, height: 1 }
-    { class: "dropdown", name: "mode",            x: 19, y: 0, width: 6, height: 1, items: MODES, value: state.mode }
+    { class: "dropdown", name: "mode",            x: 19, y: 0, width: 6, height: 1, items: modes, value: state.mode }
 
     { class: "label",    label: "Scope",          x: 0,  y: 1, width: 3, height: 1 }
-    { class: "dropdown", name: "scope",           x: 3,  y: 1, width: 5, height: 1, items: SCOPES, value: state.scope }
+    { class: "dropdown", name: "scope",           x: 3,  y: 1, width: 5, height: 1, items: scopes, value: state.scope }
     { class: "checkbox", name: "include_comments", label: "Include comments", x: 8,  y: 1, width: 7, height: 1, value: state.include_comments }
     { class: "checkbox", name: "include_empty_source", label: "Include empty source", x: 15, y: 1, width: 8, height: 1, value: state.include_empty_source }
 
-    { class: "label", label: "Groups: #{group_count} / Lines: #{line_count}", x: 0, y: 2, width: 25, height: 1 }
+    { class: "label", label: "Groups: #{groupCount} / Lines: #{lineCount}", x: 0, y: 2, width: 25, height: 1 }
 
     { class: "label",   label: "Grouped values",       x: 0,  y: 3, width: 15, height: 1 }
     { class: "label",   label: "New values",           x: 15, y: 3, width: 15, height: 1 }
-    { class: "textbox", name: "source_list", text: source_text, x: 0,  y: y_lists, width: 15, height: list_height }
-    { class: "textbox", name: "dest",        text: target_text, x: 15, y: y_lists, width: 15, height: list_height }
+    { class: "textbox", name: "source_list", text: sourceText, x: 0,  y: listsY, width: 15, height: listHeight }
+    { class: "textbox", name: "dest",        text: targetText, x: 15, y: listsY, width: 15, height: listHeight }
 
-    { class: "label", label: "Single value", x: 0, y: y_single, width: 4, height: 1 }
-    { class: "edit",  name: "single_value", value: state.single_value, x: 4, y: y_single, width: 26, height: 1 }
-    { class: "label", label: "#{MIXED_MARK} skips mixed groups; #{ESCAPED_MIXED_MARK} writes the literal text.", x: 0, y: y_single + 1, width: 30, height: 1 }
+    { class: "label", label: "Single value", x: 0, y: singleY, width: 4, height: 1 }
+    { class: "edit",  name: "single_value", value: state.singleValue, x: 4, y: singleY, width: 26, height: 1 }
+    { class: "label", label: "#{mixedMark} skips mixed groups; #{escapedMixedMark} writes the literal text.", x: 0, y: singleY + 1, width: 30, height: 1 }
   }
 
-prepare_parallel_tasks = (subs, groups, target_field, dest_text) ->
-  rows = parse_lines dest_text
+prepareParallelTasks = (subs, groups, targetField, destText) ->
+  rows = parseLines destText
   if #rows < #groups
     return nil, "The right list has fewer rows than the grouped list."
   for idx = #groups + 1, #rows
-    if trim(rows[idx]) != ""
+    if LineOps.trim(rows[idx]) != ""
       return nil, "The right list has extra non-empty rows."
 
   tasks = {}
   skipped = 0
   for idx, group in ipairs groups
     row = rows[idx]
-    literal_mixed = target_field.kind == "string" and row == ESCAPED_MIXED_MARK
-    row = MIXED_MARK if literal_mixed
+    literalMixed = targetField.kind == "string" and row == escapedMixedMark
+    row = mixedMark if literalMixed
     if row == nil
       skipped += 1
-    elseif row == MIXED_MARK and not literal_mixed
-      _, is_mixed = target_summary subs, group, target_field
-      if is_mixed
+    elseif row == mixedMark and not literalMixed
+      _, isMixed = targetSummary subs, group, targetField
+      if isMixed
         skipped += 1
       else
-        value, err = parse_target_value target_field, row
-        return nil, "Row #{idx} (#{display_group_value group.value}): #{err}" if err
+        value, err = parseTargetValue targetField, row
+        return nil, "Row #{idx} (#{displayGroupValue group.value}): #{err}" if err
         table.insert tasks, { group: group, value: value }
     else
-      value, err = parse_target_value target_field, row
-      return nil, "Row #{idx} (#{display_group_value group.value}): #{err}" if err
+      value, err = parseTargetValue targetField, row
+      return nil, "Row #{idx} (#{displayGroupValue group.value}): #{err}" if err
       table.insert tasks, { group: group, value: value }
   tasks, nil, skipped
 
-prepare_single_tasks = (groups, target_field, single_value) ->
-  value, err = parse_target_value target_field, single_value
+prepareSingleTasks = (groups, targetField, singleValue) ->
+  value, err = parseTargetValue targetField, singleValue
   return nil, err if err
   tasks = {}
   for group in *groups
     table.insert tasks, { group: group, value: value }
   tasks, nil, 0
 
-validate_tasks = (subs, tasks, target_field) ->
-  return nil unless target_field.key == "start_time" or target_field.key == "end_time"
+validateTasks = (subs, tasks, targetField) ->
+  return nil unless targetField.key == "start_time" or targetField.key == "end_time"
   for task in *tasks
     for idx in *task.group.indexes
+      LineOps.checkCancelled!
       line = subs[idx]
-      start_time = if target_field.key == "start_time" then task.value else tonumber(line.start_time) or 0
-      end_time = if target_field.key == "end_time" then task.value else tonumber(line.end_time) or 0
-      if start_time > end_time
+      startTime = if targetField.key == "start_time" then task.value else tonumber(line.start_time) or 0
+      endTime = if targetField.key == "end_time" then task.value else tonumber(line.end_time) or 0
+      if startTime > endTime
         return "Line #{idx}: start time would be after end time."
   nil
 
-apply_tasks = (subs, tasks, target_field) ->
+applyTasks = (subs, tasks, targetField) ->
   changes = {}
-  changed_lines = 0
-  changed_groups = 0
+  changedLines = 0
+  changedGroups = 0
   for task in *tasks
-    group_changed = false
+    groupChanged = false
     for idx in *task.group.indexes
+      LineOps.checkCancelled!
       line = subs[idx]
-      before = field_text line, target_field
+      before = readRawField line, targetField
       candidate = LineOps.copy line
-      write_field candidate, target_field, task.value
-      after = field_text candidate, target_field
+      writeField candidate, targetField, task.value
+      after = readRawField candidate, targetField
       if after != before
-        changed_lines += 1
-        group_changed = true
+        changedLines += 1
+        groupChanged = true
         table.insert changes, {index: idx, line: candidate}
-    changed_groups += 1 if group_changed
+    changedGroups += 1 if groupChanged
 
   if #changes > 0
     LineOps.transaction subs, script_name, ->
       for change in *changes
+        LineOps.checkCancelled!
         subs[change.index] = change.line
-  changed_groups, changed_lines
+  changedIndices = [change.index for change in *changes]
+  table.sort changedIndices
+  changedGroups, changedLines, changedIndices
 
-field_group_manager = (subs, sel) ->
-  saved = FIELD_SETTINGS\values("main") or {}
-  saved_scope = choice_or_default saved.scope, SCOPES, "Selection"
+fieldGroupManager = (subs, sel) ->
+  saved = fieldSettings\values("main") or {}
+  savedScope = choiceOrDefault saved.scope, scopes, "Selection"
   state = {
-    source: choice_or_default saved.source, FIELD_LABELS, "Effect"
-    target: choice_or_default saved.target, FIELD_LABELS, "Layer"
-    scope: if saved_scope == "Selection" and (not sel or #sel == 0) then "Whole script" else saved_scope
-    mode: choice_or_default saved.mode, MODES, "Parallel list"
+    source: choiceOrDefault saved.source, fieldLabels, "Effect"
+    target: choiceOrDefault saved.target, fieldLabels, "Layer"
+    scope: if savedScope == "Selection" and (not sel or #sel == 0) then "Whole script" else savedScope
+    mode: choiceOrDefault saved.mode, modes, "Parallel list"
     include_comments: if type(saved.include_comments) == "boolean" then saved.include_comments else true
     include_empty_source: if type(saved.include_empty_source) == "boolean" then saved.include_empty_source else false
-    single_value: ""
+    singleValue: ""
   }
 
   while true
-    source_field = find_field state.source
-    target_field = find_field state.target
-    indexes = collect_indexes subs, sel, state
-    groups = collect_groups subs, indexes, source_field, state
-    source_text, target_text = build_list_texts subs, groups, target_field
-    signature = state_signature state
+    sourceField = findField state.source
+    targetField = findField state.target
+    indexes = collectIndexes subs, sel, state
+    groups = collectGroups subs, indexes, sourceField, state
+    sourceText, targetText = buildListTexts subs, groups, targetField
+    signature = stateSignature state
     if state.dest != nil
-      target_text = state.dest
-    dialog = build_dialog state, source_text, target_text, #groups, #indexes
+      targetText = state.dest
+    dialog = buildDialog state, sourceText, targetText, #groups, #indexes
     button, res = aegisub.dialog.display dialog, { "Execute", "Refresh list", "Cancel" }, { ok: "Execute", close: "Cancel" }
-    return unless button and button != "Cancel"
+    return sel unless button == "Execute" or button == "Refresh list"
 
-    new_state = read_state res, state
-    if button == "Refresh list" or state_signature(new_state) != signature
-      new_state.dest = nil
-      state = new_state
+    newState = readState res, state
+    if button == "Refresh list" or stateSignature(newState) != signature
+      newState.dest = nil
+      state = newState
       continue
 
     if #groups == 0
-      show_message "No grouped values were found with the current options."
-      new_state.dest = nil
-      state = new_state
+      showMessage "No grouped values were found with the current options."
+      newState.dest = nil
+      state = newState
       continue
 
-    tasks, err, skipped = nil, nil, 0
-    if new_state.mode == "Single value"
-      tasks, err, skipped = prepare_single_tasks groups, target_field, new_state.single_value
+    local tasks, err, skipped
+    if newState.mode == "Single value"
+      tasks, err, skipped = prepareSingleTasks groups, targetField, newState.singleValue
     else
-      tasks, err, skipped = prepare_parallel_tasks subs, groups, target_field, res.dest
+      tasks, err, skipped = prepareParallelTasks subs, groups, targetField, res.dest
 
     if err
-      show_message err
-      new_state.dest = res.dest unless new_state.mode == "Single value"
-      state = new_state
+      showMessage err
+      newState.dest = res.dest unless newState.mode == "Single value"
+      state = newState
       continue
 
-    err = validate_tasks subs, tasks, target_field
+    err = validateTasks subs, tasks, targetField
     if err
-      show_message err
-      new_state.dest = res.dest unless new_state.mode == "Single value"
-      state = new_state
+      showMessage err
+      newState.dest = res.dest unless newState.mode == "Single value"
+      state = newState
       continue
 
-    changed_groups, changed_lines = apply_tasks subs, tasks, target_field
-    FIELD_SETTINGS\update "main", new_state, {"source", "target", "scope", "mode", "include_comments", "include_empty_source"}
-    FIELD_SETTINGS\write!
-    show_message "Updated #{changed_groups} group(s) and #{changed_lines} line(s).\nSkipped #{skipped} group(s)."
-    return
+    changedGroups, changedLines, changedIndices = applyTasks subs, tasks, targetField
+    fieldSettings\update "main", newState, {"source", "target", "scope", "mode", "include_comments", "include_empty_source"}
+    saved, saveError = fieldSettings\write!
+    message = "Updated #{changedGroups} group(s) and #{changedLines} line(s).\nSkipped #{skipped} group(s)."
+    message ..= "\nPreferences could not be saved: #{tostring saveError}" unless saved
+    showMessage message
+    return #changedIndices > 0 and changedIndices or sel
 
-can_run = (subs, sel) ->
+canRun = (subs, sel) ->
   true
 
 if depctrl and depctrl.registerMacro
-  depctrl\registerMacro script_name, script_description, field_group_manager, can_run, nil, false
+  depctrl\registerMacro script_name, script_description, fieldGroupManager, canRun, nil, false
 else
-  aegisub.register_macro script_name, script_description, field_group_manager, can_run
+  aegisub.register_macro script_name, script_description, fieldGroupManager, canRun
+
+KiteUI.publishActions()

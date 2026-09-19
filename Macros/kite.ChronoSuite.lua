@@ -1,153 +1,147 @@
 script_name        = "Chrono Suite"
 script_description = "Suite for subtitle timing, QC, cleanup, and workflow toolkit"
 script_author      = "Kiterow"
-script_version     = "1.3.2"
+script_version     = "1.5.3"
 script_namespace   = "kite.ChronoSuite"
 
 include("karaskel.lua")
 
-local UTF8_CHAR_PATTERN          = "[%z\1-\127\194-\244][\128-\191]*"
+local utf8CharPattern          = "[%z\1-\127\194-\244][\128-\191]*"
 local NBSP                       = string.char(0xC2, 0xA0)
-local INV_QUESTION               = string.char(0xC2, 0xBF)
-local INV_EXCLAMATION            = string.char(0xC2, 0xA1)
-local CJK_PERIOD                 = string.char(0xE3, 0x80, 0x82)
-local CJK_COMMA                  = string.char(0xE3, 0x80, 0x81)
-local FULLWIDTH_QUESTION         = string.char(0xEF, 0xBC, 0x9F)
-local FULLWIDTH_EXCLAMATION      = string.char(0xEF, 0xBC, 0x81)
-local FULLWIDTH_COMMA            = string.char(0xEF, 0xBC, 0x8C)
-local FULLWIDTH_SEMICOLON        = string.char(0xEF, 0xBC, 0x9B)
-local FULLWIDTH_PERIOD           = string.char(0xEF, 0xBC, 0x8E)
-local FULLWIDTH_COLON            = string.char(0xEF, 0xBC, 0x9A)
-local HORIZONTAL_ELLIPSIS        = string.char(0xE2, 0x80, 0xA6)
-local TWO_DOT_LEADER             = string.char(0xE2, 0x80, 0xA5)
-local LEFT_DOUBLE_QUOTE          = string.char(0xE2, 0x80, 0x9C)
-local RIGHT_DOUBLE_QUOTE         = string.char(0xE2, 0x80, 0x9D)
-local DOUBLE_LOW_QUOTE           = string.char(0xE2, 0x80, 0x9E)
-local DOUBLE_HIGH_REVERSED_QUOTE = string.char(0xE2, 0x80, 0x9F)
-local LEFT_SINGLE_QUOTE          = string.char(0xE2, 0x80, 0x98)
-local RIGHT_SINGLE_QUOTE         = string.char(0xE2, 0x80, 0x99)
-local SINGLE_LOW_QUOTE           = string.char(0xE2, 0x80, 0x9A)
-local SINGLE_HIGH_REVERSED_QUOTE = string.char(0xE2, 0x80, 0x9B)
-local LEFT_GUILLEMET             = string.char(0xC2, 0xAB)
-local RIGHT_GUILLEMET            = string.char(0xC2, 0xBB)
-local LEFT_SINGLE_GUILLEMET      = string.char(0xE2, 0x80, 0xB9)
-local RIGHT_SINGLE_GUILLEMET     = string.char(0xE2, 0x80, 0xBA)
-local EN_DASH                    = string.char(0xE2, 0x80, 0x93)
-local EM_DASH                    = string.char(0xE2, 0x80, 0x94)
-local HORIZONTAL_BAR             = string.char(0xE2, 0x80, 0x95)
-local MINUS_SIGN                 = string.char(0xE2, 0x88, 0x92)
+local invQuestion               = string.char(0xC2, 0xBF)
+local invExclamation            = string.char(0xC2, 0xA1)
+local cjkPeriod                 = string.char(0xE3, 0x80, 0x82)
+local cjkComma                  = string.char(0xE3, 0x80, 0x81)
+local fullwidthQuestion         = string.char(0xEF, 0xBC, 0x9F)
+local fullwidthExclamation      = string.char(0xEF, 0xBC, 0x81)
+local fullwidthComma            = string.char(0xEF, 0xBC, 0x8C)
+local fullwidthSemicolon        = string.char(0xEF, 0xBC, 0x9B)
+local fullwidthPeriod           = string.char(0xEF, 0xBC, 0x8E)
+local fullwidthColon            = string.char(0xEF, 0xBC, 0x9A)
+local horizontalEllipsis        = string.char(0xE2, 0x80, 0xA6)
+local twoDotLeader             = string.char(0xE2, 0x80, 0xA5)
+local leftDoubleQuote          = string.char(0xE2, 0x80, 0x9C)
+local rightDoubleQuote         = string.char(0xE2, 0x80, 0x9D)
+local doubleLowQuote           = string.char(0xE2, 0x80, 0x9E)
+local doubleHighReversedQuote = string.char(0xE2, 0x80, 0x9F)
+local leftSingleQuote          = string.char(0xE2, 0x80, 0x98)
+local rightSingleQuote         = string.char(0xE2, 0x80, 0x99)
+local singleLowQuote           = string.char(0xE2, 0x80, 0x9A)
+local singleHighReversedQuote = string.char(0xE2, 0x80, 0x9B)
+local leftGuillemet             = string.char(0xC2, 0xAB)
+local rightGuillemet            = string.char(0xC2, 0xBB)
+local leftSingleGuillemet      = string.char(0xE2, 0x80, 0xB9)
+local rightSingleGuillemet     = string.char(0xE2, 0x80, 0xBA)
+local enDash                    = string.char(0xE2, 0x80, 0x93)
+local emDash                    = string.char(0xE2, 0x80, 0x94)
+local horizontalBar             = string.char(0xE2, 0x80, 0x95)
+local minusSign                 = string.char(0xE2, 0x88, 0x92)
 
-local SENTENCE_SPLIT_CHARS = {
+local sentenceSplitChars = {
     ["."] = true, ["?"] = true, ["!"] = true,
-    [CJK_PERIOD] = true, [FULLWIDTH_QUESTION] = true, [FULLWIDTH_EXCLAMATION] = true,
-    [FULLWIDTH_PERIOD] = true, [HORIZONTAL_ELLIPSIS] = true, [TWO_DOT_LEADER] = true,
+    [cjkPeriod] = true, [fullwidthQuestion] = true, [fullwidthExclamation] = true,
+    [fullwidthPeriod] = true, [horizontalEllipsis] = true, [twoDotLeader] = true,
 }
-local COMMA_SPLIT_CHARS = {
+local commaSplitChars = {
     [","] = true, [":"] = true, [";"] = true,
-    [CJK_COMMA] = true, [FULLWIDTH_COMMA] = true, [FULLWIDTH_COLON] = true, [FULLWIDTH_SEMICOLON] = true,
+    [cjkComma] = true, [fullwidthComma] = true, [fullwidthColon] = true, [fullwidthSemicolon] = true,
 }
-local UTF8_PUNCTUATION_CHARS = {
-    [INV_QUESTION] = true, [INV_EXCLAMATION] = true,
-    [CJK_PERIOD] = true, [CJK_COMMA] = true,
-    [FULLWIDTH_QUESTION] = true, [FULLWIDTH_EXCLAMATION] = true,
-    [FULLWIDTH_COMMA] = true, [FULLWIDTH_SEMICOLON] = true,
-    [FULLWIDTH_PERIOD] = true, [FULLWIDTH_COLON] = true,
-    [HORIZONTAL_ELLIPSIS] = true, [TWO_DOT_LEADER] = true,
-    [LEFT_DOUBLE_QUOTE] = true, [RIGHT_DOUBLE_QUOTE] = true,
-    [LEFT_SINGLE_QUOTE] = true, [RIGHT_SINGLE_QUOTE] = true,
-    [LEFT_GUILLEMET] = true, [RIGHT_GUILLEMET] = true,
+local utf8PunctuationChars = {
+    [invQuestion] = true, [invExclamation] = true,
+    [cjkPeriod] = true, [cjkComma] = true,
+    [fullwidthQuestion] = true, [fullwidthExclamation] = true,
+    [fullwidthComma] = true, [fullwidthSemicolon] = true,
+    [fullwidthPeriod] = true, [fullwidthColon] = true,
+    [horizontalEllipsis] = true, [twoDotLeader] = true,
+    [leftDoubleQuote] = true, [rightDoubleQuote] = true,
+    [leftSingleQuote] = true, [rightSingleQuote] = true,
+    [leftGuillemet] = true, [rightGuillemet] = true,
     [string.char(0xE3,0x80,0x8C)] = true, [string.char(0xE3,0x80,0x8D)] = true,
     [string.char(0xE3,0x80,0x8E)] = true, [string.char(0xE3,0x80,0x8F)] = true,
     [string.char(0xE3,0x80,0x90)] = true, [string.char(0xE3,0x80,0x91)] = true,
     [string.char(0xEF,0xBC,0x88)] = true, [string.char(0xEF,0xBC,0x89)] = true,
     [string.char(0xEF,0xBC,0xBB)] = true, [string.char(0xEF,0xBC,0xBD)] = true,
 }
-local TERMINAL_PUNCTUATION = {
+local terminalPunctuation = {
     ["."] = true, ["?"] = true, ["!"] = true, [","] = true,
-    [CJK_PERIOD] = true, [CJK_COMMA] = true,
-    [FULLWIDTH_PERIOD] = true, [FULLWIDTH_QUESTION] = true, [FULLWIDTH_EXCLAMATION] = true, [FULLWIDTH_COMMA] = true,
-    [HORIZONTAL_ELLIPSIS] = true,
+    [cjkPeriod] = true, [cjkComma] = true,
+    [fullwidthPeriod] = true, [fullwidthQuestion] = true, [fullwidthExclamation] = true, [fullwidthComma] = true,
+    [horizontalEllipsis] = true,
 }
-local CLOSING_PUNCTUATION  = {
+local closingPunctuation  = {
     [")"] = true, ["]"] = true, ["}"] = true, ["\""] = true, ["'"] = true,
-    [RIGHT_DOUBLE_QUOTE] = true, [RIGHT_SINGLE_QUOTE] = true, [RIGHT_GUILLEMET] = true,
+    [rightDoubleQuote] = true, [rightSingleQuote] = true, [rightGuillemet] = true,
 }
 
-local LATIN_UPPER_TO_LOWER = {
+local latinUpperToLower = {
     [string.char(0xC3,0x81)] = string.char(0xC3,0xA1), [string.char(0xC3,0x89)] = string.char(0xC3,0xA9),
     [string.char(0xC3,0x8D)] = string.char(0xC3,0xAD), [string.char(0xC3,0x93)] = string.char(0xC3,0xB3),
     [string.char(0xC3,0x9A)] = string.char(0xC3,0xBA), [string.char(0xC3,0x9C)] = string.char(0xC3,0xBC),
     [string.char(0xC3,0x91)] = string.char(0xC3,0xB1),
 }
-local LATIN_LOWER_TO_UPPER = {}
-for u, l in pairs(LATIN_UPPER_TO_LOWER) do LATIN_LOWER_TO_UPPER[l] = u end
+local latinLowerToUpper = {}
+for u, l in pairs(latinUpperToLower) do latinLowerToUpper[l] = u end
 
 local function safeRequire(mod) local ok,m = pcall(require, mod); if ok then return m end end
 
 local DependencyControl = safeRequire("l0.DependencyControl")
-local depRec, ASS, Functional, re, KiteUI, Timing
+local depRec, KiteUI, Timing
 local Kite = {}
 
 if DependencyControl then
     local ok, rec = pcall(DependencyControl, {
         feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "l0.ASSFoundation", version = "0.5.0",
-              url  = "https://github.com/TypesettingTools/ASSFoundation",
-              feed = "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json" },
-            { "l0.Functional", version = "0.6.0",
-              url  = "https://github.com/TypesettingTools/Functional",
-              feed = "https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json" },
-            { "aegisub.re" },
-            { "kite.UI", version = "1.1.3",
+            { "kite.UI", version = "1.5.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Timing", version = "1.2.2",
+            { "kite.Timing", version = "1.4.1",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.PyBridge", version = "1.4.4",
+            { "kite.PyBridge", version = "1.7.1",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Media", version = "1.2.2",
+            { "kite.Media", version = "1.4.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.LineOps", version = "1.5.2",
+            { "kite.Core", version = "1.1.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.LineOps", version = "1.7.0",
+              url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+              feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
+            { "kite.EventOps", version = "1.3.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
     })
     if ok and rec then
         depRec = rec
-        local okMods, mASS, mFunctional, mRe, mKiteUI, mTiming, mPyBridge, mMedia, mLineOps = pcall(function() return depRec:requireModules() end)
+        local okMods, mKiteUI, mTiming, mPyBridge, mMedia, mCore, mLineOps, mEventOps = pcall(function() return depRec:requireModules() end)
         if okMods then
-            ASS, Functional, re, KiteUI, Timing = mASS, mFunctional, mRe, mKiteUI, mTiming
-            Kite.PyBridge, Kite.Media, Kite.LineOps = mPyBridge, mMedia, mLineOps
+            KiteUI, Timing = mKiteUI, mTiming
+            Kite.PyBridge, Kite.Media, Kite.Core, Kite.LineOps, Kite.EventOps = mPyBridge, mMedia, mCore, mLineOps, mEventOps
         end
     end
 end
-ASS        = ASS        or safeRequire("l0.ASSFoundation")
-Functional = Functional or safeRequire("l0.Functional")
-re         = re         or safeRequire("aegisub.re")
 KiteUI     = KiteUI     or safeRequire("kite.UI")
 Timing     = Timing     or safeRequire("kite.Timing")
 Kite.PyBridge = Kite.PyBridge or safeRequire("kite.PyBridge")
 Kite.Media = Kite.Media or safeRequire("kite.Media")
+Kite.Core = Kite.Core or safeRequire("kite.Core")
 Kite.LineOps = Kite.LineOps or safeRequire("kite.LineOps")
-
-local FunctionalString  = type(Functional) == "table" and Functional.string  or nil
-local FunctionalMath    = type(Functional) == "table" and Functional.math    or nil
-local FunctionalUnicode = type(Functional) == "table" and Functional.unicode or nil
+Kite.EventOps = Kite.EventOps or safeRequire("kite.EventOps")
 
 local unicode = safeRequire("aegisub.unicode") or {}
 if type(unicode.to_upper) ~= "function" then unicode.to_upper = string.upper end
 if type(unicode.to_lower) ~= "function" then unicode.to_lower = string.lower end
 if type(unicode.len)      ~= "function" then
     unicode.len = function(t)
-        local n = 0; for _ in tostring(t or ""):gmatch(UTF8_CHAR_PATTERN) do n = n + 1 end; return n
+        local n = 0; for _ in tostring(t or ""):gmatch(utf8CharPattern) do n = n + 1 end; return n
     end
 end
 
-local DEFAULT_CONFIG = {
+local defaultConfig = {
     language          = "en",
 
     scxvid_path       = "",
@@ -221,22 +215,22 @@ local DEFAULT_CONFIG = {
 
 local currentConfig = {}
 local currentLang = "en"
-local CHRONO_SETTINGS = KiteUI and KiteUI.settings(script_namespace, script_version, { main = DEFAULT_CONFIG }, {
+local chronoSettings = KiteUI and KiteUI.settings(script_namespace, script_version, { main = defaultConfig }, {
     { path = "?user/chrono_suite_config.lua", format = "lua_table", target = "main" },
 }) or nil
 
 local function loadConfig()
     currentConfig = {}
-    local loaded = CHRONO_SETTINGS and CHRONO_SETTINGS:values("main") or DEFAULT_CONFIG
-    for k, v in pairs(DEFAULT_CONFIG) do currentConfig[k] = loaded[k] == nil and v or loaded[k] end
+    local loaded = chronoSettings and chronoSettings:values("main") or defaultConfig
+    for k, v in pairs(defaultConfig) do currentConfig[k] = loaded[k] == nil and v or loaded[k] end
     currentLang = currentConfig.language or "en"
-    return CHRONO_SETTINGS ~= nil
+    return chronoSettings ~= nil
 end
 
 local function saveConfig()
-    if not CHRONO_SETTINGS then return false end
-    CHRONO_SETTINGS:update("main", currentConfig)
-    return CHRONO_SETTINGS:write()
+    if not chronoSettings then return false end
+    chronoSettings:update("main", currentConfig)
+    return chronoSettings:write()
 end
 
 loadConfig()
@@ -268,8 +262,8 @@ local LANG = {
         chk_clear_old     = "Clear previous markers",
         chk_gap_continuous= "Mark continuous (0ms)",
         chk_gap_ignore_kf = "Ignore gap on KF",
-        chk_kf_seal       = "Keyframe Seal [START-ON-KF/END-ON-KF]",
-        chk_data_import_cmt = "Wrap imported text as comments {…}",
+        chk_kf_seal       = "Keyframe seal",
+        chk_data_import_cmt = "Text as {...}",
         chk_data_import_same_layers = "Same Layers",
         chk_data_import_skip= "(empty box → skip Data Import)",
         btn_execute       = "EXECUTE",
@@ -401,8 +395,8 @@ local LANG = {
         chk_clear_old     = "Limpiar marcadores previos",
         chk_gap_continuous= "Marcar continuas (0ms)",
         chk_gap_ignore_kf = "Ignorar gap en KF",
-        chk_kf_seal       = "Sello Keyframe [START-ON-KF/END-ON-KF]",
-        chk_data_import_cmt = "Importar como comentario {…}",
+        chk_kf_seal       = "Sello de keyframe",
+        chk_data_import_cmt = "Texto en {...}",
         chk_data_import_same_layers = "Same Layers",
         chk_data_import_skip= "(caja vacía → omitir Importar Datos)",
         btn_execute       = "EJECUTAR",
@@ -532,8 +526,8 @@ local LANG = {
         chk_clear_old     = "Limpar marcadores prévios",
         chk_gap_continuous= "Marcar contínuas (0ms)",
         chk_gap_ignore_kf = "Ignorar gap em KF",
-        chk_kf_seal       = "Selo Keyframe [START-ON-KF/END-ON-KF]",
-        chk_data_import_cmt = "Importar como comentário {…}",
+        chk_kf_seal       = "Selo de keyframe",
+        chk_data_import_cmt = "Texto em {...}",
         chk_data_import_same_layers = "Same Layers",
         chk_data_import_skip= "(caixa vazia → ignorar Importar Dados)",
         btn_execute       = "EXECUTAR",
@@ -639,7 +633,7 @@ local LANG = {
     },
 }
 
-local EXTRA_LANG = {
+local extraLang = {
     en = {
         btn_config="Config", btn_help="Help", help_btn_close="Cancel",
         cfg_title="Chrono Suite Config", cfg_lbl_language="Language:",
@@ -653,7 +647,7 @@ local EXTRA_LANG = {
         err_no_keyframes="No keyframes loaded.",
         title_markers="=== AUDIT MARKERS ===", title_utilities="=== UTILITY TOOLS ===", title_data_import="--- DATA IMPORT ---", title_tools="--- EXTRA TOOLS ---",
         lbl_section_case="CASE:", lbl_section_punct="PUNCT/TEXT:", lbl_section_tags="TAGS/COMMENTS:", lbl_section_smart="SMART:", lbl_section_split="SPLIT/JOIN:", lbl_section_time="TIME/SORT:", lbl_suite_tool="Extra Tool:", lbl_large_gap="Large gap (ms):",
-        chk_kf_seal="Keyframe seal [START-ON-KF/END-ON-KF]", chk_data_import_cmt="Import text as comments {...}", chk_data_import_skip="(empty box = skip Data Import)",
+        chk_kf_seal="Keyframe seal", chk_data_import_skip="(empty box = skip Data Import)",
         chk_has_n="Line break [LINE-BREAK]", chk_has_pos="Position tag [POSITION-TAG]", chk_has_clip="Clip tag [CLIP-TAG]", chk_has_fad="Fade tag [FADE-TAG]", chk_has_t="Transform tag [TRANSFORM-TAG]", chk_has_k="Karaoke tag [KARAOKE-TAG]", chk_has_comment="Comment block [COMMENT-BLOCK]", chk_has_num="Digits [HAS-DIGITS]", chk_full_italic="Full italic [FULL-ITALIC]", chk_dbl_space="Double space [DOUBLE-SPACE]", chk_edge_space="Edge space [EDGE-SPACE]",
         chk_3liner="Three lines [THREE-LINES]", chk_missing_punct="No end punctuation [NO-END-PUNCT]", chk_punct_balance="Unpaired punctuation [UNPAIRED-PUNCT]", chk_orphan_word="Short last line [SHORT-LAST-LINE]", chk_orphan_tag="Broken tag [BROKEN-TAG]", chk_unstyled="Default style [DEFAULT-STYLE]", chk_double_italics="Italic error [ITALIC-ERROR]", chk_parentheses="Parentheses [PARENTHESES]", chk_name_prefix="Name prefix [NAME-PREFIX]", chk_sentences="Multiple sentences [MULTI-SENTENCE]",
     },
@@ -670,7 +664,7 @@ local EXTRA_LANG = {
         err_no_keyframes="No hay keyframes cargados.",
         title_markers="=== MARCADORES DE AUDITORÍA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DATOS ---", title_tools="--- HERRAMIENTAS EXTRA ---",
         lbl_apply_to="Aplicar a:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap largo (ms):", lbl_section_case="CAJA:", lbl_section_punct="PUNT/TEXTO:", lbl_section_tags="TAGS/COMENTARIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TIEMPO/ORDEN:", lbl_suite_tool="Herramienta:", lbl_selection="Selección: %d líneas",
-        chk_clear_old="Limpiar marcadores previos", chk_gap_continuous="Marcar continuas (0 ms)", chk_gap_ignore_kf="Ignorar gap si cae en KF", chk_kf_seal="Sello de keyframe [START-ON-KF/END-ON-KF]", chk_data_import_cmt="Importar texto como comentarios {...}", chk_data_import_skip="(caja vacía = saltar Importar Datos)",
+        chk_clear_old="Limpiar marcadores previos", chk_gap_continuous="Marcar continuas (0 ms)", chk_gap_ignore_kf="Ignorar gap si cae en KF", chk_kf_seal="Sello de keyframe", chk_data_import_skip="(caja vacía = saltar Importar Datos)",
         chk_has_n="Salto de línea [LINE-BREAK]", chk_has_pos="Tag de posición [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformación [TRANSFORM-TAG]", chk_has_k="Tag de karaoke [KARAOKE-TAG]", chk_has_comment="Bloque de comentario [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda en cursiva [FULL-ITALIC]", chk_dbl_space="Doble espacio [DOUBLE-SPACE]", chk_edge_space="Espacio al borde [EDGE-SPACE]",
         chk_uppercase="Mayúsculas [UPPERCASE]", chk_3liner="Tres líneas [THREE-LINES]", chk_missing_punct="Sin puntuación final [NO-END-PUNCT]", chk_punct_balance="Puntuación sin pareja [UNPAIRED-PUNCT]", chk_orphan_word="Última línea corta [SHORT-LAST-LINE]", chk_orphan_tag="Tag roto [BROKEN-TAG]", chk_overlap="Solapamiento [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Error de cursiva [ITALIC-ERROR]", chk_parentheses="Paréntesis [PARENTHESES]", chk_name_prefix="Prefijo de nombre [NAME-PREFIX]", chk_sentences="Varias oraciones [MULTI-SENTENCE]",
         msg_config_saved="Configuración guardada.", data_import_paste_hint="Pega líneas 'Dialogue:' o elige un modo de importación.",
@@ -688,14 +682,14 @@ local EXTRA_LANG = {
         err_no_keyframes="Nenhum keyframe carregado.",
         title_markers="=== MARCADORES DE AUDITORIA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DADOS ---", title_tools="--- FERRAMENTAS EXTRA ---",
         lbl_apply_to="Aplicar em:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap longo (ms):", lbl_section_case="CAIXA:", lbl_section_punct="PONT/TEXTO:", lbl_section_tags="TAGS/COMENTÁRIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TEMPO/ORDEM:", lbl_suite_tool="Ferramenta:", lbl_selection="Seleção: %d linhas",
-        chk_clear_old="Limpar marcadores anteriores", chk_gap_continuous="Marcar contínuas (0 ms)", chk_gap_ignore_kf="Ignorar gap se cair em KF", chk_kf_seal="Selo de keyframe [START-ON-KF/END-ON-KF]", chk_data_import_cmt="Importar texto como comentários {...}", chk_data_import_skip="(caixa vazia = pular Importar Dados)",
+        chk_clear_old="Limpar marcadores anteriores", chk_gap_continuous="Marcar contínuas (0 ms)", chk_gap_ignore_kf="Ignorar gap se cair em KF", chk_kf_seal="Selo de keyframe", chk_data_import_skip="(caixa vazia = pular Importar Dados)",
         chk_has_n="Quebra de linha [LINE-BREAK]", chk_has_pos="Tag de posição [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformação [TRANSFORM-TAG]", chk_has_k="Tag de karaokê [KARAOKE-TAG]", chk_has_comment="Bloco de comentário [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda em itálico [FULL-ITALIC]", chk_dbl_space="Espaço duplo [DOUBLE-SPACE]", chk_edge_space="Espaço nas bordas [EDGE-SPACE]",
         chk_uppercase="Maiúsculas [UPPERCASE]", chk_3liner="Três linhas [THREE-LINES]", chk_missing_punct="Sem pontuação final [NO-END-PUNCT]", chk_punct_balance="Pontuação sem par [UNPAIRED-PUNCT]", chk_orphan_word="Última linha curta [SHORT-LAST-LINE]", chk_orphan_tag="Tag quebrada [BROKEN-TAG]", chk_overlap="Sobreposição [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Erro de itálico [ITALIC-ERROR]", chk_parentheses="Parênteses [PARENTHESES]", chk_name_prefix="Prefixo de nome [NAME-PREFIX]", chk_sentences="Várias frases [MULTI-SENTENCE]",
         msg_config_saved="Configuração salva.", data_import_paste_hint="Cole linhas 'Dialogue:' ou escolha um modo de importação.",
     },
 }
 
-local LOCALE_PATCH = {
+local localePatch = {
     en = {
         err_no_active_dialogue   = "No valid active dialogue lines found.",
         err_no_sync_point        = "Data Import — Songs: no sync point found.\nNeed Comment line with layer 50.",
@@ -884,17 +878,17 @@ local LOCALE_PATCH = {
     },
 }
 
-for code, tbl in pairs(EXTRA_LANG) do
+for code, tbl in pairs(extraLang) do
     LANG[code] = LANG[code] or {}
     for k, v in pairs(tbl) do LANG[code][k] = v end
 end
 
-for code, tbl in pairs(LOCALE_PATCH) do
+for code, tbl in pairs(localePatch) do
     LANG[code] = LANG[code] or {}
     for k, v in pairs(tbl) do LANG[code][k] = v end
 end
 
-local EMPHASIS_LANG = {
+local emphasisLang = {
     en = {
         chk_strong_excl     = "Strong exclamation [STRONG-EXCL]",
         chk_strong_quest    = "Strong question [STRONG-QUEST]",
@@ -987,7 +981,7 @@ local EMPHASIS_LANG = {
     },
 }
 
-for code, tbl in pairs(EMPHASIS_LANG) do
+for code, tbl in pairs(emphasisLang) do
     LANG[code] = LANG[code] or {}
     for k, v in pairs(tbl) do LANG[code][k] = v end
 end
@@ -1025,7 +1019,7 @@ local UI = {
             ["Ends Only"]="Ends only", ["Start Only"]="Start only", ["Full Audit"]="Full audit", ["Duration"]="Duration", ["CPS"]="CPS", ["Short Gaps"]="Short gaps", ["Large Gaps"]="Large gaps", ["Both Gaps"]="Both gaps", ["Overtime"]="Overtime",
             ["End Only"]="End only", ["Both"]="Both", ["End only"]="End only", ["Start only"]="Start only",
             ["KF Back"]="Back", ["KF Forward"]="Forward", ["KF Both"]="Both",
-            ["Import Effects"]="Import effects", ["Import Text"]="Import text", ["Import Actor"]="Import actor", ["Import Tags"]="Import tags", ["Song Sync"]="Song sync",
+            ["Import Effects"]="Import effects", ["Import Actor"]="Import actor", ["Import Tags"]="Import tags", ["Song Sync"]="Song sync",
             ["Full Timing"]="Full + polish", ["Post-Timing"]="Post current", ["Raw Timing"]="Raw voice",
             ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Table (±ms)",
             ["Only changes"]="Only changes", ["Only 0ms"]="Only 0 ms", ["None"]="None",
@@ -1057,7 +1051,7 @@ local UI = {
             ["Sort Odd Even"]="Sort odd/even", ["Count CPS"]="Count CPS", ["Import Text"]="Import text", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Add lead-in left", ["Add Lead-In Right"]="Add lead-in right", ["Add Lead-Out Left"]="Add lead-out left", ["Add Lead-Out Right"]="Add lead-out right", ["Chain Left"]="Chain left", ["Chain Right"]="Chain right",
             ["Shift First"]="Shift first", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
-            ["AE Export"]="AE export", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
+            ["Properties and Cleanup"]="Properties and cleanup", ["AE Export"]="AE export", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
         },
         es = {
             ["en"]="Inglés", ["es"]="Español", ["pt"]="Portugués",
@@ -1065,7 +1059,7 @@ local UI = {
             ["Ends Only"]="Solo finales", ["Start Only"]="Solo inicios", ["Full Audit"]="Auditoría completa", ["Duration"]="Duración", ["CPS"]="CPS", ["Short Gaps"]="Gaps cortos", ["Large Gaps"]="Gaps largos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretiempo",
             ["End Only"]="Solo final", ["Both"]="Ambos", ["End only"]="Solo final", ["Start only"]="Solo inicio",
             ["KF Back"]="Atrás", ["KF Forward"]="Adelante", ["KF Both"]="Ambos",
-            ["Import Effects"]="Importar Effects", ["Import Text"]="Importar texto", ["Import Actor"]="Importar actor", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronía de canción",
+            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar actor", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronía de canción",
             ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Post actual", ["Raw Timing"]="Voz bruta",
             ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Clúster (±ms)", ["Table (±ms)"]="Tabla (±ms)",
             ["Only changes"]="Solo cambios", ["Only 0ms"]="Solo 0 ms", ["None"]="Ninguno",
@@ -1097,7 +1091,7 @@ local UI = {
             ["Sort Odd Even"]="Ordenar impar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in izquierda", ["Add Lead-In Right"]="Lead-in derecha", ["Add Lead-Out Left"]="Lead-out izquierda", ["Add Lead-Out Right"]="Lead-out derecha", ["Chain Left"]="Encadenar izquierda", ["Chain Right"]="Encadenar derecha",
             ["Shift First"]="Desplazar desde primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
-            ["AE Export"]="Exportar AE", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
+            ["Properties and Cleanup"]="Propiedades y limpieza", ["AE Export"]="Exportar AE", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
         },
         pt = {
             ["en"]="Inglês", ["es"]="Espanhol", ["pt"]="Português",
@@ -1105,7 +1099,7 @@ local UI = {
             ["Ends Only"]="Só finais", ["Start Only"]="Só inícios", ["Full Audit"]="Auditoria completa", ["Duration"]="Duração", ["CPS"]="CPS", ["Short Gaps"]="Gaps curtos", ["Large Gaps"]="Gaps longos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretempo",
             ["End Only"]="Só final", ["Both"]="Ambos", ["End only"]="Só final", ["Start only"]="Só início",
             ["KF Back"]="Para trás", ["KF Forward"]="Para frente", ["KF Both"]="Ambos",
-            ["Import Effects"]="Importar Effects", ["Import Text"]="Importar texto", ["Import Actor"]="Importar ator", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronia da música",
+            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar ator", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronia da música",
             ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Pós atual", ["Raw Timing"]="Voz bruta",
             ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Tabela (±ms)",
             ["Only changes"]="Só mudanças", ["Only 0ms"]="Só 0 ms", ["None"]="Nenhum",
@@ -1137,7 +1131,7 @@ local UI = {
             ["Sort Odd Even"]="Ordenar ímpar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in esquerda", ["Add Lead-In Right"]="Lead-in direita", ["Add Lead-Out Left"]="Lead-out esquerda", ["Add Lead-Out Right"]="Lead-out direita", ["Chain Left"]="Encadear esquerda", ["Chain Right"]="Encadear direita",
             ["Shift First"]="Deslocar desde primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
-            ["AE Export"]="Exportar AE", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
+            ["Properties and Cleanup"]="Propriedades e limpeza", ["AE Export"]="Exportar AE", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
         },
     },
 }
@@ -1195,7 +1189,7 @@ function UI.from(data, shown)
     if not data then return shown end
     return data.map[shown] ~= nil and data.map[shown] or shown
 end
-local SUITE_HELP = {
+local suiteHelp = {
     en = [[
 CHRONO SUITE · USER GUIDE
 __________________________
@@ -1419,8 +1413,8 @@ section during execution.
       continuations are marked as [POSSIBLE-JOIN] instead.
     - Erase Blank Lines: deletes blank lines.
     - Frame Effect: writes the start-frame number into Effect.
-    - Copy Fold: duplicates the contents of the fold containing the
-      active line.
+    - Copy Fold: displays ASS event rows from the fold containing the
+      first selected line for copying, then selects that fold.
 
 7.5. SPLIT / JOIN
     - Smart Break: inserts a \N line break at the optimal position
@@ -1429,7 +1423,8 @@ section during execution.
     - Split by Comma: splits the line by comma.
     - Pivot \N: shifts the \N break within the line.
     - Remove \N: removes every \N from the line, collapsing whitespace.
-    - Join Lines: joins consecutive selected lines.
+    - Join Lines: joins selected lines in grid order and spans their
+      earliest start and latest end, retaining the first row metadata.
     - Join Same Text: joins adjacent lines with identical text.
     - Join Overlaps: joins selected groups whose times overlap,
       expands the kept line to the group bounds, and preserves each
@@ -1493,7 +1488,9 @@ empty box skips this section.
         source lines. Imported tags override matching initial tags in
         the target line; inline tags after visible text are ignored.
    8.5. Song Sync: duplicates or synchronizes groups using a Comment
-        line on layer 50 as the sync anchor.
+        line on layer 50 as the sync anchor. The selected line's Effect
+        is copied into each imported line's Effect; source Effects are
+        retained.
    8.6. Same Layers: when checked, Import Effects, Import Text,
         Import Actor, and Import Tags only match source lines whose
         layer equals the target line layer.
@@ -1515,6 +1512,10 @@ ______________
    9.4. Remover Assistant: removes selected visible signs, spacing
         tokens, comments, and known override tags without toggling them
         back on when absent.
+   9.5. Properties and Cleanup: edits script credits and title. The
+        optional cleanup affects the whole file, removing project paths,
+        extradata, comments, Actor, Effect and empty dialogue lines.
+
 10. AUTO TIMING
 _______________
 
@@ -1869,8 +1870,8 @@ la sección durante la ejecución.
     - Erase Blank Lines: elimina las líneas vacías.
     - Frame Effect: inscribe en Effect el número de frame
       correspondiente al inicio de la línea.
-    - Copy Fold: duplica el contenido del fold que contiene a la línea
-      activa.
+    - Copy Fold: muestra las filas ASS del fold de la primera línea
+      seleccionada para copiarlas y selecciona ese grupo.
 
 7.5. DIVIDIR / UNIR
     - Smart Break: inserta un salto \N en la posición óptima
@@ -1950,7 +1951,9 @@ vacía omite esta sección.
         iguales en destino; los tags inline tras texto visible se
         ignoran.
    8.5. Song Sync: duplica o sincroniza grupos a partir de una línea
-        Comment con layer 50 como punto de sincronización.
+        Comment con layer 50 como punto de sincronización. El Effect de
+        la línea seleccionada se copia al Effect de cada línea importada;
+        se conservan los Effects de origen.
    8.6. Same Layers: al marcarlo, Import Effects, Import Text, Import
         Actor e Import Tags solo emparejan líneas de origen cuyo layer
         coincide con el layer de la línea destino.
@@ -2322,8 +2325,8 @@ seção durante a execução.
     - Erase Blank Lines: apaga linhas em branco.
     - Frame Effect: inscreve em Effect o número de frame
       correspondente ao início da linha.
-    - Copy Fold: duplica o conteúdo do fold que contém a linha
-      ativa.
+    - Copy Fold: mostra as linhas ASS do fold da primeira linha
+      selecionada para copiar e seleciona esse grupo.
 
 7.5. DIVIDIR / UNIR
     - Smart Break: insere uma quebra \N na posição ótima
@@ -2399,7 +2402,9 @@ Dados. A caixa vazia salta esta seção.
         sobrepostas. Os tags importados substituem tags iniciais iguais
         no destino; tags inline após texto visível são ignorados.
    8.5. Song Sync: duplica ou sincroniza grupos a partir de uma linha
-        Comment com layer 50 como ponto de sincronia.
+        Comment com layer 50 como ponto de sincronia. O Effect da linha
+        selecionada é copiado ao Effect de cada linha importada; os
+        Effects de origem são preservados.
    8.6. Same Layers: quando marcado, Import Effects, Import Text,
         Import Actor e Import Tags só combinam linhas de origem cujo
         layer coincide com o layer da linha destino.
@@ -2543,7 +2548,7 @@ Discord: https://discord.gg/Egq8us4xZC
 ]],
 }
 local function showHelp()
-    aegisub.dialog.display({{class="textbox", text=SUITE_HELP[currentLang] or SUITE_HELP.en, x=0, y=0, width=45, height=25}}, {L("help_btn_close")})
+    aegisub.dialog.display({{class="textbox", text=suiteHelp[currentLang] or suiteHelp.en, x=0, y=0, width=45, height=25}}, {L("help_btn_close")})
 end
 
 local function showConfigDialog()
@@ -2564,50 +2569,50 @@ local function showConfigDialog()
         { class="edit", name="scxvid_suffix", value=currentConfig.scxvid_suffix, x=1, y=4, width=1 },
         { class="label", label=L("cfg_lbl_leadutil"), x=0, y=5, width=4, height=1 },
         { class="label", label=L("cfg_lbl_lead_step"), x=0, y=6, width=1, height=1 },
-        { class="intedit", name="lead_step_ms", value=currentConfig.lead_step_ms, x=1, y=6, width=1, min=1, max=2000 },
+        { class="intedit", name="lead_step_ms", value=currentConfig.lead_step_ms, x=1, y=6, width=1, min=1 },
         { class="label", label=L("cfg_lbl_chain_cap"), x=2, y=6, width=1, height=1 },
-        { class="intedit", name="chain_max_ms", value=currentConfig.chain_max_ms, x=3, y=6, width=1, min=0, max=20000 },
+        { class="intedit", name="chain_max_ms", value=currentConfig.chain_max_ms, x=3, y=6, width=1, min=0 },
         { class="label", label=L("cfg_lbl_kite"), x=0, y=7, width=4, height=1 },
-        { class="intedit", name="kt_lead_in_base", value=currentConfig.kt_lead_in_base, x=0, y=8, width=1, min=0, max=2000 },
-        { class="intedit", name="kt_lead_in_max", value=currentConfig.kt_lead_in_max, x=1, y=8, width=1, min=0, max=2000 },
-        { class="intedit", name="kt_lead_out_base", value=currentConfig.kt_lead_out_base, x=2, y=8, width=1, min=0, max=2000 },
-        { class="intedit", name="kt_lead_out_max", value=currentConfig.kt_lead_out_max, x=3, y=8, width=1, min=0, max=2000 },
-        { class="intedit", name="kt_lead_out_chain", value=currentConfig.kt_lead_out_chain, x=0, y=9, width=1, min=0, max=2000 },
-        { class="intedit", name="kt_chain_gap_max", value=currentConfig.kt_chain_gap_max, x=1, y=9, width=1, min=0, max=2000 },
+        { class="intedit", name="kt_lead_in_base", value=currentConfig.kt_lead_in_base, x=0, y=8, width=1, min=0 },
+        { class="intedit", name="kt_lead_in_max", value=currentConfig.kt_lead_in_max, x=1, y=8, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_base", value=currentConfig.kt_lead_out_base, x=2, y=8, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_max", value=currentConfig.kt_lead_out_max, x=3, y=8, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_chain", value=currentConfig.kt_lead_out_chain, x=0, y=9, width=1, min=0 },
+        { class="intedit", name="kt_chain_gap_max", value=currentConfig.kt_chain_gap_max, x=1, y=9, width=1, min=0 },
         { class="label", label=L("cfg_lbl_bidir"), x=0, y=10, width=4, height=1 },
         { class="label", label=L("cfg_lbl_bidir_snap"), x=0, y=11, width=2, height=1 },
-        { class="intedit", name="bidir_snap_f", value=currentConfig.bidir_snap_f, x=2, y=11, width=1, min=0, max=20 },
+        { class="intedit", name="bidir_snap_f", value=currentConfig.bidir_snap_f, x=2, y=11, width=1, min=0 },
         { class="label", label=L("cfg_lbl_snap_protect"), x=0, y=12, width=2, height=1 },
-        { class="intedit", name="edge_snap_protect_ms", value=currentConfig.edge_snap_protect_ms, x=2, y=12, width=1, min=0, max=5000 },
+        { class="intedit", name="edge_snap_protect_ms", value=currentConfig.edge_snap_protect_ms, x=2, y=12, width=1, min=0 },
         { class="label", label=L("cfg_lbl_presets"), x=4, y=1, width=4, height=1 },
         { class="label", label=L("cfg_lbl_preset_start"), x=4, y=2, width=2, height=1 },
-        { class="intedit", name="preset_start_twin_ms", value=currentConfig.preset_start_twin_ms, x=6, y=2, width=1, min=0, max=5000 },
-        { class="intedit", name="preset_start_miss_ms", value=currentConfig.preset_start_miss_ms, x=7, y=2, width=1, min=0, max=5000 },
+        { class="intedit", name="preset_start_twin_ms", value=currentConfig.preset_start_twin_ms, x=6, y=2, width=1, min=0 },
+        { class="intedit", name="preset_start_miss_ms", value=currentConfig.preset_start_miss_ms, x=7, y=2, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_end"), x=4, y=3, width=2, height=1 },
-        { class="intedit", name="preset_end_twin_ms", value=currentConfig.preset_end_twin_ms, x=6, y=3, width=1, min=0, max=5000 },
-        { class="intedit", name="preset_end_miss_ms", value=currentConfig.preset_end_miss_ms, x=7, y=3, width=1, min=0, max=5000 },
+        { class="intedit", name="preset_end_twin_ms", value=currentConfig.preset_end_twin_ms, x=6, y=3, width=1, min=0 },
+        { class="intedit", name="preset_end_miss_ms", value=currentConfig.preset_end_miss_ms, x=7, y=3, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_full_kf"), x=4, y=4, width=2, height=1 },
-        { class="intedit", name="preset_full_twin_ms", value=currentConfig.preset_full_twin_ms, x=6, y=4, width=1, min=0, max=5000 },
-        { class="intedit", name="preset_full_miss_ms", value=currentConfig.preset_full_miss_ms, x=7, y=4, width=1, min=0, max=5000 },
+        { class="intedit", name="preset_full_twin_ms", value=currentConfig.preset_full_twin_ms, x=6, y=4, width=1, min=0 },
+        { class="intedit", name="preset_full_miss_ms", value=currentConfig.preset_full_miss_ms, x=7, y=4, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_full_time"), x=4, y=5, width=2, height=1 },
-        { class="intedit", name="preset_full_short_ms", value=currentConfig.preset_full_short_ms, x=6, y=5, width=1, min=0, max=20000 },
-        { class="intedit", name="preset_full_long_ms", value=currentConfig.preset_full_long_ms, x=7, y=5, width=1, min=0, max=60000 },
+        { class="intedit", name="preset_full_short_ms", value=currentConfig.preset_full_short_ms, x=6, y=5, width=1, min=0 },
+        { class="intedit", name="preset_full_long_ms", value=currentConfig.preset_full_long_ms, x=7, y=5, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_full_read"), x=4, y=6, width=2, height=1 },
-        { class="intedit", name="preset_full_max_cps", value=currentConfig.preset_full_max_cps, x=6, y=6, width=1, min=0, max=120 },
-        { class="intedit", name="preset_full_max_width", value=currentConfig.preset_full_max_width, x=7, y=6, width=1, min=0, max=5000 },
+        { class="intedit", name="preset_full_max_cps", value=currentConfig.preset_full_max_cps, x=6, y=6, width=1, min=0 },
+        { class="intedit", name="preset_full_max_width", value=currentConfig.preset_full_max_width, x=7, y=6, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_full_gap"), x=4, y=7, width=2, height=1 },
-        { class="intedit", name="preset_full_short_gap_ms", value=currentConfig.preset_full_short_gap_ms, x=6, y=7, width=1, min=0, max=5000 },
-        { class="intedit", name="preset_full_large_gap_ms", value=currentConfig.preset_full_large_gap_ms, x=7, y=7, width=1, min=0, max=30000 },
+        { class="intedit", name="preset_full_short_gap_ms", value=currentConfig.preset_full_short_gap_ms, x=6, y=7, width=1, min=0 },
+        { class="intedit", name="preset_full_large_gap_ms", value=currentConfig.preset_full_large_gap_ms, x=7, y=7, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_duration"), x=4, y=8, width=2, height=1 },
-        { class="intedit", name="preset_duration_short_ms", value=currentConfig.preset_duration_short_ms, x=6, y=8, width=1, min=0, max=20000 },
-        { class="intedit", name="preset_duration_long_ms", value=currentConfig.preset_duration_long_ms, x=7, y=8, width=1, min=0, max=60000 },
+        { class="intedit", name="preset_duration_short_ms", value=currentConfig.preset_duration_short_ms, x=6, y=8, width=1, min=0 },
+        { class="intedit", name="preset_duration_long_ms", value=currentConfig.preset_duration_long_ms, x=7, y=8, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_cps"), x=4, y=9, width=2, height=1 },
-        { class="intedit", name="preset_cps_max", value=currentConfig.preset_cps_max, x=6, y=9, width=1, min=0, max=120 },
+        { class="intedit", name="preset_cps_max", value=currentConfig.preset_cps_max, x=6, y=9, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_overtime"), x=4, y=10, width=2, height=1 },
-        { class="intedit", name="preset_overtime_ms", value=currentConfig.preset_overtime_ms, x=6, y=10, width=1, min=0, max=60000 },
+        { class="intedit", name="preset_overtime_ms", value=currentConfig.preset_overtime_ms, x=6, y=10, width=1, min=0 },
         { class="label", label=L("cfg_lbl_preset_gaps"), x=4, y=11, width=2, height=1 },
-        { class="intedit", name="preset_gap_short_ms", value=currentConfig.preset_gap_short_ms, x=6, y=11, width=1, min=0, max=5000 },
-        { class="intedit", name="preset_gap_large_ms", value=currentConfig.preset_gap_large_ms, x=7, y=11, width=1, min=0, max=30000 },
+        { class="intedit", name="preset_gap_short_ms", value=currentConfig.preset_gap_short_ms, x=6, y=11, width=1, min=0 },
+        { class="intedit", name="preset_gap_large_ms", value=currentConfig.preset_gap_large_ms, x=7, y=11, width=1, min=0 },
         { class="label", label=L("scream_title"), x=4, y=13, width=4, height=1 },
         { class="label", label=L("scream_lbl_avg"), x=4, y=14, width=3, height=1 },
         { class="edit", name="scream_avg_db", value=tostring(currentConfig.scream_avg_db), x=7, y=14, width=2, height=1 },
@@ -2624,9 +2629,9 @@ local function showConfigDialog()
         { class="checkbox", name="scream_clean_previous", label=L("scream_chk_clean"), value=currentConfig.scream_clean_previous, x=4, y=20, width=5, height=1 },
         { class="checkbox", name="scream_reuse_log", label=L("scream_chk_reuse"), value=currentConfig.scream_reuse_log, x=4, y=21, width=5, height=1 },
     }
-    local pressed, result = aegisub.dialog.display(dlg, {L("btn_save"), L("btn_cancel")})
+    local pressed, result = aegisub.dialog.display(dlg, {L("btn_save"), L("btn_cancel")}, {ok=L("btn_save"), close=L("btn_cancel")})
     if pressed == L("btn_save") then
-        local old_lang = currentConfig.language
+        local oldLang = currentConfig.language
         result.language = UI.from(cfgUi.language, result.language)
         result.scream_scope = UI.from(cfgUi.scream_scope, result.scream_scope)
         if result.scream_scope ~= "Selected lines" then result.scream_scope = "All dialogue" end
@@ -2636,18 +2641,24 @@ local function showConfigDialog()
         result.scream_min_samples = math.max(1, tonumber(result.scream_min_samples) or currentConfig.scream_min_samples)
         result.scream_robust_z = math.max(0, tonumber(result.scream_robust_z) or currentConfig.scream_robust_z)
         for k, v in pairs(result) do currentConfig[k] = v end
-        saveConfig(); resolveConfig(); showMsg(L("cfg_msg_saved"))
-        if old_lang ~= currentConfig.language then showMsg(L("cfg_msg_lang_changed")) end
+        local saved, message = saveConfig()
+        resolveConfig()
+        showMsg(saved and L("cfg_msg_saved") or tostring(message or "Could not save configuration."))
+        if oldLang ~= currentConfig.language then showMsg(L("cfg_msg_lang_changed")) end
     end
 end
 
 local function normalizeString(v) if type(v)=="string" then return v end if v==nil then return "" end return tostring(v) end
-local function normalizeNumber(v, fb) local n = tonumber(v); if n == nil then return fb end; return n end
+local function normalizeNumber(v, fallback)
+    local number = tonumber(v)
+    if not number or number ~= number or math.abs(number) == math.huge then return fallback end
+    return number
+end
 local function escapeLuaPattern(t) return normalizeString(t):gsub("(%W)", "%%%1") end
 
 local function splitUtf8Chars(text)
     local out = {}
-    for c in normalizeString(text):gmatch(UTF8_CHAR_PATTERN) do out[#out+1] = c end
+    for c in normalizeString(text):gmatch(utf8CharPattern) do out[#out+1] = c end
     return out
 end
 local function joinRange(chars, a, b) if a > b then return "" end; return table.concat(chars, "", a, b) end
@@ -2664,46 +2675,36 @@ end
 local function unicodeUpper(t)
     t = normalizeString(t)
     local ok, v = pcall(unicode.to_upper, t)
-    if ok and type(v) == "string" then return mapLatinFallback(v, LATIN_LOWER_TO_UPPER) end
-    return mapLatinFallback(string.upper(t), LATIN_LOWER_TO_UPPER)
+    if ok and type(v) == "string" then return mapLatinFallback(v, latinLowerToUpper) end
+    return mapLatinFallback(string.upper(t), latinLowerToUpper)
 end
 local function unicodeLower(t)
     t = normalizeString(t)
     local ok, v = pcall(unicode.to_lower, t)
-    if ok and type(v) == "string" then return mapLatinFallback(v, LATIN_UPPER_TO_LOWER) end
-    return mapLatinFallback(string.lower(t), LATIN_UPPER_TO_LOWER)
+    if ok and type(v) == "string" then return mapLatinFallback(v, latinUpperToLower) end
+    return mapLatinFallback(string.lower(t), latinUpperToLower)
 end
 local function unicodeSub(text, fromIdx, toIdx)
     text = normalizeString(text)
-    if FunctionalUnicode and type(FunctionalUnicode.sub) == "function" then
-        local ok, v = pcall(FunctionalUnicode.sub, text, fromIdx, toIdx)
-        if ok and type(v) == "string" then return v end
-    end
     local chars = splitUtf8Chars(text)
     local a = fromIdx or 1; local b = toIdx or #chars
     if a < 0 then a = #chars + a + 1 end
     if b < 0 then b = #chars + b + 1 end
-    return joinRange(chars, a, b)
+    return joinRange(chars, math.max(1, a), math.min(#chars, b))
 end
 local function trimText(t)
     t = normalizeString(t)
-    if FunctionalString and type(FunctionalString.trim) == "function" then
-        local ok, v = pcall(FunctionalString.trim, t)
-        if ok and type(v) == "string" then return v end
-    end
+    if Kite.Core then return Kite.Core.trim(t) end
     return (t:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 local function roundNumber(v, digits)
-    if FunctionalMath and type(FunctionalMath.round) == "function" then
-        local ok, r = pcall(FunctionalMath.round, v, digits or 0)
-        if ok and type(r) == "number" then return r end
-    end
+    if Kite.Core then return Kite.Core.roundTo(v, digits) end
     local m = 10 ^ (digits or 0)
     if v >= 0 then return math.floor(v*m + 0.5)/m end
     return math.ceil(v*m - 0.5)/m
 end
 local function isWhitespaceChar(c) return c == NBSP or (#c == 1 and c:match("^%s$") ~= nil) end
-local function isPunctuationChar(c) return UTF8_PUNCTUATION_CHARS[c] == true or (#c == 1 and c:match("^%p$") ~= nil) end
+local function isPunctuationChar(c) return utf8PunctuationChars[c] == true or (#c == 1 and c:match("^%p$") ~= nil) end
 local function isLetter(c)
     c = normalizeString(c); if c == "" then return false end
     return unicodeLower(c) ~= unicodeUpper(c)
@@ -2719,6 +2720,11 @@ end
 
 local function cloneLine(l)
     if type(l.copy) == "function" then return l:copy() end
+    if Kite.Core and Kite.Core.deepCopy then
+        local d = Kite.Core.deepCopy(l)
+        d.class = d.class or "dialogue"
+        return d
+    end
     local d = { class = l.class or "dialogue" }
     for k, v in pairs(l) do
         if type(v) == "table" then
@@ -2767,24 +2773,8 @@ local function assTimeToMs(t)
     return clockToMs(h, m, s, cs)
 end
 
-local function parseLine(lineOrText)
-    if not ASS or type(ASS.parse) ~= "function" then return nil end
-    local payload = lineOrText
-    if type(lineOrText) == "string" then payload = { text = lineOrText, class = "dialogue" } end
-    local ok, parsed = pcall(function() return ASS:parse(payload) end)
-    if ok then return parsed end
-    return nil
-end
-
 local function stripTags(text)
     text = normalizeString(text)
-    if ASS and type(ASS.parse) == "function" then
-        local parsed = parseLine(text)
-        if parsed and parsed.stripTags and parsed.getString then
-            local ok = pcall(function() parsed:stripTags() end)
-            if ok then return parsed:getString() end
-        end
-    end
     return (text:gsub("(%b{})", function(b)
         return b:match("^%{%s*\\") and "" or b
     end))
@@ -2792,11 +2782,6 @@ end
 
 local function stripComments(text)
     text = normalizeString(text)
-    local parsed = parseLine(text)
-    if parsed and parsed.stripComments and parsed.getString then
-        local ok = pcall(function() parsed:stripComments() end)
-        if ok then return parsed:getString() end
-    end
     return text:gsub("{([^}]*)}", function(inner)
         if inner:match("^%s*\\") then return "{" .. inner .. "}" end
         return ""
@@ -2829,7 +2814,6 @@ local function countWords(text)
 end
 
 local function validateDuration(l) return l.end_time and l.start_time and l.end_time > l.start_time end
-
 
 local function addEffectMarker(line, marker)
     marker = normalizeString(marker); if marker == "" then return end
@@ -2936,6 +2920,14 @@ end
 
 local function mutateTextOutsideBlocks(text, sectionMutator)
     text = normalizeString(text)
+    if Kite.LineOps and Kite.LineOps.scanSections then
+        local out = {}
+        for _, section in ipairs(Kite.LineOps.scanSections(text)) do
+            out[#out+1] = section.type == "text" and sectionMutator(section.text)
+                or text:sub(section.start, section.finish)
+        end
+        return table.concat(out)
+    end
     local out, cursor = {}, 1
     while cursor <= #text do
         local s, e = text:find("%b{}", cursor)
@@ -2949,15 +2941,7 @@ local function mutateTextOutsideBlocks(text, sectionMutator)
 end
 
 local function mutateTextSections(line, sectionMutator)
-    local parsed = parseLine(line)
-    if parsed and parsed.callback and parsed.commit and ASS and ASS.Section then
-        parsed:callback(function(section)
-            if section.class == ASS.Section.Text then section.value = sectionMutator(section.value) end
-        end)
-        parsed:commit(); return true
-    end
     line.text = mutateTextOutsideBlocks(line.text, sectionMutator)
-    return false
 end
 
 local function isDialogue(l) return type(l) == "table" and l.class == "dialogue" end
@@ -2968,48 +2952,31 @@ local function isVectorDrawing(line)
     return false
 end
 
-local function collectEditableSelection(subs, sel)
+local function collectSelection(subs, sel, predicate)
     if Kite.LineOps and Kite.LineOps.normalizeIndices then
-        return Kite.LineOps.normalizeIndices(subs, sel, isEditableDialogue)
+        return Kite.LineOps.normalizeIndices(subs, sel, predicate)
     end
     local out, seen = {}, {}
     for _, i in ipairs(sel or {}) do
         i = tonumber(i)
-        if i and i == math.floor(i) and i >= 1 and i <= #subs and not seen[i] and isEditableDialogue(subs[i]) then
+        if i and i == math.floor(i) and i >= 1 and i <= #subs and not seen[i] and predicate(subs[i]) then
             seen[i] = true; out[#out+1] = i
         end
     end
     table.sort(out)
     return out
+end
+local function collectEditableSelection(subs, sel)
+    return collectSelection(subs, sel, isEditableDialogue)
 end
 local function collectEditableTextSelection(subs, sel)
-    if Kite.LineOps and Kite.LineOps.normalizeIndices then
-        return Kite.LineOps.normalizeIndices(subs, sel, function(line)
-            return isEditableDialogue(line) and not isVectorDrawing(line)
-        end)
-    end
-    local out, seen = {}, {}
-    for _, i in ipairs(sel or {}) do
-        i = tonumber(i)
-        local l = i and i == math.floor(i) and i >= 1 and i <= #subs and subs[i] or nil
-        if l and not seen[i] and isEditableDialogue(l) and not isVectorDrawing(l) then seen[i] = true; out[#out+1] = i end
-    end
-    table.sort(out)
-    return out
+    return collectSelection(subs, sel, function(line)
+        return isEditableDialogue(line) and not isVectorDrawing(line)
+    end)
 end
 local function collectDialogueSelection(subs, sel)
-    if Kite.LineOps and Kite.LineOps.normalizeIndices then
-        return Kite.LineOps.normalizeIndices(subs, sel, isDialogue)
-    end
-    local out, seen = {}, {}
-    for _, i in ipairs(sel or {}) do
-        i = tonumber(i)
-        if i and i == math.floor(i) and i >= 1 and i <= #subs and not seen[i] and isDialogue(subs[i]) then
-            seen[i] = true; out[#out+1] = i
-        end
-    end
-    table.sort(out)
-    return out
+    if Kite.EventOps and Kite.EventOps.dialogueIndices then return Kite.EventOps.dialogueIndices(subs, sel) end
+    return collectSelection(subs, sel, isDialogue)
 end
 
 local function getTargetedSelection(subs, sel, c)
@@ -3030,7 +2997,111 @@ local function getTargetedSelection(subs, sel, c)
     return f
 end
 
-local auditLines, applyPreset, SINGLE_MARKER_ITEMS
+local function remapSelectionAfterDeletion(subs, originalSel, deleteSet)
+    local delSorted = {}
+    for k in pairs(deleteSet or {}) do delSorted[#delSorted+1] = k end
+    table.sort(delSorted)
+    local sortedSel = {}
+    for _, v in ipairs(originalSel or {}) do sortedSel[#sortedSel+1] = v end
+    table.sort(sortedSel)
+    local newSel = {}
+    for _, i in ipairs(sortedSel) do
+        if not (deleteSet and deleteSet[i]) then
+            local shift = 0
+            for _, d in ipairs(delSorted) do
+                if d < i then shift = shift + 1 else break end
+            end
+            newSel[#newSel+1] = i - shift
+        end
+    end
+    if #newSel == 0 and #sortedSel > 0 then
+        local first = math.min(sortedSel[1], #subs)
+        for i = first, #subs do
+            if isDialogue(subs[i]) then return { i } end
+        end
+        for i = first - 1, 1, -1 do
+            if isDialogue(subs[i]) then return { i } end
+        end
+    end
+    return newSel
+end
+
+local function splitTextAtLinebreaks(text)
+    local parts, current = {}, ""
+    text = normalizeString(text)
+    local cursor = 1
+    while cursor <= #text do
+        local bs, be = text:find("%b{}", cursor)
+        local ns, ne = text:find("\\[Nn]", cursor)
+        if bs and (not ns or bs < ns) then
+            current = current .. text:sub(cursor, be)
+            cursor = be + 1
+        elseif ns then
+            parts[#parts+1] = current .. text:sub(cursor, ns - 1)
+            current, cursor = "", ne + 1
+        else
+            current = current .. text:sub(cursor)
+            break
+        end
+    end
+    parts[#parts+1] = current
+    return parts
+end
+
+local function joinTextParts(parts)
+    local clean = {}
+    for _, p in ipairs(parts) do
+        local v = trimText(normalizeString(p):gsub("%s+", " "))
+        if v ~= "" then clean[#clean+1] = v end
+    end
+    local t = table.concat(clean, " ")
+    t = t:gsub("%s+", " ")
+    t = t:gsub("%s+([,;:%)%.%!%?])", "%1")
+    t = t:gsub("([%(])%s+", "%1")
+    t = t:gsub("(" .. invExclamation .. ")%s+", "%1")
+    t = t:gsub("(" .. invQuestion .. ")%s+", "%1")
+    return trimText(t)
+end
+
+local function normalizeRepeatedLetters(value)
+    local chars = splitUtf8Chars(value); if #chars < 3 then return value end
+    local out, i = {}, 1
+    while i <= #chars do
+        local cur = chars[i]
+        if isLetter(cur) then
+            local j = i + 1
+            while j <= #chars and chars[j] == cur do j = j + 1 end
+            local run = j - i
+            if run >= 3 then out[#out+1] = cur
+            else for k = i, j - 1 do out[#out+1] = chars[k] end end
+            i = j
+        else
+            out[#out+1] = cur; i = i + 1
+        end
+    end
+    return table.concat(out)
+end
+local function stripLeadingEllipsisText(value)
+    value = normalizeString(value)
+    local prefix, rest = "", trimText(value)
+    while startsWith(rest, invQuestion) or startsWith(rest, invExclamation) do
+        local c = unicodeSub(rest, 1, 1)
+        prefix = prefix .. c
+        rest = trimText(unicodeSub(rest, 2))
+    end
+    local stripping = true
+    while stripping do
+        stripping = false
+        local r = rest:gsub("^%.%.%.+%s*", "")
+        if r ~= rest then rest = r; stripping = true end
+        if startsWith(rest, horizontalEllipsis) or startsWith(rest, twoDotLeader) then
+            rest = trimText(unicodeSub(rest, 2)); stripping = true
+        end
+    end
+    return prefix .. rest
+end
+
+local auditLines, applyPreset, singleMarkerItems
 local TextOperations, TagOperations, SmartOperations, TimingOperations, MarkerOperations
 local autoTimer
 
@@ -3084,7 +3155,7 @@ local function hasKeyframeNearEdge(ms, kfs, rangeMs, direction, excludeEdgeFrame
 end
 
 do
-local AUDIT_MARKERS = {
+local auditMarkers = {
     ["TOO-SHORT"]=true,["TOO-LONG"]=true,["ZERO-LENGTH"]=true,
     ["FAST-CPS"]=true,["SLOW-CPS"]=true,["DEFAULT-STYLE"]=true,
     ["THREE-LINES"]=true,["SHORT-LAST-LINE"]=true,["TOO-WIDE"]=true,
@@ -3107,9 +3178,9 @@ local function hasTerminalPunctuation(text)
     local chars = splitUtf8Chars(trimText(visibleText(text)))
     for i = #chars, 1, -1 do
         local c = chars[i]
-        if isWhitespaceChar(c) or CLOSING_PUNCTUATION[c] then
+        if isWhitespaceChar(c) or closingPunctuation[c] then
         else
-            return TERMINAL_PUNCTUATION[c] == true
+            return terminalPunctuation[c] == true
         end
     end
     return true
@@ -3119,7 +3190,7 @@ local function hasFinalComma(text)
     local chars = splitUtf8Chars(trimText(visibleText(text)))
     for i = #chars, 1, -1 do
         local c = chars[i]
-        if isWhitespaceChar(c) or CLOSING_PUNCTUATION[c] then
+        if isWhitespaceChar(c) or closingPunctuation[c] then
         else
             return c == ","
         end
@@ -3127,7 +3198,7 @@ local function hasFinalComma(text)
     return false
 end
 
-SmartOperations = SmartOperations or {}
+SmartOperations = {}
 SmartOperations.completeSentences = function(subs, sel)
     local function incomplete(text)
         local clean = trimText(visibleText(text))
@@ -3171,17 +3242,6 @@ SmartOperations.completeSentences = function(subs, sel)
         end
         return out
     end
-    local function joinParts(parts)
-        local clean = {}
-        for _, p in ipairs(parts) do
-            local v = trimText(normalizeString(p):gsub("%s+", " "))
-            if v ~= "" then clean[#clean+1] = v end
-        end
-        local t = table.concat(clean, " ")
-        t = t:gsub("%s+", " "):gsub("%s+([,;:%)%.%!%?])", "%1"):gsub("([%(])%s+", "%1")
-        t = t:gsub("(" .. INV_EXCLAMATION .. ")%s+", "%1"):gsub("(" .. INV_QUESTION .. ")%s+", "%1")
-        return trimText(t)
-    end
     local function markSuspect(first, second, extra)
         local marked = {}
         local function mark(index)
@@ -3200,23 +3260,11 @@ SmartOperations.completeSentences = function(subs, sel)
         local p1 = stripComments(stripTags(first.text))
         local p2 = stripComments(stripTags(second.text))
         merged.end_time = math.max(first.end_time or 0, second.end_time or 0)
-        merged.text = extractLeadingTagBlocks(first.text) .. joinParts({ p1, p2 })
+        merged.text = extractLeadingTagBlocks(first.text) .. joinTextParts({ p1, p2 })
         addEffectMarker(merged, "[COMPLETE-SENTENCE]")
         subs[action.first] = merged
         subs.delete(action.second)
     end
-    local function remap(deleteSet)
-        local out = {}
-        for _, i in ipairs(sel or {}) do
-            if not deleteSet[i] then
-                local shift = 0
-                for d in pairs(deleteSet) do if d < i then shift = shift + 1 end end
-                out[#out+1] = i - shift
-            end
-        end
-        return #out > 0 and out or sel
-    end
-
     sel = collectEditableTextSelection(subs, sel)
     if #sel < 2 then return sel end
     local all, picked = collectItems()
@@ -3237,19 +3285,19 @@ SmartOperations.completeSentences = function(subs, sel)
     end
     table.sort(actions, function(a, b) return a.second > b.second end)
     for _, action in ipairs(actions) do applyJoin(action); deleteSet[action.second] = true end
-    return #actions > 0 and remap(deleteSet) or sel
+    return #actions > 0 and remapSelectionAfterDeletion(subs, sel, deleteSet) or sel
 end
 
 local function hasPunctuationBalanceIssue(text)
     local v = visibleText(text)
-    if countChar(v, INV_QUESTION)        ~= countChar(v, "?")             then return true end
-    if countChar(v, INV_EXCLAMATION)     ~= countChar(v, "!")             then return true end
+    if countChar(v, invQuestion)        ~= countChar(v, "?")             then return true end
+    if countChar(v, invExclamation)     ~= countChar(v, "!")             then return true end
     if countChar(v, "(")                 ~= countChar(v, ")")             then return true end
     if countChar(v, "[")                 ~= countChar(v, "]")             then return true end
     if countChar(v, "\"") % 2 ~= 0 then return true end
-    if countChar(v, LEFT_DOUBLE_QUOTE)   ~= countChar(v, RIGHT_DOUBLE_QUOTE) then return true end
-    if countChar(v, LEFT_SINGLE_QUOTE)   ~= countChar(v, RIGHT_SINGLE_QUOTE) then return true end
-    return countChar(v, LEFT_GUILLEMET)  ~= countChar(v, RIGHT_GUILLEMET)
+    if countChar(v, leftDoubleQuote)   ~= countChar(v, rightDoubleQuote) then return true end
+    if countChar(v, leftSingleQuote)   ~= countChar(v, rightSingleQuote) then return true end
+    return countChar(v, leftGuillemet)  ~= countChar(v, rightGuillemet)
 end
 
 local function hasOrphanTag(text)
@@ -3266,17 +3314,6 @@ local function hasOrphanTag(text)
         end
     end
     return depth ~= 0
-end
-
-local function splitByLinebreak(text)
-    local parts, last = {}, 1
-    text = normalizeString(text)
-    while true do
-        local p, pe = text:find("\\[Nn]", last)
-        if not p then parts[#parts+1] = text:sub(last); break end
-        parts[#parts+1] = text:sub(last, p - 1); last = pe + 1
-    end
-    return parts
 end
 
 local function getLineWidth(text, style)
@@ -3309,20 +3346,12 @@ local function hasNamePrefix(text)
     return visibleText(text):match("^%[.-%]:") ~= nil
 end
 
-local function tagBlockContains(text, pattern)
-    text = normalizeString(text)
-    for block in text:gmatch("{([^}]*)}") do
-        if block:sub(1,1) == "\\" and block:find(pattern) then return true end
-    end
-    return false
-end
-
-local function hasLineBreakTag(text)  return normalizeString(text):find("\\[Nn]") ~= nil end
-local function hasPosTag(text)        return tagBlockContains(text, "\\pos%(") or tagBlockContains(text, "\\move%(") end
-local function hasClipTag(text)       return tagBlockContains(text, "\\i?clip%(") end
-local function hasFadeTag(text)       return tagBlockContains(text, "\\fade?%(") end
-local function hasTransformTag(text)  return tagBlockContains(text, "\\t%(") end
-local function hasKaraokeTag(text)    return tagBlockContains(text, "\\[kK][fo]?%d") end
+local function hasLineBreakTag(text) return #splitTextAtLinebreaks(text) > 1 end
+local function hasPosTag(text)        return hasOverridePattern(text, "\\pos%(") or hasOverridePattern(text, "\\move%(") end
+local function hasClipTag(text)       return hasOverridePattern(text, "\\i?clip%(") end
+local function hasFadeTag(text)       return hasOverridePattern(text, "\\fade?%(") end
+local function hasTransformTag(text)  return hasOverridePattern(text, "\\t%(") end
+local function hasKaraokeTag(text)    return hasOverridePattern(text, "\\[kK][fo]?%d") end
 local function hasCommentBlock(text)
     text = normalizeString(text)
     for block in text:gmatch("{([^}]*)}") do
@@ -3332,9 +3361,9 @@ local function hasCommentBlock(text)
     return false
 end
 local function hasNumeric(text)         return visibleText(text):find("%d") ~= nil end
-local function hasDoubleSpaceText(text) return stripTags(text):find("[ \t][ \t]") ~= nil end
+local function hasDoubleSpaceText(text) return stripComments(stripTags(text)):find("[ \t][ \t]") ~= nil end
 local function hasEdgeSpace(text)
-    local s = stripTags(text); if s == "" then return false end
+    local s = stripComments(stripTags(text)); if s == "" then return false end
     return s:match("^[ \t]") ~= nil or s:match("[ \t]$") ~= nil
 end
 local function hasCJKChars(text) return visibleText(text):find("[\227-\237]") ~= nil end
@@ -3347,7 +3376,7 @@ end
 local function hasStrongExclamation(text)
     local clean = visibleText(text)
     for word in clean:gmatch("%S+") do
-        if wordHasAny(word, { INV_EXCLAMATION }) and wordHasAny(word, { "!", FULLWIDTH_EXCLAMATION }) then
+        if wordHasAny(word, { invExclamation }) and wordHasAny(word, { "!", fullwidthExclamation }) then
             return true
         end
     end
@@ -3357,7 +3386,7 @@ end
 local function hasStrongQuestion(text)
     local clean = visibleText(text)
     for word in clean:gmatch("%S+") do
-        if wordHasAny(word, { INV_QUESTION }) and wordHasAny(word, { "?", FULLWIDTH_QUESTION }) then
+        if wordHasAny(word, { invQuestion }) and wordHasAny(word, { "?", fullwidthQuestion }) then
             return true
         end
     end
@@ -3367,10 +3396,10 @@ end
 local function hasMixedEmphasis(text)
     local clean = visibleText(text)
     for word in clean:gmatch("%S+") do
-        local hasOpenE = wordHasAny(word, { INV_EXCLAMATION })
-        local hasOpenQ = wordHasAny(word, { INV_QUESTION })
-        local hasCloseE = wordHasAny(word, { "!", FULLWIDTH_EXCLAMATION })
-        local hasCloseQ = wordHasAny(word, { "?", FULLWIDTH_QUESTION })
+        local hasOpenE = wordHasAny(word, { invExclamation })
+        local hasOpenQ = wordHasAny(word, { invQuestion })
+        local hasCloseE = wordHasAny(word, { "!", fullwidthExclamation })
+        local hasCloseQ = wordHasAny(word, { "?", fullwidthQuestion })
         if (hasOpenE and hasOpenQ) or (hasCloseE and hasCloseQ) then return true end
     end
     return false
@@ -3378,7 +3407,7 @@ end
 
 local function hasSemicolon(text)
     local clean = visibleText(text)
-    return clean:find(";", 1, true) ~= nil or clean:find(FULLWIDTH_SEMICOLON, 1, true) ~= nil
+    return clean:find(";", 1, true) ~= nil or clean:find(fullwidthSemicolon, 1, true) ~= nil
 end
 
 local function hasStutter(text)
@@ -3411,12 +3440,12 @@ local function countSentences(text)
     local count, i = 0, 1
     while i <= #chars do
         local c = chars[i]
-        local isEnd = (c == "." or c == "?" or c == "!" or c == HORIZONTAL_ELLIPSIS)
+        local isEnd = (c == "." or c == "?" or c == "!" or c == horizontalEllipsis)
         if isEnd then
             count = count + 1
             while i + 1 <= #chars do
                 local nx = chars[i + 1]
-                if nx == "." or nx == "?" or nx == "!" or nx == HORIZONTAL_ELLIPSIS or CLOSING_PUNCTUATION[nx] then
+                if nx == "." or nx == "?" or nx == "!" or nx == horizontalEllipsis or closingPunctuation[nx] then
                     i = i + 1
                 else break end
             end
@@ -3442,7 +3471,7 @@ local function cleanAuditMarkers(effect)
     effect = normalizeString(effect)
     effect = effect:gsub("%[([^%]]+)%]", function(key)
         local base = key:match("^(%S+)") or key
-        if AUDIT_MARKERS[base] or key:match("^%d+%-SENTENCES$") then return " " end
+        if auditMarkers[base] or key:match("^%d+%-SENTENCES$") then return " " end
         return "[" .. key .. "]"
     end)
     return trimText(effect:gsub("%s+", " "))
@@ -3525,7 +3554,7 @@ local function buildAdjacentSelection(subs, sel)
     return items
 end
 
-SINGLE_MARKER_ITEMS = {
+singleMarkerItems = {
     "", "Number Effects","Add Identifier",
     "UPPERCASE","THREE-LINES","NO-END-PUNCT","FINAL-COMMA","UNPAIRED-PUNCT",
     "SHORT-LAST-LINE","TOO-WIDE","BROKEN-TAG","OVERLAP","DEFAULT-STYLE",
@@ -3534,7 +3563,7 @@ SINGLE_MARKER_ITEMS = {
     "LINE-BREAK","POSITION-TAG","CLIP-TAG","DRAWING-CLIP","FADE-TAG","TRANSFORM-TAG","KARAOKE-TAG",
     "COMMENT-BLOCK","HAS-DIGITS","HAS-CJK","FULL-ITALIC","DOUBLE-SPACE","EDGE-SPACE",
 }
-local SINGLE_TO_CHECKS = {
+local singleToChecks = {
     ["UPPERCASE"]={"check_uppercase"},     ["THREE-LINES"]={"check_3liner"},
     ["NO-END-PUNCT"]={"check_missing_punct"}, ["FINAL-COMMA"]={"check_final_comma"},
     ["UNPAIRED-PUNCT"]={"check_punct_balance"},
@@ -3577,12 +3606,12 @@ local function applySingleMarkerOverride(config)
     config.twin_kf_ms = 0
     config.miss_kf_ms = 0
     config.kf_dir = ""
-    local checks = SINGLE_TO_CHECKS[sm]
+    local checks = singleToChecks[sm]
     if checks then for _, k in ipairs(checks) do config[k] = true end end
 end
 
 local function presetNumber(key)
-    return tonumber(currentConfig and currentConfig[key]) or tonumber(DEFAULT_CONFIG[key]) or 0
+    return tonumber(currentConfig and currentConfig[key]) or tonumber(defaultConfig[key]) or 0
 end
 
 function applyPreset(result, preset)
@@ -3637,8 +3666,8 @@ function auditLines(subs, sel, config)
         MarkerOperations.randomEffects(subs, sel)
         return
     end
-    config.gap_ms      = math.min(math.max(tonumber(config.gap_ms) or 0, 0), 5000)
-    config.large_gap_ms= math.min(math.max(tonumber(config.large_gap_ms) or 0, 0), 30000)
+    config.gap_ms      = math.max(normalizeNumber(config.gap_ms) or 0, 0)
+    config.large_gap_ms= math.max(normalizeNumber(config.large_gap_ms) or 0, 0)
     config.short_ms    = tonumber(config.short_ms)    or 0
     config.long_ms     = tonumber(config.long_ms)     or 0
     config.max_cps     = tonumber(config.max_cps)     or 0
@@ -3742,7 +3771,7 @@ function auditLines(subs, sel, config)
                         if config.check_final_comma == true and hasFinalComma(clean) then addIssue(issues, "[FINAL-COMMA]") end
                     end
 
-                    local parts = splitByLinebreak(line.text)
+                    local parts = splitTextAtLinebreaks(line.text)
                     if #parts >= 3 then
                         if config.check_3liner ~= false then addIssue(issues, "[THREE-LINES]") end
                     elseif #parts == 2 then
@@ -3794,16 +3823,28 @@ function auditLines(subs, sel, config)
     end
 
     local adjacent = buildAdjacentSelection(subs, sel)
+    if config.check_overlap ~= false then
+        local selectedTiming, overlapSet = {}, {}
+        for _, item in ipairs(adjacent) do
+            if item.selected and validateDuration(item.line) then selectedTiming[#selectedTiming+1] = item end
+        end
+        for i = 1, #selectedTiming - 1 do
+            local prev = selectedTiming[i]
+            local prevEnd = tonumber(prev.line.end_time) or 0
+            for j = i + 1, #selectedTiming do
+                local line = selectedTiming[j]
+                if (tonumber(line.line.start_time) or 0) >= prevEnd then break end
+                overlapSet[prev.index] = true
+                overlapSet[line.index] = true
+            end
+        end
+        for index in pairs(overlapSet) do queueIssue(index, "[OVERLAP]") end
+    end
     for i = 1, #adjacent - 1 do
         local prev, line = adjacent[i], adjacent[i + 1]
         if prev.selected or line.selected then
             local gap = (tonumber(line.line.start_time) or 0) - (tonumber(prev.line.end_time) or 0)
-            if gap < 0 then
-                if config.check_overlap ~= false then
-                    queueIssue(prev.index, "[OVERLAP]")
-                    queueIssue(line.index, "[OVERLAP]")
-                end
-            elseif gap == 0 and config.gap_mark_continuous then
+            if gap == 0 and config.gap_mark_continuous then
                 local marker = gapMarker("SHORT-GAP", gap)
                 queueIssue(prev.index, marker)
                 queueIssue(line.index, marker)
@@ -3844,37 +3885,9 @@ end
 
 do
 TextOperations   = {}
-SmartOperations  = SmartOperations or {}
 TagOperations    = {}
 TimingOperations = {}
 MarkerOperations = {}
-
-local function remapSelectionAfterDeletion(originalSel, deleteSet)
-    local delSorted = {}
-    for k in pairs(deleteSet or {}) do delSorted[#delSorted+1] = k end
-    table.sort(delSorted)
-    local sortedSel = {}
-    for _, v in ipairs(originalSel or {}) do sortedSel[#sortedSel+1] = v end
-    table.sort(sortedSel)
-    local newSel = {}
-    for _, i in ipairs(sortedSel) do
-        if not (deleteSet and deleteSet[i]) then
-            local shift = 0
-            for _, d in ipairs(delSorted) do
-                if d < i then shift = shift + 1 else break end
-            end
-            newSel[#newSel+1] = i - shift
-        end
-    end
-    if #newSel == 0 and #sortedSel > 0 then
-        local first = sortedSel[1]
-        for _, d in ipairs(delSorted) do
-            if d < first then first = first - 1 end
-        end
-        newSel[1] = math.max(1, first)
-    end
-    return newSel
-end
 
 local function remapSelectionAfterInsertion(originalSel, insertedByIndex)
     local asc = {}
@@ -3930,58 +3943,37 @@ local function ensureInheritedTags(segment, tags)
     return segment
 end
 
-local function joinTextParts(parts)
-    local clean = {}
-    for _, p in ipairs(parts) do
-        local v = trimText(normalizeString(p):gsub("%s+", " "))
-        if v ~= "" then clean[#clean+1] = v end
+local function caseTextForSelection(subs, sel, mode)
+    for _, index in ipairs(sel) do
+        local line = subs[index]
+        local inWord, pending, done = false, true, false
+        mutateTextSections(line, function(value)
+            local chars, i = splitUtf8Chars(value), 1
+            while i <= #chars do
+                local c = chars[i]
+                if c == "\\" and chars[i+1] and chars[i+1]:match("^[Nnh]$") then
+                    inWord = false
+                    i = i + 2
+                else
+                    if isLetter(c) then
+                        if mode == "upper" then chars[i] = unicodeUpper(c)
+                        elseif mode == "lower" then chars[i] = unicodeLower(c)
+                        elseif mode == "title" then chars[i] = not inWord and unicodeUpper(c) or unicodeLower(c)
+                        elseif mode == "sentence" then chars[i] = pending and unicodeUpper(c) or unicodeLower(c)
+                        elseif not done then chars[i] = mode == "first_upper" and unicodeUpper(c) or unicodeLower(c) end
+                        inWord, pending, done = true, false, true
+                    else
+                        if isWhitespaceChar(c) or isPunctuationChar(c) then inWord = false end
+                        if sentenceSplitChars[c] then pending = true
+                        elseif not isWhitespaceChar(c) and not isPunctuationChar(c) then pending = false end
+                    end
+                    i = i + 1
+                end
+            end
+            return table.concat(chars)
+        end)
+        subs[index] = line
     end
-    local t = table.concat(clean, " ")
-    t = t:gsub("%s+", " ")
-    t = t:gsub("%s+([,;:%)%.%!%?])", "%1")
-    t = t:gsub("([%(])%s+", "%1")
-    t = t:gsub("(" .. INV_EXCLAMATION .. ")%s+", "%1")
-    t = t:gsub("(" .. INV_QUESTION .. ")%s+", "%1")
-    return trimText(t)
-end
-
-local function textToTitleCase(value)
-    local chars = splitUtf8Chars(unicodeLower(value))
-    local inWord = false
-    local i = 1
-    while i <= #chars do
-        local c = chars[i]
-        if c == "\\" and (chars[i+1] == "N" or chars[i+1] == "n") then
-            inWord = false
-            i = i + 2
-        elseif isLetter(c) then
-            if not inWord then chars[i] = unicodeUpper(c) end
-            inWord = true
-            i = i + 1
-        elseif isWhitespaceChar(c) or isPunctuationChar(c) or c == "-" then
-            inWord = false
-            i = i + 1
-        else
-            i = i + 1
-        end
-    end
-    return table.concat(chars)
-end
-
-local function textToSentenceCase(value)
-    local chars = splitUtf8Chars(unicodeLower(value))
-    local pending = true
-    for i, c in ipairs(chars) do
-        if isLetter(c) then
-            if pending then chars[i] = unicodeUpper(c); pending = false end
-        elseif SENTENCE_SPLIT_CHARS[c] or c == "?" or c == "!" then
-            pending = true
-        elseif c == INV_QUESTION or c == INV_EXCLAMATION or isWhitespaceChar(c) or c == "\"" or c == "'" or c == "(" or c == "[" then
-        else
-            if not isPunctuationChar(c) then pending = false end
-        end
-    end
-    return table.concat(chars)
 end
 
 local function changeFirstLetter(value, upper)
@@ -3993,26 +3985,6 @@ local function changeFirstLetter(value, upper)
         end
     end
     return table.concat(chars), false
-end
-
-local function stripLeadingEllipsisText(value)
-    value = normalizeString(value)
-    local prefix, rest = "", trimText(value)
-    while startsWith(rest, INV_QUESTION) or startsWith(rest, INV_EXCLAMATION) do
-        local c = unicodeSub(rest, 1, 1)
-        prefix = prefix .. c
-        rest = trimText(unicodeSub(rest, 2))
-    end
-    local stripping = true
-    while stripping do
-        stripping = false
-        local r = rest:gsub("^%.%.%.+%s*", "")
-        if r ~= rest then rest = r; stripping = true end
-        if startsWith(rest, HORIZONTAL_ELLIPSIS) or startsWith(rest, TWO_DOT_LEADER) then
-            rest = trimText(unicodeSub(rest, 2)); stripping = true
-        end
-    end
-    return prefix .. rest
 end
 
 local function addEndingEllipsisText(value)
@@ -4035,7 +4007,7 @@ local function addEndingEllipsisText(value)
         stripping = false
         local b = body:gsub("%s*%.+%s*$", "")
         if b ~= body then body = b; stripping = true end
-        if endsWith(body, HORIZONTAL_ELLIPSIS) or endsWith(body, TWO_DOT_LEADER) then
+        if endsWith(body, horizontalEllipsis) or endsWith(body, twoDotLeader) then
             body = trimText(unicodeSub(body, 1, -2)); stripping = true
         end
     end
@@ -4044,12 +4016,12 @@ end
 
 local function normalizeQuotesText(v)
     return normalizeString(v)
-        :gsub(LEFT_DOUBLE_QUOTE,"\""):gsub(RIGHT_DOUBLE_QUOTE,"\"")
-        :gsub(DOUBLE_LOW_QUOTE,"\""):gsub(DOUBLE_HIGH_REVERSED_QUOTE,"\"")
-        :gsub(LEFT_GUILLEMET,"\""):gsub(RIGHT_GUILLEMET,"\"")
-        :gsub(LEFT_SINGLE_GUILLEMET,"\""):gsub(RIGHT_SINGLE_GUILLEMET,"\"")
-        :gsub(LEFT_SINGLE_QUOTE,"'"):gsub(RIGHT_SINGLE_QUOTE,"'")
-        :gsub(SINGLE_LOW_QUOTE,"'"):gsub(SINGLE_HIGH_REVERSED_QUOTE,"'")
+        :gsub(leftDoubleQuote,"\""):gsub(rightDoubleQuote,"\"")
+        :gsub(doubleLowQuote,"\""):gsub(doubleHighReversedQuote,"\"")
+        :gsub(leftGuillemet,"\""):gsub(rightGuillemet,"\"")
+        :gsub(leftSingleGuillemet,"\""):gsub(rightSingleGuillemet,"\"")
+        :gsub(leftSingleQuote,"'"):gsub(rightSingleQuote,"'")
+        :gsub(singleLowQuote,"'"):gsub(singleHighReversedQuote,"'")
 end
 
 local function toLatinQuotesText(value)
@@ -4059,25 +4031,25 @@ local function toLatinQuotesText(value)
     for i, ch in ipairs(chars) do
         local prev, nxt = chars[i-1], chars[i+1]
         local letterContext = prev and nxt and isLetter(prev) and isLetter(nxt)
-        if ch == LEFT_DOUBLE_QUOTE or ch == DOUBLE_LOW_QUOTE then
-            out[#out+1] = LEFT_GUILLEMET
-        elseif ch == RIGHT_DOUBLE_QUOTE or ch == DOUBLE_HIGH_REVERSED_QUOTE then
-            out[#out+1] = RIGHT_GUILLEMET
-        elseif ch == LEFT_SINGLE_GUILLEMET then
-            out[#out+1] = LEFT_GUILLEMET
-        elseif ch == RIGHT_SINGLE_GUILLEMET then
-            out[#out+1] = RIGHT_GUILLEMET
-        elseif ch == LEFT_SINGLE_QUOTE or ch == SINGLE_LOW_QUOTE then
-            out[#out+1] = LEFT_GUILLEMET
-        elseif ch == RIGHT_SINGLE_QUOTE or ch == SINGLE_HIGH_REVERSED_QUOTE then
-            if letterContext then out[#out+1] = "'" else out[#out+1] = RIGHT_GUILLEMET end
+        if ch == leftDoubleQuote or ch == doubleLowQuote then
+            out[#out+1] = leftGuillemet
+        elseif ch == rightDoubleQuote or ch == doubleHighReversedQuote then
+            out[#out+1] = rightGuillemet
+        elseif ch == leftSingleGuillemet then
+            out[#out+1] = leftGuillemet
+        elseif ch == rightSingleGuillemet then
+            out[#out+1] = rightGuillemet
+        elseif ch == leftSingleQuote or ch == singleLowQuote then
+            out[#out+1] = leftGuillemet
+        elseif ch == rightSingleQuote or ch == singleHighReversedQuote then
+            if letterContext then out[#out+1] = "'" else out[#out+1] = rightGuillemet end
         elseif ch == "\"" then
-            if doubleOpen then out[#out+1] = RIGHT_GUILLEMET; doubleOpen = false
-            else out[#out+1] = LEFT_GUILLEMET; doubleOpen = true end
+            if doubleOpen then out[#out+1] = rightGuillemet; doubleOpen = false
+            else out[#out+1] = leftGuillemet; doubleOpen = true end
         elseif ch == "'" then
             if letterContext then out[#out+1] = "'"
-            elseif singleOpen then out[#out+1] = RIGHT_GUILLEMET; singleOpen = false
-            else out[#out+1] = LEFT_GUILLEMET; singleOpen = true end
+            elseif singleOpen then out[#out+1] = rightGuillemet; singleOpen = false
+            else out[#out+1] = leftGuillemet; singleOpen = true end
         else
             out[#out+1] = ch
         end
@@ -4086,7 +4058,7 @@ local function toLatinQuotesText(value)
 end
 
 local function normalizeDashesText(v)
-    v = normalizeString(v):gsub(EN_DASH,"-"):gsub(EM_DASH,"-"):gsub(HORIZONTAL_BAR,"-"):gsub(MINUS_SIGN,"-")
+    v = normalizeString(v):gsub(enDash,"-"):gsub(emDash,"-"):gsub(horizontalBar,"-"):gsub(minusSign,"-")
     v = v:gsub("%s+%-%s+", " - "):gsub("%s+%-%-", "--")
     return v
 end
@@ -4099,7 +4071,7 @@ local function toggleWrappedPunctuation(text, opening, closing)
     body, trailingTags = splitTrailingTagBlocks(body)
     if startsWith(body, opening) and endsWith(body, closing) then
         body = body:sub(#opening + 1, #body - #closing); body = trimText(body)
-        if body ~= "" and not (body:match("[%.%!%?]$") or endsWith(body, HORIZONTAL_ELLIPSIS)) then
+        if body ~= "" and not (body:match("[%.%!%?]$") or endsWith(body, horizontalEllipsis)) then
             body = body .. "."
         end
         return tags .. body .. trailingTags
@@ -4113,7 +4085,7 @@ local function toggleWrappedPunctuation(text, opening, closing)
         local clean = stripTags(body); clean = clean:sub(1, #clean - #closing)
         local paired = false
         if #opening > 1 then
-            for c in opening:gmatch(UTF8_CHAR_PATTERN) do
+            for c in opening:gmatch(utf8CharPattern) do
                 if clean:find(c, 1, true) then paired = true; break end
             end
         else
@@ -4122,7 +4094,7 @@ local function toggleWrappedPunctuation(text, opening, closing)
         if not paired then return tags .. opening .. trimText(body) .. trailingTags end
         return text
     end
-    if not body:match("%.%.%s*$") and not endsWith(trimText(body), HORIZONTAL_ELLIPSIS) then
+    if not body:match("%.%.%s*$") and not endsWith(trimText(body), horizontalEllipsis) then
         body = body:gsub("%.%s*$", "")
     end
     return tags .. opening .. trimText(body) .. closing .. trailingTags
@@ -4167,34 +4139,19 @@ function TextOperations.toggleItalics(subs, sel)
     end
 end
 
-function TextOperations.toUppercase(subs, sel)   for _, i in ipairs(sel) do local l=subs[i]; mutateTextSections(l, unicodeUpper);     subs[i]=l end end
-function TextOperations.toLowercase(subs, sel)   for _, i in ipairs(sel) do local l=subs[i]; mutateTextSections(l, unicodeLower);     subs[i]=l end end
-function TextOperations.toTitleCase(subs, sel)   for _, i in ipairs(sel) do local l=subs[i]; mutateTextSections(l, textToTitleCase);  subs[i]=l end end
-function TextOperations.toSentenceCase(subs, sel)for _, i in ipairs(sel) do local l=subs[i]; mutateTextSections(l, textToSentenceCase);subs[i]=l end end
-
-function TextOperations.capitalizeFirst(subs, sel)
-    for _, i in ipairs(sel) do
-        local l = subs[i]; local done = false
-        mutateTextSections(l, function(t) if done then return t end
-            local c, found = changeFirstLetter(t, true); if found then done = true end; return c end)
-        subs[i] = l
-    end
-end
-function TextOperations.lowercaseFirst(subs, sel)
-    for _, i in ipairs(sel) do
-        local l = subs[i]; local done = false
-        mutateTextSections(l, function(t) if done then return t end
-            local c, found = changeFirstLetter(t, false); if found then done = true end; return c end)
-        subs[i] = l
-    end
-end
+function TextOperations.toUppercase(subs, sel) caseTextForSelection(subs, sel, "upper") end
+function TextOperations.toLowercase(subs, sel) caseTextForSelection(subs, sel, "lower") end
+function TextOperations.toTitleCase(subs, sel) caseTextForSelection(subs, sel, "title") end
+function TextOperations.toSentenceCase(subs, sel) caseTextForSelection(subs, sel, "sentence") end
+function TextOperations.capitalizeFirst(subs, sel) caseTextForSelection(subs, sel, "first_upper") end
+function TextOperations.lowercaseFirst(subs, sel) caseTextForSelection(subs, sel, "first_lower") end
 
 function TextOperations.formatEllipsis(subs, sel)
     for _, i in ipairs(sel) do
         local l = subs[i]
         mutateTextSections(l, function(t)
-            t = t:gsub(HORIZONTAL_ELLIPSIS, "...")
-            t = t:gsub(TWO_DOT_LEADER, "...")
+            t = t:gsub(horizontalEllipsis, "...")
+            t = t:gsub(twoDotLeader, "...")
             t = t:gsub("%.%.+", "...")
             t = t:gsub("%s+%.%.%.", "...")
             return t
@@ -4210,7 +4167,7 @@ function TextOperations.eraseLeadingEllipsis(subs, sel)
         subs[i] = l
     end
 end
-local function eraseInnerEllipsisText(value)
+local function splitTrailingTextSuffix(value)
     local text = normalizeString(value)
     local suffix = ""
     local peeling = true
@@ -4230,31 +4187,35 @@ local function eraseInnerEllipsisText(value)
         else
             local chars = splitUtf8Chars(text)
             local last = chars[#chars]
-            if last and CLOSING_PUNCTUATION[last] then
+            if last and closingPunctuation[last] then
                 suffix = last .. suffix
                 text = joinRange(chars, 1, #chars - 1)
                 peeling = true
             end
         end
     end
+    return text, suffix
+end
+local function eraseInnerEllipsisText(value)
+    local text, suffix = splitTrailingTextSuffix(value)
     local ending = ""
     local dots = text:match("(%.%.%.+)$")
     if dots then
         ending = dots
         text = text:sub(1, #text - #dots)
-    elseif endsWith(text, HORIZONTAL_ELLIPSIS) or endsWith(text, TWO_DOT_LEADER) then
+    elseif endsWith(text, horizontalEllipsis) or endsWith(text, twoDotLeader) then
         local chars = splitUtf8Chars(text)
         ending = chars[#chars]
         text = joinRange(chars, 1, #chars - 1)
     end
     text = mutateTextOutsideBlocks(text, function(part)
         part = part:gsub("%.%.%.+([,;:%.%!%?])", "%1")
-        part = part:gsub(HORIZONTAL_ELLIPSIS .. "([,;:%.%!%?])", "%1")
-        part = part:gsub(TWO_DOT_LEADER .. "([,;:%.%!%?])", "%1")
+        part = part:gsub(horizontalEllipsis .. "([,;:%.%!%?])", "%1")
+        part = part:gsub(twoDotLeader .. "([,;:%.%!%?])", "%1")
         part = part:gsub("([^%s])%.%.%.+([^%s])", "%1 %2")
-        part = part:gsub("([^%s])" .. HORIZONTAL_ELLIPSIS .. "([^%s])", "%1 %2")
-        part = part:gsub("([^%s])" .. TWO_DOT_LEADER .. "([^%s])", "%1 %2")
-        return part:gsub(HORIZONTAL_ELLIPSIS, ""):gsub(TWO_DOT_LEADER, ""):gsub("%.%.%.+", "")
+        part = part:gsub("([^%s])" .. horizontalEllipsis .. "([^%s])", "%1 %2")
+        part = part:gsub("([^%s])" .. twoDotLeader .. "([^%s])", "%1 %2")
+        return part:gsub(horizontalEllipsis, ""):gsub(twoDotLeader, ""):gsub("%.%.%.+", "")
     end)
     return text .. ending .. suffix
 end
@@ -4269,30 +4230,18 @@ function TextOperations.addEndingEllipsis(subs, sel)
     for _, i in ipairs(sel) do local l = subs[i]; l.text = addEndingEllipsisText(l.text); subs[i] = l end
 end
 local function replaceFinalEllipsisText(value, replacement)
-    local text = normalizeString(value)
-    text = text:gsub(HORIZONTAL_ELLIPSIS, "..."):gsub(TWO_DOT_LEADER, "..."):gsub("%.%.+", "...")
-    local trailingSpace = text:match("(%s+)$") or ""
-    if trailingSpace ~= "" then text = text:sub(1, #text - #trailingSpace) end
-    local closing = {}
-    while text ~= "" do
-        local chars = splitUtf8Chars(text)
-        local last = chars[#chars]
-        if last and CLOSING_PUNCTUATION[last] then
-            table.insert(closing, 1, last)
-            text = joinRange(chars, 1, #chars - 1)
-        else
-            break
-        end
-    end
+    local text, suffix = splitTrailingTextSuffix(value)
     local changed
-    text, changed = text:gsub("%.%.%.$", replacement, 1)
+    text, changed = text:gsub("%.%.+$", replacement, 1)
+    if changed == 0 then text, changed = text:gsub(horizontalEllipsis .. "$", replacement, 1) end
+    if changed == 0 then text, changed = text:gsub(twoDotLeader .. "$", replacement, 1) end
     if changed == 0 then return value end
-    return text .. table.concat(closing) .. trailingSpace
+    return text .. suffix
 end
 local function replaceFinalEllipsisForSelection(subs, sel, replacement)
     for _, i in ipairs(sel) do
         local l = subs[i]
-        mutateTextSections(l, function(t) return replaceFinalEllipsisText(t, replacement) end)
+        l.text = replaceFinalEllipsisText(l.text, replacement)
         subs[i] = l
     end
 end
@@ -4318,28 +4267,10 @@ end
 local function togglePunctuationForSelection(subs, sel, opening, closing)
     for _, i in ipairs(sel) do local l = subs[i]; l.text = toggleWrappedPunctuation(l.text, opening, closing); subs[i] = l end
 end
-function TextOperations.toggleExclamation(subs, sel) togglePunctuationForSelection(subs, sel, INV_EXCLAMATION, "!") end
-function TextOperations.toggleQuestion(subs, sel)    togglePunctuationForSelection(subs, sel, INV_QUESTION, "?") end
-function TextOperations.toggleBothSigns(subs, sel)   togglePunctuationForSelection(subs, sel, INV_EXCLAMATION .. INV_QUESTION, "?!") end
+function TextOperations.toggleExclamation(subs, sel) togglePunctuationForSelection(subs, sel, invExclamation, "!") end
+function TextOperations.toggleQuestion(subs, sel)    togglePunctuationForSelection(subs, sel, invQuestion, "?") end
+function TextOperations.toggleBothSigns(subs, sel)   togglePunctuationForSelection(subs, sel, invExclamation .. invQuestion, "?!") end
 
-local function normalizeRepeatedLetters(value)
-    local chars = splitUtf8Chars(value); if #chars < 3 then return value end
-    local out, i = {}, 1
-    while i <= #chars do
-        local cur = chars[i]
-        if isLetter(cur) then
-            local j = i + 1
-            while j <= #chars and chars[j] == cur do j = j + 1 end
-            local run = j - i
-            if run >= 3 then out[#out+1] = cur
-            else for k = i, j - 1 do out[#out+1] = chars[k] end end
-            i = j
-        else
-            out[#out+1] = cur; i = i + 1
-        end
-    end
-    return table.concat(out)
-end
 function TextOperations.removeDuplicateLetters(subs, sel)
     for _, i in ipairs(sel) do local l = subs[i]; mutateTextSections(l, normalizeRepeatedLetters); subs[i] = l end
 end
@@ -4498,23 +4429,13 @@ end
 
 function TagOperations.removeAllTags(subs, sel)
     for _, i in ipairs(sel) do
-        local l = subs[i]; local p = parseLine(l)
-        if p and p.stripTags and p.commit then p:stripTags(); p:commit()
-        else
-            l.text = normalizeString(l.text):gsub("(%b{})", function(b)
-                return b:match("^%{%s*\\") and "" or b
-            end)
-        end
-        subs[i] = l
+        local line = subs[i]; line.text = stripTags(line.text); subs[i] = line
     end
 end
 
 function TagOperations.removeComments(subs, sel)
     for _, i in ipairs(sel) do
-        local l = subs[i]; local p = parseLine(l)
-        if p and p.stripComments and p.commit then p:stripComments(); p:commit()
-        else l.text = stripComments(l.text) end
-        subs[i] = l
+        local line = subs[i]; line.text = stripComments(line.text); subs[i] = line
     end
 end
 
@@ -4525,7 +4446,7 @@ local function mergeAdjacentTagBlocks(text)
     while i <= n do
         if text:sub(i, i) == "{" then
             local close = text:find("}", i, true)
-            if not close then out[#out+1] = text:sub(i); last = 0; break end
+            if not close then out[#out+1] = text:sub(i); break end
             local block = text:sub(i, close)
             local isTag = isOverrideBlock(block)
             if isTag and last > 0 then
@@ -4584,38 +4505,44 @@ function TagOperations.parseActor(subs, sel)
     end
     local function parseActorsAndSplit(text)
         local segments = {}
-        local current_text, current_actor = "", nil
+        local currentText, currentActor = "", nil
         local i, len = 1, text:len()
+        local patterns = {
+            "^%s*（(.-)）", "^%s*%((.-)%)", "^%s*%[(.-)%]",
+            "^%s*【(.-)】", "^%s*［(.-)］", "^%s*｛(.-)｝",
+            "^%s*〈(.-)〉", "^%s*《(.-)》", "^%s*「(.-)」",
+            "^%s*『(.-)』", "^%s*〔(.-)〕",
+        }
         while i <= len do
-            local sub = text:sub(i)
-            local actor_match, match_len = nil, 0
-            local patterns = {
-                "^%s*（(.-)）", "^%s*%((.-)%)", "^%s*%[(.-)%]",
-                "^%s*【(.-)】", "^%s*［(.-)］", "^%s*｛(.-)｝",
-                "^%s*〈(.-)〉", "^%s*《(.-)》", "^%s*「(.-)」",
-                "^%s*『(.-)』", "^%s*〔(.-)〕",
-            }
-            for _, pat in ipairs(patterns) do
-                local s, e, cap = sub:find(pat)
-                if s then actor_match = cap; match_len = e - s + 1; break end
-            end
-            if actor_match then
-                if current_text ~= "" and current_text:match("%S") then
-                    table.insert(segments, { actor = current_actor, text = current_text })
-                    current_text = ""
-                end
-                i = i + match_len; current_actor = actor_match
+            local blockEnd = text:sub(i, i) == "{" and select(2, text:find("^%b{}", i))
+            if blockEnd then
+                currentText = currentText .. text:sub(i, blockEnd)
+                i = blockEnd + 1
             else
-                local b = text:byte(i)
-                local cl = (b >= 240) and 4 or (b >= 224) and 3 or (b >= 192) and 2 or 1
-                current_text = current_text .. text:sub(i, i + cl - 1)
-                i = i + cl
+                local sub = text:sub(i)
+                local actorMatch, matchLen = nil, 0
+                for _, pat in ipairs(patterns) do
+                    local s, e, cap = sub:find(pat)
+                    if s then actorMatch = cap; matchLen = e - s + 1; break end
+                end
+                if actorMatch then
+                    if hasVisibleSegmentText(currentText) then
+                        table.insert(segments, { actor = currentActor, text = currentText })
+                        currentText = ""
+                    end
+                    i = i + matchLen; currentActor = actorMatch
+                else
+                    local b = text:byte(i)
+                    local cl = (b >= 240) and 4 or (b >= 224) and 3 or (b >= 192) and 2 or 1
+                    currentText = currentText .. text:sub(i, i + cl - 1)
+                    i = i + cl
+                end
             end
         end
-        if current_text ~= "" then table.insert(segments, { actor = current_actor, text = current_text }) end
+        if currentText ~= "" then table.insert(segments, { actor = currentActor, text = currentText }) end
         return segments
     end
-    local last_actor = nil
+    local lastActor = nil
     table.sort(sel)
     local shifts = 0
     local inserted = {}
@@ -4623,28 +4550,35 @@ function TagOperations.parseActor(subs, sel)
         local i = ix + shifts
         local l = subs[i]
         local text = normalizeString(l.text)
-        text = text:gsub("<([^>]+)>", "{\\i1}%1{\\i0}")
-        text = text:gsub("＜(.-)＞", "{\\i1}%1{\\i0}")
-        local simple_actor, simple_rest = text:match("^%s*%[([^%]]+)%]%s*:%s*(.+)$")
-        if not simple_actor then
-            simple_actor, simple_rest = text:match("^%s*([^:%[%(]+):%s*(.+)$")
-            if simple_actor and (text:match("^%s*[%a][%w+%.%-]*://") or simple_actor:find("\\") or #trimText(simple_actor) > 24) then
-                simple_actor, simple_rest = nil, nil
+        text = mutateTextOutsideBlocks(text, function(value)
+            return value:gsub("<([^>]+)>", "{\\i1}%1{\\i0}"):gsub("＜(.-)＞", "{\\i1}%1{\\i0}")
+        end)
+        local simpleActor, simpleRest = text:match("^%s*%[([^%]]+)%]%s*:%s*(.+)$")
+        if not simpleActor then
+            simpleActor, simpleRest = text:match("^%s*([^:%[%(]+):%s*(.+)$")
+            if simpleActor and (text:match("^%s*[%a][%w+%.%-]*://") or simpleActor:find("\\") or #trimText(simpleActor) > 24) then
+                simpleActor, simpleRest = nil, nil
             end
         end
-        if simple_actor and simple_rest and not simple_rest:match("[%[%(（]") then
-            l.actor = trimText(simple_actor)
-            l.text = simple_rest
-            last_actor = l.actor
+        if simpleActor and simpleRest and not simpleRest:match("[%[%(（]") then
+            l.actor = trimText(simpleActor)
+            l.text = simpleRest
+            lastActor = l.actor
             subs[i] = l
         else
             local parts = parseActorsAndSplit(text)
+            local inherited = extractLeadingTagBlocks(text)
+            for position, part in ipairs(parts) do
+                local leading, body = splitLeadingBraceBlocks(trimText(part.text))
+                part.text = leading .. trimText(body)
+                if position > 1 then part.text = ensureInheritedTags(part.text, inherited) end
+            end
             if #parts == 0 then
-                if last_actor then l.actor = last_actor; subs[i] = l end
+                if lastActor then l.actor = lastActor; subs[i] = l end
             elseif #parts == 1 then
                 local p = parts[1]
-                if p.actor then l.actor = p.actor; last_actor = p.actor
-                elseif last_actor then l.actor = last_actor end
+                if p.actor then l.actor = p.actor; lastActor = p.actor
+                elseif lastActor then l.actor = lastActor end
                 l.text = p.text:gsub("^%s+", ""):gsub("%s+$", "")
                 subs[i] = l
             else
@@ -4654,8 +4588,8 @@ function TagOperations.parseActor(subs, sel)
                     for j, p in ipairs(parts) do
                         local nl = cloneLine(l)
                         nl.start_time = t; nl.end_time = t + dur[j]; t = nl.end_time
-                        if p.actor then nl.actor = p.actor; last_actor = p.actor
-                        elseif last_actor then nl.actor = last_actor end
+                        if p.actor then nl.actor = p.actor; lastActor = p.actor
+                        elseif lastActor then nl.actor = lastActor end
                         nl.text = p.text:gsub("^%s+", ""):gsub("%s+$", "")
                         if j == 1 then subs[i] = nl else subs.insert(i + j - 1, nl); shifts = shifts + 1 end
                     end
@@ -4716,7 +4650,7 @@ local function addAhPrefixToText(value)
     local prefix, idx = {}, 1
     while idx <= #chars do
         local ch = chars[idx]
-        if ch == INV_QUESTION or ch == INV_EXCLAMATION then prefix[#prefix+1] = ch; idx = idx + 1
+        if ch == invQuestion or ch == invExclamation then prefix[#prefix+1] = ch; idx = idx + 1
         elseif ch == "." then
             local dots, j = 0, idx
             while j <= #chars and chars[j] == "." do dots = dots + 1; j = j + 1 end
@@ -4725,7 +4659,7 @@ local function addAhPrefixToText(value)
                 idx = j
                 while idx <= #chars and (chars[idx] == " " or chars[idx] == "\t") do idx = idx + 1 end
             else break end
-        elseif ch == HORIZONTAL_ELLIPSIS or ch == TWO_DOT_LEADER then
+        elseif ch == horizontalEllipsis or ch == twoDotLeader then
             prefix[#prefix+1] = ch; idx = idx + 1
             while idx <= #chars and (chars[idx] == " " or chars[idx] == "\t") do idx = idx + 1 end
         elseif ch == " " or ch == "\t" then idx = idx + 1
@@ -4761,45 +4695,21 @@ local function addAhPrefixToText(value)
     return table.concat(out), true
 end
 
-function SmartOperations.injectStutter(subs, sel)
+local function mutateFirstText(subs, sel, transform)
     for _, i in ipairs(sel) do
-        local l = subs[i]; local p = parseLine(l); local done = false
-        if p and ASS and ASS.Section and p.callback and p.commit then
-            p:callback(function(section)
-                if not done and section.class == ASS.Section.Text then
-                    local replaced, changed = addStutterToText(section.value)
-                    section.value = replaced; done = changed
-                end
-            end)
-            p:commit()
-        else
-            local leadTags, body = splitLeadingTagBlocks(normalizeString(l.text))
-            local replaced, changed = addStutterToText(body)
-            if changed then l.text = leadTags .. replaced end
-        end
-        subs[i] = l
+        local line, done = subs[i], false
+        mutateTextSections(line, function(value)
+            if done then return value end
+            local replaced, changed = transform(value)
+            done = changed
+            return replaced
+        end)
+        subs[i] = line
     end
 end
 
-function SmartOperations.injectAhPrefix(subs, sel)
-    for _, i in ipairs(sel) do
-        local l = subs[i]; local p = parseLine(l); local done = false
-        if p and ASS and ASS.Section and p.callback and p.commit then
-            p:callback(function(section)
-                if not done and section.class == ASS.Section.Text then
-                    local replaced, changed = addAhPrefixToText(section.value)
-                    section.value = replaced; done = changed
-                end
-            end)
-            p:commit()
-        else
-            local leadTags, body = splitLeadingTagBlocks(normalizeString(l.text))
-            local replaced, changed = addAhPrefixToText(body)
-            if changed then l.text = leadTags .. replaced end
-        end
-        subs[i] = l
-    end
-end
+function SmartOperations.injectStutter(subs, sel) mutateFirstText(subs, sel, addStutterToText) end
+function SmartOperations.injectAhPrefix(subs, sel) mutateFirstText(subs, sel, addAhPrefixToText) end
 
 function SmartOperations.removeHonorifics(subs, sel)
     local function removeFromText(text)
@@ -4831,17 +4741,23 @@ end
 
 function TimingOperations.removeLinebreaks(subs, sel)
     for _, i in ipairs(sel) do
-        local l = subs[i]
-        local text = normalizeString(l.text):gsub("\\[Nn]", " "):gsub("[ \t]+", " ")
-        l.text = trimText(text)
-        subs[i] = l
+        local line = subs[i]
+        mutateTextSections(line, function(value) return value:gsub("\\[Nn]", " "):gsub("[ \t]+", " ") end)
+        line.text = trimText(line.text)
+        subs[i] = line
     end
 end
 
 function SmartOperations.clarifyCaption(subs, sel)
     for _, i in ipairs(sel) do
-        local l = subs[i]; l.text = trimText(normalizeString(l.text):gsub("%b[]", ""):gsub("%s+", " "))
-        subs[i] = l
+        local line, first = subs[i], true
+        mutateTextSections(line, function(value)
+            local clean = value:gsub("%b[]", ""):gsub("%s+", " ")
+            if first then clean = clean:gsub("^%s+", ""); first = clean == "" end
+            return clean
+        end)
+        line.text = trimText(line.text)
+        subs[i] = line
     end
 end
 
@@ -4849,12 +4765,12 @@ function SmartOperations.eraseBlankLines(subs, sel)
     local toDelete, deleteSet = {}, {}
     for _, i in ipairs(sel) do
         local l = subs[i]
-        local clean = stripComments(stripTags(l.text)):gsub("%s+", "")
+        local clean = visibleText(l.text):gsub("%s+", ""):gsub(NBSP, "")
         if clean == "" then toDelete[#toDelete+1] = i; deleteSet[i] = true end
     end
     table.sort(toDelete, function(a, b) return a > b end)
     for _, i in ipairs(toDelete) do subs.delete(i) end
-    return remapSelectionAfterDeletion(sel, deleteSet)
+    return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
 
 function SmartOperations.deleteCommentLines(subs, sel)
@@ -4866,42 +4782,29 @@ function SmartOperations.deleteCommentLines(subs, sel)
             subs.delete(i); deleteSet[i] = true
         end
     end
-    return remapSelectionAfterDeletion(sel, deleteSet)
+    return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
 
+local function moveMatchingLines(subs, sel, predicate, toStart)
+    local selected, matching, other = {}, {}, {}
+    for _, i in ipairs(sel) do selected[#selected+1] = { index = i, line = cloneLine(subs[i]) } end
+    table.sort(selected, function(a, b) return a.index < b.index end)
+    for _, item in ipairs(selected) do
+        local target = predicate(item.line) and matching or other
+        target[#target+1] = item.line
+    end
+    local first, second = toStart and matching or other, toStart and other or matching
+    for _, line in ipairs(second) do first[#first+1] = line end
+    for position, item in ipairs(selected) do subs[item.index] = first[position] end
+end
 local function moveCommentLines(subs, sel, toStart)
-    local selected, commented, active = {}, {}, {}
-    for _, i in ipairs(sel) do selected[#selected+1] = { index = i, line = cloneLine(subs[i]) } end
-    table.sort(selected, function(a, b) return a.index < b.index end)
-    for _, it in ipairs(selected) do
-        if isDialogue(it.line) and it.line.comment then commented[#commented+1] = it.line
-        else active[#active+1] = it.line end
-    end
-    local ordered = {}
-    local first = toStart and commented or active
-    local second = toStart and active    or commented
-    for _, l in ipairs(first)  do ordered[#ordered+1] = l end
-    for _, l in ipairs(second) do ordered[#ordered+1] = l end
-    for idx, it in ipairs(selected) do subs[it.index] = ordered[idx] end
+    moveMatchingLines(subs, sel, function(line) return isDialogue(line) and line.comment end, toStart)
 end
-function SmartOperations.commentsToTop(subs, sel)    moveCommentLines(subs, sel, true) end
+function SmartOperations.commentsToTop(subs, sel) moveCommentLines(subs, sel, true) end
 function SmartOperations.commentsToBottom(subs, sel) moveCommentLines(subs, sel, false) end
-
-local function moveEffectLinesToTop(subs, sel)
-    local selected, marked, plain = {}, {}, {}
-    for _, i in ipairs(sel) do selected[#selected+1] = { index = i, line = cloneLine(subs[i]) } end
-    table.sort(selected, function(a, b) return a.index < b.index end)
-    for _, it in ipairs(selected) do
-        if isDialogue(it.line) and trimText(it.line.effect or "") ~= "" then marked[#marked+1] = it.line
-        else plain[#plain+1] = it.line end
-    end
-    local ordered = {}
-    for _, l in ipairs(marked) do ordered[#ordered+1] = l end
-    for _, l in ipairs(plain) do ordered[#ordered+1] = l end
-    for idx, it in ipairs(selected) do subs[it.index] = ordered[idx] end
+function TagOperations.effectsToTop(subs, sel)
+    moveMatchingLines(subs, sel, function(line) return isDialogue(line) and trimText(line.effect) ~= "" end, true)
 end
-
-function TagOperations.effectsToTop(subs, sel) moveEffectLinesToTop(subs, sel) end
 
 local function nearestKeyframe(frame, kfs, range)
     local best, bestDist = nil, nil
@@ -4976,7 +4879,7 @@ end
 local function directionalSnap(subs, sel, edge, direction)
     local kfs = getKeyframes()
     if not kfs or #kfs == 0 then showMsg(L("err_no_keyframes")); return end
-    local limit = tonumber(currentConfig.edge_snap_protect_ms) or DEFAULT_CONFIG.edge_snap_protect_ms
+    local limit = tonumber(currentConfig.edge_snap_protect_ms) or defaultConfig.edge_snap_protect_ms
     limit = math.max(0, limit)
     if limit == 0 then return end
     for _, i in ipairs(sel) do
@@ -5035,11 +4938,11 @@ local function selectionByStart(all, sel)
     return order
 end
 
-local MIN_NEIGHBOR_DURATION = 10
+local minNeighborDuration = 10
 
 local function nudgeLead(subs, sel, edge)
-    local step = normalizeNumber(currentConfig.lead_step_ms, DEFAULT_CONFIG.lead_step_ms)
-    if step <= 0 then step = DEFAULT_CONFIG.lead_step_ms end
+    local step = normalizeNumber(currentConfig.lead_step_ms, defaultConfig.lead_step_ms)
+    if step <= 0 then step = defaultConfig.lead_step_ms end
     local all = timelineSnapshot(subs)
     for _, rec in ipairs(selectionByStart(all, sel)) do
         local bound, chained = nil, {}
@@ -5053,7 +4956,7 @@ local function nudgeLead(subs, sel, edge)
             local move
             if #chained > 0 then
                 move = step
-                for _, r in ipairs(chained) do move = math.min(move, r.e - r.s - MIN_NEIGHBOR_DURATION) end
+                for _, r in ipairs(chained) do move = math.min(move, r.e - r.s - minNeighborDuration) end
                 move = math.min(move, rec.s)
                 if move > 0 then
                     for _, r in ipairs(chained) do applySnapshotTime(subs, r, r.s, r.e - move) end
@@ -5072,7 +4975,7 @@ local function nudgeLead(subs, sel, edge)
             local move
             if #chained > 0 then
                 move = step
-                for _, r in ipairs(chained) do move = math.min(move, r.e - r.s - MIN_NEIGHBOR_DURATION) end
+                for _, r in ipairs(chained) do move = math.min(move, r.e - r.s - minNeighborDuration) end
                 if move > 0 then
                     for _, r in ipairs(chained) do applySnapshotTime(subs, r, r.s + move, r.e) end
                 end
@@ -5085,11 +4988,11 @@ local function nudgeLead(subs, sel, edge)
 end
 
 local function nudgeLeadInward(subs, sel, edge)
-    local step = normalizeNumber(currentConfig.lead_step_ms, DEFAULT_CONFIG.lead_step_ms)
-    if step <= 0 then step = DEFAULT_CONFIG.lead_step_ms end
+    local step = normalizeNumber(currentConfig.lead_step_ms, defaultConfig.lead_step_ms)
+    if step <= 0 then step = defaultConfig.lead_step_ms end
     local all = timelineSnapshot(subs)
     for _, rec in ipairs(selectionByStart(all, sel)) do
-        local move = math.min(step, rec.e - rec.s - MIN_NEIGHBOR_DURATION)
+        local move = math.min(step, rec.e - rec.s - minNeighborDuration)
         if move > 0 then
             if edge == "in" then
                 local oldStart = rec.s
@@ -5113,7 +5016,7 @@ local function nudgeLeadInward(subs, sel, edge)
 end
 
 local function chainToNeighbor(subs, sel, side)
-    local cap = normalizeNumber(currentConfig.chain_max_ms, DEFAULT_CONFIG.chain_max_ms)
+    local cap = normalizeNumber(currentConfig.chain_max_ms, defaultConfig.chain_max_ms)
     cap = math.max(0, cap)
     if cap == 0 then return end
     local all = timelineSnapshot(subs)
@@ -5182,7 +5085,7 @@ local function allocateDurationsByWeights(weights, totalDuration)
     return alloc
 end
 
-local function _allocateTimeDuration(segments, totalDuration)
+local function allocateTimeDuration(segments, totalDuration)
     local w = {}; for i, s in ipairs(segments) do w[i] = countCharacters(s) end
     return allocateDurationsByWeights(w, totalDuration)
 end
@@ -5216,73 +5119,7 @@ function TimingOperations.joinSameText(subs, sel)
             end
         end
     end
-    return remapSelectionAfterDeletion(sel, deleteSet)
-end
-
-function TimingOperations.joinOverlaps(subs, sel)
-    if not sel or #sel < 2 then return sel end
-    local entries = {}
-    for _, index in ipairs(sel) do
-        local line = subs[index]
-        if isEditableDialogue(line) and validateDuration(line) then
-            entries[#entries+1] = {
-                index = index,
-                line = line,
-                start_time = line.start_time,
-                end_time = line.end_time,
-            }
-        end
-    end
-    if #entries < 2 then return sel end
-    table.sort(entries, function(a, b)
-        if a.start_time ~= b.start_time then return a.start_time < b.start_time end
-        if a.end_time ~= b.end_time then return a.end_time < b.end_time end
-        return a.index < b.index
-    end)
-
-    local groups, current = {}, nil
-    for _, entry in ipairs(entries) do
-        if not current then
-            current = { start_time = entry.start_time, end_time = entry.end_time, lines = { entry } }
-        elseif entry.start_time < current.end_time then
-            current.lines[#current.lines+1] = entry
-            if entry.end_time > current.end_time then current.end_time = entry.end_time end
-        else
-            groups[#groups+1] = current
-            current = { start_time = entry.start_time, end_time = entry.end_time, lines = { entry } }
-        end
-    end
-    if current then groups[#groups+1] = current end
-
-    local replacements, deleteSet, deleted = {}, {}, {}
-    for _, group in ipairs(groups) do
-        if #group.lines > 1 then
-            local base = group.lines[1]
-            local joined = cloneLine(base.line)
-            local texts = {}
-            joined.start_time = group.start_time
-            joined.end_time = group.end_time
-            for _, entry in ipairs(group.lines) do
-                texts[#texts+1] = entry.line.text or ""
-                if entry.index ~= base.index then
-                    deleteSet[entry.index] = true
-                    deleted[#deleted+1] = entry.index
-                end
-            end
-            joined.text = table.concat(texts, "\\N")
-            replacements[#replacements+1] = { index = base.index, line = joined }
-        end
-    end
-    if #deleted == 0 then return sel end
-
-    local function applyJoinPlan()
-        for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
-        table.sort(deleted, function(a, b) return a > b end)
-        for _, index in ipairs(deleted) do subs.delete(index) end
-    end
-    if Kite.LineOps and Kite.LineOps.transaction then Kite.LineOps.transaction(subs, applyJoinPlan)
-    else applyJoinPlan() end
-    return remapSelectionAfterDeletion(sel, deleteSet)
+    return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
 
 local function joinOverlapSentenceParts(lines)
@@ -5299,12 +5136,12 @@ local function joinOverlapSentenceParts(lines)
     return joinTextParts(parts)
 end
 
-function TimingOperations.joinOverlapSentences(subs, sel)
+local function joinOverlapGroups(subs, sel, sentences)
     if not sel or #sel < 2 then return sel end
     local entries = {}
     for _, index in ipairs(sel) do
         local line = subs[index]
-        if isEditableDialogue(line) and validateDuration(line) and not isVectorDrawing(line) then
+        if isEditableDialogue(line) and validateDuration(line) and (not sentences or not isVectorDrawing(line)) then
             entries[#entries+1] = {
                 index = index,
                 line = line,
@@ -5339,11 +5176,18 @@ function TimingOperations.joinOverlapSentences(subs, sel)
         if #group.lines > 1 then
             local base = group.lines[1]
             local joined = cloneLine(base.line)
-            local text = joinOverlapSentenceParts(group.lines)
-            if text ~= "" then
-                joined.start_time = group.start_time
-                joined.end_time = group.end_time
-                joined.text = extractLeadingTagBlocks(base.line.text) .. text
+            local text
+            if sentences then
+                text = joinOverlapSentenceParts(group.lines)
+                if text ~= "" then text = extractLeadingTagBlocks(base.line.text) .. text end
+            else
+                local parts = {}
+                for _, entry in ipairs(group.lines) do parts[#parts+1] = entry.line.text or "" end
+                text = table.concat(parts, "\\N")
+            end
+            if not sentences or text ~= "" then
+                joined.start_time, joined.end_time = group.start_time, group.end_time
+                joined.text = text
                 replacements[#replacements+1] = { index = base.index, line = joined }
                 for pos = 2, #group.lines do
                     local index = group.lines[pos].index
@@ -5355,15 +5199,18 @@ function TimingOperations.joinOverlapSentences(subs, sel)
     end
     if #deleted == 0 then return sel end
 
-    local function applySentenceJoinPlan()
+    local function applyJoinPlan()
         for _, replacement in ipairs(replacements) do subs[replacement.index] = replacement.line end
         table.sort(deleted, function(a, b) return a > b end)
         for _, index in ipairs(deleted) do subs.delete(index) end
     end
-    if Kite.LineOps and Kite.LineOps.transaction then Kite.LineOps.transaction(subs, applySentenceJoinPlan)
-    else applySentenceJoinPlan() end
-    return remapSelectionAfterDeletion(sel, deleteSet)
+    if Kite.LineOps and Kite.LineOps.transaction then Kite.LineOps.transaction(subs, applyJoinPlan)
+    else applyJoinPlan() end
+    return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
+
+function TimingOperations.joinOverlaps(subs, sel) return joinOverlapGroups(subs, sel, false) end
+function TimingOperations.joinOverlapSentences(subs, sel) return joinOverlapGroups(subs, sel, true) end
 
 function TimingOperations.sortByLength(subs, sel)
     table.sort(sel)
@@ -5444,7 +5291,7 @@ function TimingOperations.timePicker(subs, sel)
 
     local btn, res = aegisub.dialog.display({
         { class="checkbox", name="include_partial", label=L("lbl_include_partial"), value=true, x=0, y=0, width=6, height=1 },
-    }, { L("btn_ok"), L("btn_cancel") }, { cancel = L("btn_cancel") })
+    }, { L("btn_ok"), L("btn_cancel") }, { close = L("btn_cancel") })
     if btn ~= L("btn_ok") then return sel end
 
     local minStart, maxEnd
@@ -5485,14 +5332,14 @@ local function parseDialogueRaw(line)
     line = trimText(line)
     local prefix, fields = splitEventLine(line)
     if not prefix then return nil end
-    local start_time = assTimeToMs(fields[2])
-    local end_time = assTimeToMs(fields[3])
-    if not start_time or not end_time or end_time <= start_time then return nil end
+    local startTime = assTimeToMs(fields[2])
+    local endTime = assTimeToMs(fields[3])
+    if not startTime or not endTime or endTime <= startTime then return nil end
     return {
         comment    = prefix == "Comment",
         layer      = tonumber(fields[1]) or 0,
-        start_time = start_time,
-        end_time   = end_time,
+        start_time = startTime,
+        end_time   = endTime,
         style      = trimText(fields[4]),
         actor      = trimText(fields[5]),
         margin_l   = tonumber(fields[6]) or 0,
@@ -5577,10 +5424,14 @@ function TimingOperations.joinLines(subs, sel)
     sel = collectEditableSelection(subs, sel)
     if #sel < 2 then return sel end
     table.sort(sel)
-    local first, last = subs[sel[1]], subs[sel[#sel]]
+    local first = subs[sel[1]]
     local parts = {}
     for _, i in ipairs(sel) do parts[#parts+1] = stripComments(stripTags(subs[i].text)) end
-    local merged = cloneLine(first); merged.end_time = last.end_time
+    local merged = cloneLine(first)
+    for _, index in ipairs(sel) do
+        merged.start_time = math.min(merged.start_time, subs[index].start_time)
+        merged.end_time = math.max(merged.end_time, subs[index].end_time)
+    end
     local leadTags = extractLeadingTagBlocks(first.text)
     local mergedText = joinTextParts(parts)
     merged.text = (leadTags ~= "" and leadTags or "") .. mergedText
@@ -5589,7 +5440,7 @@ function TimingOperations.joinLines(subs, sel)
     return { sel[1] }
 end
 
-local function isSplitBoundary(c, comma) if SENTENCE_SPLIT_CHARS[c] then return true end; if comma == true and COMMA_SPLIT_CHARS[c] then return true end; return false end
+local function isSplitBoundary(c, comma) if sentenceSplitChars[c] then return true end; if comma == true and commaSplitChars[c] then return true end; return false end
 local function isSplitIndex(chars, i, comma)
     local c = chars[i]
     if isSplitBoundary(c, comma) then return true end
@@ -5613,7 +5464,7 @@ local function splitTextByPunctuation(text, comma)
                 while j + 1 <= #chars and isSplitBoundary(chars[j+1], comma) do
                     j = j + 1; current[#current+1] = chars[j]
                 end
-                while j + 1 <= #chars and CLOSING_PUNCTUATION[chars[j+1]] do
+                while j + 1 <= #chars and closingPunctuation[chars[j+1]] do
                     j = j + 1; current[#current+1] = chars[j]
                 end
                 local seg = trimText(table.concat(current))
@@ -5654,15 +5505,15 @@ local function splitLineByPunctuationFallback(subs, i, comma)
     return #segments - 1
 end
 
-local function _splitLineByPunctuation(subs, sel, comma)
+local function splitLineByPunctuation(subs, sel, comma)
     table.sort(sel, function(a, b) return a > b end)
     local inserted = {}
     for _, i in ipairs(sel) do inserted[i] = splitLineByPunctuationFallback(subs, i, comma) end
     return remapSelectionAfterInsertion(sel, inserted)
 end
 
-function TimingOperations.splitBySentence(subs, sel) return _splitLineByPunctuation(subs, sel, false) end
-function TimingOperations.splitByComma(subs, sel)    return _splitLineByPunctuation(subs, sel, true) end
+function TimingOperations.splitBySentence(subs, sel) return splitLineByPunctuation(subs, sel, false) end
+function TimingOperations.splitByComma(subs, sel)    return splitLineByPunctuation(subs, sel, true) end
 
 local function countWordsBeforeLinebreak(text)
     local before = normalizeString(text)
@@ -5687,7 +5538,7 @@ local function pivotLinebreakText(text)
     clean = clean:gsub("[ \t]+", " ")
     clean = trimText(clean)
     local chars = splitUtf8Chars(clean)
-    local words, inWord, depth, startAt = {}, false, 0, nil
+    local words, inWord, depth = {}, false, 0
     for idx, ch in ipairs(chars) do
         if ch == "{" then
             if inWord then words[#words].finish = idx - 1; inWord = false end
@@ -5697,8 +5548,7 @@ local function pivotLinebreakText(text)
         elseif depth == 0 and isWhitespaceChar(ch) then
             if inWord then words[#words].finish = idx - 1; inWord = false end
         elseif depth == 0 and not inWord then
-            startAt = idx
-            words[#words+1] = { start = startAt, finish = idx }
+            words[#words+1] = { start = idx, finish = idx }
             inWord = true
         elseif depth == 0 and inWord then
             words[#words].finish = idx
@@ -5733,7 +5583,7 @@ function TimingOperations.splitByLinebreak(subs, sel)
     for _, i in ipairs(sel) do
         local l = subs[i]
         if isEditableDialogue(l) and normalizeString(l.text):find("\\[Nn]") and validateDuration(l) then
-            local parts = splitByLinebreak(l.text)
+            local parts = splitTextAtLinebreaks(l.text)
             if #parts >= 2 then
                 local inherited = extractLeadingTagBlocks(l.text)
                 local final = {}
@@ -5742,7 +5592,7 @@ function TimingOperations.splitByLinebreak(subs, sel)
                     if hasVisibleSegmentText(seg) then final[#final+1] = seg end
                 end
                 if #final >= 2 then
-                    local alloc = _allocateTimeDuration(final, l.end_time - l.start_time)
+                    local alloc = allocateTimeDuration(final, l.end_time - l.start_time)
                     if alloc then
                         local first = cloneLine(l); first.text = final[1]; first.end_time = first.start_time + alloc[1]
                         subs[i] = first; local cur = first.end_time
@@ -5761,19 +5611,19 @@ function TimingOperations.splitByLinebreak(subs, sel)
 end
 
 function TimingOperations.smartLineBreak(subs, sel)
-    local STRONG_CONJ = {
+    local strongConj = {
         ["pero"]=true,["mas"]=true,["sino"]=true,["aunque"]=true,["porque"]=true,["pues"]=true,
         ["si"]=true,["aun"]=true,["cuando"]=true,["mientras"]=true,["donde"]=true,["como"]=true,
         ["y"]=true,["e"]=true,["o"]=true,["u"]=true,["ni"]=true,
         ["but"]=true,["and"]=true,["or"]=true,["so"]=true,["yet"]=true,["if"]=true,["when"]=true,
         ["while"]=true,["because"]=true,["although"]=true,["though"]=true,["unless"]=true,["whereas"]=true,
     }
-    local TIGHT_FOLLOWER = {
+    local tightFollower = {
         ["que"]=true,["cual"]=true,["cuales"]=true,["quien"]=true,["quienes"]=true,
         ["cuyo"]=true,["cuya"]=true,["cuyos"]=true,["cuyas"]=true,
         ["that"]=true,["which"]=true,["who"]=true,["whom"]=true,["whose"]=true,
     }
-    local FUNCTION_TRAIL = {
+    local functionTrail = {
         ["el"]=true,["la"]=true,["los"]=true,["las"]=true,
         ["un"]=true,["una"]=true,["unos"]=true,["unas"]=true,["lo"]=true,
         ["a"]=true,["ante"]=true,["bajo"]=true,["con"]=true,["contra"]=true,
@@ -5797,8 +5647,8 @@ function TimingOperations.smartLineBreak(subs, sel)
     }
     local function firstWordLower(text)
         local t = trimText(text); if t == "" then return nil end
-        if startsWith(t, INV_QUESTION)    then t = t:sub(#INV_QUESTION + 1) end
-        if startsWith(t, INV_EXCLAMATION) then t = t:sub(#INV_EXCLAMATION + 1) end
+        if startsWith(t, invQuestion)    then t = t:sub(#invQuestion + 1) end
+        if startsWith(t, invExclamation) then t = t:sub(#invExclamation + 1) end
         t = t:gsub("^[%-%(%[\"'%s]+", "")
         local w = t:match("^([^%s%c%p]+)")
         if not w or w == "" then return nil end
@@ -5875,13 +5725,13 @@ function TimingOperations.smartLineBreak(subs, sel)
                                     elseif lc == "," or lc == ";" or lc == ":" then cost = cost - cfg.softPauseBonus end
                                     local fw = firstWordLower(cp2)
                                     if fw then
-                                        if STRONG_CONJ[fw]    then cost = cost - cfg.conjunctionBonus
-                                        elseif TIGHT_FOLLOWER[fw] then cost = cost + cfg.tightFollowerPenalty end
+                                        if strongConj[fw]    then cost = cost - cfg.conjunctionBonus
+                                        elseif tightFollower[fw] then cost = cost + cfg.tightFollowerPenalty end
                                     end
                                     local lw = lastWordLower(cp1)
                                     if lw then
-                                        if FUNCTION_TRAIL[lw] then cost = cost + cfg.functionTrailPenalty
-                                        elseif STRONG_CONJ[lw] then cost = cost + cfg.orphanConjPenalty end
+                                        if functionTrail[lw] then cost = cost + cfg.functionTrailPenalty
+                                        elseif strongConj[lw] then cost = cost + cfg.orphanConjPenalty end
                                     end
                                     if cost < bestCost then bestCost = cost; bestSplit = sp end
                                 end
@@ -5928,12 +5778,12 @@ local function parseDialogue(l)
     return f
 end
 
-local function sameLayerMatch(line, src, same_layers)
-    if not same_layers then return true end
+local function sameLayerMatch(line, src, sameLayers)
+    if not sameLayers then return true end
     return (tonumber(line.layer) or 0) == (tonumber(src.layer) or 0)
 end
 
-local function antEffects(subs, sel, raw, same_layers)
+local function antEffects(subs, sel, raw, sameLayers)
     local src = {}
     for l in raw:gmatch("[^\r\n]+") do
         local f = parseDialogue(l)
@@ -5947,7 +5797,7 @@ local function antEffects(subs, sel, raw, same_layers)
     for _, i in ipairs(sel) do
         local l = subs[i]; local add = {}
         for _, s in ipairs(src) do
-            if sameLayerMatch(l, s, same_layers) and timeInt(l.start_time, l.end_time, s.start, s.end_time) > 0 then table.insert(add, s.effect) end
+            if sameLayerMatch(l, s, sameLayers) and timeInt(l.start_time, l.end_time, s.start, s.end_time) > 0 then table.insert(add, s.effect) end
         end
         if #add > 0 then
             if l.effect ~= "" then table.insert(add, 1, l.effect) end
@@ -5958,7 +5808,7 @@ local function antEffects(subs, sel, raw, same_layers)
     return mod
 end
 
-local function antLines(subs, sel, raw, comm, same_layers)
+local function antLines(subs, sel, raw, comm, sameLayers)
     local src = {}
     for l in raw:gmatch("[^\r\n]+") do
         local f = parseDialogue(l)
@@ -5974,7 +5824,7 @@ local function antLines(subs, sel, raw, comm, same_layers)
     for _, i in ipairs(sel) do
         local l = subs[i]; local add = ""
         for _, s in ipairs(src) do
-            if sameLayerMatch(l, s, same_layers) and timeInt(l.start_time, l.end_time, s.start, s.end_time) > 0 then
+            if sameLayerMatch(l, s, sameLayers) and timeInt(l.start_time, l.end_time, s.start, s.end_time) > 0 then
                 local t = comm and ("{" .. s.text .. "}") or s.text
                 add = (add == "" and t or add .. " " .. t)
             end
@@ -5985,7 +5835,7 @@ local function antLines(subs, sel, raw, comm, same_layers)
     return mod
 end
 
-local function antActor(subs, sel, raw, same_layers)
+local function antActor(subs, sel, raw, sameLayers)
     local src = {}
     for l in raw:gmatch("[^\r\n]+") do
         local f = parseDialogue(l)
@@ -5999,7 +5849,7 @@ local function antActor(subs, sel, raw, same_layers)
     for _, i in ipairs(sel) do
         local l = subs[i]; local ba, bd = nil, 0
         for _, s in ipairs(src) do
-            if sameLayerMatch(l, s, same_layers) then
+            if sameLayerMatch(l, s, sameLayers) then
                 local d = timeInt(l.start_time, l.end_time, s.start, s.end_time)
                 if d > bd then bd, ba = d, s.actor end
             end
@@ -6104,7 +5954,7 @@ function DataImportOps.mergeInitialTags(text, importedInner)
     return merged, merged ~= normalizeString(text)
 end
 
-function DataImportOps.importTags(subs, sel, raw, same_layers)
+function DataImportOps.importTags(subs, sel, raw, sameLayers)
     local src = {}
     for l in normalizeString(raw):gmatch("[^\r\n]+") do
         local f = parseDialogue(l)
@@ -6121,7 +5971,7 @@ function DataImportOps.importTags(subs, sel, raw, same_layers)
         if isDialogue(line) then
             local imported = {}
             for _, s in ipairs(src) do
-                if sameLayerMatch(line, s, same_layers) and timeInt(line.start_time, line.end_time, s.start, s.end_time) > 0 then
+                if sameLayerMatch(line, s, sameLayers) and timeInt(line.start_time, line.end_time, s.start, s.end_time) > 0 then
                     imported[#imported+1] = s.tags
                 end
             end
@@ -6152,29 +6002,29 @@ end
 local function antSongs(subs, sel, raw)
     if not sel or #sel == 0 then return 0 end
     if not raw or raw:gsub("%s", "") == "" then return 0 end
-    local group, sync_point = {}, nil
+    local group, syncPoint = {}, nil
     for rawLine in raw:gmatch("[^\r\n]+") do
         local line = trimWS(rawLine)
         if line ~= "" then
             local p = spParseDialogueLine(line)
             if p then
                 if p.line_type == "comment" and p.layer == 50 then
-                    local s = parseTime(p.start_time); if s then sync_point = s end
+                    local s = parseTime(p.start_time); if s then syncPoint = s end
                 end
                 table.insert(group, p)
             end
         end
     end
-    if not sync_point then
+    if not syncPoint then
         showMsg(L("err_no_sync_point")); return 0
     end
     if #group == 0 then return 0 end
-    local lines_added = 0
-    local insert_pos = sel[#sel]
+    local linesAdded = 0
+    local insertPos = sel[#sel]
     for idx = #sel, 1, -1 do
         local target = subs[sel[idx]]
         if target and target.start_time then
-            local shift = target.start_time - sync_point
+            local shift = target.start_time - syncPoint
             local marker = target.effect or ""
             for i = #group, 1, -1 do
                 local p = group[i]
@@ -6182,36 +6032,40 @@ local function antSongs(subs, sel, raw)
                 if s and e then
                     local ns, ne = s + shift, e + shift
                     if ns >= 0 and ne >= 0 then
+                        local importedEffect = p.effect or ""
+                        if marker ~= "" then
+                            importedEffect = importedEffect ~= "" and (marker .. "; " .. importedEffect) or marker
+                        end
                         local nl = {
                             class = "dialogue", comment = (p.line_type == "comment"),
                             layer = p.layer, start_time = ns, end_time = ne,
-                            style = p.style, actor = marker ~= "" and marker or p.actor,
+                            style = p.style, actor = p.actor,
                             margin_l = p.margin_l, margin_r = p.margin_r, margin_t = p.margin_t, margin_b = 0,
-                            effect = p.effect, text = p.text,
+                            effect = importedEffect, text = p.text,
                         }
-                        subs.insert(insert_pos + 1, nl)
-                        lines_added = lines_added + 1
+                        subs.insert(insertPos + 1, nl)
+                        linesAdded = linesAdded + 1
                     end
                 end
             end
         end
     end
-    return lines_added
+    return linesAdded
 end
 
-local FALLBACK_VIDEO_FPS = 24000 / 1001
-local fr_to, ms_from = aegisub.frame_from_ms, aegisub.ms_from_frame
+local fallbackVideoFps = 24000 / 1001
+local frTo, msFrom = aegisub.frame_from_ms, aegisub.ms_from_frame
 local function getFps()
     local m1, m0
-    if ms_from then
-        local ok1, v1 = pcall(ms_from, 1)
-        local ok0, v0 = pcall(ms_from, 0)
+    if msFrom then
+        local ok1, v1 = pcall(msFrom, 1)
+        local ok0, v0 = pcall(msFrom, 0)
         if ok1 then m1 = v1 end
         if ok0 then m0 = v0 end
     end
     local delta = tonumber(m1) and tonumber(m0) and (tonumber(m1) - tonumber(m0)) or nil
     if delta and delta == delta and delta > 0 and delta < math.huge then return 1000 / delta end
-    return FALLBACK_VIDEO_FPS
+    return fallbackVideoFps
 end
 local function toFrame(t)
     local f = msToFrame(t)
@@ -6230,17 +6084,17 @@ local function getKfSet()
     return kfs, set
 end
 local function ktSnap(t) return toMs(toFrame(t)) end
-local function ktIsOnKf(t_ms, kfs)
-    local f = toFrame(t_ms)
+local function ktIsOnKf(tMs, kfs)
+    local f = toFrame(tMs)
     for _, k in ipairs(kfs) do if k == f then return true end; if k > f then break end end
     return false
 end
-local function ktFindKfForward(orig, max_ms, kfs)
-    local f0, fl = toFrame(orig), toFrame(orig + max_ms)
+local function ktFindKfForward(orig, maxMs, kfs)
+    local f0, fl = toFrame(orig), toFrame(orig + maxMs)
     for _, k in ipairs(kfs) do if k > f0 and k <= fl then return toMs(k) end; if k > fl then break end end
 end
-local function ktFindKfBackward(orig, max_ms, kfs)
-    local f0, fl = toFrame(orig), toFrame(orig - max_ms)
+local function ktFindKfBackward(orig, maxMs, kfs)
+    local f0, fl = toFrame(orig), toFrame(orig - maxMs)
     local best
     for _, k in ipairs(kfs) do if k >= fl and k < f0 then best = k end; if k >= f0 then break end end
     if best then return toMs(best) end
@@ -6264,26 +6118,26 @@ local function getVT()
 if VTMOD then return VTMOD end
 
 local DEFAULTS = {
-    lead_in_ms        = DEFAULT_CONFIG.lazyt_lead_in_ms,
-    lead_out_ms       = DEFAULT_CONFIG.lazyt_lead_out_ms,
-    max_lead_out_ms   = DEFAULT_CONFIG.lazyt_max_lead_out_ms,
-    max_lead_in_ms    = DEFAULT_CONFIG.lazyt_max_lead_in_ms,
-    kf_end_range_ms   = DEFAULT_CONFIG.lazyt_kf_end_range_ms,
-    kf_start_range_ms = DEFAULT_CONFIG.lazyt_kf_start_range_ms,
-    kf_back_ms        = DEFAULT_CONFIG.lazyt_kf_back_ms,
-    duration_floor_ms = DEFAULT_CONFIG.lazyt_duration_floor_ms,
-    cps_flag          = DEFAULT_CONFIG.lazyt_cps_flag,
-    skip_signs        = DEFAULT_CONFIG.lazyt_skip_signs,
-    show_stats        = DEFAULT_CONFIG.lazyt_show_stats,
-    style_filter      = DEFAULT_CONFIG.lazyt_style_filter,
-    extra_style       = DEFAULT_CONFIG.lazyt_extra_style,
+    lead_in_ms        = defaultConfig.lazyt_lead_in_ms,
+    lead_out_ms       = defaultConfig.lazyt_lead_out_ms,
+    max_lead_out_ms   = defaultConfig.lazyt_max_lead_out_ms,
+    max_lead_in_ms    = defaultConfig.lazyt_max_lead_in_ms,
+    kf_end_range_ms   = defaultConfig.lazyt_kf_end_range_ms,
+    kf_start_range_ms = defaultConfig.lazyt_kf_start_range_ms,
+    kf_back_ms        = defaultConfig.lazyt_kf_back_ms,
+    duration_floor_ms = defaultConfig.lazyt_duration_floor_ms,
+    cps_flag          = defaultConfig.lazyt_cps_flag,
+    skip_signs        = defaultConfig.lazyt_skip_signs,
+    show_stats        = defaultConfig.lazyt_show_stats,
+    style_filter      = defaultConfig.lazyt_style_filter,
+    extra_style       = defaultConfig.lazyt_extra_style,
 
-    smooth_ms          = DEFAULT_CONFIG.lazyt_smooth_ms,
-    auto_otsu          = DEFAULT_CONFIG.lazyt_auto_otsu,
-    fill_gap_ms        = DEFAULT_CONFIG.lazyt_fill_gap_ms,
-    min_island_ms      = DEFAULT_CONFIG.lazyt_min_island_ms,
-    outer_search_ms    = DEFAULT_CONFIG.lazyt_outer_search_ms,
-    edge_spill_cleanup = DEFAULT_CONFIG.lazyt_edge_spill,
+    smooth_ms          = defaultConfig.lazyt_smooth_ms,
+    auto_otsu          = defaultConfig.lazyt_auto_otsu,
+    fill_gap_ms        = defaultConfig.lazyt_fill_gap_ms,
+    min_island_ms      = defaultConfig.lazyt_min_island_ms,
+    outer_search_ms    = defaultConfig.lazyt_outer_search_ms,
+    edge_spill_cleanup = defaultConfig.lazyt_edge_spill,
 
     hist_bins                  = 96,
     floor_percentile           = 5,
@@ -6295,7 +6149,7 @@ local DEFAULTS = {
     min_voice_ms               = 50,
 }
 
-local CONFIG_KEYS = {
+local configKeys = {
     lead_in_ms        = "lazyt_lead_in_ms",
     lead_out_ms       = "lazyt_lead_out_ms",
     max_lead_out_ms   = "lazyt_max_lead_out_ms",
@@ -6326,30 +6180,28 @@ local TUNE = {
     min_event_ms    = 10,
 }
 
-local GUI_BOUNDS = {
-    lead_in_ms        = { min = 0,   max = 600 },
-    lead_out_ms       = { min = 0,   max = 1200 },
-    max_lead_out_ms   = { min = 200, max = 1500 },
-    max_lead_in_ms    = { min = 100, max = 1000 },
-    kf_end_range_ms   = { min = 0,   max = 1500 },
-    kf_start_range_ms = { min = 0,   max = 1000 },
-    kf_back_ms        = { min = 0,   max = 300 },
-    cps_flag          = { min = 10,  max = 60 },
-    duration_floor_ms = { min = 0,   max = 2000 },
-    smooth_ms         = { min = 1,   max = 200 },
-    fill_gap_ms       = { min = 0,   max = 500 },
-    min_island_ms     = { min = 1,   max = 500 },
-    outer_search_ms   = { min = 0,   max = 5000 },
+local guiBounds = {
+    lead_in_ms        = { min = 0 },
+    lead_out_ms       = { min = 0 },
+    max_lead_out_ms   = { min = 0 },
+    max_lead_in_ms    = { min = 0 },
+    kf_end_range_ms   = { min = 0 },
+    kf_start_range_ms = { min = 0 },
+    kf_back_ms        = { min = 0 },
+    cps_flag          = { min = 1 },
+    duration_floor_ms = { min = 0 },
+    smooth_ms         = { min = 1 },
+    fill_gap_ms       = { min = 0 },
+    min_island_ms     = { min = 1 },
+    outer_search_ms   = { min = 0 },
 }
 
 local function trim(s)
-    return (tostring(s or ""):match("^%s*(.-)%s*$")) or ""
+    return trimText(s or "")
 end
 
 local function round(x)
-    x = tonumber(x) or 0
-    if x >= 0 then return math.floor(x + 0.5) end
-    return math.ceil(x - 0.5)
+    return roundNumber(tonumber(x) or 0)
 end
 
 local function clamp(x, lo, hi)
@@ -6358,7 +6210,7 @@ local function clamp(x, lo, hi)
     return x
 end
 
-local function lower_bound(list, value)
+local function lowerBound(list, value)
     local lo, hi = 1, #list + 1
     while lo < hi do
         local mid = math.floor((lo + hi) / 2)
@@ -6367,7 +6219,7 @@ local function lower_bound(list, value)
     return lo
 end
 
-local function overlap_len(a0, a1, b0, b1)
+local function overlapLength(a0, a1, b0, b1)
     return math.min(a1, b1) - math.max(a0, b0)
 end
 
@@ -6378,33 +6230,33 @@ local function progress(task, pct)
     end
 end
 
-local function save_cfg(c)
-    for key, configKey in pairs(CONFIG_KEYS) do currentConfig[configKey] = c[key] end
+local function saveAutoTimingConfig(c)
+    for key, configKey in pairs(configKeys) do currentConfig[configKey] = c[key] end
     return saveConfig()
 end
 
-local function normalize_cfg(c)
+local function normalizeAutoTimingConfig(c)
     for k, v in pairs(DEFAULTS) do
         if c[k] == nil or type(c[k]) ~= type(v) then c[k] = v end
     end
-    for k, b in pairs(GUI_BOUNDS) do
-        c[k] = clamp(round(tonumber(c[k]) or DEFAULTS[k]), b.min, b.max)
+    for k, b in pairs(guiBounds) do
+        c[k] = math.max(b.min, round(normalizeNumber(c[k]) or DEFAULTS[k]))
     end
     if c.max_lead_out_ms < c.lead_out_ms then c.max_lead_out_ms = c.lead_out_ms end
     if c.max_lead_in_ms < c.lead_in_ms then c.max_lead_in_ms = c.lead_in_ms end
     return c
 end
 
-local function get_cfg()
+local function getAutoTimingConfig()
     local c = {}
     for k, v in pairs(DEFAULTS) do c[k] = v end
-    for key, configKey in pairs(CONFIG_KEYS) do
+    for key, configKey in pairs(configKeys) do
         if currentConfig[configKey] ~= nil then c[key] = currentConfig[configKey] end
     end
-    return normalize_cfg(c)
+    return normalizeAutoTimingConfig(c)
 end
 
-local function visible_text(text)
+local function visibleAutoTimingText(text)
     if Kite.LineOps then return trim(Kite.LineOps.visibleText(text)) end
     local s = tostring(text or "")
     s = s:gsub("{[^}]*}", "")
@@ -6413,70 +6265,70 @@ local function visible_text(text)
     return trim(s)
 end
 
-local function utf8_len(s)
+local function utf8Length(s)
     s = tostring(s or "")
     local _, continuation = s:gsub("[\128-\191]", "")
     return #s - continuation
 end
 
-local function readable_chars(text)
-    local clean = visible_text(text)
+local function readableCharacters(text)
+    local clean = visibleAutoTimingText(text)
     clean = clean:gsub("[%s%p]", "")
     clean = clean:gsub("\194\191", ""):gsub("\194\161", ""):gsub("\226\128\166", "")
-    return utf8_len(clean)
+    return utf8Length(clean)
 end
 
-local function style_ok(style, flt, extra)
+local function styleMatches(style, flt, extra)
     flt = tostring(flt or "All")
     if flt == "" or flt == "All" then return true end
     style = tostring(style or "")
-    local extra_hit = extra ~= nil and extra ~= "" and style == extra
-    local lower_style = style:lower()
-    if flt == "All Default" then return lower_style:find("defa", 1, true) ~= nil or extra_hit end
+    local extraHit = extra ~= nil and extra ~= "" and style == extra
+    local lowerStyle = style:lower()
+    if flt == "All Default" then return lowerStyle:find("defa", 1, true) ~= nil or extraHit end
     if flt == "Default+Alt" then
-        return lower_style:find("defa", 1, true) ~= nil or lower_style:find("alt", 1, true) ~= nil or extra_hit
+        return lowerStyle:find("defa", 1, true) ~= nil or lowerStyle:find("alt", 1, true) ~= nil or extraHit
     end
-    return style == flt or extra_hit
+    return style == flt or extraHit
 end
 
-local function is_spoken(line, cfg)
+local function isSpoken(line, cfg)
     if not line or line.comment then return false end
     local raw = tostring(line.text or "")
     if Kite.LineOps and Kite.LineOps.hasDrawing(raw) then return false end
-    if visible_text(raw) == "" then return false end
+    if visibleAutoTimingText(raw) == "" then return false end
     local effect = tostring(line.effect or ""):lower()
     if effect:find("template", 1, true) or effect:find("karaoke", 1, true) or effect:find("code", 1, true) then return false end
     if cfg.skip_signs then
         local style = tostring(line.style or ""):lower()
         if style:find("sign", 1, true) or style:find("kara", 1, true) or style:find("fx", 1, true) then return false end
     end
-    if not style_ok(line.style, cfg.style_filter, cfg.extra_style) then return false end
+    if not styleMatches(line.style, cfg.style_filter, cfg.extra_style) then return false end
     return true
 end
 
-local function read_all(path)
+local function readAll(path)
     local f, err = io.open(path, "rb")
     if not f then error("Could not open the waveform JSON: " .. tostring(err)) end
-    local s, read_error = f:read("*all")
-    local closed, close_error = f:close()
-    if not s then error("Could not read the waveform JSON: " .. tostring(read_error)) end
-    if closed == nil then error("Could not close the waveform JSON: " .. tostring(close_error)) end
+    local s, readError = f:read("*all")
+    local closed, closeError = f:close()
+    if not s then error("Could not read the waveform JSON: " .. tostring(readError)) end
+    if closed == nil then error("Could not close the waveform JSON: " .. tostring(closeError)) end
     return s
 end
 
-local function parse_waveform_json(path)
+local function parseWaveformJson(path)
     progress("Reading waveform JSON...")
-    local content = read_all(path)
-    local point_ms = tonumber(content:match('"pointMs"%s*:%s*([%d%.]+)'))
-    if not point_ms or point_ms ~= point_ms or point_ms == math.huge or point_ms <= 0 then
+    local content = readAll(path)
+    local pointMs = normalizeNumber(content:match('"pointMs"%s*:%s*([^,%s}%]]+)'))
+    if not pointMs or pointMs ~= pointMs or pointMs == math.huge or pointMs <= 0 then
         error("The waveform has an invalid 'pointMs' value.")
     end
-    local key_start, key_end = content:find('"peaks"%s*:%s*%[')
-    if not key_start then error("No 'peaks' array found in the JSON.") end
-    local arr_start = content:find("[", key_end, true)
-    local arr_end = content:find("]", arr_start, true)
-    if not arr_start or not arr_end then error("Could not delimit the 'peaks' array.") end
-    local arr = content:sub(arr_start + 1, arr_end - 1)
+    local keyStart, keyEnd = content:find('"peaks"%s*:%s*%[')
+    if not keyStart then error("No 'peaks' array found in the JSON.") end
+    local arrStart = content:find("[", keyEnd, true)
+    local arrEnd = content:find("]", arrStart, true)
+    if not arrStart or not arrEnd then error("Could not delimit the 'peaks' array.") end
+    local arr = content:sub(arrStart + 1, arrEnd - 1)
     content = nil
     collectgarbage("collect")
 
@@ -6486,8 +6338,14 @@ local function parse_waveform_json(path)
     local pending = nil
     local count = 0
     local sum = 0
-    for num in arr:gmatch("%-?%d+") do
-        local v = tonumber(num)
+    local position = 1
+    while position <= #arr do
+        local comma = arr:find(",", position, true)
+        local token = arr:sub(position, comma and comma - 1 or #arr):match("^%s*(.-)%s*$")
+        local v = token:match("^%-?%d+$") and normalizeNumber(token)
+        if not v then error("The 'peaks' array must contain finite integer min/max values separated by commas.") end
+        if comma == #arr then error("The 'peaks' array has a trailing comma.") end
+        position = comma and comma + 1 or #arr + 1
         if pending == nil then
             pending = v
         else
@@ -6508,15 +6366,15 @@ local function parse_waveform_json(path)
     collectgarbage("collect")
     if pending ~= nil then error("The 'peaks' array contains an unmatched min/max value.") end
     if count == 0 then error("The 'peaks' array produced no envelope points.") end
-    return { prefix = prefix, n = count, point_ms = point_ms }
+    return { prefix = prefix, n = count, point_ms = pointMs }
 end
 
-local function smooth_at(wave, point_index, left_window, right_window)
+local function smoothAt(wave, pointIndex, leftWindow, rightWindow)
     local n = wave.n
-    if point_index < 1 then point_index = 1 end
-    if point_index > n then point_index = n end
-    local l = point_index - left_window
-    local r = point_index + right_window
+    if pointIndex < 1 then pointIndex = 1 end
+    if pointIndex > n then pointIndex = n end
+    local l = pointIndex - leftWindow
+    local r = pointIndex + rightWindow
     if l < 1 then l = 1 end
     if r > n then r = n end
     return (wave.prefix[r] - wave.prefix[l - 1]) / (r - l + 1)
@@ -6539,7 +6397,7 @@ local function percentile(values, p)
     return tmp[lo] * (1 - frac) + tmp[hi] * frac
 end
 
-local function otsu_threshold(values, bins)
+local function otsuThreshold(values, bins)
     local n = #values
     if n == 0 then return 0 end
     bins = math.max(16, bins or 96)
@@ -6564,36 +6422,36 @@ local function otsu_threshold(values, bins)
     end
     local centers = {}
     local total = 0
-    local sum_total = 0
+    local sumTotal = 0
     for i = 1, bins do
         centers[i] = lo + (i - 0.5) * span / bins
         total = total + hist[i]
-        sum_total = sum_total + hist[i] * centers[i]
+        sumTotal = sumTotal + hist[i] * centers[i]
     end
     if total == 0 then return (lo + hi) / 2 end
-    local w_b = 0
-    local sum_b = 0
-    local best_var = -1
-    local best_thr = centers[1]
+    local wB = 0
+    local sumB = 0
+    local bestVar = -1
+    local bestThr = centers[1]
     for i = 1, bins do
-        w_b = w_b + hist[i]
-        sum_b = sum_b + hist[i] * centers[i]
-        local w_f = total - w_b
-        if w_b > 0 and w_f > 0 then
-            local mean_b = sum_b / w_b
-            local mean_f = (sum_total - sum_b) / w_f
-            local diff = mean_b - mean_f
-            local between = w_b * w_f * diff * diff
-            if between > best_var then
-                best_var = between
-                best_thr = centers[i]
+        wB = wB + hist[i]
+        sumB = sumB + hist[i] * centers[i]
+        local wF = total - wB
+        if wB > 0 and wF > 0 then
+            local meanB = sumB / wB
+            local meanF = (sumTotal - sumB) / wF
+            local diff = meanB - meanF
+            local between = wB * wF * diff * diff
+            if between > bestVar then
+                bestVar = between
+                bestThr = centers[i]
             end
         end
     end
-    return best_thr
+    return bestThr
 end
 
-local function build_runs(mask)
+local function buildRuns(mask)
     local runs = {}
     local n = #mask
     local i = 1
@@ -6607,26 +6465,26 @@ local function build_runs(mask)
     return runs
 end
 
-local function morph_mask(mask, fill_gap, min_island)
-    local runs = build_runs(mask)
+local function morphMask(mask, fillGap, minIsland)
+    local runs = buildRuns(mask)
     for r = 2, #runs - 1 do
         local run = runs[r]
-        if (not run.v) and (run.b - run.a + 1) <= fill_gap and runs[r - 1].v and runs[r + 1].v then
+        if (not run.v) and (run.b - run.a + 1) <= fillGap and runs[r - 1].v and runs[r + 1].v then
             for i = run.a, run.b do mask[i] = true end
         end
     end
-    runs = build_runs(mask)
+    runs = buildRuns(mask)
     for r = 1, #runs do
         local run = runs[r]
-        if run.v and (run.b - run.a + 1) < min_island then
+        if run.v and (run.b - run.a + 1) < minIsland then
             for i = run.a, run.b do mask[i] = false end
         end
     end
 end
 
-local function build_components(mask, values, threshold, L0, point_ms)
+local function buildComponents(mask, values, threshold, L0, pointMs)
     local comps = {}
-    local runs = build_runs(mask)
+    local runs = buildRuns(mask)
     for r = 1, #runs do
         local run = runs[r]
         if run.v then
@@ -6638,12 +6496,12 @@ local function build_components(mask, values, threshold, L0, point_ms)
                 if excess > 0 then mass = mass + excess end
                 if v > maxv then maxv = v end
             end
-            local a_ms = (L0 + run.a - 1) * point_ms
-            local b_ms = (L0 + run.b) * point_ms
+            local aMs = (L0 + run.a - 1) * pointMs
+            local bMs = (L0 + run.b) * pointMs
             comps[#comps + 1] = {
-                a = a_ms,
-                b = b_ms,
-                duration = b_ms - a_ms,
+                a = aMs,
+                b = bMs,
+                duration = bMs - aMs,
                 mass = mass,
                 maxv = maxv
             }
@@ -6652,24 +6510,24 @@ local function build_components(mask, values, threshold, L0, point_ms)
     return comps
 end
 
-local function remove_edge_spill(comps, start_ms, end_ms, cfg)
+local function removeEdgeSpill(comps, startMs, endMs, cfg)
     if #comps <= 1 or not cfg.edge_spill_cleanup then return comps end
-    local max_mass = 0
+    local maxMass = 0
     for i = 1, #comps do
-        if comps[i].mass > max_mass then max_mass = comps[i].mass end
+        if comps[i].mass > maxMass then maxMass = comps[i].mass end
     end
-    if max_mass <= 0 then return comps end
-    local mass_ratio = (cfg.spill_mass_per_mille or 300) / 1000.0
-    local gap_factor = (cfg.spill_gap_factor_per_mille or 1000) / 1000.0
-    local edge_near = cfg.edge_near_ms or 20
+    if maxMass <= 0 then return comps end
+    local massRatio = (cfg.spill_mass_per_mille or 300) / 1000.0
+    local gapFactor = (cfg.spill_gap_factor_per_mille or 1000) / 1000.0
+    local edgeNear = cfg.edge_near_ms or 20
     while #comps > 1 do
         local first = comps[1]
         local second = comps[2]
         local gap = second.a - first.b
-        local near_edge = first.a <= start_ms + edge_near
-        local separated = gap > gap_factor * math.max(1, first.duration)
-        local small = first.mass < mass_ratio * max_mass
-        if near_edge and separated and small then
+        local nearEdge = first.a <= startMs + edgeNear
+        local separated = gap > gapFactor * math.max(1, first.duration)
+        local small = first.mass < massRatio * maxMass
+        if nearEdge and separated and small then
             table.remove(comps, 1)
         else
             break
@@ -6679,10 +6537,10 @@ local function remove_edge_spill(comps, start_ms, end_ms, cfg)
         local last = comps[#comps]
         local prev = comps[#comps - 1]
         local gap = last.a - prev.b
-        local near_edge = last.b >= end_ms - edge_near
-        local separated = gap > gap_factor * math.max(1, last.duration)
-        local small = last.mass < mass_ratio * max_mass
-        if near_edge and separated and small then
+        local nearEdge = last.b >= endMs - edgeNear
+        local separated = gap > gapFactor * math.max(1, last.duration)
+        local small = last.mass < massRatio * maxMass
+        if nearEdge and separated and small then
             table.remove(comps, #comps)
         else
             break
@@ -6691,9 +6549,9 @@ local function remove_edge_spill(comps, start_ms, end_ms, cfg)
     return comps
 end
 
-local function threshold_values(values, cfg)
+local function thresholdValues(values, cfg)
     if cfg.auto_otsu then
-        return otsu_threshold(values, cfg.hist_bins)
+        return otsuThreshold(values, cfg.hist_bins)
     end
     local floor = percentile(values, cfg.floor_percentile or 5)
     local peak = percentile(values, cfg.peak_percentile or 95)
@@ -6702,65 +6560,65 @@ local function threshold_values(values, cfg)
     return floor + (cfg.sensitivity_per_mille / 1000.0) * range
 end
 
-local function detect_voice_waveform(it, wave, cfg)
-    local point_ms = wave.point_ms
-    local start_ms = it.os
-    local end_ms = it.oe
-    if end_ms <= start_ms then return nil end
+local function detectVoiceWaveform(it, wave, cfg)
+    local pointMs = wave.point_ms
+    local startMs = it.os
+    local endMs = it.oe
+    if endMs <= startMs then return nil end
 
     local outer = cfg.outer_search_ms or 0
-    local search_start = math.max(0, start_ms - outer)
-    local search_end = math.min(wave.n * point_ms, end_ms + outer)
-    if search_end <= search_start + 10 then return nil end
+    local searchStart = math.max(0, startMs - outer)
+    local searchEnd = math.min(wave.n * pointMs, endMs + outer)
+    if searchEnd <= searchStart + 10 then return nil end
 
-    local L0 = math.floor(search_start / point_ms)
-    local R0 = math.floor(search_end / point_ms)
+    local L0 = math.floor(searchStart / pointMs)
+    local R0 = math.floor(searchEnd / pointMs)
     if R0 > wave.n then R0 = wave.n end
     if L0 < 0 then L0 = 0 end
     local len = R0 - L0
     if len <= 10 then return nil end
 
-    local smooth_points = math.max(1, math.floor(cfg.smooth_ms / point_ms + 0.5))
-    local left_window = math.floor((smooth_points - 1) / 2)
-    local right_window = (smooth_points - 1) - left_window
+    local smoothPoints = math.max(1, math.floor(cfg.smooth_ms / pointMs + 0.5))
+    local leftWindow = math.floor((smoothPoints - 1) / 2)
+    local rightWindow = (smoothPoints - 1) - leftWindow
 
     local values = {}
-    local max_value = 0
+    local maxValue = 0
     for j = 1, len do
-        local env = smooth_at(wave, L0 + j, left_window, right_window)
+        local env = smoothAt(wave, L0 + j, leftWindow, rightWindow)
         if cfg.auto_otsu then
             values[j] = math.log(1 + env)
         else
             values[j] = env
         end
-        if values[j] > max_value then max_value = values[j] end
+        if values[j] > maxValue then maxValue = values[j] end
     end
 
-    if max_value <= 0 then return nil end
+    if maxValue <= 0 then return nil end
 
-    local threshold = threshold_values(values, cfg)
+    local threshold = thresholdValues(values, cfg)
     local mask = {}
     for i = 1, len do mask[i] = values[i] >= threshold end
 
-    local fill_gap = math.max(0, math.floor((cfg.fill_gap_ms or 60) / point_ms + 0.5))
-    local min_island = math.max(1, math.floor((cfg.min_island_ms or 60) / point_ms + 0.5))
-    morph_mask(mask, fill_gap, min_island)
+    local fillGap = math.max(0, math.floor((cfg.fill_gap_ms or 60) / pointMs + 0.5))
+    local minIsland = math.max(1, math.floor((cfg.min_island_ms or 60) / pointMs + 0.5))
+    morphMask(mask, fillGap, minIsland)
 
-    local comps = build_components(mask, values, threshold, L0, point_ms)
+    local comps = buildComponents(mask, values, threshold, L0, pointMs)
     if #comps == 0 then return nil end
-    comps = remove_edge_spill(comps, start_ms, end_ms, cfg)
+    comps = removeEdgeSpill(comps, startMs, endMs, cfg)
     if #comps == 0 then return nil end
 
-    local vs = clamp(comps[1].a, search_start, search_end)
-    local ve = clamp(comps[#comps].b, search_start, search_end)
+    local vs = clamp(comps[1].a, searchStart, searchEnd)
+    local ve = clamp(comps[#comps].b, searchStart, searchEnd)
     if ve - vs < (cfg.min_voice_ms or 50) then return nil end
-    local weak = (vs <= search_start + 1) or (ve >= search_end - 1)
+    local weak = (vs <= searchStart + 1) or (ve >= searchEnd - 1)
     return { vs = round(vs), ve = round(ve), weak = weak }
 end
 
-local function kf_in(kfs, lo, hi, target)
+local function keyframeInRange(kfs, lo, hi, target)
     if not kfs or #kfs == 0 or hi < lo then return nil end
-    local pos = lower_bound(kfs, lo)
+    local pos = lowerBound(kfs, lo)
     local best, bestd
     while pos <= #kfs do
         local t = kfs[pos]
@@ -6772,17 +6630,17 @@ local function kf_in(kfs, lo, hi, target)
     return best
 end
 
-local function add_flag(it, flag)
+local function addFlag(it, flag)
     it.flags = it.flags or {}
     for _, f in ipairs(it.flags) do if f == flag then return end end
     it.flags[#it.flags + 1] = flag
 end
 
 local function stacked(a, b)
-    return overlap_len(a.os, a.oe, b.os, b.oe) > TUNE.stack_eps_ms
+    return overlapLength(a.os, a.oe, b.os, b.oe) > TUNE.stack_eps_ms
 end
 
-local function plan_padding(items, kfs, kfset, cfg, stats)
+local function planPadding(items, kfs, kfset, cfg, stats)
     stats = stats or {}
     local vis, processed = {}, {}
     for _, it in ipairs(items) do
@@ -6801,31 +6659,31 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
         it.s, it.e = it.ideal_s, it.ideal_e
         it.s_kf, it.e_kf = false, false
         it.joined_l, it.joined_r = false, false
-        local orig_start_kf = kf_in(kfs, it.os - grace, it.os + grace, it.os)
-        local orig_end_kf = kf_in(kfs, it.oe - grace, it.oe + grace, it.oe)
-        local ks = kf_in(kfs, it.vs - cfg.kf_start_range_ms, it.vs, it.vs)
-            or kf_in(kfs, it.vs + 1, math.min(it.vs + cfg.kf_back_ms, it.ve - 1), it.vs + 1)
-        if not ks and orig_start_kf
-            and orig_start_kf >= it.vs - cfg.kf_start_range_ms - 2 * grace
-            and orig_start_kf <= it.vs + cfg.kf_back_ms then
-            ks = orig_start_kf
+        local origStartKf = keyframeInRange(kfs, it.os - grace, it.os + grace, it.os)
+        local origEndKf = keyframeInRange(kfs, it.oe - grace, it.oe + grace, it.oe)
+        local ks = keyframeInRange(kfs, it.vs - cfg.kf_start_range_ms, it.vs, it.vs)
+            or keyframeInRange(kfs, it.vs + 1, math.min(it.vs + cfg.kf_back_ms, it.ve - 1), it.vs + 1)
+        if not ks and origStartKf
+            and origStartKf >= it.vs - cfg.kf_start_range_ms - 2 * grace
+            and origStartKf <= it.vs + cfg.kf_back_ms then
+            ks = origStartKf
         end
         if ks then it.s, it.s_kf = ks, true end
         local elo = math.max(it.ve - cfg.kf_back_ms, it.vs + 1)
-        local ke = kf_in(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
+        local ke = keyframeInRange(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
         if not ke and elo <= it.ve - 1 then
-            ke = kf_in(kfs, elo, it.ve - 1, it.ve)
+            ke = keyframeInRange(kfs, elo, it.ve - 1, it.ve)
         end
-        if not ke and orig_end_kf
-            and orig_end_kf > it.vs
-            and orig_end_kf <= it.ve + cfg.max_lead_out_ms + 2 * grace then
-            ke = orig_end_kf
+        if not ke and origEndKf
+            and origEndKf > it.vs
+            and origEndKf <= it.ve + cfg.max_lead_out_ms + 2 * grace then
+            ke = origEndKf
         end
         if ke then it.e, it.e_kf = ke, true end
         if it.s < 0 then it.s = 0 end
     end
 
-    local function set_boundary(a, b, t)
+    local function setBoundary(a, b, t)
         t = round(t)
         a.e, b.s = t, t
         local on = kfset and kfset[t] or false
@@ -6834,10 +6692,10 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
         stats.joins = (stats.joins or 0) + 1
     end
 
-    local function resolve_pair(a, b, blocked, orig_chained)
+    local function resolvePair(a, b, blocked, origChained)
         if stacked(a, b) then return end
         if b.vs < a.ve then
-            if a.e > b.s then add_flag(a, "OVERLAP"); add_flag(b, "OVERLAP") end
+            if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
             return
         end
         if blocked then
@@ -6845,10 +6703,10 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
                 a.e = clamp(b.s, a.ve, a.e)
                 a.e_kf = kfset and kfset[a.e] or false
             end
-            if a.e > b.s then add_flag(a, "OVERLAP"); add_flag(b, "OVERLAP") end
+            if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
             return
         end
-        local va_e, vb_s = a.ve, b.vs
+        local vaE, vbS = a.ve, b.vs
         local gap = b.s - a.e
         if gap == 0 then
             a.joined_r, b.joined_l = true, true
@@ -6857,82 +6715,82 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
 
         if gap < 0 then
             local boundary
-            if a.e_kf and a.e <= vb_s + cfg.kf_back_ms then boundary = a.e
-            elseif b.s_kf and b.s >= va_e - cfg.kf_back_ms then boundary = b.s
+            if a.e_kf and a.e <= vbS + cfg.kf_back_ms then boundary = a.e
+            elseif b.s_kf and b.s >= vaE - cfg.kf_back_ms then boundary = b.s
             else
-                local r0 = math.max(va_e - cfg.kf_back_ms, math.min(a.e, b.s))
-                local r1 = math.min(vb_s + cfg.kf_back_ms, math.max(a.e, b.s))
-                boundary = kf_in(kfs, r0, r1, clamp(vb_s - cfg.lead_in_ms, r0, r1))
+                local r0 = math.max(vaE - cfg.kf_back_ms, math.min(a.e, b.s))
+                local r1 = math.min(vbS + cfg.kf_back_ms, math.max(a.e, b.s))
+                boundary = keyframeInRange(kfs, r0, r1, clamp(vbS - cfg.lead_in_ms, r0, r1))
                 if not boundary then
-                    local cand = vb_s - cfg.lead_in_ms
-                    if cand - va_e >= TUNE.keep_min_out_ms then
+                    local cand = vbS - cfg.lead_in_ms
+                    if cand - vaE >= TUNE.keep_min_out_ms then
                         boundary = cand
                     else
                         local padding = cfg.lead_out_ms + cfg.lead_in_ms
                         if padding > 0 then
-                            boundary = va_e + (vb_s - va_e) * cfg.lead_out_ms / padding
+                            boundary = vaE + (vbS - vaE) * cfg.lead_out_ms / padding
                         else
-                            boundary = va_e + (vb_s - va_e) / 2
+                            boundary = vaE + (vbS - vaE) / 2
                         end
                     end
-                    boundary = clamp(boundary, va_e, vb_s)
+                    boundary = clamp(boundary, vaE, vbS)
                 end
             end
-            set_boundary(a, b, boundary)
+            setBoundary(a, b, boundary)
             return
         end
 
-        local out_room = math.max(0, cfg.max_lead_out_ms - (a.e - va_e))
-        local in_room = math.max(0, cfg.max_lead_in_ms - (vb_s - b.s))
-        local joinable = gap <= out_room + in_room
+        local outRoom = math.max(0, cfg.max_lead_out_ms - (a.e - vaE))
+        local inRoom = math.max(0, cfg.max_lead_in_ms - (vbS - b.s))
+        local joinable = gap <= outRoom + inRoom
         local flashy = gap <= TUNE.flash_gap_ms
-        local wanted = joinable or flashy or orig_chained
-        local grace_ms = (flashy or orig_chained) and TUNE.cap_grace_ms or 0
+        local wanted = joinable or flashy or origChained
+        local graceMs = (flashy or origChained) and TUNE.cap_grace_ms or 0
 
-        local zone_kf
+        local zoneKf
         if b.s - a.e > 2 then
-            zone_kf = kf_in(kfs, a.e + 1, b.s - 1, clamp(vb_s - cfg.lead_in_ms, a.e + 1, b.s - 1))
+            zoneKf = keyframeInRange(kfs, a.e + 1, b.s - 1, clamp(vbS - cfg.lead_in_ms, a.e + 1, b.s - 1))
         end
 
         if a.e_kf and b.s_kf then
             if flashy then
-                if b.s - va_e <= cfg.max_lead_out_ms + TUNE.cap_grace_ms then
-                    set_boundary(a, b, b.s)
-                elseif vb_s - a.e <= cfg.max_lead_in_ms + TUNE.cap_grace_ms then
-                    set_boundary(a, b, a.e)
+                if b.s - vaE <= cfg.max_lead_out_ms + TUNE.cap_grace_ms then
+                    setBoundary(a, b, b.s)
+                elseif vbS - a.e <= cfg.max_lead_in_ms + TUNE.cap_grace_ms then
+                    setBoundary(a, b, a.e)
                 end
             end
             return
         end
         if a.e_kf then
-            if wanted and not zone_kf and vb_s - a.e <= cfg.max_lead_in_ms + grace_ms then
-                set_boundary(a, b, a.e)
+            if wanted and not zoneKf and vbS - a.e <= cfg.max_lead_in_ms + graceMs then
+                setBoundary(a, b, a.e)
             end
             return
         end
         if b.s_kf then
-            if zone_kf and zone_kf - va_e <= cfg.max_lead_out_ms then
-                a.e = zone_kf
+            if zoneKf and zoneKf - vaE <= cfg.max_lead_out_ms then
+                a.e = zoneKf
                 a.e_kf = true
-            elseif wanted and b.s - va_e <= cfg.max_lead_out_ms + grace_ms then
-                set_boundary(a, b, b.s)
+            elseif wanted and b.s - vaE <= cfg.max_lead_out_ms + graceMs then
+                setBoundary(a, b, b.s)
             end
             return
         end
-        if zone_kf then
-            if wanted and zone_kf - va_e <= cfg.max_lead_out_ms + grace_ms
-                and vb_s - zone_kf <= cfg.max_lead_in_ms + grace_ms then
-                set_boundary(a, b, zone_kf)
+        if zoneKf then
+            if wanted and zoneKf - vaE <= cfg.max_lead_out_ms + graceMs
+                and vbS - zoneKf <= cfg.max_lead_in_ms + graceMs then
+                setBoundary(a, b, zoneKf)
             end
             return
         end
         if not wanted then return end
-        if b.s - va_e <= cfg.max_lead_out_ms + grace_ms then
-            set_boundary(a, b, b.s)
+        if b.s - vaE <= cfg.max_lead_out_ms + graceMs then
+            setBoundary(a, b, b.s)
         elseif joinable then
-            set_boundary(a, b, va_e + cfg.max_lead_out_ms)
+            setBoundary(a, b, vaE + cfg.max_lead_out_ms)
         elseif flashy then
-            set_boundary(a, b, clamp(b.s, va_e, vb_s))
+            setBoundary(a, b, clamp(b.s, vaE, vbS))
         end
     end
 
@@ -6943,9 +6801,9 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
             local m = vis[k]
             if not m.use and m.oe > a.ve and m.os < b.vs then blocked = true; break end
         end
-        local orig_gap = b.os - a.oe
-        local orig_chained = orig_gap <= grace and orig_gap >= -TUNE.stack_eps_ms
-        resolve_pair(a, b, blocked, orig_chained)
+        local origGap = b.os - a.oe
+        local origChained = origGap <= grace and origGap >= -TUNE.stack_eps_ms
+        resolvePair(a, b, blocked, origChained)
     end
 
     for _, it in ipairs(processed) do
@@ -6961,21 +6819,27 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
         end
     end
 
+    local futureStarts = {}
+    for i = #processed, 1, -1 do
+        futureStarts[i] = math.min(processed[i].s, futureStarts[i + 1] or math.huge)
+    end
     for i = 1, #processed do
+        if Kite.LineOps then Kite.LineOps.checkCancelled() end
         local a = processed[i]
-        for j = i + 1, math.min(i + 3, #processed) do
+        for j = i + 1, #processed do
+            if a.e <= futureStarts[j] then break end
             local b = processed[j]
             if not stacked(a, b) and a.e > b.s then
                 a.e = math.max(b.s, a.ve)
                 a.e_kf = kfset and kfset[a.e] or false
-                if a.e > b.s then add_flag(a, "OVERLAP"); add_flag(b, "OVERLAP") end
+                if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
             end
         end
     end
 
     for _, it in ipairs(processed) do
         if not it.e_kf and not it.joined_r then
-            local z = kf_in(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
+            local z = keyframeInRange(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
             if z and z ~= it.e then
                 local nx = vis[it.vpos + 1]
                 local lim
@@ -6995,20 +6859,20 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
             local short = cfg.duration_floor_ms - (it.e - it.s)
             if short > 0 then
                 local pall = vis[it.vpos - 1]
-                local left_lim = 0
-                if pall and not stacked(pall, it) then left_lim = (pall.use and pall.e) or pall.oe end
+                local leftLim = 0
+                if pall and not stacked(pall, it) then leftLim = (pall.use and pall.e) or pall.oe end
                 local nall = vis[it.vpos + 1]
-                local right_lim = math.huge
-                if nall and not stacked(it, nall) then right_lim = (nall.use and nall.s) or nall.os end
+                local rightLim = math.huge
+                if nall and not stacked(it, nall) then rightLim = (nall.use and nall.s) or nall.os end
                 if not it.e_kf then
-                    local give = math.min(short, math.max(0, right_lim - it.e))
+                    local give = math.min(short, math.max(0, rightLim - it.e))
                     it.e = it.e + give; short = short - give
                 end
                 if short > 0 and not it.s_kf then
-                    local give = math.min(short, math.max(0, it.s - left_lim))
+                    local give = math.min(short, math.max(0, it.s - leftLim))
                     it.s = it.s - give; short = short - give
                 end
-                if short > 0 then add_flag(it, "SHORT") end
+                if short > 0 then addFlag(it, "SHORT") end
             end
         end
     end
@@ -7029,7 +6893,7 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
                     b.s_kf = kfset and kfset[b.s] or false
                     bs = b.s
                 end
-                if ae > bs then add_flag(a, "OVERLAP"); add_flag(b, "OVERLAP") end
+                if ae > bs then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
             end
         end
     end
@@ -7041,39 +6905,39 @@ local function plan_padding(items, kfs, kfset, cfg, stats)
     return processed
 end
 
-local function add_cps_flags(items, cfg)
+local function addCpsFlags(items, cfg)
     for _, it in ipairs(items) do
         if it.use and it.chars > 0 and it.e and it.s and it.e > it.s then
             local cps = it.chars * 1000 / (it.e - it.s)
             if cps > cfg.cps_flag then
-                add_flag(it, string.format("CPS %d", round(cps)))
+                addFlag(it, string.format("CPS %d", round(cps)))
             end
         end
     end
 end
 
-local function clean_marks(effect)
+local function cleanMarks(effect)
     local s = trim(effect)
     s = s:gsub("%s*%[TM%-[^%]]*%]", "")
     return trim(s)
 end
 
-local function collect_items(subs, sel, cfg)
+local function collectAutoTimingItems(subs, sel, cfg)
     local items = {}
     for _, idx in ipairs(sel or {}) do
         local line = subs[idx]
         if line and line.class == "dialogue" and not line.comment then
-            local os_ms = tonumber(line.start_time) or 0
-            local oe_ms = tonumber(line.end_time) or 0
-            local old_marks = {}
+            local osMs = tonumber(line.start_time) or 0
+            local oeMs = tonumber(line.end_time) or 0
+            local oldMarks = {}
             for m in tostring(line.effect or ""):gmatch("%[TM%-([^%]%s]+)") do
-                old_marks[m] = true
+                oldMarks[m] = true
             end
             items[#items + 1] = {
-                idx = idx, line = line, os = os_ms, oe = oe_ms,
-                spoken = oe_ms > os_ms and is_spoken(line, cfg),
-                chars = readable_chars(line.text),
-                old_marks = old_marks,
+                idx = idx, line = line, os = osMs, oe = oeMs,
+                spoken = oeMs > osMs and isSpoken(line, cfg),
+                chars = readableCharacters(line.text),
+                old_marks = oldMarks,
                 flags = {},
             }
         end
@@ -7085,7 +6949,7 @@ local function collect_items(subs, sel, cfg)
     return items
 end
 
-local function dialogue_ordinals(subs)
+local function dialogueOrdinals(subs)
     local ord, n = {}, 0
     for i = 1, #subs do
         if subs[i].class == "dialogue" then
@@ -7096,33 +6960,33 @@ local function dialogue_ordinals(subs)
     return ord
 end
 
-local function apply_items(subs, items)
+local function applyAutoTimingItems(subs, items)
     local flagged = {}
     for _, it in ipairs(items) do
-        local line = it.line
-        if it.use and it.s and it.e then
-            local ns = round(it.s)
-            local ne = math.max(round(it.e), ns + TUNE.min_event_ms)
-            line.start_time = ns
-            line.end_time = ne
+        if it.spoken then
+            local line = it.line
+            if it.use and it.s and it.e then
+                local ns = round(it.s)
+                local ne = math.max(round(it.e), ns + TUNE.min_event_ms)
+                line.start_time = ns
+                line.end_time = ne
+            end
+            local eff = cleanMarks(line.effect)
+            if #it.flags > 0 then
+                local tags = {}
+                for _, fl in ipairs(it.flags) do tags[#tags + 1] = "[TM-" .. fl .. "]" end
+                eff = (eff == "" and "" or eff .. " ") .. table.concat(tags, " ")
+                flagged[#flagged + 1] = it
+            end
+            line.effect = eff
+            subs[it.idx] = line
         end
-        local eff = clean_marks(line.effect)
-        if #it.flags > 0 then
-            local tags = {}
-            for _, fl in ipairs(it.flags) do tags[#tags + 1] = "[TM-" .. fl .. "]" end
-            eff = (eff == "" and "" or eff .. " ") .. table.concat(tags, " ")
-            flagged[#flagged + 1] = it
-        end
-        line.effect = eff
-        subs[it.idx] = line
     end
     return flagged
 end
 
-local MODE_NAMES = { "voice match", "padding + cleanup", "full process" }
-
-local function run_pipeline(subs, sel, cfg, mode, detect, kfs, kfset)
-    local items = collect_items(subs, sel, cfg)
+local function runAutoTimingPipeline(subs, sel, cfg, mode, detect, kfs, kfset)
+    local items = collectAutoTimingItems(subs, sel, cfg)
     if #items == 0 then return nil, "no_lines" end
 
     local stats = { matched = 0, spoken = 0, used = 0 }
@@ -7132,21 +6996,21 @@ local function run_pipeline(subs, sel, cfg, mode, detect, kfs, kfset)
             stats.spoken = stats.spoken + 1
             if mode == 2 then
                 if it.old_marks["NOVOICE"] then
-                    add_flag(it, "NOVOICE")
+                    addFlag(it, "NOVOICE")
                 else
                     it.vs, it.ve = it.os, it.oe
                     it.use = true
-                    if it.old_marks["WEAK"] then add_flag(it, "WEAK") end
+                    if it.old_marks["WEAK"] then addFlag(it, "WEAK") end
                 end
             else
                 local v = detect(it)
                 if v then
                     it.vs, it.ve = v.vs, v.ve
                     it.use = true
-                    if v.weak then add_flag(it, "WEAK") end
+                    if v.weak then addFlag(it, "WEAK") end
                     stats.matched = stats.matched + 1
                 else
-                    add_flag(it, "NOVOICE")
+                    addFlag(it, "NOVOICE")
                 end
             end
             if it.use then stats.used = stats.used + 1 end
@@ -7163,58 +7027,56 @@ local function run_pipeline(subs, sel, cfg, mode, detect, kfs, kfset)
             if it.use then
                 it.s, it.e = it.vs, it.ve
                 if prev and not stacked(prev, it) and it.s < prev.e then
-                    add_flag(prev, "OVERLAP"); add_flag(it, "OVERLAP")
+                    addFlag(prev, "OVERLAP"); addFlag(it, "OVERLAP")
                 end
                 prev = it
             end
         end
     else
-        plan_padding(items, kfs, kfset, cfg, stats)
+        planPadding(items, kfs, kfset, cfg, stats)
     end
-    add_cps_flags(items, cfg)
+    addCpsFlags(items, cfg)
 
     progress("Applying...", 85)
-    local ordinals = dialogue_ordinals(subs)
+    local ordinals = dialogueOrdinals(subs)
     local flagged
     if Kite.LineOps and Kite.LineOps.transaction then
-        Kite.LineOps.transaction(subs, function() flagged = apply_items(subs, items) end)
+        Kite.LineOps.transaction(subs, function() flagged = applyAutoTimingItems(subs, items) end)
     else
-        flagged = apply_items(subs, items)
+        flagged = applyAutoTimingItems(subs, items)
     end
     progress(nil, 100)
     return { items = items, flagged = flagged, stats = stats, ordinals = ordinals }
 end
 
 local VT = {
-    DEFAULTS = DEFAULTS, TUNE = TUNE, GUI_BOUNDS = GUI_BOUNDS,
-    MODE_NAMES = MODE_NAMES,
-    normalize_cfg = normalize_cfg,
-    style_ok = style_ok,
-    get_cfg = get_cfg,
-    save_cfg = save_cfg,
-    parse_waveform_json = parse_waveform_json,
-    detect_voice_waveform = detect_voice_waveform,
-    plan_padding = plan_padding,
-    add_cps_flags = add_cps_flags,
-    run_pipeline = run_pipeline,
+    GUI_BOUNDS = guiBounds,
+    normalize_cfg = normalizeAutoTimingConfig,
+    style_ok = styleMatches,
+    get_cfg = getAutoTimingConfig,
+    save_cfg = saveAutoTimingConfig,
+    parse_waveform_json = parseWaveformJson,
+    detect_voice_waveform = detectVoiceWaveform,
+    run_pipeline = runAutoTimingPipeline,
 }
 
 VTMOD = VT
+
 return VTMOD
 end
 
-local AT_DETECTORS = { "Lazy", "Busy" }
-local AT_MODES = { "Full Timing", "Raw Timing", "Post-Timing" }
-local AT_MODE_SET = {}
-for _, m in ipairs(AT_MODES) do AT_MODE_SET[m] = true end
-local LZT_METHODS = { "LazyFusion", "Cluster (±ms)", "Table (±ms)" }
-local LAZY_NUMERIC = {
+local atDetectors = { "Lazy", "Busy" }
+local atModes = { "Full Timing", "Raw Timing", "Post-Timing" }
+local atModeSet = {}
+for _, m in ipairs(atModes) do atModeSet[m] = true end
+local lztMethods = { "LazyFusion", "Cluster (±ms)", "Table (±ms)" }
+local lazyNumeric = {
     "lead_in_ms", "lead_out_ms", "max_lead_out_ms", "max_lead_in_ms",
     "kf_end_range_ms", "kf_start_range_ms", "kf_back_ms", "duration_floor_ms", "cps_flag",
     "smooth_ms", "fill_gap_ms", "min_island_ms", "outer_search_ms",
 }
-local DATA_KEYS = { "sil30", "sil40", "sil50", "vad", "flux", "env" }
-local LEGACY_KEYS = { "sil30", "sil40", "sil50" }
+local dataKeys = { "sil30", "sil40", "sil50", "vad", "flux", "env" }
+local legacyKeys = { "sil30", "sil40", "sil50" }
 local atWave = { path = nil, data = nil }
 local busyPaths = { sil30 = "", sil40 = "", sil50 = "", vad = "", flux = "", env = "" }
 local busyDiscovered = false
@@ -7271,10 +7133,10 @@ local function atDiscoverBusyPaths()
     if not Timing or busyDiscovered then return end
     busyDiscovered = true
     local p = {}
-    for _, k in ipairs(Timing.pathKeys or DATA_KEYS) do p[k] = "" end
+    for _, k in ipairs(Timing.pathKeys or dataKeys) do p[k] = "" end
     local ok = pcall(Timing.discoverPaths, p)
     if ok then
-        for _, k in ipairs(DATA_KEYS) do
+        for _, k in ipairs(dataKeys) do
             if (busyPaths[k] or "") == "" and p[k] and p[k] ~= "" then busyPaths[k] = p[k] end
         end
     end
@@ -7282,13 +7144,13 @@ end
 
 local function atBusyHasInput(wave)
     if wave then return true end
-    for _, k in ipairs(DATA_KEYS) do if (busyPaths[k] or "") ~= "" then return true end end
+    for _, k in ipairs(dataKeys) do if (busyPaths[k] or "") ~= "" then return true end end
     return false
 end
 
 local function atMakeBusyDetect(cfg, wave, kfs)
     local paths = {}
-    for _, k in ipairs(DATA_KEYS) do paths[k] = busyPaths[k] or "" end
+    for _, k in ipairs(dataKeys) do paths[k] = busyPaths[k] or "" end
     if wave then paths.waveEnv = atWaveEnvelope(wave) end
     local sig = Timing.buildSignals(paths)
     if #sig.sources == 0 and not sig.env then return nil end
@@ -7334,7 +7196,7 @@ local function atRunLegacy(VT, subs, sel, cfg)
     return true
 end
 
-local function atBusyDialog(VT)
+local function atBusyDialog()
     if not Timing then showMsg(L("at_err_module")); return end
     atDiscoverBusyPaths()
     while true do
@@ -7342,20 +7204,20 @@ local function atBusyDialog(VT)
             { class="label", label=L("at_lbl_data"), x=0, y=0, width=8, height=1 },
             { class="checkbox", name="discover", label=L("at_chk_discover"), value=false, x=0, y=1, width=8, height=1 },
             { class="label", label=L("at_lbl_sil"), x=0, y=2, width=2, height=1 },
-            { class="edit", name="sil30", text=busyPaths.sil30, x=2, y=2, width=6, height=1 },
-            { class="edit", name="sil40", text=busyPaths.sil40, x=0, y=3, width=4, height=1 },
-            { class="edit", name="sil50", text=busyPaths.sil50, x=4, y=3, width=4, height=1 },
+            { class="edit", name="sil30", value=busyPaths.sil30, x=2, y=2, width=6, height=1 },
+            { class="edit", name="sil40", value=busyPaths.sil40, x=0, y=3, width=4, height=1 },
+            { class="edit", name="sil50", value=busyPaths.sil50, x=4, y=3, width=4, height=1 },
             { class="label", label=L("at_lbl_vad"), x=0, y=4, width=2, height=1 },
-            { class="edit", name="vad", text=busyPaths.vad, x=2, y=4, width=6, height=1 },
+            { class="edit", name="vad", value=busyPaths.vad, x=2, y=4, width=6, height=1 },
             { class="label", label=L("at_lbl_flux"), x=0, y=5, width=2, height=1 },
-            { class="edit", name="flux", text=busyPaths.flux, x=2, y=5, width=6, height=1 },
+            { class="edit", name="flux", value=busyPaths.flux, x=2, y=5, width=6, height=1 },
             { class="label", label=L("at_lbl_env"), x=0, y=6, width=2, height=1 },
-            { class="edit", name="env", text=busyPaths.env, x=2, y=6, width=6, height=1 },
+            { class="edit", name="env", value=busyPaths.env, x=2, y=6, width=6, height=1 },
             { class="label", label=L("at_busy_hint"), x=0, y=7, width=8, height=1 },
         }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_ok"), L("btn_browse"), L("btn_cancel") }, { cancel = L("btn_cancel") })
+        local pressed, r = aegisub.dialog.display(d, { L("btn_ok"), L("btn_browse"), L("btn_cancel") }, { close = L("btn_cancel") })
         if not pressed or pressed == L("btn_cancel") then return end
-        for _, k in ipairs(DATA_KEYS) do busyPaths[k] = normalizeString(r[k]) end
+        for _, k in ipairs(dataKeys) do busyPaths[k] = normalizeString(r[k]) end
         if r.discover then busyDiscovered = false; atDiscoverBusyPaths() end
         if pressed == L("btn_browse") then
             local dir = Timing and select(1, Timing.scriptDirAndBase()) or ""
@@ -7374,28 +7236,28 @@ local function atBusyDialog(VT)
     end
 end
 
-local function atLegacyDialog(VT)
+local function atLegacyDialog()
     if not Timing then showMsg(L("at_err_module")); return end
     atDiscoverBusyPaths()
-    local methodUi = UI.options(LZT_METHODS, currentConfig.lzt_method)
+    local methodUi = UI.options(lztMethods, currentConfig.lzt_method)
     while true do
         local d = {
             { class="label", label=L("at_sec_legacy"), x=0, y=0, width=8, height=1 },
             { class="label", label=L("at_legacy_hint"), x=0, y=1, width=8, height=1 },
             { class="checkbox", name="discover", label=L("at_chk_discover_legacy"), value=false, x=0, y=2, width=8, height=1 },
             { class="label", label=L("at_lbl_sil"), x=0, y=3, width=2, height=1 },
-            { class="edit", name="sil30", text=busyPaths.sil30, x=2, y=3, width=6, height=1 },
-            { class="edit", name="sil40", text=busyPaths.sil40, x=0, y=4, width=4, height=1 },
-            { class="edit", name="sil50", text=busyPaths.sil50, x=4, y=4, width=4, height=1 },
+            { class="edit", name="sil30", value=busyPaths.sil30, x=2, y=3, width=6, height=1 },
+            { class="edit", name="sil40", value=busyPaths.sil40, x=0, y=4, width=4, height=1 },
+            { class="edit", name="sil50", value=busyPaths.sil50, x=4, y=4, width=4, height=1 },
             { class="label", label=L("at_lbl_method"), x=0, y=5, width=2, height=1 },
             { class="dropdown", name="method", items=methodUi.items, value=methodUi.value, x=2, y=5, width=4, height=1 },
             { class="label", label=L("at_lbl_limit"), x=6, y=5, width=1, height=1 },
-            { class="intedit", name="limit", value=tonumber(currentConfig.lzt_limit) or 800, min=0, max=10000, x=7, y=5, width=1, height=1 },
+            { class="intedit", name="limit", value=tonumber(currentConfig.lzt_limit) or 800, min=0, x=7, y=5, width=1, height=1 },
             { class="checkbox", name="silonly", label=L("at_chk_silonly"), value=currentConfig.lzt_silences_only and true or false, x=0, y=6, width=8, height=1 },
         }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_run_legacy"), L("btn_browse"), L("btn_cancel") }, { cancel = L("btn_cancel") })
+        local pressed, r = aegisub.dialog.display(d, { L("btn_run_legacy"), L("btn_browse"), L("btn_cancel") }, { close = L("btn_cancel") })
         if not pressed or pressed == L("btn_cancel") then return end
-        for _, k in ipairs(LEGACY_KEYS) do busyPaths[k] = normalizeString(r[k]) end
+        for _, k in ipairs(legacyKeys) do busyPaths[k] = normalizeString(r[k]) end
         currentConfig.lzt_method = UI.from(methodUi, r.method)
         currentConfig.lzt_limit = tonumber(r.limit) or currentConfig.lzt_limit
         currentConfig.lzt_silences_only = r.silonly and true or false
@@ -7435,7 +7297,7 @@ autoTimer = function(subs, sel)
     resolveConfig()
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
     local VT = getVT()
-    if not AT_MODE_SET[currentConfig.lazyt_mode] then currentConfig.lazyt_mode = "Full Timing" end
+    if not atModeSet[currentConfig.lazyt_mode] then currentConfig.lazyt_mode = "Full Timing" end
     if currentConfig.at_detector ~= "Busy" then currentConfig.at_detector = "Lazy" end
     local cfg = VT.get_cfg()
 
@@ -7457,8 +7319,8 @@ autoTimer = function(subs, sel)
     local B = VT.GUI_BOUNDS
 
     while true do
-        local modeUi = UI.options(AT_MODES, currentConfig.lazyt_mode)
-        local detUi = UI.options(AT_DETECTORS, currentConfig.at_detector)
+        local modeUi = UI.options(atModes, currentConfig.lazyt_mode)
+        local detUi = UI.options(atDetectors, currentConfig.at_detector)
         local styleUi = UI.options(styles, cfg.style_filter)
         local d = {
             { class="label", label=string.format(L("at_title"), subsName or "?"), x=0, y=0, width=4, height=1 },
@@ -7468,7 +7330,7 @@ autoTimer = function(subs, sel)
             { class="dropdown", name="detector", items=detUi.items, value=detUi.value, x=9, y=0, width=3, height=1 },
 
             { class="label", label=L("lazyt_lbl_json"), x=0, y=1, width=3, height=1 },
-            { class="edit", name="json", text=(atWave.path or ""), x=3, y=1, width=9, height=1 },
+            { class="edit", name="json", value=(atWave.path or ""), x=3, y=1, width=9, height=1 },
             { class="checkbox", name="reload_json", label=L("lazyt_chk_reload"), value=false, x=0, y=2, width=4, height=1 },
             { class="label", label=L("lazyt_lbl_outer"), x=4, y=2, width=2, height=1 },
             { class="intedit", name="outer_search_ms", value=cfg.outer_search_ms, min=B.outer_search_ms.min, max=B.outer_search_ms.max, x=6, y=2, width=2, height=1 },
@@ -7504,35 +7366,37 @@ autoTimer = function(subs, sel)
             { class="checkbox", name="show_stats", label=L("lazyt_chk_stats"), value=cfg.show_stats, x=5, y=10, width=4, height=1 },
             { class="label", label=L("lazyt_lbl_style"), x=0, y=11, width=3, height=1 },
             { class="dropdown", name="style_filter", items=styleUi.items, value=styleUi.value, x=3, y=11, width=4, height=1 },
-            { class="edit", name="extra_style", text=cfg.extra_style, x=7, y=11, width=5, height=1 },
+            { class="edit", name="extra_style", value=cfg.extra_style, x=7, y=11, width=5, height=1 },
             { class="label", label=L("at_hint"), x=0, y=12, width=12, height=1 },
             { class="label", label=L("at_hint_mode"), x=0, y=13, width=12, height=1 },
         }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_process"), L("btn_browse"), L("btn_data"), L("btn_legacy"), L("btn_save"), L("btn_cancel") }, { cancel = L("btn_cancel") })
+        local pressed, r = aegisub.dialog.display(d, { L("btn_process"), L("btn_browse"), L("btn_data"), L("btn_legacy"), L("btn_save"), L("btn_cancel") }, { close = L("btn_cancel") })
         if not pressed or pressed == L("btn_cancel") then return end
 
         currentConfig.lazyt_mode = UI.from(modeUi, r.mode)
         currentConfig.at_detector = UI.from(detUi, r.detector)
         cfg.style_filter = UI.from(styleUi, r.style_filter)
         cfg.extra_style = normalizeString(r.extra_style)
-        for _, k in ipairs(LAZY_NUMERIC) do cfg[k] = r[k] end
+        for _, k in ipairs(lazyNumeric) do cfg[k] = r[k] end
         cfg.auto_otsu = r.auto_otsu and true or false
         cfg.edge_spill_cleanup = r.edge_spill_cleanup and true or false
         cfg.skip_signs = r.skip_signs and true or false
         cfg.show_stats = r.show_stats and true or false
         VT.normalize_cfg(cfg)
         local jsonField = normalizeString(r.json)
+        local enteredPath = jsonField ~= "" and jsonField or nil
+        if atWave.path ~= enteredPath then atWave.path, atWave.data = enteredPath, nil end
 
         if pressed == L("btn_save") then
-            VT.save_cfg(cfg)
-            showMsg(L("msg_config_saved"))
+            local saved, message = VT.save_cfg(cfg)
+            showMsg(saved and L("msg_config_saved") or tostring(message or "Could not save configuration."))
         elseif pressed == L("btn_browse") then
             local picked = aegisub.dialog.open(L("lazyt_open_title"), "", jsonField ~= "" and jsonField or (atWave.path or ""), L("lazyt_json_filter"), false, true)
             if picked and picked ~= "" then atWave.path = picked; atWave.data = nil end
         elseif pressed == L("btn_data") then
-            atBusyDialog(VT)
+            atBusyDialog()
         elseif pressed == L("btn_legacy") then
-            local action = atLegacyDialog(VT)
+            local action = atLegacyDialog()
             if action == "legacy" then
                 if atRunLegacy(VT, subs, sel, cfg) then return sel end
             end
@@ -7556,7 +7420,7 @@ autoTimer = function(subs, sel)
                     end
                     if not Timing then showMsg(L("at_err_module")); ready = false
                     elseif not atBusyHasInput(wave) then
-                        local action = atBusyDialog(VT)
+                        local action = atBusyDialog()
                         if action ~= "ok" or not atBusyHasInput(wave) then showMsg(L("at_err_busy_input")); ready = false end
                     else
                         detect = atMakeBusyDetect(cfg, wave, kfs)
@@ -7602,7 +7466,7 @@ function runScxvid()
     local ffmpeg = ffmpegConfigured ~= "" and ffmpegConfigured or "ffmpeg"
     if scxConfigured ~= "" and not Kite.PyBridge.fileExists(scxConfigured) then showMsg(string.format(L("err_scxvid_not_found"), scxConfigured)); return end
     if ffmpegConfigured ~= "" and not Kite.PyBridge.fileExists(ffmpegConfigured) then showMsg(string.format(L("err_ffmpeg_not_found"), ffmpegConfigured)); return end
-    local directory = Kite.PyBridge.parentPath(video) or Kite.LineOps.subtitleFolder() or Kite.PyBridge.tempRoot()
+    local directory = Kite.PyBridge.parentPath(video) or (Kite.LineOps and Kite.LineOps.subtitleFolder()) or Kite.PyBridge.tempRoot()
     if not directory then showMsg(L("err_cannot_create_directory")); return end
     local fileName = video:gsub("^.*[\\/]", "")
     local baseName = fileName:gsub("%.[^.]+$", "")
@@ -7643,13 +7507,7 @@ function Scream.analysisLog(media)
     return Kite.PyBridge.joinPath(folder, "chrono_suite_scream.log")
 end
 
-function Scream.median(values)
-    if #values == 0 then return 0 end
-    table.sort(values)
-    local mid = math.floor((#values + 1) / 2)
-    if #values % 2 == 1 then return values[mid] end
-    return (values[mid] + values[mid + 1]) / 2
-end
+function Scream.median(values) return require("kite.Core").median(values, true) or 0 end
 
 function Scream.dbToPower(db) return 10 ^ (db / 10) end
 function Scream.powerToDb(power)
@@ -7790,7 +7648,7 @@ function Scream.configDialog()
         { class = "checkbox", name = "scream_clean_previous", label = L("scream_chk_clean"), value = currentConfig.scream_clean_previous, x = 0, y = 7, width = 10, height = 1 },
         { class = "checkbox", name = "scream_reuse_log",      label = L("scream_chk_reuse"), value = currentConfig.scream_reuse_log,      x = 0, y = 8, width = 10, height = 1 },
     }
-    local btn, res = aegisub.dialog.display(dlg, { L("scream_btn_analyze"), L("btn_cancel") }, { cancel = L("btn_cancel") })
+    local btn, res = aegisub.dialog.display(dlg, { L("scream_btn_analyze"), L("btn_cancel") }, { close = L("btn_cancel") })
     if not btn or btn == L("btn_cancel") then return nil end
     local scope = UI.from(scopeUi, res.scream_scope)
     if scope ~= "Selected lines" then scope = "All dialogue" end
@@ -7818,10 +7676,14 @@ function screamDetector(subs, sel)
     if not cfg then return end
     local logPath = Scream.analysisLog(media)
     if not logPath then showMsg(L("scream_msg_no_folder")); return end
-    if not cfg.scream_reuse_log or not Kite.PyBridge.fileExists(logPath) then
+    local sourcePath = logPath .. ".source"
+    local cachedSource = Kite.PyBridge.readFile(sourcePath)
+    if not cfg.scream_reuse_log or cachedSource ~= media or not Kite.PyBridge.fileExists(logPath) then
         showMsg(L("scream_msg_running"))
+        Kite.PyBridge.removeFile(sourcePath)
         local ok, diagnostic = Scream.runAnalysis(media, logPath)
         if not ok then showMsg(string.format(L("err_process_failed"), tostring(diagnostic or ""))); return end
+        Kite.PyBridge.writeFile(sourcePath, media)
     end
     local samples = Scream.parseLog(logPath)
     if #samples == 0 then showMsg(string.format(L("scream_msg_no_log"), logPath)); return end
@@ -7870,16 +7732,16 @@ function screamDetector(subs, sel)
 end
 end
 
-local function ktCalcLeadIn(orig_start, boundary, kfs, cfg)
+local function ktCalcLeadIn(origStart, boundary, kfs, cfg)
     local hard = boundary or 0
-    local kf = ktFindKfBackward(orig_start, cfg.kt_lead_in_max, kfs)
+    local kf = ktFindKfBackward(origStart, cfg.kt_lead_in_max, kfs)
     if kf and kf >= hard then return kf end
-    return ktSnap(math.max(orig_start - cfg.kt_lead_in_base, hard))
+    return ktSnap(math.max(origStart - cfg.kt_lead_in_base, hard))
 end
-local function ktCalcLeadOut(orig_end, boundary, kfs, cfg)
-    local kf = ktFindKfForward(orig_end, cfg.kt_lead_out_max, kfs)
+local function ktCalcLeadOut(origEnd, boundary, kfs, cfg)
+    local kf = ktFindKfForward(origEnd, cfg.kt_lead_out_max, kfs)
     if kf and (not boundary or kf <= boundary) then return kf end
-    local base = orig_end + cfg.kt_lead_out_base
+    local base = origEnd + cfg.kt_lead_out_base
     if boundary then base = math.min(base, boundary) end
     return ktSnap(base)
 end
@@ -7890,88 +7752,88 @@ local function kiteTimingOne(subs, si, kfs, cfg)
     local before = {
         [si] = { start_time = cur.start_time, end_time = cur.end_time },
     }
-    local prev_idx, next_idx
-    for j = si - 1, 1, -1 do if isEditableDialogue(subs[j]) then prev_idx = j; break end end
-    for j = si + 1, #subs do if isEditableDialogue(subs[j]) then next_idx = j; break end end
-    local new_s, new_e = cur.start_time, cur.end_time
-    local pending_next_start
-    if not prev_idx and not ktIsOnKf(cur.start_time, kfs) then
-        new_s = ktCalcLeadIn(cur.start_time, nil, kfs, cfg)
+    local prevIdx, nextIdx
+    for j = si - 1, 1, -1 do if isEditableDialogue(subs[j]) then prevIdx = j; break end end
+    for j = si + 1, #subs do if isEditableDialogue(subs[j]) then nextIdx = j; break end end
+    local newS, newE = cur.start_time, cur.end_time
+    local pendingNextStart
+    if not prevIdx and not ktIsOnKf(cur.start_time, kfs) then
+        newS = ktCalcLeadIn(cur.start_time, nil, kfs, cfg)
     end
-    if next_idx then
-        local nxt = subs[next_idx]
+    if nextIdx then
+        local nxt = subs[nextIdx]
         if not nxt.start_time then return 0 end
-        before[next_idx] = { start_time = nxt.start_time, end_time = nxt.end_time }
-        local orig_e1, orig_s2 = cur.end_time, nxt.start_time
-        local e1_locked = ktIsOnKf(orig_e1, kfs)
-        local s2_locked = ktIsOnKf(orig_s2, kfs)
-        local gap = orig_s2 - orig_e1
-        local new_e1, new_s2 = orig_e1, orig_s2
-        if e1_locked and s2_locked then
-        elseif e1_locked then
+        before[nextIdx] = { start_time = nxt.start_time, end_time = nxt.end_time }
+        local origE1, origS2 = cur.end_time, nxt.start_time
+        local e1Locked = ktIsOnKf(origE1, kfs)
+        local s2Locked = ktIsOnKf(origS2, kfs)
+        local gap = origS2 - origE1
+        local newE1, newS2 = origE1, origS2
+        if e1Locked and s2Locked then
+        elseif e1Locked then
             if gap > 0 then
-                if gap <= cfg.kt_lead_in_max and gap <= cfg.kt_chain_gap_max then new_s2 = orig_e1
-                else new_s2 = ktCalcLeadIn(orig_s2, orig_e1, kfs, cfg) end
+                if gap <= cfg.kt_lead_in_max and gap <= cfg.kt_chain_gap_max then newS2 = origE1
+                else newS2 = ktCalcLeadIn(origS2, origE1, kfs, cfg) end
             elseif gap < 0 then
-                new_s2 = ktCalcLeadIn(orig_s2, nil, kfs, cfg)
-                if new_s2 < 0 then new_s2 = 0 end
+                newS2 = ktCalcLeadIn(origS2, nil, kfs, cfg)
+                if newS2 < 0 then newS2 = 0 end
             end
-        elseif s2_locked then
+        elseif s2Locked then
             if gap > 0 then
-                local reach = orig_s2 - orig_e1
-                if reach >= 0 and reach <= cfg.kt_lead_out_chain and gap <= cfg.kt_chain_gap_max then new_e1 = orig_s2
-                else new_e1 = ktCalcLeadOut(orig_e1, orig_s2, kfs, cfg) end
+                local reach = origS2 - origE1
+                if reach >= 0 and reach <= cfg.kt_lead_out_chain and gap <= cfg.kt_chain_gap_max then newE1 = origS2
+                else newE1 = ktCalcLeadOut(origE1, origS2, kfs, cfg) end
             elseif gap < 0 then
-                new_e1 = ktCalcLeadOut(orig_e1, nil, kfs, cfg)
+                newE1 = ktCalcLeadOut(origE1, nil, kfs, cfg)
             end
         elseif gap > 0 then
-            local kf1 = ktFindKfForward(orig_e1, cfg.kt_lead_out_max, kfs)
-            if kf1 and kf1 > orig_s2 then kf1 = nil end
-            local kf2 = ktFindKfBackward(orig_s2, cfg.kt_lead_in_max, kfs)
-            if kf2 and kf2 < orig_e1 then kf2 = nil end
-            local base_e1 = ktSnap(math.min(orig_e1 + cfg.kt_lead_out_base, orig_s2))
-            local base_s2 = ktSnap(math.max(orig_s2 - cfg.kt_lead_in_base, orig_e1))
+            local kf1 = ktFindKfForward(origE1, cfg.kt_lead_out_max, kfs)
+            if kf1 and kf1 > origS2 then kf1 = nil end
+            local kf2 = ktFindKfBackward(origS2, cfg.kt_lead_in_max, kfs)
+            if kf2 and kf2 < origE1 then kf2 = nil end
+            local baseE1 = ktSnap(math.min(origE1 + cfg.kt_lead_out_base, origS2))
+            local baseS2 = ktSnap(math.max(origS2 - cfg.kt_lead_in_base, origE1))
             if kf1 and kf2 then
-                new_e1 = kf1; new_s2 = kf2
-                if new_e1 > new_s2 then local mid = ktSnap((new_e1 + new_s2) / 2); new_e1 = mid; new_s2 = mid end
+                newE1 = kf1; newS2 = kf2
+                if newE1 > newS2 then local mid = ktSnap((newE1 + newS2) / 2); newE1 = mid; newS2 = mid end
             elseif kf1 and not kf2 then
-                new_e1 = kf1
-                local reach = orig_s2 - kf1
-                if reach >= 0 and reach <= cfg.kt_lead_in_max and gap <= cfg.kt_chain_gap_max then new_s2 = kf1 else new_s2 = base_s2 end
+                newE1 = kf1
+                local reach = origS2 - kf1
+                if reach >= 0 and reach <= cfg.kt_lead_in_max and gap <= cfg.kt_chain_gap_max then newS2 = kf1 else newS2 = baseS2 end
             elseif not kf1 and kf2 then
-                new_s2 = kf2
-                local reach = kf2 - orig_e1
-                if reach >= 0 and reach <= cfg.kt_lead_out_chain and gap <= cfg.kt_chain_gap_max then new_e1 = kf2 else new_e1 = base_e1 end
+                newS2 = kf2
+                local reach = kf2 - origE1
+                if reach >= 0 and reach <= cfg.kt_lead_out_chain and gap <= cfg.kt_chain_gap_max then newE1 = kf2 else newE1 = baseE1 end
             else
                 if gap <= cfg.kt_chain_gap_max and gap <= (cfg.kt_lead_out_chain + cfg.kt_lead_in_max) then
-                    new_s2 = base_s2; new_e1 = new_s2
+                    newS2 = baseS2; newE1 = newS2
                 else
-                    new_e1 = base_e1; new_s2 = base_s2
-                    if new_e1 > new_s2 then local mid = ktSnap((new_e1 + new_s2) / 2); new_e1 = mid; new_s2 = mid end
+                    newE1 = baseE1; newS2 = baseS2
+                    if newE1 > newS2 then local mid = ktSnap((newE1 + newS2) / 2); newE1 = mid; newS2 = mid end
                 end
             end
         elseif gap < 0 then
-            new_e1 = ktCalcLeadOut(orig_e1, nil, kfs, cfg)
-            new_s2 = ktCalcLeadIn(orig_s2, nil, kfs, cfg)
-            if new_s2 < 0 then new_s2 = 0 end
+            newE1 = ktCalcLeadOut(origE1, nil, kfs, cfg)
+            newS2 = ktCalcLeadIn(origS2, nil, kfs, cfg)
+            if newS2 < 0 then newS2 = 0 end
         end
-        new_e = new_e1
-        pending_next_start = new_s2
+        newE = newE1
+        pendingNextStart = newS2
     else
         if not ktIsOnKf(cur.end_time, kfs) then
-            new_e = ktCalcLeadOut(cur.end_time, nil, kfs, cfg)
+            newE = ktCalcLeadOut(cur.end_time, nil, kfs, cfg)
         end
     end
-    if new_e <= new_s then return 0 end
-    if next_idx and pending_next_start then
-        local nxt = subs[next_idx]
-        if not nxt or not nxt.end_time or pending_next_start >= nxt.end_time then return 0 end
+    if newE <= newS then return 0 end
+    if nextIdx and pendingNextStart then
+        local nxt = subs[nextIdx]
+        if not nxt or not nxt.end_time or pendingNextStart >= nxt.end_time then return 0 end
     end
-    cur.start_time = new_s; cur.end_time = new_e; subs[si] = cur
-    if next_idx and pending_next_start then
-        local nxt = subs[next_idx]
-        nxt.start_time = pending_next_start
-        subs[next_idx] = nxt
+    cur.start_time = newS; cur.end_time = newE; subs[si] = cur
+    if nextIdx and pendingNextStart then
+        local nxt = subs[nextIdx]
+        nxt.start_time = pendingNextStart
+        subs[nextIdx] = nxt
     end
 
     local changed = 0
@@ -7985,8 +7847,8 @@ end
 local function kiteTiming(subs, sel)
     resolveConfig()
     local okFrame = false
-    if fr_to and ms_from then
-        local ok, f0, m0 = pcall(function() return fr_to(0), ms_from(0) end)
+    if frTo and msFrom then
+        local ok, f0, m0 = pcall(function() return frTo(0), msFrom(0) end)
         okFrame = ok and f0 ~= nil and m0 ~= nil
     end
     if not okFrame then showMsg(L("err_no_video")); return end
@@ -8212,19 +8074,19 @@ local function aeKeyframeExport(subs, sel)
             end
         end
     end
-    local frame_ms = 1000 / FPS
-    local out_pos = { "Adobe After Effects 6.0 Keyframe Data\n", "\tUnits Per Second\t" .. FPS .. "\n",
+    local frameMs = 1000 / FPS
+    local outPos = { "Adobe After Effects 6.0 Keyframe Data\n", "\tUnits Per Second\t" .. FPS .. "\n",
                       "\tSource Width\t" .. vw .. "\n", "\tSource Height\t" .. vh .. "\n",
                       "\tSource Pixel Aspect Ratio\t1\n", "\tComp Pixel Aspect Ratio\t1\n\n",
                       "Position\n\tFrame\tX pixels\tY pixels\tZ pixels\n" }
-    local out_scale = { "\nScale\n\tFrame\tX percent\tY percent\tZ percent\n" }
-    local out_rot   = { "\nRotation\n\tFrame\tDegrees\n" }
+    local outScale = { "\nScale\n\tFrame\tX percent\tY percent\tZ percent\n" }
+    local outRot   = { "\nRotation\n\tFrame\tDegrees\n" }
     local gframe = 0
     for _, idx in ipairs(sel) do
         local line = subs[idx]
         if isDialogue(line) and validateDuration(line) then
             local text = normalizeString(line.text)
-            local nf = math.max(1, math.floor((line.end_time - line.start_time) / frame_ms + 0.5))
+            local nf = math.max(1, math.floor((line.end_time - line.start_time) / frameMs + 0.5))
             local position = Kite.LineOps and Kite.LineOps.lastTagCall(text, "pos") or nil
             local positionArgs = position and Kite.LineOps.splitArguments(position.value) or {}
             local x = tonumber(positionArgs[1]) or vw / 2
@@ -8248,22 +8110,22 @@ local function aeKeyframeExport(subs, sel)
             local fscy = numericTag("fscy", 100)
             local frz = numericTag("frz", 0)
             for localFrame = 0, nf - 1 do
-                local px, py = positionAt(localFrame * frame_ms)
-                table.insert(out_pos,   string.format("\t%d\t%s\t%s\t0\n", gframe, px, py))
-                table.insert(out_scale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
-                table.insert(out_rot,   string.format("\t%d\t%s\n", gframe, frz))
+                local px, py = positionAt(localFrame * frameMs)
+                table.insert(outPos,   string.format("\t%d\t%s\t%s\t0\n", gframe, px, py))
+                table.insert(outScale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
+                table.insert(outRot,   string.format("\t%d\t%s\n", gframe, frz))
                 gframe = gframe + 1
             end
         end
     end
-    table.insert(out_rot, "\nEnd of Keyframe Data")
-    local payload = table.concat(out_pos) .. table.concat(out_scale) .. table.concat(out_rot)
+    table.insert(outRot, "\nEnd of Keyframe Data")
+    local payload = table.concat(outPos) .. table.concat(outScale) .. table.concat(outRot)
     if aegisub.dialog and type(aegisub.dialog.save) == "function" then
-        local save_path = aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false)
-        if not save_path or save_path == "" then return end
-        local ok, message = Kite.PyBridge.writeFile(save_path, payload)
-        if ok then showMsg(string.format(L("msg_ae_saved"), save_path)); return end
-        showMsg(string.format(L("err_cannot_write_file"), save_path) .. "\n" .. tostring(message or ""))
+        local savePath = aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false)
+        if not savePath or savePath == "" then return end
+        local ok, message = Kite.PyBridge.writeFile(savePath, payload)
+        if ok then showMsg(string.format(L("msg_ae_saved"), savePath)); return end
+        showMsg(string.format(L("err_cannot_write_file"), savePath) .. "\n" .. tostring(message or ""))
         return
     end
     if aegisub.log then aegisub.log(payload) end
@@ -8272,24 +8134,24 @@ end
 local function stutterManager(subs, sel)
     for _, i in ipairs(sel) do
         local l = subs[i]
-        local has_TT = normalizeString(l.effect):find("%[TT%]") ~= nil
+        local hasTT = normalizeString(l.effect):find("%[TT%]") ~= nil
         local pre, text = splitLeadingBraceBlocks(l.text)
         local punct, rest = "", text
         local scanning = true
         while scanning do
-            if startsWith(rest, INV_EXCLAMATION) then punct = punct .. INV_EXCLAMATION; rest = rest:sub(#INV_EXCLAMATION + 1)
-            elseif startsWith(rest, INV_QUESTION) then punct = punct .. INV_QUESTION; rest = rest:sub(#INV_QUESTION + 1)
+            if startsWith(rest, invExclamation) then punct = punct .. invExclamation; rest = rest:sub(#invExclamation + 1)
+            elseif startsWith(rest, invQuestion) then punct = punct .. invQuestion; rest = rest:sub(#invQuestion + 1)
             elseif rest:match("^%s") then punct = punct .. rest:sub(1, 1); rest = rest:sub(2)
             else scanning = false end
         end
         local chars = {}
-        for c in rest:gmatch(UTF8_CHAR_PATTERN) do table.insert(chars, c) end
+        for c in rest:gmatch(utf8CharPattern) do table.insert(chars, c) end
         if #chars > 0 and chars[1]:match("[%a\128-\255]") then
             local first = chars[1]
             local base = unicodeUpper(first)
             local firstLower = unicodeLower(first)
-            local is_stutter = (#chars >= 3 and chars[2] == "-" and unicodeLower(chars[3]) == firstLower)
-            if is_stutter then
+            local isStutter = (#chars >= 3 and chars[2] == "-" and unicodeLower(chars[3]) == firstLower)
+            if isStutter then
                 local res, mode = {}, true
                 for _, c in ipairs(chars) do
                     if mode then
@@ -8301,7 +8163,7 @@ local function stutterManager(subs, sel)
                     end
                 end
                 l.text = pre .. punct .. table.concat(res)
-            elseif has_TT then
+            elseif hasTT then
                 local tail = table.concat(chars, "", 2)
                 l.text = pre .. punct .. base .. "-" .. base .. tail
             end
@@ -8373,7 +8235,7 @@ local function shiftToFirst(subs, sel)
     end
 end
 
-local UTILITY_SECTIONS = {
+local utilitySections = {
     {
         id    = "case",
         label_key = "lbl_section_case",
@@ -8394,9 +8256,9 @@ local UTILITY_SECTIONS = {
         label_key = "lbl_section_punct",
         items = {
             { name="" },
-            { name="Toggle " .. INV_EXCLAMATION .. "!",                       func = TextOperations.toggleExclamation },
-            { name="Toggle " .. INV_QUESTION .. "?",                          func = TextOperations.toggleQuestion },
-            { name="Toggle " .. INV_EXCLAMATION .. INV_QUESTION .. "?!",      func = TextOperations.toggleBothSigns },
+            { name="Toggle " .. invExclamation .. "!",                       func = TextOperations.toggleExclamation },
+            { name="Toggle " .. invQuestion .. "?",                          func = TextOperations.toggleQuestion },
+            { name="Toggle " .. invExclamation .. invQuestion .. "?!",      func = TextOperations.toggleBothSigns },
             { name="Normalize Ellipsis",                func = TextOperations.formatEllipsis },
             { name="Add Ellipsis",                      func = TextOperations.addEndingEllipsis },
             { name="Erase Leading Ellipsis",            func = TextOperations.eraseLeadingEllipsis },
@@ -8404,7 +8266,7 @@ local UTILITY_SECTIONS = {
             { name="Ellipsis to Comma",                 func = TextOperations.ellipsisToComma },
             { name="Ellipsis to Period",                func = TextOperations.ellipsisToPeriod },
             { name="Unify Quotes",                      func = TextOperations.normalizeQuotes },
-            { name="Latin Quotes (" .. LEFT_GUILLEMET .. RIGHT_GUILLEMET .. ")", func = TextOperations.toLatinQuotes },
+            { name="Latin Quotes (" .. leftGuillemet .. rightGuillemet .. ")", func = TextOperations.toLatinQuotes },
             { name="Normalize Dashes",                  func = TextOperations.normalizeDashes },
             { name="Trim Trailing Spaces",              func = TextOperations.trimTrailingSpaces },
             { name="Remove Duplicate Letters",          func = TextOperations.removeDuplicateLetters },
@@ -8499,9 +8361,9 @@ local UTILITY_SECTIONS = {
     },
 }
 
-local function findUtilityEntry(section_id, name)
-    for _, sec in ipairs(UTILITY_SECTIONS) do
-        if sec.id == section_id then
+local function findUtilityEntry(sectionId, name)
+    for _, sec in ipairs(utilitySections) do
+        if sec.id == sectionId then
             for _, it in ipairs(sec.items) do
                 if it.name == name then return it end
             end
@@ -8513,8 +8375,7 @@ end
 local function runUtilityEntry(entry, subs, sel)
     if not entry or not entry.func then return sel end
     local target
-    if entry.allLines then        target = sel
-    elseif entry.includeComments then target = collectDialogueSelection(subs, sel)
+    if entry.includeComments then target = collectDialogueSelection(subs, sel)
     elseif entry.includeVector   then target = collectEditableSelection(subs, sel)
     else                          target = collectEditableTextSelection(subs, sel) end
     local result = entry.func(subs, target)
@@ -8647,42 +8508,8 @@ function RemoverOps.removeStutterText(value)
     return table.concat(out)
 end
 
-function RemoverOps.removeDuplicateLettersText(value)
-    local chars = splitUtf8Chars(normalizeString(value))
-    local out, i = {}, 1
-    while i <= #chars do
-        local cur = chars[i]
-        if isLetter(cur) then
-            local j = i + 1
-            while j <= #chars and chars[j] == cur do j = j + 1 end
-            if j - i >= 3 then out[#out+1] = cur
-            else for k = i, j - 1 do out[#out+1] = chars[k] end end
-            i = j
-        else
-            out[#out+1] = cur
-            i = i + 1
-        end
-    end
-    return table.concat(out)
-end
-
-function RemoverOps.removeLeadingEllipsisText(value)
-    local prefix, rest = "", trimText(normalizeString(value))
-    while startsWith(rest, INV_QUESTION) or startsWith(rest, INV_EXCLAMATION) do
-        prefix = prefix .. unicodeSub(rest, 1, 1)
-        rest = trimText(unicodeSub(rest, 2))
-    end
-    local stripping = true
-    while stripping do
-        stripping = false
-        local r = rest:gsub("^%.%.%.+%s*", "")
-        if r ~= rest then rest = r; stripping = true end
-        if startsWith(rest, HORIZONTAL_ELLIPSIS) or startsWith(rest, TWO_DOT_LEADER) then
-            rest = trimText(unicodeSub(rest, 2)); stripping = true
-        end
-    end
-    return prefix .. rest
-end
+RemoverOps.removeDuplicateLettersText = normalizeRepeatedLetters
+RemoverOps.removeLeadingEllipsisText = stripLeadingEllipsisText
 
 function RemoverOps.cleanTextSection(value, opts)
     local t = normalizeString(value)
@@ -8690,45 +8517,45 @@ function RemoverOps.cleanTextSection(value, opts)
     if opts.rem_h then t = t:gsub("\\h", " "):gsub(NBSP, " ") end
     if opts.rem_combo then
         t = RemoverOps.removeVisibleSet(t, {
-            [INV_EXCLAMATION]=true, ["!"]=true, [FULLWIDTH_EXCLAMATION]=true,
-            [INV_QUESTION]=true, ["?"]=true, [FULLWIDTH_QUESTION]=true,
+            [invExclamation]=true, ["!"]=true, [fullwidthExclamation]=true,
+            [invQuestion]=true, ["?"]=true, [fullwidthQuestion]=true,
         })
     else
         if opts.rem_excl then
             t = RemoverOps.removeVisibleSet(t, {
-                [INV_EXCLAMATION]=true, ["!"]=true, [FULLWIDTH_EXCLAMATION]=true,
+                [invExclamation]=true, ["!"]=true, [fullwidthExclamation]=true,
             })
         end
         if opts.rem_quest then
             t = RemoverOps.removeVisibleSet(t, {
-                [INV_QUESTION]=true, ["?"]=true, [FULLWIDTH_QUESTION]=true,
+                [invQuestion]=true, ["?"]=true, [fullwidthQuestion]=true,
             })
         end
     end
-    if opts.rem_all_commas then t = RemoverOps.removeVisibleSet(t, { [","]=true, [CJK_COMMA]=true, [FULLWIDTH_COMMA]=true }) end
+    if opts.rem_all_commas then t = RemoverOps.removeVisibleSet(t, { [","]=true, [cjkComma]=true, [fullwidthComma]=true }) end
     if opts.rem_quotes then
         t = RemoverOps.removeVisibleSet(t, {
-            ["\""]=true, [LEFT_DOUBLE_QUOTE]=true, [RIGHT_DOUBLE_QUOTE]=true,
-            [DOUBLE_LOW_QUOTE]=true, [DOUBLE_HIGH_REVERSED_QUOTE]=true,
+            ["\""]=true, [leftDoubleQuote]=true, [rightDoubleQuote]=true,
+            [doubleLowQuote]=true, [doubleHighReversedQuote]=true,
             [string.char(0xEF,0xBC,0x82)]=true,
-            [LEFT_GUILLEMET]=true, [RIGHT_GUILLEMET]=true,
+            [leftGuillemet]=true, [rightGuillemet]=true,
             [string.char(0xE3,0x80,0x8C)]=true, [string.char(0xE3,0x80,0x8D)]=true,
             [string.char(0xE3,0x80,0x8E)]=true, [string.char(0xE3,0x80,0x8F)]=true,
         })
     end
     if opts.rem_apostrophes then
         t = RemoverOps.removeVisibleSet(t, {
-            ["'"]=true, [LEFT_SINGLE_QUOTE]=true, [RIGHT_SINGLE_QUOTE]=true,
-            [SINGLE_LOW_QUOTE]=true, [SINGLE_HIGH_REVERSED_QUOTE]=true,
+            ["'"]=true, [leftSingleQuote]=true, [rightSingleQuote]=true,
+            [singleLowQuote]=true, [singleHighReversedQuote]=true,
             [string.char(0xEF,0xBC,0x87)]=true,
-            [LEFT_SINGLE_GUILLEMET]=true, [RIGHT_SINGLE_GUILLEMET]=true,
+            [leftSingleGuillemet]=true, [rightSingleGuillemet]=true,
         })
     end
     if opts.rem_stutter then t = RemoverOps.removeStutterText(t) end
     if opts.rem_dup_letters then t = RemoverOps.removeDuplicateLettersText(t) end
     if opts.rem_leading_ellipsis then t = RemoverOps.removeLeadingEllipsisText(t) end
     if opts.rem_ellipsis then
-        t = t:gsub(HORIZONTAL_ELLIPSIS, ""):gsub(TWO_DOT_LEADER, ""):gsub("%.%.%.+", "")
+        t = t:gsub(horizontalEllipsis, ""):gsub(twoDotLeader, ""):gsub("%.%.%.+", "")
     end
     if opts.rem_n or opts.rem_h or opts.rem_double_space then t = t:gsub("[ \t][ \t]+", " ") end
     return t
@@ -8759,8 +8586,8 @@ function RemoverOps.removeOneFinalComma(text)
     for i = #tokens, 1, -1 do
         if tokens[i][2] then
             local c = tokens[i][1]
-            if isWhitespaceChar(c) or CLOSING_PUNCTUATION[c] then
-            elseif c == "," or c == CJK_COMMA or c == FULLWIDTH_COMMA then
+            if isWhitespaceChar(c) or closingPunctuation[c] then
+            elseif c == "," or c == cjkComma or c == fullwidthComma then
                 table.remove(tokens, i)
                 local out = {}
                 for _, token in ipairs(tokens) do out[#out+1] = token[1] end
@@ -8785,8 +8612,6 @@ end
 function RemoverOps.cleanLine(line, opts)
     local before = normalizeString(line.text)
     if opts.rem_inline_comments then line.text = stripComments(line.text) end
-    if opts.rem_n then line.text = normalizeString(line.text):gsub("\\[Nn]", " ") end
-    if opts.rem_h then line.text = normalizeString(line.text):gsub("\\h", " ") end
     if opts.rem_italic_tags then line.text = removeOverridePattern(line.text, "\\i[01]") end
     if opts.rem_q_tags then line.text = removeOverridePattern(line.text, "\\q%d") end
     if opts.rem_an8 then line.text = removeOverridePattern(line.text, "\\an8") end
@@ -8797,7 +8622,6 @@ function RemoverOps.cleanLine(line, opts)
 end
 
 function RemoverOps.gui(subs, sel)
-    local state = {}
     local dlg = {
         { class="label", label=L("lbl_remover_title"), x=0, y=0, width=6, height=1 },
         { class="label", label=L("lbl_remover_text"), x=0, y=1, width=3, height=1 },
@@ -8826,7 +8650,7 @@ function RemoverOps.gui(subs, sel)
     }
     local button, result = aegisub.dialog.display(dlg, { L("btn_apply"), L("btn_cancel") })
     if button ~= L("btn_apply") then return false end
-    state = result
+    local state = result
     if not RemoverOps.anySelected(state) then showMsg(L("err_remover_none")); return false end
     local modified, deleted, deleteSet = 0, 0, {}
     for _, i in ipairs(sel) do
@@ -8849,21 +8673,22 @@ function RemoverOps.gui(subs, sel)
         for _, i in ipairs(sorted) do subs.delete(i); deleted = deleted + 1 end
     end
     showMsg(string.format(L("msg_remover_done"), modified, deleted))
-    return true
+    return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
 
-local SUITE_TOOLS = {
+local suiteTools = {
     { name = "" },
+    { name = "Properties and Cleanup", func = function(subs, sel) return require("kite.EventOps").properties.run(subs, sel, {language=currentConfig.language}) end, mutates=false, returnsSelection=true },
     { name = "AE Export", func = aeKeyframeExport, mutates = false },
     { name = "Text Replacer",       func = remplacer },
     { name = "mpv QC", func = mpvQcTool },
-    { name = "Remover Assistant", func = RemoverOps.gui },
+    { name = "Remover Assistant", func = RemoverOps.gui, returnsSelection = true },
 }
-local SUITE_TOOL_NAMES = {}
-for _, t in ipairs(SUITE_TOOLS) do SUITE_TOOL_NAMES[#SUITE_TOOL_NAMES+1] = t.name end
+local suiteToolNames = {}
+for _, t in ipairs(suiteTools) do suiteToolNames[#suiteToolNames+1] = t.name end
 
 local function findSuiteTool(name)
-    for _, t in ipairs(SUITE_TOOLS) do if t.name == name then return t end end
+    for _, t in ipairs(suiteTools) do if t.name == name then return t end end
 end
 
 local function rowMasterGui(subs, sel)
@@ -8891,16 +8716,16 @@ local function rowMasterGui(subs, sel)
             preset = UI.options({ "","Ends Only","Start Only","Full Audit","Duration","CPS","Short Gaps","Large Gaps","Both Gaps","Overtime" }, state.preset),
             kf_mode = UI.options({ "","End Only","Start Only","Both" }, state.kf_mode),
             kf_dir = UI.options({ "","KF Back","KF Forward","KF Both" }, state.kf_dir),
-            sec_case = UI.utilityOptions(UTILITY_SECTIONS[1], state.sec_case),
-            sec_punct = UI.utilityOptions(UTILITY_SECTIONS[2], state.sec_punct),
-            sec_tags = UI.utilityOptions(UTILITY_SECTIONS[3], state.sec_tags),
-            sec_smart = UI.utilityOptions(UTILITY_SECTIONS[4], state.sec_smart),
-            sec_split = UI.utilityOptions(UTILITY_SECTIONS[5], state.sec_split),
-            sec_time = UI.utilityOptions(UTILITY_SECTIONS[6], state.sec_time),
-            sec_kara = UI.utilityOptions(UTILITY_SECTIONS[7], state.sec_kara),
-            single_marker = UI.options(SINGLE_MARKER_ITEMS, state.single_marker),
+            sec_case = UI.utilityOptions(utilitySections[1], state.sec_case),
+            sec_punct = UI.utilityOptions(utilitySections[2], state.sec_punct),
+            sec_tags = UI.utilityOptions(utilitySections[3], state.sec_tags),
+            sec_smart = UI.utilityOptions(utilitySections[4], state.sec_smart),
+            sec_split = UI.utilityOptions(utilitySections[5], state.sec_split),
+            sec_time = UI.utilityOptions(utilitySections[6], state.sec_time),
+            sec_kara = UI.utilityOptions(utilitySections[7], state.sec_kara),
+            single_marker = UI.options(singleMarkerItems, state.single_marker),
             mm = UI.options({ "Import Effects","Import Text","Import Actor","Import Tags","Song Sync" }, state.mm),
-            ct = UI.options(SUITE_TOOL_NAMES, state.ct),
+            ct = UI.options(suiteToolNames, state.ct),
         }
         local d = {
             { class="label",    label=L("lbl_apply_to"),                                              x=0,  y=0, width=4, height=1 },
@@ -8934,7 +8759,7 @@ local function rowMasterGui(subs, sel)
             { class="intedit",  name="miss_kf_ms", value=state.miss_kf_ms, min=0,                     x=9, y=5, width=2, height=1 },
             { class="label",    label="│",                                                            x=11, y=5, width=1, height=1 },
 
-            { class="checkbox", name="kf_seal", label=L("chk_kf_seal"), value=state.kf_seal,          x=0, y=6, width=5, height=1 },
+            { class="checkbox", name="kf_seal", label=L("chk_kf_seal"), hint="[START-ON-KF/END-ON-KF]", value=state.kf_seal,          x=0, y=6, width=5, height=1 },
             { class="label",    label=L("lbl_overtime"),                                              x=5, y=6, width=3, height=1 },
             { class="intedit",  name="overtime_ms", value=state.overtime_ms, min=0,                   x=8, y=6, width=3, height=1 },
             { class="label",    label="│",                                                            x=11, y=6, width=1, height=1 },
@@ -8993,9 +8818,10 @@ local function rowMasterGui(subs, sel)
             { class="label",    label=L("title_data_import"),                                       x=0, y=12, width=24, height=1 },
             { class="label",    label=L("lbl_data_import_mode"),                                    x=0, y=13, width=4, height=1 },
             { class="dropdown", name="mm", items=ui.mm.items, value=ui.mm.value, x=4, y=13, width=8, height=1 },
-            { class="checkbox", name="mc", label=L("chk_data_import_cmt"), value=state.mc,           x=12, y=13, width=7, height=1 },
+            { class="checkbox", name="mc", label=L("chk_data_import_cmt"), hint=L("lbl_import_as_comments"), value=state.mc,
+                                                                                                  x=12, y=13, width=4, height=1 },
             { class="checkbox", name="same_layers", label=L("chk_data_import_same_layers"), value=state.same_layers,
-                                                                                                  x=19, y=13, width=5, height=1 },
+                                                                                                  x=16, y=13, width=8, height=1 },
             { class="textbox",  name="mr", text=state.mr,                                         x=0, y=14, width=24, height=4 },
             { class="label",    label=L("chk_data_import_skip") .. "  ·  " .. L("data_import_paste_hint"),
                                                                                                   x=0, y=18, width=24, height=1 },
@@ -9006,7 +8832,7 @@ local function rowMasterGui(subs, sel)
         }
 
         local buttons = { L("btn_execute"), L("btn_autotiming"), L("btn_extract_kf"), L("btn_scream"), L("btn_config"), L("btn_help"), L("btn_cancel") }
-        local b, r = aegisub.dialog.display(d, buttons)
+        local b, r = aegisub.dialog.display(d, buttons, {close=L("btn_cancel")})
         if b == L("btn_cancel") or not b then return end
 
         r.tm = UI.from(ui.tm, r.tm)
@@ -9043,24 +8869,24 @@ local function rowMasterGui(subs, sel)
         elseif b == L("btn_help") then
             showHelp()
         elseif b == L("btn_execute") then
-            local twin_val = tonumber(r.twin_kf_ms)
-            if not twin_val or twin_val < 0 then showMsg(L("err_invalid_twin")) else
-                local miss_val = tonumber(r.miss_kf_ms)
-                if not miss_val or miss_val < 0 then showMsg(L("err_invalid_miss")) else
-                    local ov_val = tonumber(r.overtime_ms)
-                    if not ov_val or ov_val < 0 then showMsg(L("err_invalid_ov")) else
-                        local tool_active = (r.ct and r.ct ~= "")
-                        local section_active = (r.sec_case ~= "" or r.sec_punct ~= "" or r.sec_tags ~= ""
+            local twinVal = tonumber(r.twin_kf_ms)
+            if not twinVal or twinVal < 0 then showMsg(L("err_invalid_twin")) else
+                local missVal = tonumber(r.miss_kf_ms)
+                if not missVal or missVal < 0 then showMsg(L("err_invalid_miss")) else
+                    local ovVal = tonumber(r.overtime_ms)
+                    if not ovVal or ovVal < 0 then showMsg(L("err_invalid_ov")) else
+                        local toolActive = (r.ct and r.ct ~= "")
+                        local sectionActive = (r.sec_case ~= "" or r.sec_punct ~= "" or r.sec_tags ~= ""
                             or r.sec_smart ~= "" or r.sec_split ~= "" or r.sec_time ~= "" or r.sec_kara ~= "")
-                        local import_active = (r.mr and r.mr:gsub("%s", "") ~= "")
-                        local audit_active = (r.preset ~= "" or r.single_marker ~= "" or r.kf_seal
-                            or twin_val > 0 or miss_val > 0 or ov_val > 0
+                        local importActive = (r.mr and r.mr:gsub("%s", "") ~= "")
+                        local auditActive = (r.preset ~= "" or r.single_marker ~= "" or r.kf_seal
+                            or twinVal > 0 or missVal > 0 or ovVal > 0
                             or (tonumber(r.short_ms) or 0) > 0 or (tonumber(r.long_ms) or 0) > 0
                             or (tonumber(r.min_cps) or 0) > 0 or (tonumber(r.max_cps) or 0) > 0
                             or (tonumber(r.gap_ms) or 0) > 0 or (tonumber(r.large_gap_ms) or 0) > 0
                             or (tonumber(r.max_width) or 0) > 0)
 
-                        if not (tool_active or section_active or import_active or audit_active) then return end
+                        if not (toolActive or sectionActive or importActive or auditActive) then return end
 
                         local tsel = getTargetedSelection(subs, sel, { mode = r.tm, value = r.tv })
                         if #tsel == 0 then
@@ -9068,7 +8894,7 @@ local function rowMasterGui(subs, sel)
                         else
                             aegisub.progress.task("Chrono Suite - Executing...")
 
-                            if tool_active then
+                            if toolActive then
                                 local tool = findSuiteTool(r.ct)
                                 if tool and tool.func then
                                     local result = tool.func(subs, tsel)
@@ -9081,11 +8907,11 @@ local function rowMasterGui(subs, sel)
                                 return
                             end
 
-                            local current_sel = tsel
-                            local returns_selection = false
-                            local mutated = import_active or audit_active
-                            if section_active then
-                                local section_dd = {
+                            local currentSel = tsel
+                            local returnsSelection = false
+                            local mutated = importActive or auditActive
+                            if sectionActive then
+                                local sectionDd = {
                                     { id = "case",  pick = r.sec_case  },
                                     { id = "punct", pick = r.sec_punct },
                                     { id = "tags",  pick = r.sec_tags  },
@@ -9094,29 +8920,29 @@ local function rowMasterGui(subs, sel)
                                     { id = "time",  pick = r.sec_time  },
                                     { id = "kara",  pick = r.sec_kara  },
                                 }
-                                for _, s in ipairs(section_dd) do
+                                for _, s in ipairs(sectionDd) do
                                     if s.pick and s.pick ~= "" then
                                         local entry = findUtilityEntry(s.id, s.pick)
-                                        if entry and entry.returnsSelection then returns_selection = true end
+                                        if entry and entry.returnsSelection then returnsSelection = true end
                                         if entry and entry.mutates ~= false then mutated = true end
-                                        current_sel = runUtilityEntry(entry, subs, current_sel)
+                                        currentSel = runUtilityEntry(entry, subs, currentSel)
                                     end
                                 end
                             end
 
-                            if import_active then
-                                if     r.mm == "Import Effects" then antEffects(subs, current_sel, r.mr, r.same_layers)
-                                elseif r.mm == "Import Text"   then antLines(subs,   current_sel, r.mr, r.mc, r.same_layers)
-                                elseif r.mm == "Import Actor"   then antActor(subs,   current_sel, r.mr, r.same_layers)
-                                elseif r.mm == "Import Tags"    then DataImportOps.importTags(subs, current_sel, r.mr, r.same_layers)
-                                elseif r.mm == "Song Sync"   then antSongs(subs,   current_sel, r.mr) end
+                            if importActive then
+                                if     r.mm == "Import Effects" then antEffects(subs, currentSel, r.mr, r.same_layers)
+                                elseif r.mm == "Import Text"   then antLines(subs,   currentSel, r.mr, r.mc, r.same_layers)
+                                elseif r.mm == "Import Actor"   then antActor(subs,   currentSel, r.mr, r.same_layers)
+                                elseif r.mm == "Import Tags"    then DataImportOps.importTags(subs, currentSel, r.mr, r.same_layers)
+                                elseif r.mm == "Song Sync"   then antSongs(subs,   currentSel, r.mr) end
                             end
 
-                            if audit_active then
-                                local audit_cfg = {
+                            if auditActive then
+                                local auditCfg = {
                                     short_ms = tonumber(r.short_ms) or 0,
                                     long_ms = tonumber(r.long_ms) or 0,
-                                    twin_kf_ms = twin_val, miss_kf_ms = miss_val, overtime_ms = ov_val,
+                                    twin_kf_ms = twinVal, miss_kf_ms = missVal, overtime_ms = ovVal,
                                     min_cps = tonumber(r.min_cps) or 0,
                                     max_cps = tonumber(r.max_cps) or 0,
                                     gap_ms = tonumber(r.gap_ms) or 0,
@@ -9138,14 +8964,14 @@ local function rowMasterGui(subs, sel)
                                     check_dbl_space=false, check_edge_space=false,
                                 }
                                 if r.preset and r.preset ~= "" then
-                                    audit_cfg = applyPreset(audit_cfg, r.preset)
-                                    if r.kf_dir and r.kf_dir ~= "" then audit_cfg.kf_dir = r.kf_dir end
+                                    auditCfg = applyPreset(auditCfg, r.preset)
+                                    if r.kf_dir and r.kf_dir ~= "" then auditCfg.kf_dir = r.kf_dir end
                                 end
-                                auditLines(subs, current_sel, audit_cfg)
+                                auditLines(subs, currentSel, auditCfg)
                             end
 
                             if mutated then aegisub.set_undo_point("Chrono Suite - Executed") end
-                            if returns_selection then return current_sel end
+                            if returnsSelection then return currentSel end
                             return
                         end
                     end
@@ -9181,7 +9007,6 @@ function HotkeyMenu.migrate()
     local okPath, path = pcall(aegisub.decode_path, "?user/hotkey.json")
     if not okPath or not path or path == "" then return end
     local content = Kite.PyBridge and Kite.PyBridge.readFile(path) or nil
-    if not content then return end
     if not content or content == "" then return end
 
     local changed = false
@@ -9230,7 +9055,7 @@ for _, m in ipairs(macros) do
     end
 end
 
-local UTILITY_MACRO_GROUPS = {
+local utilityMacroGroups = {
     case  = "Case",
     punct = "Punctuation",
     tags  = "Tags",
@@ -9248,8 +9073,8 @@ local function makeUtilityMacro(entry)
     end
 end
 
-for _, sec in ipairs(UTILITY_SECTIONS) do
-    local group = UTILITY_MACRO_GROUPS[sec.id] or sec.id
+for _, sec in ipairs(utilitySections) do
+    local group = utilityMacroGroups[sec.id] or sec.id
     for _, entry in ipairs(sec.items) do
         if entry.name and entry.name ~= "" and entry.func then
             local root = sec.id == "kara" and "Karaoke" or ("Utility/" .. group)
@@ -9263,12 +9088,13 @@ end
 
 local function makeSuiteToolMacro(tool)
     return function(subs, sel)
-        tool.func(subs, sel)
+        local result = tool.func(subs, sel)
         if tool.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. tool.name) end
+        if tool.returnsSelection and type(result) == "table" then return result end
     end
 end
 
-for _, tool in ipairs(SUITE_TOOLS) do
+for _, tool in ipairs(suiteTools) do
     if tool.name and tool.name ~= "" and tool.func then
         local process = makeSuiteToolMacro(tool)
         local newPath = HotkeyMenu.path(tool.name)
@@ -9278,3 +9104,5 @@ for _, tool in ipairs(SUITE_TOOLS) do
 end
 
 HotkeyMenu.migrate()
+
+require("kite.UI").publishActions()

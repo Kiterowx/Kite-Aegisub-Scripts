@@ -1,5 +1,5 @@
-local MODULE_VERSION = "1.5.0"
-local PyBridge = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
+local moduleVersion = "1.7.2"
+local PyBridge = { VERSION = moduleVersion, version = moduleVersion }
 local unpack = table.unpack or unpack
 
 local function safeRequire(name)
@@ -9,6 +9,7 @@ local function safeRequire(name)
 end
 
 local DependencyControl = safeRequire("l0.DependencyControl")
+local Core = assert(safeRequire("kite.Core"), "kite.Core is required")
 local command = safeRequire("aka.command")
 local lfs = safeRequire("lfs")
 local ffi = safeRequire("ffi")
@@ -16,13 +17,14 @@ local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.PyBridge",
-        version = MODULE_VERSION,
+        version = moduleVersion,
         description = "Shared process and filesystem bridge for Kite backends",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.PyBridge",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
+            {"kite.Core", version = "1.1.0"},
             {"aka.command", version = "1.0.2"},
         },
     })
@@ -66,15 +68,13 @@ if ffi then
 end
 
 local counter = 0
-local CLOCK_SUBSECOND_SCALE = 1000000
+local clockSubsecondScale = 1000000
 
 local function pack(...)
     return { n = select("#", ...), ... }
 end
 
-local function trim(value)
-    return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
-end
+local trim = Core.trim
 
 local function decodedPath(specification)
     if not aegisub or type(aegisub.decode_path) ~= "function" then return nil end
@@ -146,7 +146,7 @@ end
 local function uniqueSuffix()
     counter = counter + 1
     return string.format("%d.%d.%d", os.time(), counter,
-        math.floor(os.clock() * CLOCK_SUBSECOND_SCALE) % CLOCK_SUBSECOND_SCALE)
+        math.floor(os.clock() * clockSubsecondScale) % clockSubsecondScale)
 end
 
 local function removeFile(path)
@@ -285,24 +285,10 @@ local function withAtomicFile(path, callback)
 end
 
 local function writeFile(path, data)
-    if type(path) ~= "string" or trim(path) == "" then return false, "target path is empty" end
-    local parent = parentPath(path)
-    if parent and parent ~= "" then
-        local ok, message = writableDirectory(parent)
-        if not ok then return false, message end
-    end
-    local temporary = path .. ".temporary." .. uniqueSuffix()
-    local handle, message = io.open(temporary, "wb")
-    if not handle then return false, message end
-    local called, ok, writeMessage = pcall(handle.write, handle, data or "")
-    local finalized, finalMessage = flushAndClose(handle, called and ok ~= nil and ok ~= false)
-    if not called or ok == nil or ok == false or not finalized then
-        removeFile(temporary)
-        return false, (not called and ok) or writeMessage or finalMessage
-    end
-    local replaced, replaceMessage = replaceFile(temporary, path)
-    if not replaced then removeFile(temporary) end
-    return replaced, replaceMessage
+    return withAtomicFile(path,function(handle)
+        local written, message = handle:write(data or "")
+        if not written then return false, message end
+    end)
 end
 
 local function quote(value)
@@ -345,11 +331,47 @@ local function commandLine(executable, arguments)
     return table.concat(parts, " ")
 end
 
+local function encodePowerShell(text)
+    local bytes, at = {}, 1
+    local function word(value)
+        bytes[#bytes + 1], bytes[#bytes + 2] = value % 256, math.floor(value / 256)
+    end
+    while at <= #text do
+        local first = text:byte(at)
+        local count = first < 128 and 1 or first < 224 and 2 or first < 240 and 3 or 4
+        local value = count == 1 and first or first % (2 ^ (7 - count))
+        for offset = 1, count - 1 do value = value * 64 + text:byte(at + offset) % 64 end
+        if value >= 65536 then
+            value = value - 65536
+            word(55296 + math.floor(value / 1024)); word(56320 + value % 1024)
+        else word(value) end
+        at = at + count
+    end
+    local alphabet, output = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", {}
+    for index = 1, #bytes, 3 do
+        local value = bytes[index] * 65536 + (bytes[index + 1] or 0) * 256 + (bytes[index + 2] or 0)
+        for digit = 1, 4 do
+            local code = math.floor(value / (64 ^ (4 - digit))) % 64
+            output[#output + 1] = index + digit - 2 > #bytes and "=" or alphabet:sub(code + 1, code + 1)
+        end
+    end
+    return table.concat(output)
+end
+
 local function run(commandText, quiet)
     if not PyBridge.available then return false, "aka.command is required to run commands", nil end
     commandText = tostring(commandText or "")
     if trim(commandText) == "" then return false, "command is empty", nil end
-    local ok, output, status, reason, exitCode = pcall(command.run_cmd_c, commandText, quiet ~= false)
+    local runner, invocation = command.run_cmd_c, commandText
+    if PyBridge.isWindows and type(command.run_cmd) == "function" and type(command.c) == "function" then
+
+        local script = command.c(commandText):match('^powershell %-Command "(.*)"$')
+        if script then
+            runner = command.run_cmd
+            invocation = "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " .. encodePowerShell(script)
+        end
+    end
+    local ok, output, status, reason, exitCode = pcall(runner, invocation, quiet ~= false)
     if not ok then return false, tostring(output), nil end
     if status == true then return true, tostring(output or ""), tonumber(exitCode) or 0 end
     local ending = reason == "exit" and ("exit code " .. tostring(exitCode)) or (tostring(reason or "failure") .. " " .. tostring(exitCode or ""))
@@ -562,6 +584,153 @@ local function processExists(pid)
     local ok = os.execute("kill -0 " .. tostring(pid) .. " >/dev/null 2>&1")
     return ok == true or ok == 0
 end
+
+local processPollMs = 100
+local processExitGracePolls = 30
+local processAliveCheckPolls = 10
+local processMissingExitPolls = 5
+local processOutputLimit = 4 * 1024 * 1024
+local processExitBytes = 64
+local cancelledExitCode = 130
+
+local function powerShellLiteral(value)
+    return "'" .. tostring(value or ""):gsub("'", "''") .. "'"
+end
+
+local function quoteProcessArgument(value)
+    value = tostring(value or "")
+    if value == "" then return '\"\"' end
+    if not value:find('[%s\"]') then return value end
+    local quoted, slashes = {'"'}, 0
+    for index = 1, #value do
+        local character = value:sub(index, index)
+        if character == "\\" then
+            slashes = slashes + 1
+        elseif character == '"' then
+            quoted[#quoted + 1] = string.rep("\\", slashes * 2 + 1) .. '"'
+            slashes = 0
+        else
+            quoted[#quoted + 1] = string.rep("\\", slashes) .. character
+            slashes = 0
+        end
+    end
+    quoted[#quoted + 1] = string.rep("\\", slashes * 2) .. '"'
+    return table.concat(quoted)
+end
+
+local function buildProcessScript(commandSpec, paths)
+    local arguments = {}
+    for _, value in ipairs(commandSpec.args or {}) do arguments[#arguments + 1] = quoteProcessArgument(value) end
+    local variables = {
+        executable = powerShellLiteral(commandSpec.executable),
+        arguments = powerShellLiteral(table.concat(arguments, " ")),
+        cancel = powerShellLiteral(paths.cancel), stdout = powerShellLiteral(paths.stdout),
+        stderr = powerShellLiteral(paths.stderr), exit = powerShellLiteral(paths.exit),
+        poll = tostring(processPollMs), cancelledCode = tostring(cancelledExitCode),
+    }
+    local script = [=[$ErrorActionPreference = 'Stop'
+$process = $null
+$stdout = ''
+$stderr = ''
+$exitCode = -1
+$cancelled = $false
+try {
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = @{executable}
+  $startInfo.Arguments = @{arguments}
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
+  if (-not $process.Start()) { throw 'The process could not be started.' }
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
+  while (-not $process.HasExited) {
+    if (Test-Path -LiteralPath @{cancel}) {
+      $cancelled = $true
+      try { $process.Kill() } catch {}
+      break
+    }
+    Start-Sleep -Milliseconds @{poll}
+  }
+  $process.WaitForExit()
+  $stdout = $stdoutTask.Result
+  $stderr = $stderrTask.Result
+  $exitCode = if ($cancelled) { @{cancelledCode} } else { $process.ExitCode }
+} catch {
+  $stderr = ($stderr + "`r`n" + $_.Exception.ToString()).Trim()
+  if ($process -and -not $process.HasExited) { try { $process.Kill() } catch {} }
+} finally {
+  [System.IO.File]::WriteAllText(@{stdout}, [string]$stdout)
+  [System.IO.File]::WriteAllText(@{stderr}, [string]$stderr)
+  [System.IO.File]::WriteAllText(@{exit}, [string]$exitCode)
+}
+]=]
+    return "\239\187\191" .. script:gsub("@{(%w+)}", function(key) return assert(variables[key]) end)
+end
+
+local function processCancelled()
+    if not aegisub or not aegisub.progress or not aegisub.progress.is_cancelled then return false end
+    local ok, value = pcall(aegisub.progress.is_cancelled)
+    return ok and value == true
+end
+
+local function waitForProcess(pid, paths)
+    local cancellationWritten, poll = false, 0
+    while not PyBridge.fileExists(paths.exit) do
+        poll = poll + 1
+        if processCancelled() and not cancellationWritten then
+            cancellationWritten = PyBridge.writeFile(paths.cancel, "cancel") == true
+        end
+        if poll % processAliveCheckPolls == 0 and not PyBridge.processExists(pid) then
+            for _ = 1, processMissingExitPolls do
+                if PyBridge.fileExists(paths.exit) then break end
+                PyBridge.sleep(processPollMs)
+            end
+            if not PyBridge.fileExists(paths.exit) then break end
+        end
+        PyBridge.sleep(processPollMs)
+    end
+    for _ = 1, processExitGracePolls do
+        if not PyBridge.processExists(pid) then break end
+        PyBridge.sleep(processPollMs)
+    end
+    return cancellationWritten
+end
+
+local function runProcess(commandSpec)
+    if type(commandSpec) ~= "table" or trim(commandSpec.executable) == "" then return false, "The command is invalid." end
+    if processCancelled() then return false, "Cancelled.", cancelledExitCode end
+    if not PyBridge.isWindows then return PyBridge.run(PyBridge.commandLine(commandSpec.executable, commandSpec.args)) end
+    local paths, pathError = PyBridge.tempPaths("kite_process", {
+        script = ".ps1", stdout = ".stdout.txt", stderr = ".stderr.txt", exit = ".exit.txt", cancel = ".cancel",
+    })
+    if not paths then return false, pathError or "The temporary directory is unavailable." end
+    PyBridge.cleanup(paths)
+    local written, writeError = PyBridge.writeFile(paths.script, buildProcessScript(commandSpec, paths))
+    if not written then PyBridge.cleanup(paths); return false, writeError or "Could not write the hidden process supervisor." end
+    local started, pid = PyBridge.startDetachedScript(paths.script)
+    if not started then PyBridge.cleanup(paths); return false, pid or "Could not start the hidden process supervisor." end
+    local cancelled = waitForProcess(pid, paths)
+    local output = {}
+    for _, key in ipairs({"stdout", "stderr"}) do
+        local value = PyBridge.readFile(paths[key], processOutputLimit) or ""
+        if trim(value) ~= "" then output[#output + 1] = value end
+    end
+    local exitCode = tonumber(trim(PyBridge.readFile(paths.exit, processExitBytes)))
+    local diagnostic = table.concat(output, "\n")
+    PyBridge.cleanup(paths)
+    if cancelled then return false, diagnostic ~= "" and diagnostic or "Cancelled.", cancelledExitCode end
+    if not exitCode then return false, diagnostic ~= "" and diagnostic or "The hidden process ended without reporting an exit code." end
+    return exitCode == 0, diagnostic, exitCode
+end
+
+PyBridge.quoteProcessArgument = quoteProcessArgument
+PyBridge.buildProcessScript = buildProcessScript
+PyBridge.runProcess = runProcess
 
 PyBridge.trim = trim
 PyBridge.decodedPath = decodedPath

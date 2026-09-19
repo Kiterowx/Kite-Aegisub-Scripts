@@ -1,5 +1,5 @@
-local MODULE_VERSION = "1.0.3"
-local EventOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
+local moduleVersion = "1.3.1"
+local EventOps = { VERSION = moduleVersion, version = moduleVersion }
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -8,77 +8,37 @@ local function safeRequire(name)
 end
 
 local DependencyControl = safeRequire("l0.DependencyControl")
-local LineOps = safeRequire("kite.LineOps")
+local Core = assert(safeRequire("kite.Core"), "kite.Core is required")
+local LineOps = assert(safeRequire("kite.LineOps"), "kite.LineOps is required")
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.EventOps",
-        version = MODULE_VERSION,
+        version = moduleVersion,
         description = "Shared dialogue-event transformations for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.EventOps",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.LineOps", version = "1.5.2" },
+            { "kite.Core", version = "1.1.0" },
+            { "kite.LineOps", version = "1.7.0" },
+            {"kite.UI",version="1.5.0"},
         },
     })
 end
 
-local function trim(value)
-    if LineOps and LineOps.trim then return LineOps.trim(value) end
-    return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
-end
-
-local function copy(value)
-    if LineOps and LineOps.deepCopy then return LineOps.deepCopy(value) end
-    if type(value) ~= "table" then return value end
-    local out = {}
-    for key, item in pairs(value) do out[key] = copy(item) end
-    return out
-end
-
-local function subtitleLength(subtitles)
-    if LineOps and LineOps.subtitleLength then return LineOps.subtitleLength(subtitles) end
-    local ok, value = pcall(function() return #subtitles end)
-    return ok and tonumber(value) or 0
-end
+local trim = Core.trim
+local copy = Core.deepCopy
 
 local function dialogueIndices(subtitles, selection)
-    if LineOps and LineOps.normalizeIndices then
-        return LineOps.normalizeIndices(subtitles, selection, function(line)
-            return line and line.class == "dialogue"
-        end)
-    end
-    local seen, out = {}, {}
-    local maximum = subtitleLength(subtitles)
-    for _, raw in ipairs(type(selection) == "table" and selection or {}) do
-        local index = tonumber(raw)
-        if index and index == math.floor(index) and index >= 1 and index <= maximum and not seen[index] then
-            local line = subtitles[index]
-            if line and line.class == "dialogue" then
-                seen[index] = true
-                out[#out + 1] = index
-            end
-        end
-    end
-    table.sort(out)
-    return out
+    return LineOps.normalizeIndices(subtitles, selection, function(line)
+        return line and line.class == "dialogue"
+    end)
 end
 
 local function leadingPrefix(text)
     text = tostring(text or "")
-    if not LineOps or not LineOps.scanSections then
-        local prefix, cursor = {}, 1
-        while text:sub(cursor, cursor) == "{" do
-            local close = text:find("}", cursor + 1, true)
-            if not close then break end
-            local block = text:sub(cursor, close)
-            if block:find("\\", 1, true) then prefix[#prefix + 1] = block end
-            cursor = close + 1
-        end
-        return table.concat(prefix)
-    end
     local parts = {}
     for _, section in ipairs(LineOps.scanSections(text)) do
         if section.type == "text" or section.type == "drawing" then break end
@@ -102,21 +62,7 @@ local function cloneWithVisibleText(subtitles, selection, replacement)
         operations[#operations + 1] = { index = index + 1, lines = { clone } }
     end
     if #operations == 0 then return {}, 0 end
-    local inserted
-    if LineOps and LineOps.insertLines then
-        inserted = LineOps.insertLines(subtitles, operations)
-    else
-        inserted = {}
-        for position = #operations, 1, -1 do
-            local operation = operations[position]
-            subtitles.insert(operation.index, operation.lines[1])
-        end
-        local shift = 0
-        for _, operation in ipairs(operations) do
-            inserted[#inserted + 1] = operation.index + shift
-            shift = shift + 1
-        end
-    end
+    local inserted = LineOps.insertLines(subtitles, operations)
     return inserted, #inserted
 end
 
@@ -148,7 +94,7 @@ end
 local hyphens = { ["-"] = true, ["‐"] = true, ["‑"] = true }
 
 local function hasStutter(text)
-    local visible = LineOps and LineOps.visibleText and LineOps.visibleText(text) or tostring(text or ""):gsub("{[^}]*}", "")
+    local visible = LineOps.visibleText(text)
     local chars = utf8Characters(visible)
     for index = 1, #chars - 2 do
         local left, separator, right = chars[index], chars[index + 1], chars[index + 2]
@@ -192,7 +138,6 @@ local function zero(value)
 end
 
 local function adjustFade(text, removeIn, removeOut)
-    if not LineOps or not LineOps.mapTagCalls then return tostring(text or ""), 0 end
     local result, changed = LineOps.mapTagCalls(text, "fad", function(call)
         local args = LineOps.splitArguments(call.value)
         if #args ~= 2 then return nil end
@@ -209,9 +154,6 @@ local function adjustFade(text, removeIn, removeOut)
 end
 
 local function setFadeComponent(text, component, duration)
-    if not LineOps or not LineOps.mapTagCalls or not LineOps.splitArguments or not LineOps.prependTag then
-        return nil, "line_ops_unavailable"
-    end
     component = tostring(component or ""):lower()
     if component == "intro" then component = "in" end
     if component == "outro" then component = "out" end
@@ -313,12 +255,12 @@ local function continuousFadeCleanup(subtitles, selection)
     return selection, modified
 end
 
-local RANDOM_MODULUS = 2147483647
-local RANDOM_MULTIPLIER = 48271
-local DEFAULT_SEED_STRIDE = 7919
+local randomModulus = 2147483647
+local randomMultiplier = 48271
+local defaultSeedStride = 7919
 
 local function randomIndex(state, maximum)
-    state = (RANDOM_MULTIPLIER * state) % RANDOM_MODULUS
+    state = (randomMultiplier * state) % randomModulus
     return state, math.floor(state % maximum) + 1
 end
 
@@ -332,10 +274,10 @@ local function shuffleLineText(subtitles, selection, seed)
     end
     local numericSeed = tonumber(seed)
     if not numericSeed or numericSeed ~= numericSeed or math.abs(numericSeed) == math.huge then
-        numericSeed = os.time() + #indices * DEFAULT_SEED_STRIDE
+        numericSeed = os.time() + #indices * defaultSeedStride
     end
-    local state = math.floor(numericSeed % RANDOM_MODULUS)
-    if state <= 0 then state = state + RANDOM_MODULUS - 1 end
+    local state = math.floor(numericSeed % randomModulus)
+    if state <= 0 then state = state + randomModulus - 1 end
     for index = #shuffled, 2, -1 do
         local swap
         state, swap = randomIndex(state, index)
@@ -369,6 +311,151 @@ EventOps.adjustFade = adjustFade
 EventOps.setFadeComponent = setFadeComponent
 EventOps.continuousFadeCleanup = continuousFadeCleanup
 EventOps.shuffleLineText = shuffleLineText
+
+EventOps.properties = (function()
+local fields={"Title","Original Script","Original Translation","Original Editing","Original Timing","Synch Point","Script Updated By","Update Details"}
+local projectKeys={}
+for _,key in ipairs({"Last Style Storage","Audio File","Video File","Video AR Mode","Video AR Value","Video Zoom Percent","Video Position","Scroll Position","Active Line","Automation Scripts","Keyframes File","Timecodes File","Audio URI","Video URI"}) do projectKeys[key]=true end
+local labels={
+    en={title="Properties and Cleanup",save="Save",cancel="Cancel",episode="Add episode from filename",clean="Clean the whole subtitle file",hint="Cleanup removes project paths, extradata, comments, Actor, Effect and empty dialogue lines.",missing="Save the subtitle with an episode number in its filename first.",empty="Enter a title before adding an episode.",fields={"Title","Original script","Translation","Editing","Timing","Sync point","Updated by","Update details"}},
+    es={title="Propiedades y limpieza",save="Guardar",cancel="Cancelar",episode="Añadir episodio desde el nombre del archivo",clean="Limpiar todo el archivo de subtítulos",hint="La limpieza quita rutas del proyecto, extradata, comentarios, Actor, Effect y líneas de diálogo vacías.",missing="Guarda el subtítulo con un número de episodio en su nombre.",empty="Escribe un título antes de añadir el episodio.",fields={"Título","Guion original","Traducción","Edición","Tiempos","Punto de sincronía","Actualizado por","Detalles de actualización"}},
+    pt={title="Propriedades e limpeza",save="Salvar",cancel="Cancelar",episode="Adicionar episódio pelo nome do arquivo",clean="Limpar todo o arquivo de legendas",hint="A limpeza remove caminhos do projeto, extradata, comentários, Actor, Effect e linhas de diálogo vazias.",missing="Salve a legenda com um número de episódio no nome.",empty="Preencha o título antes de adicionar o episódio.",fields={"Título","Roteiro original","Tradução","Edição","Tempos","Ponto de sincronia","Atualizado por","Detalhes da atualização"}},
+}
+local function section(line)
+    return (trim(line.section):lower():gsub("^%[", ""):gsub("%]$", ""))
+end
+local function scriptInfo(line)
+    local name=section(line)
+    return line.class=="info" and (name=="" or name=="script info")
+end
+local function read(subs)
+    local values={}
+    for _,field in ipairs(fields) do values[field]="" end
+    local seen={}
+    for index=1,#subs do
+        local line=subs[index]
+        if scriptInfo(line) and values[line.key]~=nil and not seen[line.key] then values[line.key]=tostring(line.value or "");seen[line.key]=true end
+    end
+    return values
+end
+local function cleanText(text)
+    local output={}
+    text=tostring(text or "")
+    for _,part in ipairs(LineOps.scanSections(text)) do
+        if part.type~="comment" then output[#output+1]=text:sub(part.start,part.finish) end
+    end
+    return table.concat(output)
+end
+local function apply(subs,selection,values,clean)
+    local wanted,indices={},{}
+    for _,index in ipairs(selection or {}) do wanted[index]=true end
+    for index=1,#subs do indices[index]=index end
+    return LineOps.transaction(subs,nil,function()
+        local changes=0
+        local function remove(index)
+            subs.delete(index);table.remove(indices,index);changes=changes+1
+        end
+        if clean then
+            for index=#subs,1,-1 do
+                LineOps.checkCancelled()
+                local line=subs[index]
+                local name=section(line)
+                if name=="aegisub project garbage" or name=="aegisub extradata" or line.class=="extradata" or (line.class=="info" and projectKeys[line.key]) then remove(index)
+                elseif line.class=="dialogue" then
+                    if line.comment then remove(index)
+                    else
+                        local nextLine=Core.copy(line)
+                        nextLine.text=cleanText(line.text)
+                        nextLine.actor,nextLine.effect,nextLine.extra="","",nil
+                        local analysis=LineOps.analyzeText(nextLine.text)
+                        if analysis.visible:gsub("%s+","")=="" and not analysis.has_drawing then remove(index)
+                        elseif nextLine.text~=line.text or line.actor~="" or line.effect~="" or line.extra~=nil then subs[index]=nextLine;changes=changes+1 end
+                    end
+                end
+            end
+        end
+        local first={}
+        local duplicates={}
+        for index=1,#subs do
+            LineOps.checkCancelled()
+            local line=subs[index]
+            if scriptInfo(line) and values[line.key]~=nil then
+                if first[line.key] then duplicates[#duplicates+1]=index
+                else first[line.key]=true
+                    if tostring(line.value or "")~=values[line.key] then line.value=values[line.key];subs[index]=line;changes=changes+1 end
+                end
+            end
+        end
+        for index=#duplicates,1,-1 do remove(duplicates[index]) end
+        local insertAt=1
+        for index=1,#subs do if scriptInfo(subs[index]) then insertAt=index+1 elseif insertAt>1 then break end end
+        for _,field in ipairs(fields) do
+            LineOps.checkCancelled()
+            if not first[field] then
+                subs.insert(insertAt,{class="info",section="[Script Info]",key=field,value=values[field] or ""})
+                table.insert(indices,insertAt,false);insertAt=insertAt+1;changes=changes+1
+            end
+        end
+        local result={}
+        for index,original in ipairs(indices) do if wanted[original] and subs[index].class=="dialogue" then result[#result+1]=index end end
+        return result,changes
+    end)
+end
+local function run(subs,selection,context)
+    context=context or {}
+    local text=labels[context.language] or labels.en
+    local values=read(subs)
+    local addEpisode,clean=false,false
+    while true do
+        local width,labelWidth=40,12
+        local dialog={{class="label",label=text.title,x=0,y=0,width=width,height=1}}
+        for index,key in ipairs(fields) do
+            dialog[#dialog+1]={class="label",label=text.fields[index],x=0,y=index+1,width=labelWidth,height=1}
+            dialog[#dialog+1]={class="edit",name="property"..index,value=values[key],x=labelWidth,y=index+1,width=width-labelWidth,height=1}
+        end
+        local row=#fields+3
+        dialog[#dialog+1]={class="checkbox",name="add_ep",label=text.episode,value=addEpisode,x=0,y=row,width=width,height=1}
+        dialog[#dialog+1]={class="checkbox",name="clean_all",label=text.clean,value=clean,x=0,y=row+1,width=width,height=1}
+        dialog[#dialog+1]={class="label",label=text.hint,x=0,y=row+3,width=width,height=2}
+        local button,result=aegisub.dialog.display(dialog,{text.save,text.cancel},{ok=text.save,close=text.cancel})
+        if button~=text.save then return selection end
+        addEpisode,clean=result.add_ep==true,result.clean_all==true
+        for index,key in ipairs(fields) do values[key]=tostring(result["property"..index] or values[key]) end
+        local message
+        if result.values then
+            local rows={}
+            for value in (result.values:gsub("\r\n","\n"):gsub("\r","\n").."\n"):gmatch("(.-)\n") do rows[#rows+1]=value end
+            for index,key in ipairs(fields) do values[key]=rows[index] or "" end
+            for index=#fields+1,#rows do if trim(rows[index])~="" then message=text.fields[#fields]..": "..rows[index] end end
+        end
+        if addEpisode and not message then
+            local ok,name=pcall(aegisub.file_name or function() end)
+            local stem=ok and tostring(name or ""):match("([^/\\]+)$")
+            stem=stem and stem:gsub("%.[^.]+$","")
+            local episode
+            if stem then
+                local plain=trim(stem:gsub("%b[]",""):gsub("%b()", ""))
+                episode=plain:match("[sS]%d+[eE](%d+)") or plain:match("%s%-%s*(%d+)")
+                    or plain:gsub("[vV]%d+$", ""):match("(%d+)%s*$")
+            end
+            if not episode then message=text.missing
+            elseif trim(values.Title)=="" then message=text.empty
+            else
+                episode=episode:gsub("^0+", "")
+                if #episode<2 then episode=string.rep("0",2-#episode)..episode end
+                values.Title=trim(values.Title:gsub("%s+%-%s+%d+$","")).." - "..episode
+            end
+        end
+        if message then require("kite.UI").message(message,{button=text.save})
+        else
+            local selected,changes=apply(subs,selection,values,clean)
+            if changes>0 and aegisub.set_undo_point then aegisub.set_undo_point(text.title) end
+            return selected
+        end
+    end
+end
+return {run=run,read=read,apply=apply,fields=fields}
+end)()
 
 if depctrl then
     EventOps.version = depctrl

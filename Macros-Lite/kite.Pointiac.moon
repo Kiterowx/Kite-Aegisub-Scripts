@@ -1,26 +1,24 @@
 export script_name        = "Pointiac"
 export script_description = "Create first and last frame point markers from selected lines"
 export script_author      = "Kiterow"
-export script_version     = "1.1.2"
+export script_version     = "1.1.7"
 export script_namespace   = "kite.Pointiac"
 
-POINT_PATH = "m 0 4.657 b 0 2.085 2.085 0 4.657 0 7.229 0 9.314 2.085 9.314 4.657 9.314 7.229 7.229 9.314 4.657 9.314 2.085 9.314 0 7.229 0 4.657"
-POINT_SIZE = 9.314
-NUMBER_EPSILON = 0.000001
-NUMBER_DECIMALS = 3
-DEFAULTS = {
+PointPath = "m 0 4.657 b 0 2.085 2.085 0 4.657 0 7.229 0 9.314 2.085 9.314 4.657 9.314 7.229 7.229 9.314 4.657 9.314 2.085 9.314 0 7.229 0 4.657"
+PointSize = 9.314
+Defaults = {
   color: "#FFFFFF"
   fps: 24
   separation: 16
-  layer_offset: 1
-  target_width: 1920
-  target_height: 1080
+  layerOffset: 1
+  targetWidth: 1920
+  targetHeight: 1080
 }
 
-ok_depctrl, DependencyControl = pcall require, "l0.DependencyControl"
+okDepctrl, DependencyControl = pcall require, "l0.DependencyControl"
 depctrl = nil
-if ok_depctrl and DependencyControl
-  ok_record, record = pcall ->
+if okDepctrl and DependencyControl
+  okRecord, record = pcall ->
     DependencyControl{
       name: script_name
       description: script_description
@@ -29,236 +27,186 @@ if ok_depctrl and DependencyControl
       namespace: script_namespace
       feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
       {
-        {"kite.UI", version: "1.1.3", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        {"kite.UI", version: "1.5.0", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
-        {"kite.LineOps", version: "1.5.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+        {"kite.LineOps", version: "1.7.2", url: "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed: "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}
+        {"kite.Core", version: "1.1.0"}
+        {"kite.Color", version: "1.2.1"}
       }
     }
-  depctrl = record if ok_record
+  depctrl = record if okRecord
 
 KiteUI, LineOps = nil, nil
 if depctrl
-  ok_ui, ui, line_ops = pcall -> depctrl\requireModules!
-  if ok_ui
+  okUi, ui, lineOps = pcall -> depctrl\requireModules!
+  if okUi
     KiteUI = ui
-    LineOps = line_ops
+    LineOps = lineOps
 KiteUI or= require "kite.UI"
 LineOps or= require "kite.LineOps"
-POINT_SETTINGS = KiteUI.settings script_namespace, script_version, {
+PointSettings = KiteUI.settings script_namespace, script_version, {
   main: {
-    color: DEFAULTS.color
-    fps: DEFAULTS.fps
-    separation: DEFAULTS.separation
-    layer_offset: DEFAULTS.layer_offset
+    color: Defaults.color
+    fps: Defaults.fps
+    separation: Defaults.separation
+    layer_offset: Defaults.layerOffset
   }
 }, {}
-POINT_SETTINGS\load!
+PointSettings\load!
 
-copy_line = (line) ->
-  out = {}
-  return out unless type(line) == "table"
-  out[k] = v for k, v in pairs line
-  out
+finiteNumber = require("kite.Core").finiteNumber
+formatNumber = LineOps.formatNumber
+normalizeColor = require("kite.Color").normalize
 
-round_int = (value) ->
-  value = tonumber value
-  value = 0 unless value and value == value and value != math.huge and value != -math.huge
-  if value >= 0
-    math.floor(value + 0.5)
-  else
-    math.ceil(value - 0.5)
+safeFps = (value) ->
+  fps = finiteNumber(value) or Defaults.fps
+  if fps > 0 then fps else Defaults.fps
 
-finite_number = (value) ->
-  number = tonumber value
-  return nil unless number and number == number and number != math.huge and number != -math.huge
-  number
+frameMs = (fps) ->
+  math.max 1, math.floor(1000 / safeFps(fps) + 0.5)
 
-format_number = (value) ->
-  n = finite_number(value) or 0
-  n = 0 if math.abs(n) < NUMBER_EPSILON
-  nearest = round_int n
-  return tostring(nearest) if math.abs(n - nearest) < NUMBER_EPSILON
-  out = string.format "%.#{NUMBER_DECIMALS}f", n
-  out = out\gsub "0+$", ""
-  out\gsub "%.$", ""
+safeSeparation = (value) -> finiteNumber(value) or Defaults.separation
 
-normalize_color = (value) ->
-  text = if value == nil then "" else tostring value
-  text = text\gsub "^%s+", ""
-  text = text\gsub "%s+$", ""
-  r, g, b = text\match "^#?(%x%x)(%x%x)(%x%x)$"
-  return "&H#{b\upper!}#{g\upper!}#{r\upper!}&" if r
-  hex = text\match "^&[Hh](%x+)&?$"
-  if hex and (#hex == 6 or #hex == 8)
-    hex = hex\sub -6 if #hex == 8
-    return "&H#{hex\upper!}&"
-  "&HFFFFFF&"
-
-safe_fps = (value) ->
-  fps = finite_number(value) or DEFAULTS.fps
-  if fps > 0 then fps else DEFAULTS.fps
-
-frame_ms = (fps) ->
-  math.max 1, math.floor(1000 / safe_fps(fps) + 0.5)
-
-safe_separation = (value) ->
-  raw = finite_number(value) or DEFAULTS.separation
-  sign = if raw < 0 then -1 else 1
-  min_sep = POINT_SIZE + 1
-  sign * math.max(math.abs(raw), min_sep)
-
-get_script_resolution = (subs) ->
-  res = {x: DEFAULTS.target_width, y: DEFAULTS.target_height}
-  if subs
-    for i = 1, #subs
-      line = subs[i]
-      if line and line.class == "info"
-        key = tostring(line.key or "")\lower!
-        if key == "playresx"
-          value = finite_number line.value
-          res.x = value if value and value > 0
-        elseif key == "playresy"
-          value = finite_number line.value
-          res.y = value if value and value > 0
-  res
-
-default_position = (script_res) ->
-  sep = DEFAULTS.separation
+defaultPosition = (scriptResolution, separation = Defaults.separation) ->
   {
-    x: round_int((script_res.x - sep) / 2)
-    y: round_int((script_res.y - POINT_SIZE) / 2)
+    x: (scriptResolution.x - separation - PointSize) / 2
+    y: (scriptResolution.y - PointSize) / 2
   }
 
-show_message = (message) ->
-  aegisub.dialog.display {
-    {class: "label", label: tostring(message or ""), x: 0, y: 0, width: 34, height: 2}
-  }, {"OK"}
+showMessage = (message) ->
+  KiteUI.message message
 
-show_dialog = (script_res) ->
-  saved = POINT_SETTINGS\values "main"
-  pos = default_position script_res
+showDialog = (scriptResolution) ->
+  saved = PointSettings\values "main"
+  pos = defaultPosition scriptResolution, safeSeparation(saved.separation)
   ui = {
     {class: "label", label: "Pointiac", x: 0, y: 0, width: 8, height: 1}
     {class: "label", label: "Color", x: 0, y: 1, width: 2, height: 1}
     {class: "color", name: "color", value: saved.color, x: 2, y: 1, width: 2, height: 2}
-    {class: "label", label: "FPS", x: 5, y: 1, width: 1, height: 1}
-    {class: "floatedit", name: "fps", value: saved.fps, min: 1, x: 6, y: 1, width: 2, height: 1}
+    {class: "label", label: "FPS*", x: 5, y: 1, width: 1, height: 1}
+    {class: "floatedit", name: "fps", value: saved.fps, min: 0, x: 6, y: 1, width: 2, height: 1}
     {class: "label", label: "X/Y", x: 0, y: 3, width: 2, height: 1}
     {class: "floatedit", name: "x", value: pos.x, x: 2, y: 3, width: 2, height: 1}
     {class: "floatedit", name: "y", value: pos.y, x: 4, y: 3, width: 2, height: 1}
-    {class: "label", label: "Sep X", x: 0, y: 4, width: 2, height: 1}
-    {class: "floatedit", name: "separation", value: saved.separation, min: POINT_SIZE + 1, x: 2, y: 4, width: 2, height: 1}
-    {class: "label", label: "Capa+", x: 4, y: 4, width: 2, height: 1}
-    {class: "intedit", name: "layer_offset", value: saved.layer_offset, min: -100, max: 100, x: 6, y: 4, width: 2, height: 1}
+    {class: "label", label: "Offset X", x: 0, y: 4, width: 2, height: 1}
+    {class: "floatedit", name: "separation", value: saved.separation, x: 2, y: 4, width: 2, height: 1}
+    {class: "label", label: "Layer +", x: 4, y: 4, width: 2, height: 1}
+    {class: "intedit", name: "layer_offset", value: saved.layer_offset, x: 6, y: 4, width: 2, height: 1}
+    {class: "label", label: "* FPS is used only when video timecodes are unavailable.", x: 0, y: 5, width: 8}
+    {class: "label", label: "Offset X may be positive, negative or zero.", x: 0, y: 6, width: 8}
   }
   button, res = aegisub.dialog.display ui, {"Execute", "Cancel"}, {ok: "Execute", close: "Cancel"}
   return nil if button != "Execute"
   stable = {
     color: res.color
-    fps: safe_fps res.fps
-    separation: safe_separation res.separation
-    layer_offset: math.max -100, math.min 100, round_int(finite_number(res.layer_offset) or DEFAULTS.layer_offset)
+    fps: safeFps res.fps
+    separation: safeSeparation res.separation
+    layer_offset: LineOps.round(finiteNumber(res.layer_offset) or Defaults.layerOffset)
   }
-  POINT_SETTINGS\update "main", stable
-  POINT_SETTINGS\write!
+  PointSettings\update "main", stable
+  ok, saved, err = pcall -> PointSettings\write!
+  unless ok and saved
+    showMessage "Could not save settings. The current values will still be used.\n" .. tostring(err or saved or "")
   {
-    color: normalize_color res.color
+    color: normalizeColor res.color
     fps: stable.fps
-    x: finite_number(res.x) or pos.x
-    y: finite_number(res.y) or pos.y
+    x: finiteNumber(res.x) or pos.x
+    y: finiteNumber(res.y) or pos.y
     separation: stable.separation
-    layer_offset: stable.layer_offset
+    layerOffset: stable.layer_offset
   }
 
-point_text = (x, y, color) ->
-  string.format "{\\an7\\pos(%s,%s)\\bord0\\shad0\\1c%s\\p1}%s",
-    format_number(x),
-    format_number(y),
+pointText = (x, y, color) ->
+  string.format "{\\an7\\pos(%s,%s)\\bord0\\shad0\\fscx100\\fscy100\\frz0\\alpha&H00&\\1c%s\\p1}%s",
+    formatNumber(x),
+    formatNumber(y),
     color,
-    POINT_PATH
+    PointPath
 
-timings = (base, fps) ->
-  start_time = math.max 0, finite_number(base.start_time) or 0
-  end_time = finite_number(base.end_time) or start_time
-  frame_len = frame_ms fps
-  end_time = start_time + frame_len if end_time <= start_time
+markerTimings = (base, fps) ->
+  startTime = math.max 0, finiteNumber(base.start_time) or 0
+  endTime = finiteNumber(base.end_time) or startTime
+  frameLength = frameMs fps
+  endTime = startTime + frameLength if endTime <= startTime
   if aegisub and aegisub.frame_from_ms and aegisub.ms_from_frame
-    ok_start, start_value = pcall aegisub.frame_from_ms, start_time
-    ok_last, last_value = pcall aegisub.frame_from_ms, math.max(start_time, end_time - 1)
-    start_frame = finite_number start_value if ok_start
-    last_frame = finite_number last_value if ok_last
-    if start_frame and last_frame and start_frame >= 0 and last_frame >= start_frame
-      ok_first_end, first_end_value = pcall aegisub.ms_from_frame, start_frame + 1
-      ok_last_start, last_start_value = pcall aegisub.ms_from_frame, last_frame
-      first_boundary = finite_number first_end_value if ok_first_end
-      last_boundary = finite_number last_start_value if ok_last_start
-      first_end = math.min end_time, first_boundary or end_time
-      last_start = math.max start_time, last_boundary or start_time
-      first_end = math.min end_time, start_time + 1 if first_end <= start_time
-      last_start = start_time if last_start >= end_time
-      return {
-        first_start: start_time
-        first_end: first_end
-        last_start: last_start
-        last_end: end_time
-      }
-  first_end = math.min end_time, start_time + frame_len
-  first_end = start_time + 1 if first_end <= start_time
-  last_start = math.max start_time, end_time - frame_len
-  last_end = end_time
-  if last_start >= last_end
-    last_start = start_time
-    last_end = first_end
+    okStart, startValue = pcall aegisub.frame_from_ms, startTime
+    okLast, lastValue = pcall aegisub.frame_from_ms, math.max(startTime, endTime - 1)
+    startFrame = finiteNumber startValue if okStart
+    lastFrame = finiteNumber lastValue if okLast
+    if startFrame and lastFrame and startFrame >= 0 and lastFrame >= startFrame
+      okFirstEnd, firstEndValue = pcall aegisub.ms_from_frame, startFrame + 1
+      okLastStart, lastStartValue = pcall aegisub.ms_from_frame, lastFrame
+      firstBoundary = finiteNumber firstEndValue if okFirstEnd
+      lastBoundary = finiteNumber lastStartValue if okLastStart
+      if firstBoundary and lastBoundary and firstBoundary > startTime and lastBoundary < endTime
+        return {
+          firstStart: startTime
+          firstEnd: math.min(endTime, firstBoundary)
+          lastStart: math.max(startTime, lastBoundary)
+          lastEnd: endTime
+        }
+  firstEnd = math.min endTime, startTime + frameLength
+  firstEnd = startTime + 1 if firstEnd <= startTime
+  lastStart = math.max startTime, endTime - frameLength
+  lastEnd = endTime
+  if lastStart >= lastEnd
+    lastStart = startTime
+    lastEnd = firstEnd
   {
-    first_start: start_time
-    first_end: first_end
-    last_start: last_start
-    last_end: last_end
+    firstStart: startTime
+    firstEnd: firstEnd
+    lastStart: lastStart
+    lastEnd: lastEnd
   }
 
-point_lines = (base, opts) ->
-  times = timings base, opts.fps
-  base_layer = finite_number(base.layer) or 0
-  layer = math.max 0, round_int(base_layer + opts.layer_offset)
-  first = copy_line base
-  last = copy_line base
+pointLines = (base, opts) ->
+  times = markerTimings base, opts.fps
+  baseLayer = finiteNumber(base.layer) or 0
+  layer = math.max 0, LineOps.round(baseLayer + opts.layerOffset)
+  first = LineOps.copy base
+  last = LineOps.copy base
 
   first.comment = false
   first.layer = layer
-  first.start_time = times.first_start
-  first.end_time = times.first_end
-  first.text = point_text opts.x, opts.y, opts.color
+  first.start_time = times.firstStart
+  first.end_time = times.firstEnd
+  first.text = pointText opts.x, opts.y, opts.color
 
   last.comment = false
   last.layer = layer
-  last.start_time = times.last_start
-  last.end_time = times.last_end
-  last.text = point_text opts.x + opts.separation, opts.y, opts.color
+  last.start_time = times.lastStart
+  last.end_time = times.lastEnd
+  last.text = pointText opts.x + opts.separation, opts.y, opts.color
 
   first, last
 
-selected_dialogue_indices = (subs, sel) ->
+selectedDialogueIndices = (subs, sel) ->
   LineOps.normalizeIndices subs, sel, (line) -> line and line.class == "dialogue"
 
 main = (subs, sel, active) ->
-  targets = selected_dialogue_indices subs, sel
+  targets = selectedDialogueIndices subs, sel
   if #targets == 0
-    show_message "Select at least one dialogue line."
+    showMessage "Select at least one dialogue line."
     aegisub.cancel!
     return nil
 
-  opts = show_dialog get_script_resolution(subs)
+  scriptWidth, scriptHeight = LineOps.scriptResolution subs, Defaults.targetWidth, Defaults.targetHeight
+  opts = showDialog {x: scriptWidth, y: scriptHeight}
   return nil unless opts
   operations = {}
   for idx in *targets
-    first, last = point_lines subs[idx], opts
+    LineOps.checkCancelled!
+    first, last = pointLines subs[idx], opts
     operations[#operations + 1] = {index: idx + 1, lines: {first, last}}
-  LineOps.transaction subs, script_name, -> LineOps.insertLines subs, operations
+  inserted = LineOps.transaction subs, script_name, -> LineOps.insertLines subs, operations
+  inserted, inserted[1] or active
 
-validate = (subs, sel) -> #selected_dialogue_indices(subs, sel) > 0
+validate = (subs, sel) -> #selectedDialogueIndices(subs, sel) > 0
 if aegisub and aegisub.register_macro
   if depctrl and depctrl.registerMacro
     depctrl\registerMacro script_name, script_description, main, validate, nil, false
   else
     aegisub.register_macro script_name, script_description, main, validate
+
+KiteUI.publishActions()

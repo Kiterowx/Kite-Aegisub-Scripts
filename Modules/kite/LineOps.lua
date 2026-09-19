@@ -1,8 +1,7 @@
-local MODULE_VERSION = "1.5.3"
-local LineOps = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
+local moduleVersion = "1.7.4"
+local LineOps = { VERSION = moduleVersion, version = moduleVersion }
 local unpack = table.unpack or unpack
-local MAX_ROUND_DECIMALS = 12
-local RESTORE_CHUNK_SIZE = 500
+local insertChunkSize = 500
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -10,24 +9,32 @@ local function safeRequire(name)
     return nil
 end
 
-local util = safeRequire("aegisub.util")
+local Core = assert(safeRequire("kite.Core"), "kite.Core is required")
 local DependencyControl = safeRequire("l0.DependencyControl")
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.LineOps",
-        version = MODULE_VERSION,
+        version = moduleVersion,
         description = "Shared line, selection and lightweight ASS operations for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.LineOps",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+        {
+            { "kite.Core", version = "1.1.0" },
+        },
     })
 end
 
-local function trim(value)
-    return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
-end
+local trim = Core.trim
+local copy = Core.copy
+local deepCopy = Core.deepCopy
+local finiteNumber = Core.finiteNumber
+local round = Core.round
+local roundTo = Core.roundTo
+local shallowEqual = Core.shallowEqual
+local clamp = Core.clamp
 
 local VIRAMA = {
     [0x094D] = true, [0x09CD] = true, [0x0A4D] = true, [0x0ACD] = true,
@@ -48,14 +55,14 @@ local VIRAMA = {
     [0x11D97] = true, [0x11F41] = true, [0x11F42] = true,
 }
 
-local PREPEND_RANGES = {
+local prependRanges = {
     {0x0600, 0x0605}, {0x06DD, 0x06DD}, {0x070F, 0x070F}, {0x0890, 0x0891},
     {0x08E2, 0x08E2}, {0x0D4E, 0x0D4E}, {0x110BD, 0x110BD}, {0x110CD, 0x110CD},
     {0x111C2, 0x111C3}, {0x113D1, 0x113D1}, {0x1193F, 0x1193F}, {0x11941, 0x11941},
     {0x11A3A, 0x11A3A}, {0x11A84, 0x11A89}, {0x11D46, 0x11D46}, {0x11F02, 0x11F02},
 }
 
-local SENTENCE_TERMINAL_RANGES = {
+local sentenceTerminalRanges = {
     0x0021,0x0021, 0x002E,0x002E, 0x003F,0x003F, 0x0589,0x0589, 0x061D,0x061F,
     0x06D4,0x06D4, 0x0700,0x0702, 0x07F9,0x07F9, 0x0837,0x0837, 0x0839,0x0839,
     0x083D,0x083E, 0x0964,0x0965, 0x104A,0x104B, 0x1362,0x1362, 0x1367,0x1368,
@@ -119,9 +126,9 @@ end
 local function isSentenceTerminal(text)
     local codepoint = firstCodepoint(text)
     if not codepoint then return false end
-    for index = 1, #SENTENCE_TERMINAL_RANGES, 2 do
-        if codepoint >= SENTENCE_TERMINAL_RANGES[index]
-            and codepoint <= SENTENCE_TERMINAL_RANGES[index + 1] then return true end
+    for index = 1, #sentenceTerminalRanges, 2 do
+        if codepoint >= sentenceTerminalRanges[index]
+            and codepoint <= sentenceTerminalRanges[index + 1] then return true end
     end
     return false
 end
@@ -138,6 +145,7 @@ local function isFallbackMark(codepoint)
         or (codepoint >= 0x1DC0 and codepoint <= 0x1DFF)
         or (codepoint >= 0x20D0 and codepoint <= 0x20FF)
         or (codepoint >= 0xFE00 and codepoint <= 0xFE0F)
+        or (codepoint >= 0xFE20 and codepoint <= 0xFE2F)
         or (codepoint >= 0xE0100 and codepoint <= 0xE01EF)
 end
 
@@ -183,7 +191,8 @@ local function rawGraphemes(text, regex)
             units[#units + 1], position = escape, position + 2
         else
             local start = position
-            _, position = utf8Next(text, position)
+            local _, nextPosition = utf8Next(text, position)
+            position = nextPosition
             units[#units + 1] = text:sub(start, position - 1)
         end
     end
@@ -206,7 +215,7 @@ local function graphemes(text, regex)
             or isFallbackMark(first) or regexHas(regex, unit, "^\\p{M}+$")
             or (first >= 0x1F3FB and first <= 0x1F3FF)
             or (first >= 0xE0020 and first <= 0xE007F)
-            or VIRAMA[last] or inRanges(last, PREPEND_RANGES)
+            or VIRAMA[last] or inRanges(last, prependRanges)
             or joinsHangul(last, first)
             or (regional and regionalRun % 2 == 1)
         )
@@ -214,68 +223,6 @@ local function graphemes(text, regex)
         regionalRun = regional and regionalRun + 1 or 0
     end
     return result
-end
-
-local function copy(value)
-    if type(value) ~= "table" then return value end
-    if util and type(util.copy) == "function" then
-        local ok, result = pcall(util.copy, value)
-        if ok then return result end
-    end
-    local result = {}
-    for key, item in pairs(value) do result[key] = item end
-    return setmetatable(result, getmetatable(value))
-end
-
-local function deepCopy(value, seen)
-    if type(value) ~= "table" then return value end
-    if util and type(util.deep_copy) == "function" then
-        local ok, result = pcall(util.deep_copy, value)
-        if ok then return result end
-    end
-    seen = seen or {}
-    if seen[value] then return seen[value] end
-    local result = {}
-    seen[value] = result
-    for key, item in pairs(value) do
-        result[deepCopy(key, seen)] = deepCopy(item, seen)
-    end
-    return setmetatable(result, getmetatable(value))
-end
-
-local function finiteNumber(value)
-    local number = tonumber(value)
-    if not number or number ~= number or math.abs(number) == math.huge then return nil end
-    return number
-end
-
-local function round(value)
-    value = finiteNumber(value) or 0
-    if value >= 0 then return math.floor(value + 0.5) end
-    return math.ceil(value - 0.5)
-end
-
-
-local function roundTo(value, decimals)
-    value = finiteNumber(value) or 0
-    decimals = math.max(0, math.min(MAX_ROUND_DECIMALS, round(finiteNumber(decimals) or 0)))
-    local factor = 10 ^ decimals
-    if value >= 0 then return math.floor(value * factor + 0.5) / factor end
-    return math.ceil(value * factor - 0.5) / factor
-end
-
-local function shallowEqual(left, right)
-    left = type(left) == "table" and left or {}
-    right = type(right) == "table" and right or {}
-    for key, value in pairs(left) do if right[key] ~= value then return false end end
-    for key, value in pairs(right) do if left[key] ~= value then return false end end
-    return true
-end
-local function clamp(value, minimum, maximum)
-    value = finiteNumber(value) or 0
-    if minimum ~= nil and value < minimum then return minimum end
-    if maximum ~= nil and value > maximum then return maximum end
-    return value
 end
 
 local function checkCancelled()
@@ -345,10 +292,6 @@ local function methodResolution(object)
     return positiveNumber(x), positiveNumber(y)
 end
 
--- Resolve PlayRes from an ASS subtitle object, a LineCollection/ASS object, a
--- line belonging to one, or a metadata table. Missing axes independently use
--- the optional positive fallbacks. The third result is true only when both
--- axes came from the source rather than a fallback.
 local function scriptResolution(source, fallbackX, fallbackY)
     local x, y
     local seen = {}
@@ -428,7 +371,7 @@ end
 
 local knownTags = {
     "fscx", "fscy", "fsp", "xbord", "ybord", "xshad", "yshad", "alpha", "iclip", "clip",
-    "move", "fade", "pos", "org", "frz", "frx", "fry", "fax", "fay", "bord", "shad",
+    "move", "fade", "fad", "pos", "org", "frz", "frx", "fry", "fr", "fax", "fay", "bord", "shad",
     "blur", "be", "fn", "fs", "fe", "an", "a", "q", "pbo", "p", "r", "k", "K", "kf",
     "ko", "kt", "b", "i", "u", "s", "c",
 }
@@ -473,7 +416,7 @@ local function tagCalls(text, wanted)
         local closeStart = text:find("}", openStart + 1, true)
         if not closeStart then break end
         local block = text:sub(openStart + 1, closeStart - 1)
-        if block:match("^%s*\\") then
+        if block:find("\\",1,true) then
             local index = 1
             local depth = 0
             while index <= #block do
@@ -672,14 +615,16 @@ local function scanSections(text)
             break
         end
         local block = text:sub(open + 1, close - 1)
-        local isTag = block:match("^%s*\\") ~= nil
+        local isTag = block:find("\\",1,true) ~= nil
         append(isTag and "override" or "comment", block, open, close, drawing)
         if isTag then
             for _, call in ipairs(tagCalls("{" .. block .. "}", {p = true, r = true})) do
                 if call.top_level then
                     local base = call.name:gsub("^%d", "")
-                    if base == "r" then drawing = 0
-                    elseif base == "p" then drawing = math.max(0, tonumber(call.value) or 0) end
+                    if call.raw:sub(2, #base + 1) == base then
+                        if base == "r" then drawing = 0
+                        elseif base == "p" then drawing = math.max(0, tonumber(call.value) or 0) end
+                    end
                 end
             end
         end
@@ -904,9 +849,15 @@ local function insertLines(subtitles, operations)
     end
     table.sort(order, function(left, right) return left > right end)
     for _, index in ipairs(order) do
-        local arguments = {}
-        for _, record in ipairs(grouped[index]) do arguments[#arguments + 1] = record.line end
-        if #arguments > 0 then subtitles.insert(index, unpack(arguments)) end
+        local records = grouped[index]
+        for last = #records, 1, -insertChunkSize do
+            checkCancelled()
+            local arguments = {}
+            for offset = math.max(1, last - insertChunkSize + 1), last do
+                arguments[#arguments + 1] = records[offset].line
+            end
+            subtitles.insert(index, unpack(arguments))
+        end
     end
     table.sort(order)
     local inserted = {}
@@ -928,8 +879,8 @@ end
 
 local function restore(subtitles, state)
     for index = #subtitles, 1, -1 do subtitles.delete(index) end
-    for first = 1, #state, RESTORE_CHUNK_SIZE do
-        local last = math.min(#state, first + RESTORE_CHUNK_SIZE - 1)
+    for first = 1, #state, insertChunkSize do
+        local last = math.min(#state, first + insertChunkSize - 1)
         local chunk = {}
         for index = first, last do chunk[#chunk + 1] = deepCopy(state[index]) end
         if #chunk > 0 then subtitles.insert(#subtitles + 1, unpack(chunk)) end
@@ -955,6 +906,7 @@ local function transaction(subtitles, undoName, callback)
     return unpack(packed, 2, packed.n)
 end
 
+LineOps.formatNumber = Core.formatNumber
 LineOps.trim = trim
 LineOps.graphemes = graphemes
 LineOps.firstCodepoint = firstCodepoint

@@ -1,5 +1,5 @@
-local MODULE_VERSION = "1.2.2"
-local Media = { VERSION = MODULE_VERSION, version = MODULE_VERSION }
+local moduleVersion = "1.4.0"
+local Media = { VERSION = moduleVersion, version = moduleVersion }
 
 local function safeRequire(name)
     local ok, value = pcall(require, name)
@@ -8,68 +8,42 @@ local function safeRequire(name)
 end
 
 local DependencyControl = safeRequire("l0.DependencyControl")
-local LineOps = safeRequire("kite.LineOps")
-local PyBridge = safeRequire("kite.PyBridge")
+local Core = assert(safeRequire("kite.Core"), "kite.Core is required")
+local LineOps = assert(safeRequire("kite.LineOps"), "kite.LineOps is required")
+local PyBridge = assert(safeRequire("kite.PyBridge"), "kite.PyBridge is required")
 local MILLISECOND = 1
-local PNG_SIGNATURE = "\137PNG\r\n\26\n"
-local PNG_MINIMUM_SIZE = 33
-local PNG_HEADER_SIZE = 13
-local PNG_INTEGER_SIZE = 4
-local PNG_CHUNK_OVERHEAD = 12
-local MINIMUM_RATE_SAMPLES = 16
-local DEFAULT_TIMECODE_TOLERANCE_MS = 1.1
-local COMMON_RATE_TOLERANCE = 0.02
+local pngSignature = "\137PNG\r\n\26\n"
+local pngMinimumSize = 33
+local pngHeaderSize = 13
+local pngIntegerSize = 4
+local pngChunkOverhead = 12
+local minimumRateSamples = 16
+local defaultTimecodeToleranceMs = 1.1
+local commonRateTolerance = 0.02
 local depctrl
 if DependencyControl then
     depctrl = DependencyControl({
         name = "kite.Media",
-        version = MODULE_VERSION,
+        version = moduleVersion,
         description = "Shared project-media, frame-window and media-output utilities for Kite macros",
         author = "Kiterow",
         url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
         moduleName = "kite.Media",
         feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.LineOps", version = "1.5.2" },
-            { "kite.PyBridge", version = "1.4.4" },
+            { "kite.Core", version = "1.1.0" },
+            { "kite.LineOps", version = "1.7.0" },
+            { "kite.PyBridge", version = "1.7.1" },
         },
     })
 end
 
-local function trim(value)
-    if LineOps and LineOps.trim then return LineOps.trim(value) end
-    return (tostring(value == nil and "" or value):match("^%s*(.-)%s*$")) or ""
-end
+local trim = Core.trim
+local finiteNumber = Core.finiteNumber
 
-local function finiteNumber(value)
-    local number = tonumber(value)
-    if not number or number ~= number or math.abs(number) == math.huge then return nil end
-    return number
-end
-
-local function fileExists(path)
-    if PyBridge and PyBridge.fileExists then return PyBridge.fileExists(path) end
-    local handle = trim(path) ~= "" and io.open(path, "rb") or nil
-    if not handle then return false end
-    handle:close()
-    return true
-end
-
-local function decodedPath(specification)
-    if PyBridge and PyBridge.decodedPath then return PyBridge.decodedPath(specification) end
-    if not aegisub or type(aegisub.decode_path) ~= "function" then return nil end
-    local ok, value = pcall(aegisub.decode_path, specification)
-    if ok and type(value) == "string" and value ~= "" and value ~= specification then return value end
-    return nil
-end
-
-local function projectProperties()
-    if LineOps and LineOps.projectProperties then return LineOps.projectProperties() end
-    if not aegisub or type(aegisub.project_properties) ~= "function" then return {} end
-    local ok, value = pcall(aegisub.project_properties)
-    if ok and type(value) == "table" then return value end
-    return {}
-end
+local fileExists = PyBridge.fileExists
+local decodedPath = PyBridge.decodedPath
+local projectProperties = LineOps.projectProperties
 
 local function isDummy(path)
     local value = trim(path):lower()
@@ -138,18 +112,7 @@ local function selectionWindow(subtitles, selection, options)
         if options.positiveDuration ~= false and endTime <= startTime then return false end
         return true
     end
-    local records, rejected
-    if LineOps and LineOps.selectedLines then
-        records, rejected = LineOps.selectedLines(subtitles, selection, predicate, options.requireAll == true)
-    else
-        records, rejected = {}, {}
-        for _, index in ipairs(selection or {}) do
-            local line = subtitles[index]
-            if predicate(line) then records[#records + 1] = { index = index, line = line }
-            else rejected[#rejected + 1] = index end
-        end
-        if options.requireAll == true and #rejected > 0 then records = nil end
-    end
+    local records, rejected = LineOps.selectedLines(subtitles, selection, predicate, options.requireAll == true)
     if not records then return nil, "selection contains unsupported lines", rejected end
     if #records == 0 then return nil, "select at least one valid dialogue line", rejected end
     local indices, minimumStart, maximumEnd = {}, nil, nil
@@ -209,7 +172,7 @@ local function constantFrameRate(startFrame, endFrame, options)
     if not startTime or not endTime or endTime <= startTime then return false, nil, { reason = "timecodes unavailable" } end
     local count = endFrame - startFrame
     local requestedSamples = finiteNumber(options.maximumSamples)
-    local maximumSamples = requestedSamples and math.max(MINIMUM_RATE_SAMPLES, math.floor(requestedSamples))
+    local maximumSamples = requestedSamples and math.max(minimumRateSamples, math.floor(requestedSamples))
         or math.max(1, math.ceil(count))
     local step = math.max(1, math.ceil(count / maximumSamples))
     local minimumDuration, maximumDuration, maximumPhase = nil, nil, 0
@@ -246,8 +209,8 @@ local function constantFrameRate(startFrame, endFrame, options)
             if not inspect(endFrame - 1) then return false, nil, { reason = "invalid timecode", frame = endFrame - 1 } end
         end
     end
-    local durationTolerance = math.max(0, finiteNumber(options.durationTolerance) or DEFAULT_TIMECODE_TOLERANCE_MS)
-    local phaseTolerance = math.max(0, finiteNumber(options.phaseTolerance) or DEFAULT_TIMECODE_TOLERANCE_MS)
+    local durationTolerance = math.max(0, finiteNumber(options.durationTolerance) or defaultTimecodeToleranceMs)
+    local phaseTolerance = math.max(0, finiteNumber(options.phaseTolerance) or defaultTimecodeToleranceMs)
     local rate = count * 1000 / (endTime - startTime)
     local constant = minimumDuration ~= nil
         and maximumDuration - minimumDuration <= durationTolerance
@@ -274,45 +237,38 @@ local function frameRateArgument(startFrame, endFrame, options)
     end
     if not rate then return nil end
     for _, candidate in ipairs(commonRates) do
-        if math.abs(rate - candidate.value) <= COMMON_RATE_TOLERANCE then return candidate.text, rate end
+        if math.abs(rate - candidate.value) <= commonRateTolerance then return candidate.text, rate end
     end
     return string.format("%.6f", rate):gsub("0+$", ""):gsub("%.$", ""), rate
 end
 
-local function fileSize(path)
-    if PyBridge and PyBridge.fileSize then return PyBridge.fileSize(path) end
-    local handle = io.open(path, "rb")
-    if not handle then return nil end
-    local size = handle:seek("end")
-    handle:close()
-    return tonumber(size)
-end
+local fileSize = PyBridge.fileSize
 
 local function verifyPng(path)
     local handle = io.open(path, "rb")
     if not handle then return false, "missing" end
-    local signature = handle:read(#PNG_SIGNATURE)
-    if signature ~= PNG_SIGNATURE then handle:close(); return false, "invalid" end
+    local signature = handle:read(#pngSignature)
+    if signature ~= pngSignature then handle:close(); return false, "invalid" end
     local size = handle:seek("end")
-    if not size or size < PNG_MINIMUM_SIZE then handle:close(); return false, "empty" end
-    handle:seek("set", #PNG_SIGNATURE)
+    if not size or size < pngMinimumSize then handle:close(); return false, "empty" end
+    handle:seek("set", #pngSignature)
     local function uint32(bytes)
-        if type(bytes) ~= "string" or #bytes ~= PNG_INTEGER_SIZE then return nil end
-        local a, b, c, d = bytes:byte(1, PNG_INTEGER_SIZE)
+        if type(bytes) ~= "string" or #bytes ~= pngIntegerSize then return nil end
+        local a, b, c, d = bytes:byte(1, pngIntegerSize)
         return ((a * 256 + b) * 256 + c) * 256 + d
     end
     local seenHeader, seenData, seenEnd = false, false, false
     while true do
         local cursor = handle:seek()
-        if not cursor or cursor + PNG_CHUNK_OVERHEAD > size then break end
-        local length = uint32(handle:read(PNG_INTEGER_SIZE))
-        local kind = handle:read(PNG_INTEGER_SIZE)
+        if not cursor or cursor + pngChunkOverhead > size then break end
+        local length = uint32(handle:read(pngIntegerSize))
+        local kind = handle:read(pngIntegerSize)
         local position = handle:seek()
-        if not length or not kind or #kind ~= PNG_INTEGER_SIZE or not position
-            or length > size - position - PNG_INTEGER_SIZE then break end
+        if not length or not kind or #kind ~= pngIntegerSize or not position
+            or length > size - position - pngIntegerSize then break end
         if not seenHeader and kind ~= "IHDR" then break end
         if kind == "IHDR" then
-            if seenHeader or length ~= PNG_HEADER_SIZE then break end
+            if seenHeader or length ~= pngHeaderSize then break end
             local header = handle:read(length)
             local width = header and uint32(header:sub(1, 4)) or nil
             local height = header and uint32(header:sub(5, 8)) or nil
@@ -322,8 +278,8 @@ local function verifyPng(path)
             if kind == "IDAT" and length > 0 then seenData = true end
             if not handle:seek("cur", length) then break end
         end
-        local checksum = handle:read(PNG_INTEGER_SIZE)
-        if not checksum or #checksum ~= PNG_INTEGER_SIZE then break end
+        local checksum = handle:read(pngIntegerSize)
+        if not checksum or #checksum ~= pngIntegerSize then break end
         if kind == "IEND" then
             seenEnd = length == 0
             break

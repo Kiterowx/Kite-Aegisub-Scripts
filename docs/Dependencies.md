@@ -1,58 +1,39 @@
 # Dependencies
 
-## Common requirement
+English | [Español](es/Dependencies.md) | [Index](../README.md#documentation)
 
-- Aegisub Automation 4 with DependencyControl installed.
+The scripts require these 12 included modules. Copy the complete `Modules/kite/` folder to `automation/include/kite/` and update them together. Follow the [installation steps](../README.md#installation) to set up Aegisub and DependencyControl.
 
-`DependencyControl.json` is the authoritative package manifest. It contains the exact version, download path, SHA-1, and required modules for each macro.
+## Included modules
 
-## Shared Kite modules
+| Module | Version | Responsibility |
+| --- | --- | --- |
+| `kite.Core` | 1.1.0 | Numbers and ASS formatting. |
+| `kite.AssDrawing` | 1.0.3 | Drawings and conversion profiles. |
+| `kite.LineOps` | 1.7.4 | Line selection and editing. |
+| `kite.AssContext` | 1.1.3 | ASS styles, tags and timing. |
+| `kite.Color` | 1.2.2 | Colors and palettes. |
+| `kite.EventOps` | 1.3.1 | Subtitle properties and cleanup. |
+| `kite.Media` | 1.4.0 | Video, audio and timecodes. |
+| `kite.PyBridge` | 1.7.2 | External processes and Python backends. |
+| `kite.ShapeOptimizer` | 1.3.2 | Drawing and gradient optimization. |
+| `kite.Timing` | 1.4.3 | Timing and karaoke reconstruction. |
+| `kite.Settings` | 1.0.1 | Configuration. |
+| `kite.UI` | 1.5.1 | Dialogs, favorites and shortcuts. |
 
-### `kite.LineOps` 1.5.3
+[DependencyControl.json](../DependencyControl.json) lists the minimum versions required by each script.
 
-Provides validated selections, safe access to the Automation 4 subtitle object, grouped insertions, transactions, rollback, visible-text analysis, drawing state, and lightweight ASS tag operations.
+## Lua libraries
 
-ASSFoundation remains the structural parser for effective tags, style cascades, typed tag classes, complete drawing geometry, and semantic serialization.
-
-### `kite.EventOps` 1.0.3
-
-Provides shared event transformations used by Rhea Signs, including visible-text cloning, Unicode stutter detection, frame-based fade updates, continuous-fade cleanup, and deterministic text shuffling.
-
-### `kite.Media` 1.2.2
-
-Resolves project video, audio, timecodes, subtitle paths, selected frame windows, and CFR/VFR behavior. Chrono Suite and Moka Motion use it for media operations.
-
-### `kite.PyBridge` 1.5.0
-
-Provides platform-aware command execution through `aka.command`, Python resolution, path handling, writable temporary-folder fallback, cleanup, bounded reads, and atomic replacement. It is used by AutoMask, Chrono Suite, Moka Motion, PNG2ASS, Rhea Signs, Snapshoter, Wave2json, and Zheus.
-
-### `kite.ShapeOptimizer` 1.1.0
-
-Provides shared drawing geometry, position unification, perimeter placement, color clustering, and horizontal or vertical gradient reduction for Rhea Signs.
-
-### `kite.Timing` 1.2.2
-
-Provides shared timing, readability, signal, waveform, keyframe, and file-discovery utilities for Chrono Suite.
-
-### `kite.UI` 1.1.3
-
-Provides settings by namespace, migration from supported legacy formats, deep copies, in-memory fallback, dialog helpers, and atomic settings persistence in `?user/config/kite.settings.json`.
-
-## External Automation modules
-
-- `l0.ASSFoundation` and `l0.Functional` provide structured ASS parsing and functional collection helpers.
-- `a-mo.LineCollection`, `a-mo.Line`, `a-mo.Tags`, and related Aegisub-Motion modules provide complex line collections and motion data.
-- `arch.Math`, `arch.Perspective`, and `arch.Util` provide matrix and perspective operations.
-- `ZF.main` provides shared typesetting and geometry components.
-- `aka.command` provides hidden process execution for `kite.PyBridge`.
-- `SubInspector.Inspector` is optional for Gradient Row bounds.
-- `myaa.ASSParser` is required by Selesub.
-- `aegisub.re`, `aegisub.unicode`, `aegisub.clipboard`, `aegisub.util`, `json`, `karaskel`, and `Yutils` are used where declared by the feed.
+Install the libraries listed for each script in the [main table](../README.md#scripts). The [library links](../README.md#lua-libraries) point to their repositories. Keep Aegisub’s bundled Automation files. Yutils requires LuaJIT and libpng for PNG reading.
 
 ## Python backends
 
-AutoMask uses `kite-automask` 0.4.1 and FFmpeg. EfficientSAM and LaMa are optional model downloads for segmentation and inpainting. AutoMask and PNG2ASS expose backend checks that report package readiness and compare the installed version with the configured local or GitHub source. AutoMask uses `kite-png2ass` for contour vectorization.
+AutoMask and PNG2ASS require 64-bit Python 3.10 or newer. Install Git for package downloads from GitHub. OpenCV and the libraries below are installed automatically; install FFmpeg separately.
 
-PNG2ASS uses `kite-png2ass` 1.4.1, exposed as the Python module `ass_png2ass`.
+| Backend | Version | Dependencies |
+| --- | --- | --- |
+| `kite-png2ass` | 1.4.2 | Pillow, OpenCV, NumPy, svg2ssa, defusedxml and vtracer. |
+| `kite-automask` | 0.4.2 | NumPy, OpenCV, ONNX Runtime, PySide6 and PNG2ASS. |
 
-Both backends require 64-bit Python 3.10 or newer. Their `pyproject.toml` files contain the reproducible Python dependency lists.
+For AutoMask’s EfficientSAM and LaMa tools, install the models from **Backend/Install Models**. Gradients work without them.
