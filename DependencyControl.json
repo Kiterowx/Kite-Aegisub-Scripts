@@ -1279,7 +1279,7 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "1.2.3",
+          "version": "1.2.4",
           "released": "2026-09-19",
           "default": true,
           "files": [
@@ -1287,7 +1287,7 @@
               "name": ".moon",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/Macros/kite.ZagreoGlyphs.moon",
               "localFilePath": "Macros/kite.ZagreoGlyphs.moon",
-              "sha1": "9245A416B7972E551D9C1D463BB89F7B37929263"
+              "sha1": "BC28D1FBB789A4C0B580EA3F1F9B05832EE65200"
             }
           ],
           "requiredModules": [

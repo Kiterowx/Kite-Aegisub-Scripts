@@ -111,7 +111,7 @@ Join the [support Discord](https://discord.gg/Egq8us4xZC). Include the macro nam
 
 ## Links
 
-- Catalogue site: <https://kiterowx.github.io/Guide-Aegisub-Scripts/>
+- Catalogue site: <https://kiterowx.github.io/Kite-Aegisub-Scripts-Guide/>
 - Chrono Generators: <https://github.com/Kiterowx/Chrono-Generators-Scripts>
 - Timing guide: <https://kiterowx.github.io/Arquitectura-del-Timing/>
 

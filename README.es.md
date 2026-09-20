@@ -111,7 +111,7 @@ Para consultas y avisos de errores, entra al [Discord de soporte](https://discor
 
 ## Enlaces
 
-- [Sitio del catálogo](https://kiterowx.github.io/Guide-Aegisub-Scripts/).
+- [Sitio del catálogo](https://kiterowx.github.io/Kite-Aegisub-Scripts-Guide/).
 - [Chrono Generators](https://github.com/Kiterowx/Chrono-Generators-Scripts).
 - [Guía de timing](https://kiterowx.github.io/Arquitectura-del-Timing/).
 

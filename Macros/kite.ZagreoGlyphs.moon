@@ -1,7 +1,7 @@
 export script_name        = "Zagreo Glyphs"
 export script_description = "Generate vector-path glyph animation moments from ASS text or drawings"
 export script_author      = "Kiterow"
-export script_version     = "1.2.3"
+export script_version     = "1.2.4"
 export script_namespace   = "kite.ZagreoGlyphs"
 
 ConfigFile = "kite-zagreo-glyphs.json"
@@ -335,8 +335,8 @@ MorphStepCount = 4
 HotkeyMenuRoot = ": Kite Hotkeys :"
 HotkeyMenuScript = script_name
 WindowW = 8
-PickerHelpH = 2
-OptionHelpH = 2
+PickerHelpH = 6
+OptionHelpH = 6
 
 finiteNumber = Core.finiteNumber
 trim = LineOps.trim
