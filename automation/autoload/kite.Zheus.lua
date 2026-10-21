@@ -1,7 +1,7 @@
 script_name        = "Zheus Colormanager"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.7.3"
+script_version     = "4.7.4"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -23,7 +23,7 @@ local depRec = DependencyControl{
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         {"kite.Color", version = "1.2.2"},
-        {"kite.UI", version = "1.5.1"},
+        {"kite.UI", version = "1.5.2"},
         {"kite.AssContext", version = "1.1.3"},
         {"kite.Settings", version = "1.0.1"},
     },
@@ -323,7 +323,7 @@ function ColorDialogs.editMapping(title,colors,pending,options)
     end
 end
 
-local ColorRelay = { name = "ColorRelay", menu_name = "ColorRelay" }
+local ColorRelay = { name = "Transiciones de color", menu_name = "Transiciones de color" }
 
 function ColorRelay.showMessage(title, msg)
     return KiteUI.message(msg, {title=title or ColorRelay.name, button="Aceptar", width=36, height=UI.textHeight(msg,14)})
@@ -3366,12 +3366,12 @@ Gestores:
 
 Cambios:
 - De colores: reemplaza colores detectados en los canales marcados.
-- De colores en secuencia: abre ColorRelay para cambios por fotograma.
+- De colores en secuencia: abre Transiciones de color para cambios por fotograma.
 
 Botones:
-- Gestor ejecuta el selector Gestores.
-- Cambio ejecuta el selector Cambios.
-- VSF aplica los degradados \1vc, \2vc, \3vc y \4vc del panel.
+- Abrir gestor ejecuta el selector Gestores.
+- Cambiar colores ejecuta el selector Cambios.
+- 4 esquinas aplica los degradados \1vc, \2vc, \3vc y \4vc del panel.
 - Daltonismo abre auditoría y remapeo accesible.
 
 Comportamiento
@@ -3649,7 +3649,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
 
         if mode == "DASH" then
             ui = buildVSFGradientPanel(cfg, getAuditText(), status)
-            btns = { "Gestor", "Cambio", "VSF", "Daltonismo", "Ayuda", "Cancelar" }
+            btns = { "Abrir gestor", "Cambiar colores", "4 esquinas", "Daltonismo", "Ayuda", "Cancelar" }
         elseif mode == "ARCH" then
             ui, shown = ManagerDialog.build(page, uiActorsPerPage, actors, data, nil, nil)
             local y = 3 + (shown or 0)
@@ -3659,7 +3659,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                 table.insert(ui, { class = "label", label = status, x = 0, y = y + 1, width = 5 })
                 y = y + 1
             end
-            table.insert(ui,{class="dropdown",name="more",items={"VSF","Lista","Conflictos","Exportar","Importar"},value="Lista",x=0,y=y+1,width=5})
+            table.insert(ui,{class="dropdown",name="more",items={"4 esquinas","Lista","Conflictos","Exportar","Importar"},value="Lista",x=0,y=y+1,width=5})
             btns = #actors>uiActorsPerPage and { "Aplicar", "←", "→", "Abrir", "Volver", "Cancelar" }
                 or { "Aplicar", "Abrir", "Volver", "Cancelar" }
         elseif mode == "ARCHVSF" then
@@ -3703,7 +3703,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
             ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, "vsf", displayedVSFTag)
             vsfTag = res.vctag
             status = "Editando \\" .. vsfTag .. "."
-        elseif btn == "Gestor" then
+        elseif btn == "Abrir gestor" then
             if res.gestores == "Actores" then
                 local applied, actorAction = ejecutarGestorDeActores(subs, sel)
                 if applied then
@@ -3728,7 +3728,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
         elseif btn == "Conflictos" then
             ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             mode = "CONF"
-        elseif btn == "VSF" and mode == "ARCH" then
+        elseif btn == "4 esquinas" and mode == "ARCH" then
             ManagerDialog.sync(data, actors, res, page, uiActorsPerPage, nil, nil)
             mode = "ARCHVSF"
         elseif btn == "Normal" then
@@ -3812,7 +3812,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                     mode = "ARCHVSF"
                 end
             end
-        elseif btn == "VSF" then
+        elseif btn == "4 esquinas" then
             local n, err = VSFCornerEditor.applyGradient(subs, sel, res)
             if err then
                 status = "Error: " .. err
@@ -3826,7 +3826,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                 cfg = Config.load()
                 status = (n or 0) .. " líneas con etiquetas VSF aplicadas."
             end
-        elseif btn == "Cambio" then
+        elseif btn == "Cambiar colores" then
             if res.cambios == "Por tramos" then
                 return ColorUtil.segments.run(subs, sel)
             elseif res.cambios == "De colores en secuencia" then
@@ -4133,13 +4133,20 @@ local macroEntries = {
     { menuPath,                                   script_description,                    mainController },
 }
 
+require("kite.UI").actions.rename(script_namespace, {
+    [hotkeyMenuPath .. "/Colores"] = hotkeyMenuPath .. "/Colores por actor",
+    [hotkeyMenuPath .. "/VSF"] = hotkeyMenuPath .. "/Colores de 4 esquinas",
+    [hotkeyMenuPath .. "/Actores"] = hotkeyMenuPath .. "/Renombrar o fusionar actores",
+    [hotkeyMenuPath .. "/ColorRelay"] = hotkeyMenuPath .. "/Transiciones de color",
+})
+
 local hotkeyMacroEntries = {
     { "Editor de tramos", "Editar colores por tramos conservando texto y tags", ColorUtil.segments.run },
-    { "Colores",            "Atajo: abrir gestor de color por actor",       openChromaManagerDirect },
-    { "VSF",                "Atajo: abrir gestor de 4 esquinas por actor",  openVSFManagerDirect },
-    { "Actores",            "Atajo: renombrar o fusionar actores",          ejecutarGestorDeActores },
+    { "Colores por actor",            "Atajo: abrir gestor de color por actor",       openChromaManagerDirect },
+    { "Colores de 4 esquinas",                "Atajo: abrir gestor de 4 esquinas por actor",  openVSFManagerDirect },
+    { "Renombrar o fusionar actores",            "Atajo: renombrar o fusionar actores",          ejecutarGestorDeActores },
     { "Cambiar colores",    "Atajo: buscar y cambiar colores",              runColorReplaceDirect },
-    { "ColorRelay",         "Atajo: cambios de color persistentes por \\t",  ColorRelay.run },
+    { "Transiciones de color",         "Atajo: cambios de color persistentes por \\t",  ColorRelay.run },
     { "Daltonismo",                  "Atajo: abrir panel de Daltonismo",            openAccessibilityApply },
     { "Daltonismo/Auditar",          "Atajo: auditar accesibilidad de color",        openAccessibilityAudit },
     { "Daltonismo/Aplicar Daltonismo", "Atajo: aplicar perfil Daltonismo",           macroApply("DALTONICO") },

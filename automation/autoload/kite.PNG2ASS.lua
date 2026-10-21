@@ -1,7 +1,7 @@
 script_name        = "PNG2ASS"
 script_description = "Convert images and SVG files into ASS drawing lines"
 script_author      = "Kiterow"
-script_version     = "1.6.4"
+script_version     = "1.7.1"
 script_namespace   = "kite.PNG2ASS"
 
 local PNG2ASS = {}
@@ -67,6 +67,12 @@ do
                     url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
                     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
                 },
+                {
+                    "ZF.main",
+                    version = "2.3.0",
+                    url = "https://github.com/TypesettingTools/zeref-Aegisub-Scripts",
+                    feed = "https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json",
+                },
             }
         })
     end
@@ -125,6 +131,8 @@ local DEFAULTS = {
     blur = 0,
     color = "style",
     line_warning = 256,
+    svg_precision = 3,
+    svg_arc_degrees = 30,
 }
 
 local MODES = { "auto", "alpha", "white-matte", "dark-matte", "luma", "color" }
@@ -132,6 +140,8 @@ local traceProfiles = { "balanced", "quality" }
 local POSITIONS = { "0,0", "Active pos", "Manual" }
 local COLORS = { "style", "source" }
 local optionLimits = {
+    svg_precision = { min = 0, max = 5, integer = true },
+    svg_arc_degrees = { min = 1, max = 90 },
     threshold = { min = 0, max = 100, integer = true },
     p_scale = { min = 1, max = 6, integer = true },
     line_warning = { min = 1, max = maxSequenceLines, integer = true },
@@ -513,6 +523,8 @@ local pngSettings = KiteUI.settings(script_namespace, script_version, {
         max_chars = DEFAULTS.max_chars,
         max_pixels = DEFAULTS.max_pixels,
         denoise = DEFAULTS.denoise,
+        svg_precision = DEFAULTS.svg_precision,
+        svg_arc_degrees = DEFAULTS.svg_arc_degrees,
     },
 }, {
     { path = configPath(), format = "key_value", target = "package" },
@@ -739,10 +751,14 @@ local function checkPackageMain()
     end
 end
 
-local function createDialog(line, cfg, imageCount, frameCount)
+local function createDialog(line, cfg, imageCount, frameCount, isSvg)
     local px, py = activePos(line.text)
     local saved = normalizeMainOptions(pngSettings:values("main"))
     local defaultPosition = (px and py) and "Active pos" or saved.position
+    if isSvg then
+        defaultPosition = "0,0"
+        saved.color = "source"
+    end
     local countLabel = "Images: " .. tostring(imageCount or 1)
     if frameCount then
         countLabel = countLabel .. " / Frames: " .. tostring(frameCount)
@@ -783,10 +799,19 @@ local function createDialog(line, cfg, imageCount, frameCount)
         python = { class = "edit", name = "python", value = cfg.python, x = 2, y = 7, width = 11, height = 1 },
         count_label = { class = "label", label = countLabel, x = 0, y = 8, width = 15, height = 1 },
     }
+    if isSvg then
+        interface.svg_precision_label = { class = "label", label = "SVG decimals", x = 0, y = 9, width = 3, height = 1 }
+        interface.svg_precision = { class = "intedit", name = "svg_precision", value = saved.svg_precision, min = 0, max = 5, x = 3, y = 9, width = 2, height = 1 }
+        interface.svg_arc_label = { class = "label", label = "Arc degrees", x = 5, y = 9, width = 3, height = 1 }
+        interface.svg_arc_degrees = { class = "floatedit", name = "svg_arc_degrees", value = saved.svg_arc_degrees, min = 1, max = 90, x = 8, y = 9, width = 2, height = 1 }
+        interface.svg_note = { class = "label", label = "SVG keeps its canvas coordinates. Use matching PlayRes. Raster tracing controls do not apply.", x = 0, y = 10, width = 15, height = 2 }
+    end
     local button, result = aegisub.dialog.display(interface, { "Execute", "Cancel" }, { ok = "Execute", close = "Cancel" })
     if button ~= "Execute" then
         aegisub.cancel()
     end
+    result.svg_precision = result.svg_precision or saved.svg_precision
+    result.svg_arc_degrees = result.svg_arc_degrees or saved.svg_arc_degrees
     result = normalizeMainOptions(result)
     if result.color == "source" and result.mode == "auto" then result.mode = "color" end
     result.python = trim(result.python)
@@ -818,6 +843,8 @@ local function conversionArguments(paths, options, posX, posY)
         "--pos-x", tostring(posX),
         "--pos-y", tostring(posY),
         "--blur", tostring(options.blur),
+        "--svg-precision", tostring(options.svg_precision),
+        "--svg-arc-degrees", tostring(options.svg_arc_degrees),
         "--log", paths.log,
         "--result-file", paths.result,
         "--progress-file", paths.progress,
@@ -874,6 +901,9 @@ local function conversionSummary(result, fallbackLines, fallbackChars)
         "Characters: " .. tostring(math.floor(chars)),
     }
     local elapsed = finiteNumber(result.elapsed_seconds)
+    if result.mode == "svg" and result.width and result.height then
+        values[#values + 1] = "SVG canvas: " .. tostring(result.width) .. " x " .. tostring(result.height) .. " (match the subtitle PlayRes)."
+    end
     if elapsed then values[#values + 1] = string.format("Backend time: %.2f s", elapsed) end
     local frames = finiteNumber(result.frames)
     if frames then values[#values + 1] = "Frames: " .. tostring(math.floor(frames)) end
@@ -896,6 +926,123 @@ local function confirmInsertion(result, fallbackLines, fallbackChars)
         { class = "textbox", value = conversionSummary(result, fallbackLines, fallbackChars), x = 0, y = 0, width = 62, height = 14 },
     }, { "Insert", "Cancel" }, { ok = "Insert", close = "Cancel" })
     return button == "Insert"
+end
+
+local ShapeClipper
+
+local function bakeDrawingClip(tags, drawing)
+    local clip = tags:match("\\clip%(([^)]*)%)")
+    if not clip then return tags, drawing, false end
+    local p = assert(tonumber(tags:match("\\p(%d+)")), "Drawing scale is missing.")
+    local x, y = tags:match("\\pos%(([^,]+),([^)]*)%)")
+    x, y = assert(finiteNumber(x)), assert(finiteNumber(y))
+    local clipScale, clipPath = clip:match("^%s*(%d+)%s*,%s*(m%s.+)$")
+    if not clipPath then clipScale, clipPath = 1, clip:match("^%s*(m%s.+)$") end
+    if not clipPath then
+        local coords = {}
+        for value in clip:gmatch("[^,]+") do coords[#coords + 1] = assert(finiteNumber(trim(value)), "Invalid rectangle clip.") end
+        assert(#coords == 4, "Unsupported SVG clip.")
+        clipPath = string.format("m %.6f %.6f l %.6f %.6f %.6f %.6f %.6f %.6f", coords[1], coords[2], coords[3], coords[2], coords[3], coords[4], coords[1], coords[4])
+    end
+
+
+    local drawScale = 2 ^ (p - 1)
+    local screenScale = 2 ^ (tonumber(clipScale) - 1)
+    local subject = AssDrawing.mapCoordinates(drawing, function(a, b) return a * 32 / drawScale, b * 32 / drawScale end, 6)
+    local cutter = AssDrawing.mapCoordinates(clipPath, function(a, b) return (a / screenScale - x) * 32, (b / screenScale - y) * 32 end, 6)
+    ShapeClipper = ShapeClipper or require("ZF.main.2D.clipper").CLIPPER
+
+    local outside = ShapeClipper(subject, cutter, true):clipper("difference", "non_zero"):build()
+    if trim(outside) ~= "" then
+        local clipped = ShapeClipper(subject, cutter, true):clipper("intersection", "non_zero"):build(nil, 1, 6)
+        if trim(clipped) == "" then return tags, nil, true end
+        drawing = AssDrawing.mapCoordinates(clipped, function(a, b) return a * drawScale / 32, b * drawScale / 32 end, 6)
+    end
+    return tags:gsub("\\clip%b()", ""), drawing, true
+end
+
+local function removeStyleDefaults(tags, style)
+    if not style then return tags end
+
+
+    if tags:find("\\t%(") or tags:find("\\r") then return tags end
+    local defaults = {
+        an = style.align, bord = style.outline, shad = style.shadow,
+        fscx = style.scale_x, fscy = style.scale_y, frz = style.angle,
+        frx = 0, fry = 0, fax = 0, fay = 0, pbo = 0, blur = 0, be = 0,
+    }
+    local function hex(value)
+        local digits = type(value) == "string" and value:match("&?[Hh]([%x]+)&?")
+        return digits and tonumber(digits, 16) or nil
+    end
+    for channel = 1, 4 do
+        local color = hex(style["color" .. channel])
+        if color then
+            defaults[channel .. "c"] = color % 16777216
+            defaults[channel .. "a"] = math.floor(color / 16777216) % 256
+        end
+    end
+    local entries, last = {}, {}
+    for name, value in tags:gmatch("\\([1-4]?[a-z]+)([^\\]*)") do
+        if name == "c" then name = "1c" end
+        entries[#entries + 1] = { name = name, value = value }
+        if defaults[name] ~= nil then last[name] = #entries end
+    end
+    local border = last.bord and finiteNumber(trim(entries[last.bord].value)) or style.outline
+    local shadow = last.shad and finiteNumber(trim(entries[last.shad].value)) or style.shadow
+    local noBorder = tonumber(style.borderstyle) == 1 and border == 0 and not tags:find("\\[xy]bord")
+    local noShadow = shadow == 0 and not tags:find("\\[xy]shad")
+    local output = {}
+    for index, entry in ipairs(entries) do
+        local name, value = entry.name, entry.value
+        local isHex = name:match("^[1-4][ac]$")
+        local numeric = isHex and hex(value) or finiteNumber(trim(value))
+        if name == "alpha" then
+            local alpha = hex(value)
+            for channel = 1, 4 do defaults[channel .. "a"] = alpha end
+        end
+        local redundant = defaults[name] ~= nil and numeric ~= nil and math.abs(numeric - defaults[name]) < 0.0000001
+
+
+        local repeated = last[name] and last[name] ~= index and not name:match("^[1-4]a$")
+        local invisible = noBorder and (name == "3a" or name == "3c") or noShadow and (name == "4a" or name == "4c")
+        if not redundant and not repeated and not invisible then output[#output + 1] = "\\" .. name .. value end
+        if not repeated and defaults[name] ~= nil and numeric ~= nil then defaults[name] = numeric end
+    end
+    return table.concat(output)
+end
+
+local function prepareDrawings(subs, groups, source, jobs)
+    local styles, clipped, softClips = {}, 0, false
+    for i = 1, #subs do
+        local line = subs[i]
+        if line.class == "style" then styles[line.name] = line end
+    end
+    for groupIndex, group in ipairs(groups) do
+        local target = jobs and jobs[groupIndex].line or source
+        local prepared = {}
+        for _, text in ipairs(group) do
+            if cancellationRequested() then error(CANCELLED, 0) end
+            local tags, drawing = text:match("^%{([^}]*)%}%s*(.-)%s*%{\\p0%}%s*$")
+            assert(tags and drawing, "Expected a generated ASS drawing.")
+            local oldTags, hadClip = tags
+            tags, drawing, hadClip = bakeDrawingClip(tags, drawing)
+            if hadClip then
+                clipped = clipped + 1
+                for name, value in oldTags:gmatch("\\([a-z]+)([%d%.]+)") do
+                    if (name == "blur" or name == "bord") and tonumber(value) > 0 then softClips = true end
+                end
+            end
+            if drawing then
+                tags = removeStyleDefaults(tags, styles[target.style])
+                local line = "{" .. tags .. "}" .. drawing .. "{\\p0}"
+                assert(validAssShapeLine(line), "Postprocessed ASS drawing is invalid.")
+                prepared[#prepared + 1] = line
+            end
+        end
+        groups[groupIndex] = prepared
+    end
+    return clipped, softClips
 end
 
 local function makeShapeLine(source, assText, startTime, endTime)
@@ -1092,7 +1239,8 @@ function PNG2ASS.Main(subs, sel, activeLine)
             cancelWith("Image count does not match selected frame count.\n\nImages: " .. tostring(#imagePaths) .. "\nFrames: " .. tostring(#frameJobs))
         end
     end
-    local options = createDialog(line, cfg, #imagePaths, frameJobs and #frameJobs or nil)
+    local isSvg = imagePaths[1]:lower():match("%.svg$") ~= nil
+    local options = createDialog(line, cfg, #imagePaths, frameJobs and #frameJobs or nil, isSvg)
     local posX, posY, positionError = resolvePosition(options, line)
     if not posX then cancelWith(positionError) end
     local paths, pathError = allocateTempPaths()
@@ -1117,12 +1265,25 @@ function PNG2ASS.Main(subs, sel, activeLine)
         if message == CANCELLED then aegisub.cancel() end
         if not data or not sequence and #data == 0 then cancelWith(message or "Conversion produced no ASS drawings.") end
         local groups = sequence and data or {data}
+        local _, softClips = prepareDrawings(subs, groups, line, frameJobs)
+        data = sequence and groups or groups[1]
         local totalLines, totalChars = 0, 0
         for _, lines in ipairs(groups) do
             totalLines = totalLines + #lines
             for _, text in ipairs(lines) do totalChars = totalChars + #text end
         end
-        if not confirmInsertion(decodeJsonFile(paths.result), totalLines, totalChars) then aegisub.cancel() end
+        assert(totalChars <= maxSequenceChars, "Clipped drawings exceed the character limit.")
+        if totalLines == 0 then
+            showMessage("The clip removed every drawing. No lines were inserted.")
+            return sel, activeLine
+        end
+        local result = decodeJsonFile(paths.result) or {}
+        result.lines, result.chars = totalLines, totalChars
+        if softClips then
+            result.warnings = result.warnings or {}
+            result.warnings[#result.warnings + 1] = "Clip tags were baked into geometry with Everything Shape. Blur and borders can extend past the cut edge."
+        end
+        if not confirmInsertion(result, totalLines, totalChars) then aegisub.cancel() end
         local inserted, newSel, insertError
         if sequence then inserted, newSel, insertError = pcall(insertSequenceShapes, subs, frameJobs, data)
         else inserted, newSel, insertError = pcall(insertShapes, subs, index, data) end

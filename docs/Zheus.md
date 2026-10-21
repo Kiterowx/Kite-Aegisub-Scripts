@@ -1,4 +1,4 @@
-# Zheus Colormanager 4.7.3
+# Zheus Colormanager 4.7.4
 
 English | [Español](es/Zheus.md) | [Index](../README.md#documentation)
 
@@ -22,11 +22,11 @@ The main command is **Zheus Colormanager**. The other 17 actions are under `: Ki
 | --- | --- |
 | Zheus Colormanager | Selection summary, managers, replacements and four quick gradients. |
 | Editor de tramos | Edit a line's color spans and boundaries. |
-| Colores | Fill, outline and shadow palettes by actor. |
-| VSF | Four corners by actor and channel. |
-| Actores | Rename, merge or clear actors in the selection. |
+| Colores por actor | Fill, outline and shadow palettes by actor. |
+| Colores de 4 esquinas | Four corners by actor and channel. |
+| Renombrar o fusionar actores | Rename, merge or clear actors in the selection. |
 | Cambiar colores | Replace explicit values in selected channels. |
-| ColorRelay | Build palette changes at control frames. |
+| Transiciones de color | Build palette changes at control frames. |
 | Daltonismo | Open analysis, profiles and import/export. |
 | Daltonismo/Auditar | Report without editing subtitles. |
 | Daltonismo/Aplicar Daltonismo | Open with the Daltonismo profile selected. |
@@ -43,7 +43,7 @@ Profile commands open a window before applying. **Cancelar** discards the pendin
 
 ## Actor colors
 
-1. Open **Colores**, or choose **Colores por Actor** and press **Gestor**.
+1. Open **Colores por actor**, or choose **Colores por Actor** and press **Abrir gestor**.
 2. Edit `\c`, `\3c` and `\4c`: fill, outline and shadow. Each page holds eight actors; navigation preserves edits.
 3. Choose **Etiquetas**, **Estilos** or **Limpiar**, then press **Aplicar**.
 
@@ -80,7 +80,7 @@ Pages hold eight replacements and retain edits across navigation. **Aplicar** ap
 
 Short ASS colors are accepted and output is normalized. Higher color digits do not introduce alpha.
 
-## ColorRelay
+## Transiciones de color
 
 Requires video and frame/millisecond conversion. Frame durations use Aegisub timestamps, including variable frame rates.
 
@@ -95,7 +95,7 @@ Replacements persist into later controls. Invalid, repeated or out-of-selection 
 
 A fade crossing a cut keeps its complete color endpoints and relative times in both events, including negative times. It is not restarted from rounded intermediate colors at the cut.
 
-ColorRelay needs uniform solid channels within each line. It supports initial resets and preserves motion, fades and transforms of unrelated properties. Before editing, it rejects later changes in selected channels, VSF gradients in them, transforms of those colors and overlapping fades on one channel. Use the segment editor or prepare uniform lines for these cases.
+Transiciones de color needs uniform solid channels within each line. It supports initial resets and preserves motion, fades and transforms of unrelated properties. Before editing, it rejects later changes in selected channels, VSF gradients in them, transforms of those colors and overlapping fades on one channel. Use the segment editor or prepare uniform lines for these cases.
 
 ## Segment editor
 
@@ -153,3 +153,5 @@ Your settings and custom profiles are saved between sessions. Previous settings 
 - Red in `\c` and green inside `\t` both appear in Cambiar colores. Changing outline only retains the fill animation.
 - A palette of 209 colors uses 27 eight-row pages. Applying includes edits from every page.
 - A fade spanning 100–900 ms crosses a cut at 440 ms. The second event retains `\t(-340,460,...)` and the original color endpoints.
+
+The hotkeys Colores por actor, Colores de 4 esquinas, Renombrar o fusionar actores and Transiciones de color name their actions explicitly. Existing bindings migrate when the script reloads.

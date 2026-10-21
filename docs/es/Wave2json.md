@@ -4,7 +4,7 @@
 
 Wave2json exporta una forma de onda como pirámide JSON: una serie detallada de amplitudes mínimas y máximas, seguida de niveles cada vez menos detallados. Lee PCM y escribe niveles temporales por partes para no mantener todo el audio y sus niveles en memoria.
 
-Se distribuye en `Macros-Lite` y registra tres acciones bajo **Wave2json**. No tiene ventana de configuración. Los atajos se asignan a las acciones; la raíz del menú no es ejecutable.
+Se distribuye en `automation/autoload` y registra tres acciones bajo **Wave2json**. No tiene ventana de configuración. Los atajos se asignan a las acciones; la raíz del menú no es ejecutable.
 
 ## Acciones
 

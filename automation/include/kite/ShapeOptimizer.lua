@@ -1,4 +1,4 @@
-local moduleVersion = "1.3.2"
+local moduleVersion = "1.3.3"
 local ShapeOptimizer = { VERSION = moduleVersion, version = moduleVersion }
 
 local function safeRequire(name)
@@ -647,7 +647,11 @@ parseShapeLine = function(text, style)
   visualTags = visualTags:gsub("\\p%d+", "")
   visualTags = visualTags:gsub("\\1?c&[Hh]%x+&?", "")
   visualTags = visualTags:match("^%s*(.-)%s*$")
-  local residue = tags
+
+
+  local residue = LineOps.mapTagCalls("{" .. tags .. "}", {"fr", "frz", "frx", "fry", "fax", "fay"}, function(call)
+    if call.raw:sub(2, #call.name + 1) == call.name and finiteNumber(call.value) == 0 then return "" end
+  end):sub(2, -2)
   residue = residue:gsub("\\an%d+", "")
   residue = residue:gsub("\\pos%([^)]*%)", "")
   residue = residue:gsub("\\bord[%-%d%.]+", "")
@@ -688,6 +692,9 @@ parseShapeLine = function(text, style)
     return nil, translate("err_invalid_pos")
   end
   style = type(style) == "table" and style or {}
+  if not LineOps.hasTag("{" .. tags .. "}", {"fr", "frz"}, true) and (finiteNumber(style.angle) or 0) ~= 0 then
+    return nil, translate("err_unsupported_tags", "\\frz" .. tostring(style.angle))
+  end
   local colorHex = lastMatch(tags, "\\1?c&[Hh](%x+)&?")
   local colorSource = colorHex and ("&H" .. tostring(colorHex) .. "&")
     or style.color1 or style.primary_color or style.primaryColor

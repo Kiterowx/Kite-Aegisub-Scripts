@@ -1,4 +1,4 @@
-# Allure 1.2.4
+# Allure 1.2.5
 
 [English](../Allure.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -22,7 +22,7 @@ La biblioteca se guarda junto al subtítulo: `Makeup Library.index.json` contien
 1. Guarda el ASS para que Allure pueda localizar la biblioteca.
 2. Selecciona las capas de origen y activa la línea que servirá de referencia.
 3. Escribe un nombre, elige **Save style**, **Save group** o **Save both**, y pulsa **Makeup**.
-4. La ventana actualiza la biblioteca. Ciérrala, selecciona el texto de destino, vuelve a abrir Allure y elige el registro.
+4. Tras guardar correctamente, acepta el aviso de confirmación y Allure se cierra. Selecciona el texto de destino, vuelve a abrir Allure y elige el registro. Si falla el guardado o rechazas reemplazar un preset existente, el panel permanece abierto.
 5. Selecciona **Insert preset**, elige el modo de inserción y pulsa **Makeup**. La salida nueva queda seleccionada.
 
 La captura adaptable agrupa textos visibles idénticos en espacios reutilizables. **Create from targets** necesita un destino por espacio y genera las capas guardadas para cada grupo. Si hay varios espacios, cada grupo de destinos debe ser contiguo y tener el número de líneas requerido. **Replace selected layers** sustituye grupos contiguos completos con tantas filas como el preajuste. Se admite cualquier cantidad de grupos completos.
@@ -51,7 +51,7 @@ La escala de un clip vectorial debe ser un entero positivo cuyo factor sea finit
 
 ## Ventanas, preferencias y recuperación
 
-Config permite elegir idioma, pasos de atajos, modo de giro y pivote. Los valores inválidos mantienen abierta la ventana y conservan el resto de las ediciones. Help, Config y las operaciones sobre la biblioteca regresan al borrador principal. Cerrar cancela la operación actual. Se admiten pasos positivos pequeños.
+Config permite elegir idioma, pasos de atajos, modo de giro y pivote. Los valores inválidos mantienen abierta la ventana y conservan el resto de las ediciones. Help, Config y eliminar un preset regresan al borrador principal. Guardar un preset correctamente cierra Allure tras confirmar el aviso; un fallo o reemplazo cancelado conserva el panel abierto. Cerrar cancela la operación actual. Se admiten pasos positivos pequeños.
 
 Los registros y el índice se escriben mediante sustitución atómica. Al reemplazar un preajuste, primero se crea el nuevo registro y después se actualiza el índice; si este falla, el anterior sigue disponible. **Save both** guarda dos registros independientes. Al trasladar una biblioteca, copia juntos el índice y la carpeta de registros.
 

@@ -1,4 +1,4 @@
-# Zagreo Glyphs 1.2.3
+# Zagreo Glyphs 1.2.4
 
 English | [Español](es/ZagreoGlyphs.md) | [Index](../README.md#documentation)
 

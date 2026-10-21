@@ -1,8 +1,8 @@
-# AutoMask 2.5.5
+# AutoMask 2.5.6
 
 [English](../AutoMask.md) | Español | [Índice](../../README.es.md#documentación)
 
-AutoMask captura el fotograma actual y envía una región por línea seleccionada a `kite-automask` 0.4.2. Permite cubrir letras o defectos de una superficie y obtener su contorno como dibujo o clip ASS.
+AutoMask captura el fotograma actual y envía una región por línea seleccionada a `kite-automask` 0.4.3. Permite cubrir letras o defectos de una superficie y obtener su contorno como dibujo o clip ASS.
 
 ## Operaciones
 
@@ -49,6 +49,8 @@ El panel lateral permite desplazamiento en pantallas pequeñas. Durante el traba
 | Rueda / arrastre con botón central | Zoom / desplazamiento. |
 
 ## Salidas
+
+Los dibujos de Fill y Shape incluyen `\fscx100\fscy100` para conservar sus proporciones independientemente de las escalas del estilo de destino. Estas escalas neutras también se admiten al reutilizar el dibujo como guía.
 
 | Salida | Cambio en el subtítulo |
 | --- | --- |

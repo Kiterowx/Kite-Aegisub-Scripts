@@ -1,7 +1,7 @@
 export script_name = "Selesub"
 export script_description = "Filters, imports, exports, and manages subtitle events"
 export script_author = "Kiterow"
-export script_version = "2.1.8"
+export script_version = "2.1.9"
 export script_namespace = "kite.Selesub"
 
 HotkeyMenuRoot = ": Kite Hotkeys :"
@@ -910,7 +910,7 @@ HotkeyFields = {
 activeValue = (subs, active, field) ->
   line = active and subs[active] or nil
   return nil unless isEvent line
-  tostring(line[field.key] or "")
+  if field.value then field.value(line) else tostring(line[field.key] or "")
 
 selectCurrentValue = (field) ->
   (subs, selection, active) ->
@@ -938,13 +938,13 @@ blockBounds = (subs, active, field) ->
   index = active - 1
   while index >= 1
     line = subs[index]
-    break unless isEvent(line) and tostring(line[field.key] or "") == value
+    break unless isEvent(line) and activeValue(subs, index, field) == value
     first = index
     index -= 1
   index = active + 1
   while index <= #subs
     line = subs[index]
-    break unless isEvent(line) and tostring(line[field.key] or "") == value
+    break unless isEvent(line) and activeValue(subs, index, field) == value
     last = index
     index += 1
   first, last
@@ -976,6 +976,7 @@ registerMacro = (name, description, process, validate = canRun) ->
   depctrl\registerMacro name, description, process, validate, nil, false
 
 registerMacro script_name, script_description, subtitleSelector
+registerMacro hotkeyPath("Text", "Same Text Neighbors"), "Selects adjacent rows with identical text ignoring ASS tags.", blockAction({value: (line) -> table.concat [section.text for section in *LineOps.scanSections(line.text) when section.type == "text" or section.type == "drawing"]}, "select")
 for field in *HotkeyFields
   section = field.label
   description = field.label\lower!

@@ -4,7 +4,7 @@ English | [Español](es/Wave2json.md) | [Index](../README.md#documentation)
 
 Wave2json exports the audio waveform as a JSON pyramid: a detailed series of minimum/maximum amplitudes plus progressively coarser levels. It reads PCM and writes temporary level files incrementally, so it does not hold the complete audio or every waveform level in memory.
 
-The script is distributed from `Macros-Lite` and registers three direct actions under **Wave2json**. There is no configuration dialog. Assign hotkeys to the individual actions listed below; the menu root is not an executable action.
+The script is distributed from `automation/autoload` and registers three direct actions under **Wave2json**. There is no configuration dialog. Assign hotkeys to the individual actions listed below; the menu root is not an executable action.
 
 ## Actions
 

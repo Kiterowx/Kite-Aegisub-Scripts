@@ -1,8 +1,8 @@
-# Chrono Suite 1.5.3
+# Chrono Suite 1.6.1
 
 [English](../ChronoSuite.md) | Español | [Índice](../../README.es.md#documentación)
 
-Chrono Suite reúne herramientas de sincronización, revisión, limpieza, importación y edición. Abre **Chrono Suite** para usar el panel, o **Chrono Suite/Config** y **Chrono Suite/Help**. Bajo **: Kite Hotkeys :/Chrono Suite/** hay 83 acciones: Auto Timing, Extract KF, Scream Detector, Audit Markers, 74 utilidades y cinco herramientas adicionales.
+Chrono Suite reúne herramientas de sincronización, revisión, limpieza, importación y edición. Abre **Chrono Suite** para usar el panel, o **Chrono Suite/Config** y **Chrono Suite/Help**. Bajo **: Kite Hotkeys :/Chrono Suite/** están Auto Timing, Extract KF, Scream Detector, Audit Markers, las utilidades y las herramientas adicionales.
 
 La interfaz admite inglés, español y portugués. Los identificadores de las acciones permanecen en inglés para conservar atajos. Esta guía mantiene los nombres ingleses como referencia.
 
@@ -13,7 +13,7 @@ La interfaz admite inglés, español y portugués. Los identificadores de las ac
 - Para editar texto, activa la utilidad deseada. Las secciones no vacías se ejecutan en el orden del panel; deja vacías las demás.
 - Para preparar créditos y propiedades, abre Properties and Cleanup. Su limpieza opcional afecta al archivo completo.
 
-La mayoría de las utilidades de texto excluyen comentarios y dibujos. Las operaciones de tiempo y etiquetas pueden incluir dibujos; ordenación, plegado y gestión de comentarios tienen su propio alcance. Borrado y división actualizan la selección. Count CPS, Time Picker, Copy Fold y AE Export no editan el texto. Usa Deshacer para revisar cambios, especialmente si combinas utilidades.
+La mayoría de las utilidades de texto excluyen comentarios y dibujos. Las operaciones de tiempo y etiquetas pueden incluir dibujos; ordenación, plegado y gestión de comentarios tienen su propio alcance. Borrado y división actualizan la selección. Count CPS, Select Time Range, Copy Fold y After Effects Keyframes no editan el texto. Usa Deshacer para revisar cambios, especialmente si combinas utilidades.
 
 ## Panel principal
 
@@ -115,7 +115,7 @@ Cada sección tiene un desplegable independiente. Dejarlo vacío omite la secci�
 | Normalize Dashes | Normaliza guiones y rayas. |
 | Trim Trailing Spaces | Elimina espacios finales. |
 | Remove Duplicate Letters | Elimina letras consecutivas repetidas. |
-| Add Stutter / Stutter Manager | Añade tartamudeo / abre su gestor. |
+| Add Stutter / Normalize Stutter | Añade tartamudeo / normaliza iniciales y aplica [TT]. |
 | Add Ah Prefix | Añade «ah» al inicio. |
 
 ### Tags / Comments
@@ -127,9 +127,9 @@ Cada sección tiene un desplegable independiente. Dejarlo vacío omite la secci�
 | Reinsert Tags | Devuelve etiquetas de Effect al texto y cambia punto y coma por coma dentro de los bloques. |
 | Remove Tags | Retira bloques de etiquetas. |
 | Merge Tags | Une bloques de etiquetas adyacentes: `{\an5}{\blur2}` pasa a `{\an5\blur2}`. Conserva comentarios y bloques separados. |
-| Remove Comments | Retira comentarios internos. |
-| Actor Parser | Extrae información del actor del texto. |
-| Swap Comment | Alterna el estado de comentario. |
+| Remove Inline Comments | Retira comentarios internos. |
+| Extract Actors and Split | Extrae información del actor del texto. |
+| Swap Text and Comments | Intercambia texto visible y comentarios internos; conserva los tags. |
 | Delete Comment Lines | Elimina filas comentadas. |
 | Comments to Top / Bottom | Lleva comentarios al inicio / final de la selección. |
 | Effects to Top | Lleva arriba las filas con Effect, conservando su orden relativo. |
@@ -138,23 +138,23 @@ Cada sección tiene un desplegable independiente. Dejarlo vacío omite la secci�
 
 | Acción | Resultado |
 | --- | --- |
+| Smart Break | Equilibra ancho visual y pausas. |
+| Smart Split | Divide frases con la onda de audio. |
 | Bidirectional Snapping | Ajusta inicio y fin al fotograma clave más próximo dentro del alcance configurado. |
 | Remove Honorifics | Encierra honoríficos japoneses en `{…}` para ocultarlos sin borrarlos de la fuente. |
 | Caption Clarifier | Normaliza corchetes e indicaciones. |
 | Complete Sentences | Une una oración incompleta con la siguiente si empieza en minúscula. Los solapes o continuaciones distintas se marcan `[POSSIBLE-JOIN]`. |
 | Erase Blank Lines | Elimina líneas vacías. |
-| Frame Effect | Escribe el fotograma inicial en Effect. |
+| Current Frame to Effect | Añade el fotograma actual del vídeo a Effect. |
 | Copy Fold | Muestra filas ASS del pliegue de la primera línea seleccionada para copiarlas y selecciona ese pliegue. |
 
 ### Split / Join
 
 | Acción | Resultado |
 | --- | --- |
-| Smart Break | Inserta `\N` si el ancho renderizado supera el disponible. |
 | Split by Sentence / Comma | Divide por oración / coma. |
 | Pivot `\N` | Desplaza el salto. |
 | Remove `\N` | Retira los saltos y consolida espacios. |
-| Join Lines | Une textos en orden de filas; abarca inicio mínimo y fin máximo y conserva metadatos de la primera fila. |
 | Join Same Text | Une filas seleccionadas adyacentes con texto idéntico y estilo compatible. |
 | Join Overlaps | Une grupos superpuestos, abarca sus límites y separa textos con `\N`. |
 | Join Overlap Sentences | Une grupos superpuestos como oración en orden de filas; conserva la primera como base y amplía el final. |
@@ -165,13 +165,13 @@ Cada sección tiene un desplegable independiente. Dejarlo vacío omite la secci�
 | Acción | Resultado |
 | --- | --- |
 | Copy Times | Copia tiempos de una línea a otras. |
-| Time Picker | Selecciona por intervalo. |
-| Sort by Length / CPS | Ordena por longitud visible / velocidad de lectura. |
+| Select Time Range | Selecciona por intervalo. |
+| Sort by Text Length / CPS | Ordena por longitud visible / velocidad de lectura. |
 | Sort Odd Even | Ordena según el valor numérico par o impar de Effect. |
 | Count CPS | Muestra CPS promedio. |
 | Import Text | Importa texto externo para sustitución controlada. |
 | Kite Timing | Aplica márgenes adaptables, encadenado y protección de bordes con los valores de Config. |
-| Shift First | Desplaza la selección para alinear la primera línea con el inicio de la segunda. |
+| Align to First Start | Desplaza desde la segunda fila para alinear su inicio al de la primera, conservando las distancias relativas. |
 | Start Snap Back / Forward | Lleva el inicio al fotograma clave anterior / siguiente. |
 | End Snap Back / Forward | Lleva el fin al fotograma clave anterior / siguiente. |
 | Add Lead-In Left / Right | Mueve el inicio atrás / adelante según el paso configurado. Si la anterior está encadenada a hueco cero, mueve también su fin. Con hueco positivo, el desplazamiento hacia atrás se detiene al tocarla. |
@@ -190,17 +190,17 @@ Usa el texto pegado en su cuadro. Vacío omite la sección.
 | --- | --- |
 | Import Effects / Import Text | Copia Effect / texto visible por solape temporal. |
 | Import Actor | Copia el actor de la mejor coincidencia temporal. |
-| Import Tags | Copia etiquetas iniciales y sustituye las equivalentes del destino. Ignora las posteriores al texto visible. |
+| Import Tags | Reemplaza tags iniciales desde una sola fuente con máximo solapamiento positivo; empates por orden pegado. |
 | Song Sync | Duplica o sincroniza grupos usando una línea Comment de capa 50 como referencia. Añade el Effect seleccionado a las líneas importadas conservando sus Effects de origen. |
 | Same Layers | Exige la misma capa para las cuatro importaciones anteriores. |
 | Import as comments | Encierra el texto importado en `{…}`. |
 
 ## Extra Tools
 
-- **AE Export**: exporta movimiento compatible con After Effects.
+- **After Effects Keyframes**: exporta movimiento compatible con After Effects.
 - **Text Replacer**: sustituye texto visible conservando etiquetas.
 - **mpv QC**: lee `[hh:mm:ss.ms] [Type] Observation {suggested text}`. Añade `[QC: …]` a Effect y la sugerencia como comentario en el texto. La tolerancia se expresa en milisegundos.
-- **Remover Assistant**: elimina los signos, espacios, comentarios y etiquetas elegidos; no los activa si faltan.
+- **Text and Tag Cleanup**: elimina los signos, espacios, comentarios y etiquetas elegidos; no los activa si faltan.
 - **Properties and Cleanup**: edita título y créditos, con limpieza opcional de todo el archivo.
 
 ## Auto Timing
@@ -267,7 +267,7 @@ Edita Title, Original Script, Original Translation, Original Editing, Original T
 
 ## Ejemplos y límites
 
-- Join Lines con filas a 4–5 s y 1–2 s produce un evento a 1–5 s y mantiene el texto en orden de filas. Conserva etiquetas iniciales y metadatos de la primera, no todo el formato intermedio de las demás.
+- Line Merge and Cleanup con filas a 4–5 s y 1–2 s produce un evento a 1–5 s y mantiene el texto en orden de filas. Conserva etiquetas iniciales y metadatos de la primera, no todo el formato intermedio de las demás.
 - Auto Timing comprueba los posibles solapes posteriores, aunque impliquen más de tres filas. Las líneas originalmente superpuestas mantienen su tratamiento específico.
 - Un JSON de forma de onda necesita `pointMs` positivo y finito y pares enteros mínimo/máximo en `peaks`. Se rechazan valores inválidos y pares incompletos. `pointMs` admite notación científica completa.
 - FFmpeg y SCXvid necesitan archivos legibles y rutas configuradas. Su instalación es independiente de los módulos Lua.
@@ -277,3 +277,23 @@ Edita Title, Original Script, Original Translation, Original Editing, Original T
 Se guardan las preferencias de cada herramienta.
 
 [Discord de soporte](https://discord.gg/Egq8us4xZC).
+
+## Unión, división y desplazamiento
+
+**Extra Tools → Line Merge and Cleanup** sustituye a ChronoJoin. Tiene botones directos y una explicación fija:
+
+- **Join:** combina texto visible, conserva los tags iniciales de la primera fila y baja la inicial tras coma o puntos suspensivos.
+- **Keep Second:** exige dos filas y copia el segundo texto completo.
+- **Keep Last:** copia el texto completo de la última fila seleccionada.
+- **No Inner ...:** une y retira los puntos suspensivos internos.
+- **One Phrase:** cambia puntos entre oraciones por comas y baja la inicial siguiente: `Hola. ¿Cómo estás?` → `Hola, ¿cómo estás?`. También acepta una sola fila. Conserva abreviaturas comunes, decimales, siglas y puntos suspensivos; revisa los nombres propios.
+
+Todos conservan los demás campos de la primera fila y abarcan el inicio mínimo y el final máximo. El orden del texto es el orden de filas.
+
+**Smart → Smart Split** sustituye a ChronoSplit. Comparte la lectura de Wave2json con Auto Timing, elige el nivel más fino y respeta el desplazamiento de exportaciones parciales. **Continuo** conserva los extremos y enlaza frases; **Raw** recorta cada frase a la actividad asignada. Los marcadores `[CS-*]` en Effect señalan estimaciones o dudas. Omite dibujos, karaoke y texto con animación temporal. **Smart Break** también está en Smart y equilibra ancho visual y pausas, respetando los saltos existentes.
+
+**Karaoke → Shift Following Lines** sustituye a ChronoK. Desde la fila activa desplaza todas las filas de diálogo posteriores, incluidos comentarios, para dejar **100 ms** antes de la primera. Conserva duraciones y distancias relativas, sigue el orden de la lista y rechaza toda la operación si genera tiempos negativos.
+
+**Import Tags** elige una única fuente por el mayor solapamiento positivo. En empate gana la primera en el texto pegado; las líneas que solo se tocan no coinciden. Reemplaza todos los tags iniciales del destino con el bloque de esa fuente; una fuente ganadora sin tags los elimina. Conserva comentarios, texto y tags internos del destino. Sin solapamiento no modifica nada. No combina fuentes ni acumula tags al repetir la importación.
+
+**Normalize Stutter** normaliza las iniciales repetidas y aplica tartamudeo a las líneas con `[TT]`; es una acción directa.

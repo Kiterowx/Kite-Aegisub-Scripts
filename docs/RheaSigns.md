@@ -1,4 +1,4 @@
-# Rhea Signs 2.1.4
+# Rhea Signs 2.2.1
 
 English | [Español](es/RheaSigns.md) | [Index](../README.md#documentation)
 
@@ -11,18 +11,18 @@ Main menu: **Rhea Signs**. The dedicated commands are registered under `: Kite H
 | Command | Purpose |
 | --- | --- |
 | Rhea Signs | Open the main panel and combine operations |
-| TagOps | Copy, retain, resize, transform or align tags |
-| Fast Signs | Build a background, glow and text stack |
+| Tag Editor | Copy, retain, resize, transform or align tags |
+| Sign Builder | Build a background, glow and text stack |
 | Signs Editor | Replace repeated text and regenerate marked gradients |
-| Shapes/Unify Positions | Share a drawing pivot while preserving placement |
+| Shapes/Unify Drawing Pivots | Share a drawing pivot while preserving placement |
 | Shapes/Place on Perimeter | Repeat drawing units around closed contours |
 | Shapes/Shape Color Optimizer | Merge compatible colors or reduce a gradient |
 | Tools/Style to Tags | Bake selected style properties into override tags |
 | Font and Style Manager | Inspect fonts, replace fonts, edit or clone styles |
-| Fast Fades | Choose a frame fade or continuous cleanup |
-| Fast Fades/In | Set fade-in duration using the active video frame |
-| Fast Fades/Out | Set fade-out duration using the active video frame |
-| Fast Fades/Clean | Remove internal fades between continuous groups |
+| Frame Fades and Cleanup | Choose a frame fade or continuous cleanup |
+| Frame Fades and Cleanup/In | Set fade-in duration using the active video frame |
+| Frame Fades and Cleanup/Out | Set fade-out duration using the active video frame |
+| Frame Fades and Cleanup/Clean | Remove internal fades between continuous groups |
 | Shuffle Line Text | Shuffle text while retaining event properties |
 
 ## Main panel
@@ -37,7 +37,7 @@ The panel has **Masks**, **Perspective**, **Shapes**, **Sign** and **Toolbox** s
 
 Generated selections feed the next operation. A perspective operation that cannot complete stops the chain. Each modifying operation has its own cancellation/rollback boundary; an error in a later operation does not intentionally undo a previously completed operation.
 
-The panel also opens Signs Editor, Fast Signs, TagOps, configuration and help. Closing a child dialog returns to the main panel where that workflow supports it. Settings and the current dialog draft survive those transitions. A direct command opens its own workflow without requiring the main panel.
+The panel also opens Signs Editor, Sign Builder, Tag Editor, configuration and help. Closing a child dialog returns to the main panel where that workflow supports it. Settings and the current dialog draft survive those transitions. A direct command opens its own workflow without requiring the main panel.
 
 ## Signs Editor
 
@@ -60,7 +60,7 @@ When regeneration is enabled, marked groups can be regenerated even if their vis
 
 Example: replacing three styled text sections `A{\b1}B{\i1}C` with `XY` assigns `X`, an empty middle section and `Y`. It preserves the formatting boundaries instead of moving both characters into the final sections.
 
-## TagOps
+## Tag Editor
 
 ### Copy tags
 
@@ -188,7 +188,7 @@ Plane metadata accepts signed decimal/exponent numbers and requires exactly four
 
 ## Shapes
 
-### Unify Positions
+### Unify Drawing Pivots
 
 Select at least two static drawings. The active selected event supplies the pivot; otherwise the helper chooses its reference from the selection. It rewrites positions and compensates local drawing coordinates to preserve placement.
 
@@ -212,7 +212,7 @@ Uses `kite.ShapeOptimizer` for compatible static drawings. Modes: Auto, Similar 
 
 The summary reports the proposed reduction. When enabled, confirmation occurs before applying it. If the shapes are incompatible or no acceptable reduction exists, the original events remain unchanged.
 
-## Fast Signs
+## Sign Builder
 
 Groups overlapping non-comment events, lays their boxes side by side near the configured top offset and generates three layers per source:
 
@@ -248,7 +248,7 @@ An invalid or incomplete form reopens with its draft intact. Color and clone for
 
 **Style to Tags** converts chosen style properties through `AssContext.styleBake`. The dialog supports property selection, protection of existing families, zero omission and reset expansion. Explicit alignment retains its first-tag priority; resets do not introduce a new line alignment. Active resets resolve their actual styles, while comments and nested resets remain intact. The legacy Taggerize entry calls this integrated tool.
 
-**Fast Fades/In** sets the incoming duration to `current frame time − start`. **Out** sets the outgoing duration to `end − current frame time`. The frame must be inside every selected non-comment event. The other component is preserved. Invalid fade data aborts before applying the batch.
+**Frame Fades and Cleanup/In** sets the incoming duration to `current frame time − start`. **Out** sets the outgoing duration to `end − current frame time`. The frame must be inside every selected non-comment event. The other component is preserved. Invalid fade data aborts before applying the batch.
 
 **Continuous Fade Cleanup** groups matching event intervals and cleans internal boundaries of continuous groups, retaining external fades. It requires more than one timing group. **Shuffle Line Text** shuffles only text among selected dialogue events; timing and other event fields remain attached to their rows.
 
@@ -257,3 +257,11 @@ An invalid or incomplete form reopens with its draft intact. Color and clone for
 Your settings are saved between sessions. Previous settings are imported automatically.
 
 Public menu paths, action names and existing helper aliases remain available. Shared dependencies handle ASS context, line transactions, drawing validation/mapping, colors, shape optimization and event operations. Rhea does not require the Hotkeys macro to run.
+
+## Split at Visual Changes and Simplify Drawing
+
+**Tools → Split at Visual Changes** absorbs the standalone script. Select one line, load video and choose a rectangular region; a static rectangular clip can guide it. Set color difference, global percentage and block percentage, then review runs before generating. **Conservar animación** retimes animation tags; **Congelar por tramo** samples the first frame of each run. It can retain a commented original and remove the guide clip. Karaoke and unsupported temporal effects are rejected before writing.
+
+**Shapes → Simplify Drawing** removes points on straight paths and converts nearly straight cubic Béziers to line segments. Default tolerance is **0.05 drawing units at p1**, before scale or perspective; **0** only removes collinear geometry. Original points and controls bound error per pass. Extrema, corners, backtracking, separate contours and detailed curves are retained. B-splines remain unchanged. Only selected drawing sections change; tags, text and metadata are preserved. Positive tolerance permits small geometric differences that scaling may magnify. Edge antialiasing can vary slightly even at zero tolerance.
+
+**Tools → Remove Redundant Zero Tags** removes only visually redundant zero tags, respecting styles, resets and animations.

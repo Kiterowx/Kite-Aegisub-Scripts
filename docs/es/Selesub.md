@@ -1,4 +1,4 @@
-# Selesub 2.1.8
+# Selesub 2.1.9
 
 [English](../Selesub.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -106,3 +106,7 @@ Tras Run correcto se guardan alcance, acción, campo, operador y casillas. No se
 La búsqueda y las ediciones permiten cancelar. Comentar, borrar e importar usan transacciones; exportar usa escritura atómica. No hay un máximo fijo de eventos ni de tamaño de importación.
 
 Instala `myaa.ASSParser` y sigue los pasos de [instalación](../../README.es.md#instalación).
+
+## Vecinas con el mismo texto
+
+El atajo **`: Kite Hotkeys :/Selesub/Text/Same Text Neighbors`** selecciona el bloque contiguo alrededor de la fila activa. Ignora bloques ASS, distingue mayúsculas, espacios y saltos escritos, e incluye filas comentadas si coinciden. Se detiene en la primera fila distinta o que no sea un evento de diálogo. Conserva la fila activa y no edita líneas.

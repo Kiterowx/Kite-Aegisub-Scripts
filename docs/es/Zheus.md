@@ -1,4 +1,4 @@
-# Zheus Colormanager 4.7.3
+# Zheus Colormanager 4.7.4
 
 [English](../Zheus.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -22,11 +22,11 @@ El menú principal es **Zheus Colormanager**. Los otros 17 accesos están bajo `
 | --- | --- |
 | Zheus Colormanager | Panel con resumen de selección, gestores, cambios y cuatro degradados rápidos. |
 | Editor de tramos | Edita fronteras y colores de los tramos de una línea. |
-| Colores | Abre la paleta de relleno, borde y sombra por actor. |
-| VSF | Abre las cuatro esquinas por actor y canal. |
-| Actores | Renombra, fusiona o vacía actores de la selección. |
+| Colores por actor | Abre la paleta de relleno, borde y sombra por actor. |
+| Colores de 4 esquinas | Abre las cuatro esquinas por actor y canal. |
+| Renombrar o fusionar actores | Renombra, fusiona o vacía actores de la selección. |
 | Cambiar colores | Sustituye valores explícitos en los canales elegidos. |
-| ColorRelay | Construye cambios de paleta en fotogramas de control. |
+| Transiciones de color | Construye cambios de paleta en fotogramas de control. |
 | Daltonismo | Abre el panel de auditoría, perfiles e importación/exportación. |
 | Daltonismo/Auditar | Muestra el informe sin modificar subtítulos. |
 | Daltonismo/Aplicar Daltonismo | Preselecciona el perfil Daltonismo. |
@@ -43,7 +43,7 @@ Los accesos de perfil abren una ventana antes de aplicar. **Cancelar** descarta 
 
 ## Colores por actor
 
-1. Abre **Colores** o elige **Colores por Actor** en el panel y pulsa **Gestor**.
+1. Abre **Colores por actor** o elige **Colores por Actor** en el panel y pulsa **Abrir gestor**.
 2. Edita `\c`, `\3c` y `\4c`: relleno, borde y sombra. Hay ocho actores por página; las flechas conservan lo editado.
 3. Elige **Etiquetas**, **Estilos** o **Limpiar** y pulsa **Aplicar**.
 
@@ -74,15 +74,15 @@ El panel principal permite activar varios canales y aplicarlos juntos. La opció
 
 ## Cambiar colores
 
-Elige los canales que participarán y pulsa **Actualizar** cuando cambies el filtro. Se enumeran los colores explícitos de esos canales, incluidos los destinos de `\t` y las esquinas VSF. Los colores heredados que no están escritos como etiquetas se gestionan desde **Colores** o desde los estilos.
+Elige los canales que participarán y pulsa **Actualizar** cuando cambies el filtro. Se enumeran los colores explícitos de esos canales, incluidos los destinos de `\t` y las esquinas VSF. Los colores heredados que no están escritos como etiquetas se gestionan desde **Colores por actor** o desde los estilos.
 
 Cada página muestra hasta ocho sustituciones. Los cambios de páginas anteriores permanecen en el borrador. **Aplicar** realiza el mapa completo de sustituciones una sola vez: sustituir rojo por azul y azul por verde no vuelve a transformar en verde el rojo recién sustituido. Los canales desmarcados conservan sus valores.
 
 Se aceptan colores ASS cortos al leer etiquetas y se emiten colores normalizados. Las sustituciones no añaden alfa derivada de los dígitos superiores de un color.
 
-## ColorRelay
+## Transiciones de color
 
-ColorRelay necesita vídeo y conversiones de fotograma/milisegundo disponibles. Utiliza las marcas temporales de Aegisub; no presupone una tasa fija cuando se pide una duración en fotogramas.
+Transiciones de color necesita vídeo y conversiones de fotograma/milisegundo disponibles. Utiliza las marcas temporales de Aegisub; no presupone una tasa fija cuando se pide una duración en fotogramas.
 
 1. Selecciona las líneas que forman la secuencia.
 2. Introduce fotogramas de control y un fundido predeterminado. Puedes escribir `120f, 150f`, `F120`, `120` o una línea como `120f fundido 6f`.
@@ -95,7 +95,7 @@ Las sustituciones son persistentes: los controles anteriores se tienen en cuenta
 
 Si un fundido cruza el corte entre dos líneas, ambas conservan sus extremos completos y sus tiempos relativos, incluso negativos. No se reconstruye un segundo fundido a partir de colores redondeados en el corte.
 
-ColorRelay trabaja con canales sólidos uniformes dentro de cada línea. Admite resets iniciales y preserva movimiento, fades y transformaciones de otras propiedades. Antes de modificar nada rechaza cambios posteriores de los canales seleccionados, degradados VSF en ellos, transformaciones de esos colores y fundidos que se solapen en el mismo canal. En esos casos usa el editor de tramos o prepara líneas uniformes; el script no aplana silenciosamente el programa existente.
+Transiciones de color trabaja con canales sólidos uniformes dentro de cada línea. Admite resets iniciales y preserva movimiento, fades y transformaciones de otras propiedades. Antes de modificar nada rechaza cambios posteriores de los canales seleccionados, degradados VSF en ellos, transformaciones de esos colores y fundidos que se solapen en el mismo canal. En esos casos usa el editor de tramos o prepara líneas uniformes; el script no aplana silenciosamente el programa existente.
 
 ## Editor de tramos
 
@@ -153,3 +153,5 @@ La configuración y los perfiles personalizados se guardan entre sesiones. Los a
 - Rojo en `\c` y verde dentro de `\t` aparecen en **Cambiar colores**. Cambiar solo el canal de borde deja esa animación del relleno intacta.
 - Una lista de 209 colores se edita en 27 páginas de ocho filas. Al aplicar se incluyen las modificaciones de la primera y la última página.
 - Un control con fundido entre 100 y 900 ms cruza un corte a 440 ms. La segunda línea conserva `\t(-340,460,...)`, con los extremos originales del color.
+
+Los atajos Colores por actor, Colores de 4 esquinas, Renombrar o fusionar actores y Transiciones de color explican su acción. Los nombres anteriores conservan sus asignaciones al recargar el script.

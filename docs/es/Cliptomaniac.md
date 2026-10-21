@@ -1,8 +1,8 @@
-# Cliptomaniac 0.4.4
+# Cliptomaniac 0.4.5
 
 [English](../Cliptomaniac.md) | Español | [Índice](../../README.es.md#documentación)
 
-Cliptomaniac edita clips ASS, usa guías para colocar o transformar texto y convierte líneas animadas en eventos por fotograma. **Cliptomaniac** abre el selector; **Cliptomaniac/Help**, la referencia. Las 39 acciones individuales están bajo **: Kite Hotkeys :/Cliptomaniac/**. Las barras dentro de un nombre usan el carácter de ancho completo para no crear otro submenú.
+Cliptomaniac edita clips ASS, usa guías para colocar o transformar texto y convierte líneas animadas en eventos por fotograma. **Cliptomaniac** abre el selector; **Cliptomaniac/Help**, la referencia. Las 40 acciones individuales están bajo **: Kite Hotkeys :/Cliptomaniac/**. Las barras dentro de un nombre usan el carácter de ancho completo para no crear otro submenú.
 
 ## Elegir la geometría de origen
 
@@ -111,6 +111,12 @@ Acción directa. Añade D a A-B-C cerrando direcciones opuestas en el plano de p
 ### Copy clip/iclip
 
 Acción directa. Copia el primer clip a los destinos seleccionados correspondientes o de la primera línea al resto.
+
+### Merge clip/iclip
+
+Acción directa, llamada **combinar clip/iclip** en español. La primera línea de diálogo seleccionada por orden del subtítulo aporta su primer clip; cada línea de diálogo seleccionada posterior que tenga clip recibe todos sus trazos. La fuente queda intacta. Cada destino conserva su tipo `clip` o `iclip` y su escala vectorial; los rectángulos se convierten en trayectos y las coordenadas de la fuente se adaptan a la escala del destino. El campo Effect no cambia la fuente.
+
+Los trazos se añaden como contornos separados, conservando guías abiertas, curvas y formas múltiples. Por ejemplo, `m 0 50 l 100 50` y `m 50 0 l 50 100` quedan como dos trazos en cruz. Se añade geometría, sin hacer una unión de polígonos ni cambiar el sentido de los contornos. Solo se usa el primer clip de cada línea; se omiten comentarios, líneas no seleccionadas, líneas sin clip utilizable y clips dentro de `\t(...)`.
 
 ### Create clip around text
 

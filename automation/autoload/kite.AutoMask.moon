@@ -1,7 +1,7 @@
 export script_name        = "AutoMask"
 export script_description = "Detect, clean and reconstruct guided surfaces through the kite-automask backend."
 export script_author      = "Kiterow"
-export script_version     = "2.5.5"
+export script_version     = "2.5.6"
 export script_namespace   = "kite.AutoMask"
 
 menuPath = script_name
@@ -313,7 +313,7 @@ stripClips = LineOps.stripClips
 injectFirstTag = LineOps.prependTag
 
 shapeText = (path) ->
-  "{\\an7\\pos(0,0)\\bord0\\shad0\\p1}#{path}{\\p0}"
+  "{\\an7\\pos(0,0)\\fscx100\\fscy100\\bord0\\shad0\\p1}#{path}{\\p0}"
 
 replacementSelection = (items, groups) ->
   selection, delta = {}, 0

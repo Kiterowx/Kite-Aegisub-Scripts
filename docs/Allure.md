@@ -1,4 +1,4 @@
-# Allure 1.2.4
+# Allure 1.2.5
 
 English | [Español](es/Allure.md) | [Index](../README.md#documentation)
 
@@ -40,7 +40,7 @@ Follow [Installation](../README.md#installation) and install `l0.dkjson` through
 1. Save the ASS file so the script can locate its preset library.
 2. Select the source layers and make the intended reference line active.
 3. Enter a name and choose **Save style**, **Save group**, or **Save both**, then press **Makeup**.
-4. The window stays open and reloads the library. Close it, select your destination text, reopen Allure and select the saved record.
+4. After a successful save, dismiss the confirmation and Allure closes. Select your destination text, reopen Allure and select the saved record. If saving fails or you decline to replace an existing preset, the panel stays open.
 5. Choose **Insert preset** and the insertion mode, then press **Makeup**. The new output is selected.
 
 Adaptive capture groups identical visible source texts into reusable slots. **Create from targets** accepts one target per slot and expands each group into the saved layer stack. When there are multiple slots, each target group must be contiguous and contain the required number of lines. **Replace selected layers** expects complete contiguous layer stacks with the same number of rows as the preset and changes those rows in place. These requirements prevent mixing unrelated stacks; there is no arbitrary cap on the number of complete groups.
@@ -65,7 +65,7 @@ Vector clip scale is accepted when it is a positive integer and its coordinate f
 
 ## Windows, preferences and failure recovery
 
-Configuration controls the language, hotkey steps, rotation mode and pivot. Invalid step values keep the dialog open and preserve the other edited values. Help and configuration return to the main draft. Saving or deleting library records also returns to that draft. Closing a window cancels its current operation. Hotkey steps accept any positive finite value.
+Configuration controls the language, hotkey steps, rotation mode and pivot. Invalid step values keep the dialog open and preserve the other edited values. Help and configuration return to the main draft. Deleting a library record returns to that draft. A successful preset save closes Allure after confirmation; failed or cancelled saves keep the draft open. Closing a window cancels its current operation. Hotkey steps accept any positive finite value.
 
 Preset files and the index use atomic file writes. Replacing a preset creates the new record before committing the index, so an index-write failure keeps the old record readable. The old file is removed after a successful commit. **Save both** stores two independent records; it is not a single transaction across the pair. Keep the index and record directory together when transferring a library.
 

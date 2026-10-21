@@ -1,8 +1,8 @@
-# PNG2ASS 1.6.4
+# PNG2ASS 1.7.1
 
 [English](../PNG2ASS.md) | Español | [Índice](../../README.es.md#documentación)
 
-PNG2ASS convierte imágenes y archivos SVG en dibujos ASS mediante `kite-png2ass` 1.4.2. Una imagen suelta hereda los tiempos de la línea activa seleccionada. Varias imágenes forman una secuencia asociada a los fotogramas de las líneas seleccionadas. Los originales se conservan.
+PNG2ASS convierte imágenes y archivos SVG en dibujos ASS mediante `kite-png2ass` 1.5.1. Una imagen suelta hereda los tiempos de la línea activa seleccionada. Varias imágenes forman una secuencia asociada a los fotogramas de las líneas seleccionadas. Los originales se conservan.
 
 ## Convertir una imagen
 
@@ -23,9 +23,19 @@ Se utiliza la línea activa si pertenece a la selección; en caso contrario, el 
 | dark-matte / luma | Primer plano oscuro sobre blanco; compone la transparencia sobre blanco. | OpenCV. |
 | color | Contenido visible separado en capas de color. | VTracer + svg2ssa. |
 
-Elige **source** con **auto** para pedir conversión de color. Los modos explícitos de máscara usan el color del estilo; color conserva los originales. SVG pasa directamente a svg2ssa. En SVG, **style** elimina los colores de origen y conserva la opacidad.
+Elige **source** con **auto** para pedir conversión de color. Los modos explícitos de máscara usan el color del estilo; color conserva los originales. SVG pasa directamente a svgelements. En SVG, **style** elimina los colores de origen y conserva la opacidad.
 
 OpenCV conserva los huecos mediante la orientación de los contornos. En la salida de VTracer se eliminan elementos de trayecto vacíos y se conservan los datos válidos.
+
+## Fidelidad del SVG
+
+La importación SVG comienza con colores de origen y posición 0,0. Iguala PlayRes con el lienzo SVG. Las transformaciones anidadas matrix/translate/scale/rotate/skew se aplican a los paths; se conservan rectángulos, círculos, elipses y polígonos. SVG decimals (0–5) y Arc degrees (1–90) controlan la precisión y la subdivisión de arcos. Los controles de trazado raster no afectan al SVG.
+
+Se admiten un clip en coordenadas de usuario y Gaussian blur isotrópico simple. Blur, opacidad de grupo y bordes ASS son aproximados; convierte trazos a contornos para reproducir extremos, uniones y paths abiertos. Expande texto vivo, imágenes, use/symbol, gradientes, máscaras, filtros complejos, rellenos evenodd, trazos discontinuos y clips anidados a paths compatibles antes de importar. Los componentes no admitidos provocan un error. No se incluyen presets de compresión SVGO ni el control epsilon de la web.
+
+Antes de insertar, PNG2ASS aplica los clips del SVG a la geometría mediante la biblioteca de Shape Clipper de Everything Shape (ZF.main 2.3.0). No quedan tags de clip. Las curvas se conservan intactas si toda la figura está dentro del recorte; las intersecciones reales convierten las curvas a segmentos con tolerancia máxima de 1/32 de píxel del script. Los resultados vacíos se omiten. El desenfoque y el borde ASS se dibujan después del corte geométrico y pueden extenderse fuera de él; la vista previa avisa de esta limitación.
+
+Los tags generados se comparan con el estilo de cada línea de destino. Se omiten bord0, shad0, escala, rotación, colores y alfa cuando repiten sus valores; se mantienen las anulaciones necesarias. Por ejemplo, bord0 se conserva si el estilo tiene borde. Cada fotograma de una secuencia utiliza su propio estilo de destino.
 
 ## Opciones
 

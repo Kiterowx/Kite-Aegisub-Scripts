@@ -1,7 +1,7 @@
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "2.1.4"
+script_version     = "2.2.1"
 script_namespace   = "kite.RheaSigns"
 local rheaZeroEpsilon = 1e-9
 local rheaDimensionEpsilon = 0.0001
@@ -30,10 +30,10 @@ local depRec = DependencyControl{
         { "kite.Core", version = "1.1.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.UI", version = "1.5.0",
+        { "kite.UI", version = "1.5.2",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.LineOps", version = "1.7.2",
+        { "kite.LineOps", version = "1.7.4",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         { "kite.PyBridge", version = "1.7.1",
@@ -42,12 +42,14 @@ local depRec = DependencyControl{
         { "kite.EventOps", version = "1.3.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.ShapeOptimizer", version = "1.3.1",
+        { "kite.ShapeOptimizer", version = "1.3.3",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         { "kite.AssContext", version = "1.1.3" },
         { "kite.AssDrawing", version = "1.0.3" },
         { "kite.Color", version = "1.2.1" },
+        { "kite.Media", version = "1.4.0" },
+        { "arch.Util", version = "0.1.0" },
     },
 }
 local ASS, Functional, ArchPersp, LineCollection, AMLine, Core, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
@@ -65,6 +67,9 @@ local LANG = {
         mask_err_drawing = "The selection contains no valid ASS drawing.",
         sh_perimeter_sequence_hint = "Enter unit numbers separated by spaces or commas; they repeat in this order.",
         tool_style_tags = "Style to Tags",
+        tool_zero_tags = "Remove redundant zero tags (selection)",
+        tool_zero_done = "Removed %d redundant zero tags from %d selected lines.",
+        tool_zero_undo = "Rhea Signs: remove redundant zero tags",
         title_perspectiva = "PERSPECTIVE",
         title_signlayout = "SIGN",
         title_masks = "MASKS",
@@ -97,8 +102,8 @@ local LANG = {
         lbl_stops = "Stops:",
         btn_execute = "Execute",
         btn_mass_signs = "Signs Editor",
-        btn_fastsigns = "FastSigns",
-        btn_tagops = "TagOps",
+        btn_fastsigns = "Sign Builder",
+        btn_tagops = "Tag Editor",
         btn_config = "Config",
         btn_help = "Help",
         btn_save = "Execute",
@@ -107,7 +112,7 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "No selection.",
         tool_font_manager = "Font and style manager",
-        tool_fade_suite = "Fast Fades",
+        tool_fade_suite = "Frame Fades and Cleanup",
         tool_shuffle_line_text = "Shuffle line text",
         tool_err_shuffle_lines = "Select at least two dialogue lines.",
         tool_undo_shuffle_line_text = "Rhea Signs: shuffle line text",
@@ -142,7 +147,7 @@ local LANG = {
         lbl_glow_border = "Glow b",
         lbl_glow_blur = "Glow blur",
         lbl_text_blur = "Text blur",
-        tagops_title = "TAG OPS",
+        tagops_title = "TAG EDITOR",
         tagops_replace = "Replace matching tags",
         tagops_read_all = "Read all source blocks",
         tagops_append = "Append inside first block",
@@ -164,6 +169,9 @@ local LANG = {
         mask_err_drawing = "La selección no contiene un dibujo ASS válido.",
         sh_perimeter_sequence_hint = "Escribe los números de unidad separados por espacios o comas; se repetirán en ese orden.",
         tool_style_tags = "Estilo a tags",
+        tool_zero_tags = "Eliminar tags cero redundantes (selección)",
+        tool_zero_done = "Se eliminaron %d tags cero redundantes de %d líneas seleccionadas.",
+        tool_zero_undo = "Rhea Signs: eliminar tags cero redundantes",
         title_perspectiva = "PERSPECTIVA",
         title_signlayout = "CARTEL",
         title_masks = "MASCARAS",
@@ -196,8 +204,8 @@ local LANG = {
         lbl_stops = "Pasos:",
         btn_execute = "Execute",
         btn_mass_signs = "Editor de carteles",
-        btn_fastsigns = "FastSigns",
-        btn_tagops = "TagOps",
+        btn_fastsigns = "Sign Builder",
+        btn_tagops = "Tag Editor",
         btn_config = "Config",
         btn_help = "Ayuda",
         btn_save = "Execute",
@@ -206,7 +214,7 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sin seleccion.",
         tool_font_manager = "Gestor de fuentes y estilos",
-        tool_fade_suite = "Fast Fades",
+        tool_fade_suite = "Frame Fades and Cleanup",
         tool_shuffle_line_text = "Mezclar texto de líneas",
         tool_err_shuffle_lines = "Selecciona al menos dos líneas de diálogo.",
         tool_undo_shuffle_line_text = "Rhea Signs: mezclar texto de líneas",
@@ -241,7 +249,7 @@ local LANG = {
         lbl_glow_border = "Borde glow",
         lbl_glow_blur = "Blur glow",
         lbl_text_blur = "Blur texto",
-        tagops_title = "TAG OPS",
+        tagops_title = "TAG EDITOR",
         tagops_replace = "Reemplazar tags iguales",
         tagops_read_all = "Leer todos los bloques",
         tagops_append = "Anexar en primer bloque",
@@ -263,6 +271,9 @@ local LANG = {
         mask_err_drawing = "A seleção não contém um desenho ASS válido.",
         sh_perimeter_sequence_hint = "Digite os números das unidades separados por espaços ou vírgulas; eles se repetem nessa ordem.",
         tool_style_tags = "Estilo para tags",
+        tool_zero_tags = "Remover tags zero redundantes (seleção)",
+        tool_zero_done = "Removidas %d tags zero redundantes de %d linhas selecionadas.",
+        tool_zero_undo = "Rhea Signs: remover tags zero redundantes",
         title_perspectiva = "PERSPECTIVA",
         title_signlayout = "PLACA",
         title_masks = "MASCARAS",
@@ -295,8 +306,8 @@ local LANG = {
         lbl_stops = "Passos:",
         btn_execute = "Execute",
         btn_mass_signs = "Editor de placas",
-        btn_fastsigns = "FastSigns",
-        btn_tagops = "TagOps",
+        btn_fastsigns = "Sign Builder",
+        btn_tagops = "Tag Editor",
         btn_config = "Config",
         btn_help = "Ajuda",
         btn_save = "Execute",
@@ -305,7 +316,7 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sem selecao.",
         tool_font_manager = "Gerenciador de fontes e estilos",
-        tool_fade_suite = "Fast Fades",
+        tool_fade_suite = "Frame Fades and Cleanup",
         tool_shuffle_line_text = "Embaralhar texto das linhas",
         tool_err_shuffle_lines = "Selecione ao menos duas falas.",
         tool_undo_shuffle_line_text = "Rhea Signs: embaralhar texto das linhas",
@@ -340,7 +351,7 @@ local LANG = {
         lbl_glow_border = "Borda glow",
         lbl_glow_blur = "Blur glow",
         lbl_text_blur = "Blur texto",
-        tagops_title = "TAG OPS",
+        tagops_title = "TAG EDITOR",
         tagops_replace = "Substituir tags iguais",
         tagops_read_all = "Ler todos os blocos",
         tagops_append = "Anexar no primeiro bloco",
@@ -437,7 +448,7 @@ local extraLang = {
         fade_undo_intro = "Rhea Signs: fade in from current frame", fade_undo_outro = "Rhea Signs: fade out from current frame",
         fade_undo_cleanup = "Rhea Signs: continuous fade cleanup",
         title_shapes = "SHAPES", lbl_perimeter = "Perimeter:", lbl_intensity = "Intensity:", lbl_threshold = "Threshold:", lbl_bands = "Bands:",
-        sh_action_unify = "Unify positions", sh_action_perimeter = "Place on perimeter", sh_action_optimizer = "Shape color optimizer",
+        sh_action_unify = "Unify drawing pivots", sh_action_perimeter = "Place on perimeter", sh_action_optimizer = "Shape color optimizer",
         sh_perimeter_exterior = "Exterior contours only", sh_perimeter_holes = "Exterior contours and holes",
         sh_mode_auto = "Auto", sh_mode_similar = "Similar colors", sh_mode_gradient = "Full gradient",
         sh_intensity_balanced = "Balanced", sh_intensity_fidelity = "Fidelity", sh_intensity_aggressive = "Aggressive",
@@ -550,7 +561,7 @@ local extraLang = {
         fade_undo_intro = "Rhea Signs: fade de entrada desde el frame actual", fade_undo_outro = "Rhea Signs: fade de salida desde el frame actual",
         fade_undo_cleanup = "Rhea Signs: limpiar fades continuos",
         title_shapes = "SHAPES", lbl_perimeter = "Perimetro:", lbl_intensity = "Intensidad:", lbl_threshold = "Umbral:", lbl_bands = "Bandas:",
-        sh_action_unify = "Unificar posiciones", sh_action_perimeter = "Pegar al perimetro", sh_action_optimizer = "Optimizar color de shapes",
+        sh_action_unify = "Unificar pivotes de dibujos", sh_action_perimeter = "Pegar al perimetro", sh_action_optimizer = "Optimizar color de shapes",
         sh_perimeter_exterior = "Solo contornos exteriores", sh_perimeter_holes = "Contornos exteriores y huecos",
         sh_mode_auto = "Auto", sh_mode_similar = "Colores similares", sh_mode_gradient = "Gradiente completo",
         sh_intensity_balanced = "Equilibrado", sh_intensity_fidelity = "Fidelidad", sh_intensity_aggressive = "Agresivo",
@@ -663,7 +674,7 @@ local extraLang = {
         fade_undo_intro = "Rhea Signs: fade de entrada desde o frame atual", fade_undo_outro = "Rhea Signs: fade de saida desde o frame atual",
         fade_undo_cleanup = "Rhea Signs: limpar fades continuos",
         title_shapes = "FORMAS", lbl_perimeter = "Perimetro:", lbl_intensity = "Intensidade:", lbl_threshold = "Limiar:", lbl_bands = "Faixas:",
-        sh_action_unify = "Unificar posicoes", sh_action_perimeter = "Colocar no perimetro", sh_action_optimizer = "Otimizar cores de formas",
+        sh_action_unify = "Unificar pivôs de desenhos", sh_action_perimeter = "Colocar no perimetro", sh_action_optimizer = "Otimizar cores de formas",
         sh_perimeter_exterior = "Somente contornos exteriores", sh_perimeter_holes = "Contornos exteriores e furos",
         sh_mode_auto = "Auto", sh_mode_similar = "Cores semelhantes", sh_mode_gradient = "Gradiente completo",
         sh_intensity_balanced = "Equilibrado", sh_intensity_fidelity = "Fidelidade", sh_intensity_aggressive = "Agressivo",
@@ -3193,7 +3204,7 @@ local function runFastSigns(subs, sel)
     local cfg = fastSignsConfig()
     local meta, styles = karaskel.collect_head(subs, false)
     local vidW = fastSignsRes(meta)
-    if not vidW then showMsg("FastSigns could not determine the script or video resolution."); return end
+    if not vidW then showMsg("Sign Builder could not determine the script or video resolution."); return end
     local clusters = {}
     local candidates = {}
     local lines = LineCollection(subs, sel, function(line)
@@ -3208,7 +3219,7 @@ local function runFastSigns(subs, sel)
         end
     end)
     if #candidates == 0 then
-        showMsg("FastSigns found no eligible non-comment dialogue lines.")
+        showMsg("Sign Builder found no eligible non-comment dialogue lines.")
         return false
     end
     table.sort(candidates, function(a, b)
@@ -3291,7 +3302,7 @@ local function runFastSigns(subs, sel)
         additions[line] = {box, glow, text}
     end
     local result = Rhea.Lines.atomic(subs, function() return RheaFoundation.insertCollectedLinesAfter(lines, additions) end)
-    aegisub.set_undo_point("Rhea Signs - FastSigns")
+    aegisub.set_undo_point("Rhea Signs - Sign Builder")
     return result
 end
 RheaOps.Tools.fastSigns = runFastSigns
@@ -4013,26 +4024,40 @@ spacing adjusts the distance between generated elements and accepts negatives.
 Circle Text creates character lines on a circle. Curve Text places character
 lines along a vector clip.
 Shapes:
-Unify Positions gives selected ASS drawings one shared pivot without moving
+Unify Drawing Pivots gives selected ASS drawings one shared pivot without moving
 their rendered geometry. Place on Perimeter repeats multilayer units along all
 visible exterior contours, with an optional mode for real nonzero-winding holes.
 Shape Color Optimizer merges nearby colors or reduces reliable gradients. Its
 mode, intensity, OKLab threshold, band limit, and summary option are editable in
 the main panel and saved in Config.
 Auxiliary buttons:
-Signs Editor edits repeated sign text in bulk. FastSigns creates box, glow, and
-front text layers. TagOps handles tag copy, keep-only, numeric recalculation,
+Signs Editor edits repeated sign text in bulk. Sign Builder creates box, glow, and
+front text layers. Tag Editor handles tag copy, keep-only, numeric recalculation,
 untimed transforms, and position alignment. Config stores language, mask color,
 FastSigns settings, and the Shapes controls.
 Toolbox:
+Remove redundant zero tags cleans only selected lines, respecting styles, resets
+and earlier overrides. Animated targets and positioning tags are retained.
 Font and Style Manager replaces fonts in styles and optional \fn tags,
 batch-edits style fields and colors, clones styles, and
-refreshes the detected font and style lists. In Fast Fades, In sets fade-in from
+refreshes the detected font and style lists. In Frame Fades and Cleanup, In sets fade-in from
 the current video frame, Out sets fade-out, and Clean removes internal fade edges at
 exact shared timing boundaries between selected groups. Fade-in and fade-out
 preserve the other duration and unrelated tags.
 Shuffle Line Text redistributes text among selected dialogue rows without moving
 their timing or metadata. Leave the dropdown empty to skip it.
+
+Split at Visual Changes (Toolbox): splits one line at visual changes inside a rectangular
+video region. Uses the native video frames; a static rectangular clip can guide
+the region. Review detected runs before generating. Keep animation retimes tags;
+Freeze samples the first frame of each run. Karaoke and unsupported temporal
+effects are rejected before writing. The original may be kept commented.
+Simplify Drawing (Shapes): removes redundant line points and converts nearly
+straight cubic Beziers to lines. Maximum deviation defaults to 0.05 drawing
+units at p1 (before scale/perspective); zero only removes collinear geometry.
+Controls and original points bound the error within each pass. Extrema, corners,
+backtracking, separate contours and detailed curves are retained. Splines stay
+unchanged. Operates on selected drawing sections, preserving text and tags.
 ]],
 es = [[
 RHEA SIGNS - GUIA DE USO
@@ -4060,19 +4085,34 @@ segun nonzero winding. Optimizar color de shapes fusiona colores cercanos o
 reduce gradientes fiables. Modo, intensidad, umbral OKLab, limite de bandas y
 resumen se editan en el panel principal y se guardan en Config.
 Botones auxiliares:
-Editor de carteles edita texto repetido en lote. FastSigns crea capas de caja,
-glow y texto frontal. TagOps maneja copiar tags, Keep Only, recalculo numerico,
+Editor de carteles edita texto repetido en lote. Sign Builder crea capas de caja,
+glow y texto frontal. Tag Editor maneja copiar tags, Keep Only, recalculo numerico,
 transformaciones sin tiempos y alineacion de posicion. Config guarda idioma,
 color de mascara, ajustes de FastSigns y controles de Shapes.
 Herramientas:
+Eliminar tags cero redundantes limpia solo las líneas seleccionadas, respetando
+estilos, resets y tags previos. Conserva los destinos de animación y la posición.
 El gestor de fuentes y estilos cambia fuentes en estilos y tags \fn opcionales,
 edita campos y colores en lote, clona
-estilos y actualiza las listas detectadas. En Fast Fades, Entrada fija la entrada
+estilos y actualiza las listas detectadas. En Frame Fades and Cleanup, Entrada fija la entrada
 desde el frame actual, Salida fija la salida y Limpiar elimina los bordes internos del
 limite temporal exacto entre grupos seleccionados. La entrada y la salida no
 alteran la otra duracion ni los demas tags. Mezclar
 texto de lineas redistribuye el texto sin mover tiempos ni metadatos. Deja el
 dropdown vacio para omitirlo.
+
+Split at Visual Changes (Herramientas): divide una línea por cambios visuales dentro de
+una región rectangular del vídeo. Usa frames nativos; un clip rectangular fijo
+puede servir de guía. Revisa los tramos antes de generar. Conservar animación
+reajusta los tags; Congelar evalúa el primer frame de cada tramo. Rechaza karaoke
+y efectos temporales no compatibles antes de escribir. Puede guardar la original
+comentada.
+Simplify Drawing (Shapes): elimina puntos redundantes y convierte Bézier cúbicas
+casi rectas en rectas. La desviación máxima predeterminada es 0.05 unidades de
+dibujo en p1, antes de escala/perspectiva; cero solo elimina geometría colineal.
+Comprueba los puntos y controles originales para limitar el error en cada pasada.
+Conserva extremos, esquinas, retrocesos, contornos y curvas con detalle. No cambia
+splines. Actúa en los dibujos seleccionados y conserva el texto y los tags.
 ]],
 pt = [[
 RHEA SIGNS - GUIA DE USO
@@ -4101,18 +4141,31 @@ reduz gradientes confiaveis. Modo, intensidade, limiar OKLab, limite de faixas e
 resumo sao editados no painel principal e salvos em Config.
 Botoes auxiliares:
 Editor de placas edita texto repetido em lote. FastSigns cria camadas de caixa,
-glow e texto frontal. TagOps cuida de copiar tags, Keep Only, recalculo numerico,
+glow e texto frontal. Tag Editor cuida de copiar tags, Keep Only, recalculo numerico,
 transformacoes sem tempos e alinhamento de posicao. Config guarda idioma, cor da
 mascara, ajustes de FastSigns e controles de Formas.
 Ferramentas:
+Remover tags zero redundantes limpa apenas as linhas selecionadas, respeitando
+estilos, resets e tags anteriores. Preserva destinos de animação e posições.
 O gerenciador de fontes e estilos troca fontes em estilos e etiquetas \fn
 opcionais, edita campos e cores em lote, clona estilos
-e atualiza as listas detectadas. Em Fast Fades, Entrada define a entrada desde o
+e atualiza as listas detectadas. Em Frame Fades and Cleanup, Entrada define a entrada desde o
 frame atual, Saida define a saida e Limpar remove as bordas internas no limite de tempo
 exato entre grupos selecionados. A entrada e a saida nao alteram a outra duracao
 nem as demais tags. Embaralhar texto das
 linhas redistribui o texto sem mover tempos nem metadados. Deixe o dropdown vazio
 para ignora-lo.
+
+Split at Visual Changes (Ferramentas): divide uma linha nas mudanças visuais de uma região
+retangular do vídeo. Usa frames nativos e aceita um clip retangular fixo como
+guia. Revise os trechos antes de gerar. Preservar animação reajusta tags;
+Congelar avalia o primeiro frame de cada trecho. Karaoke e efeitos temporais
+incompatíveis são rejeitados antes de gravar. Pode guardar a original comentada.
+Simplify Drawing (Formas): remove pontos redundantes e converte Béziers cúbicas
+quase retas em retas. O desvio padrão é 0.05 unidades de desenho em p1, antes de
+escala/perspectiva; zero remove apenas geometria colinear. Os pontos e controles
+originais limitam o erro por passagem. Preserva extremos, cantos, retrocessos,
+contornos e curvas detalhadas. Splines ficam intactas. Preserva texto e tags.
 ]],
 }
 local function helpText()
@@ -4138,7 +4191,7 @@ local choiceKeys = {
     ["Pos Align"] = "tagops_pos_align",
     ["Add"] = "tagops_add", ["Percent"] = "tagops_percent", ["Transform"] = "tagops_transform",
     ["Keep org"] = "tagops_keep_org", ["Move org"] = "tagops_move_org",
-    ["Unify Positions"] = "sh_action_unify",
+    ["Unify Drawing Pivots"] = "sh_action_unify",
     ["Place on Perimeter"] = "sh_action_perimeter",
     ["Shape Color Optimizer"] = "sh_action_optimizer",
     ["Exterior contours only"] = "sh_perimeter_exterior",
@@ -4150,9 +4203,10 @@ local choiceKeys = {
     ["Fidelity"] = "sh_intensity_fidelity",
     ["Aggressive"] = "sh_intensity_aggressive",
     ["Font and Style Manager"] = "tool_font_manager",
-    ["Fast Fades"] = "tool_fade_suite",
+    ["Frame Fades and Cleanup"] = "tool_fade_suite",
     ["Shuffle Line Text"] = "tool_shuffle_line_text",
     ["Style to Tags"] = "tool_style_tags",
+    ["Remove Redundant Zero Tags"] = "tool_zero_tags",
 }
 local function choiceLabel(raw)
     local key = choiceKeys[raw]
@@ -4187,13 +4241,14 @@ Rhea.Actions = {
     Tools = {
         Shapes = "Shapes",
         FontStyles = "Font and Style Manager",
-        Fades = "Fast Fades",
+        Fades = "Frame Fades and Cleanup",
         Shuffle = "Shuffle Line Text",
     },
     Shapes = {
-        Unify = "Unify Positions",
+        Unify = "Unify Drawing Pivots",
         Perimeter = "Place on Perimeter",
         Optimize = "Shape Color Optimizer",
+        Simplify = "Simplify Drawing",
         PerimeterModes = {"Exterior contours only", "Exterior contours and holes"},
     },
     Fades = {
@@ -4206,7 +4261,159 @@ Rhea.Actions.Shapes.Items = {
     Rhea.Actions.Shapes.Unify,
     Rhea.Actions.Shapes.Perimeter,
     Rhea.Actions.Shapes.Optimize,
+    Rhea.Actions.Shapes.Simplify,
 }
+RheaOps.DrawingPoints = (function()
+local Points = {}
+
+local function distance(point, first, last)
+    local dx, dy = last.x - first.x, last.y - first.y
+    local length = dx * dx + dy * dy
+    local ratio = length > 0 and ((point.x-first.x)*dx + (point.y-first.y)*dy) / length or 0
+    if length > 0 and ratio >= 0 and ratio <= 1 then
+        return math.abs((point.x-first.x)*dy-(point.y-first.y)*dx)/math.sqrt(length), ratio
+    end
+    local t = Rhea.clamp(ratio, 0, 1)
+    local x, y = point.x-first.x-t*dx, point.y-first.y-t*dy
+    return math.sqrt(x*x+y*y), ratio
+end
+
+function Points.path(path, tolerance)
+    if not AssDrawing.validatePath(path) then return path, 0 end
+    local tokens = ShapeCore.tokenizePath(path)
+    if not tokens then return path, 0 end
+    local rawTokens = {}
+    for token in path:gmatch("%S+") do rawTokens[#rawTokens+1] = token end
+    local segments, current, command, index = {}, nil, nil, 1
+    local minX, maxX, minY, maxY
+    local function remember(point)
+        if not minX or point.x < minX.x then minX = point end
+        if not maxX or point.x > maxX.x then maxX = point end
+        if not minY or point.y < minY.y then minY = point end
+        if not maxY or point.y > maxY.y then maxY = point end
+    end
+    while index <= #tokens do
+        if tokens[index].kind == "command" then command = tokens[index].value; index = index + 1 end
+        if command == "s" or command == "p" or command == "c" then return path, 0 end
+        local segment = {command=command, first=current, points={}}
+        local count = command == "b" and 3 or 1
+        for _ = 1, count do
+            local point = {x=tokens[index].value, y=tokens[index+1].value, rawX=rawTokens[index], rawY=rawTokens[index+1]}
+            segment.points[#segment.points+1] = point
+            remember(point)
+            index = index + 2
+        end
+        current = segment.points[#segment.points]
+        segments[#segments+1] = segment
+    end
+    local protected = {[minX]=true, [maxX]=true, [minY]=true, [maxY]=true}
+    local removed = 0
+    for _, segment in ipairs(segments) do
+        if segment.command == "b" and segment.first then
+            local a, b, finish = unpack(segment.points)
+            local da, ta = distance(a, segment.first, finish)
+            local db, tb = distance(b, segment.first, finish)
+            if da <= tolerance and db <= tolerance and ta >= 0 and tb >= ta and tb <= 1
+                and not protected[a] and not protected[b] then
+                segment.command, segment.original = "l", segment.points
+                segment.points = {finish}
+                removed = removed + 2
+            end
+        end
+    end
+    local output, cursor = {}, 1
+    local function append(commandName, points)
+        output[#output+1] = commandName
+        for _, point in ipairs(points) do
+            output[#output+1], output[#output+2] = point.rawX, point.rawY
+        end
+    end
+    while cursor <= #segments do
+        local segment = segments[cursor]
+        if segment.command ~= "l" or not segment.first then
+            append(segment.command, segment.points)
+            cursor = cursor + 1
+        else
+            local run, constraints = {segment.first}, {}
+            while cursor <= #segments and segments[cursor].command == "l" do
+                local nextSegment = segments[cursor]
+                run[#run+1] = nextSegment.points[1]
+                constraints[#run] = nextSegment.original or nextSegment.points
+                cursor = cursor + 1
+            end
+            local keep, stack = {[1]=true, [#run]=true}, {{1,#run}}
+            while #stack > 0 do
+                LineOps.checkCancelled()
+                local range = table.remove(stack)
+                local a, b = range[1], range[2]
+                if b > a + 1 then
+                    local split, worst, previous = nil, tolerance, 0
+                    for i = a+1, b do
+                        for _, point in ipairs(constraints[i]) do
+                            local deviation, ratio = distance(point, run[a], run[b])
+                            if ratio < previous or ratio < 0 or ratio > 1 then deviation = math.huge end
+                            previous = ratio
+                            if deviation > worst then worst, split = deviation, math.min(i, b-1) end
+                        end
+                        if i < b and protected[run[i]] then split = i; break end
+                    end
+                    if split then
+                        keep[split] = true
+                        stack[#stack+1], stack[#stack+2] = {a,split}, {split,b}
+                    end
+                end
+            end
+            local reduced = {}
+            for i = 2, #run do
+                if keep[i] then reduced[#reduced+1] = run[i] else removed = removed + 1 end
+            end
+            append("l", reduced)
+        end
+    end
+    if removed == 0 then return path, 0 end
+    return table.concat(output, " "), removed
+end
+
+function Points.text(text, tolerance)
+    local out, removed = {}, 0
+    for _, section in ipairs(LineOps.scanSections(text)) do
+        local value = text:sub(section.start, section.finish)
+        if section.type == "drawing" then
+            local count
+            value, count = Points.path(value, tolerance * 2 ^ (section.drawing - 1))
+            removed = removed + count
+        end
+        out[#out+1] = value
+    end
+    return table.concat(out), removed
+end
+
+function Points.main(subs, sel)
+    local button, values = aegisub.dialog.display({
+        {class="label", label="Simplify Drawing: removes points on nearly straight paths.\nCurved Béziers, corners, extrema and separate contours are preserved.", x=0,y=0,width=2,height=2},
+        {class="label", label="Maximum deviation (drawing units at p1):",x=0,y=2,width=1},
+        {class="floatedit", name="tolerance", value=0.05,min=0,max=0.25,step=0.01,x=1,y=2,width=1},
+    }, {"Simplify", "Cancel"}, {close="Cancel"})
+    if button ~= "Simplify" then return sel, false end
+    local tolerance = Core.finiteNumber(values.tolerance)
+    if not tolerance or tolerance < 0 or tolerance > 0.25 then return sel, false end
+    local replacements, total = {}, 0
+    for _, index in ipairs(RheaFoundation.selectionDialogueIndices(subs, sel)) do
+        LineOps.checkCancelled()
+        local line = subs[index]
+        local text, removed = Points.text(line.text, tolerance)
+        if removed > 0 then line.text = text; replacements[index] = line; total = total + removed end
+    end
+    if total == 0 then showMsg("Simplify Drawing: no removable points."); return sel, false end
+    LineOps.transaction(subs, "Rhea Signs - Simplify Drawing", function()
+        for index, line in pairs(replacements) do LineOps.checkCancelled(); subs[index] = line end
+    end)
+    showMsg("Simplify Drawing: " .. total .. " points removed.")
+    return sel, true
+end
+return Points
+end)()
+
 RheaOps.Shapes = (function()
 local Unify = (function()
 local undoName = "Unify Shape Positions"
@@ -5898,7 +6105,9 @@ local function main(subs, sel, active, options, context)
     options = options or {}
     context = context or {}
     local result, changed, payload
-    if options.action == Rhea.Actions.Shapes.Unify then
+    if options.action == Rhea.Actions.Shapes.Simplify then
+        result, changed, payload = RheaOps.DrawingPoints.main(subs, sel)
+    elseif options.action == Rhea.Actions.Shapes.Unify then
         result, changed, payload = Unify.main(subs, sel, active, context)
     elseif options.action == Rhea.Actions.Shapes.Perimeter then
         result, changed, payload = Perimeter.main(subs, sel, active, context, {
@@ -6892,7 +7101,7 @@ function Fades.applyFrameFade(subs, sel, mode, context)
             context,
             intro and "fade_undo_intro" or "fade_undo_outro",
             intro and "Rhea Signs: fade in from current frame" or "Rhea Signs: fade out from current frame",
-            intro and "Fast Fades - fade in" or "Fast Fades - fade out"
+            intro and "Frame Fades and Cleanup - fade in" or "Frame Fades and Cleanup - fade out"
         )
         return sel, true
     end)
@@ -6913,7 +7122,7 @@ function Fades.cleanup(subs, sel, context)
         return EventOps.continuousFadeCleanup(subs, indices)
     end)
     if changed > 0 then
-        undo(context, "fade_undo_cleanup", "Rhea Signs: continuous fade cleanup", "Fast Fades - continuous cleanup")
+        undo(context, "fade_undo_cleanup", "Rhea Signs: continuous fade cleanup", "Frame Fades and Cleanup - continuous cleanup")
     end
     return result, changed > 0
 end
@@ -6964,16 +7173,506 @@ local function main(subs, sel, _, context)
 end
 return { main = main }
 end)()
+RheaOps.ZeroTags = (function()
+local ZeroTags = {}
+local styleFields = {
+    xbord = "outline", ybord = "outline", xshad = "shadow", yshad = "shadow",
+    frz = "angle", fsp = "spacing", b = "bold", i = "italic", u = "underline", s = "strikeout",
+}
+local intrinsicZeros = {frx=0, fry=0, fax=0, fay=0, blur=0, be=0, pbo=0}
+local families = {bord={"xbord", "ybord"}, shad={"xshad", "yshad"}, fr={"frz"},
+    alpha={"1a", "2a", "3a", "4a"}}
+for name in pairs(styleFields) do families[name] = {name} end
+for name in pairs(intrinsicZeros) do families[name] = {name} end
+for channel = 1, 4 do families[channel .. "a"] = {channel .. "a"} end
+local function initialState(style)
+    if not style then return {} end
+    local state = Core.copy(intrinsicZeros)
+    for name, field in pairs(styleFields) do
+        local value = style[field]
+        state[name] = type(value) == "boolean" and (value and 1 or 0) or Core.finiteNumber(value)
+    end
+    for channel = 1, 4 do
+        local alpha = tostring(style["color" .. channel] or ""):match("^&[Hh](%x%x)%x%x%x%x%x%x&?$")
+        state[channel .. "a"] = alpha and tonumber(alpha, 16) or nil
+    end
+    return state
+end
+local function tagValue(call)
+    if call.name == "alpha" or call.name:match("^[1234]a$") then
+        local hex = call.value:match("^%s*&[Hh](%x+)&?%s*$")
+        return hex and tonumber(hex, 16) or nil
+    end
+    if call.value:match("^%s*[+-]?%d*%.?%d*%s*$") then return Core.finiteNumber(call.value) end
+end
+function ZeroTags.cleanText(text, baseStyle, styles)
+    text = tostring(text or "")
+    local state, removed, deletions, blocks = initialState(baseStyle), 0, {}, {}
+    for _, call in ipairs(LineOps.tagCalls(text)) do
+        if call.raw:sub(2, #call.name + 1) == call.name then
+            if call.name == "r" then
+                local name = Rhea.trim(call.value)
+                state = call.top_level and initialState(name == "" and baseStyle or (styles or {})[name]) or {}
+            else
+                local fields = families[call.name]
+                if fields then
+                    local value = tagValue(call)
+                    local redundant = call.top_level and value == 0
+                    for _, field in ipairs(fields) do
+                        if state[field] ~= 0 then redundant = false end
+                    end
+                    if redundant then
+                        deletions[call.start], blocks[call.block_start] = true, true
+                        removed = removed + 1
+                    end
+
+                    for _, field in ipairs(fields) do state[field] = call.top_level and value or nil end
+                end
+            end
+        end
+    end
+    if removed == 0 then return text, 0 end
+    local chunks, cursor = {}, 1
+    for _, block in ipairs(RheaFoundation.iterTagBlocks(text)) do
+        if blocks[block.openPos] then
+            chunks[#chunks + 1] = text:sub(cursor, block.openPos - 1)
+            local cleaned = LineOps.mapTagCalls("{" .. block.content .. "}", nil, function(call)
+                if deletions[block.openPos + call.start - 1] then return "" end
+            end)
+            if not cleaned:match("^{%s*}$") then chunks[#chunks + 1] = cleaned end
+            cursor = block.closePos + 1
+        end
+    end
+    chunks[#chunks + 1] = text:sub(cursor)
+    return table.concat(chunks), removed
+end
+function ZeroTags.main(subs, sel, _, context)
+    local tagsChanged, linesChanged = 0, 0
+    local styles = Rhea.styleMap(subs)
+    Rhea.Lines.atomic(subs, function()
+        for _, index in ipairs(RheaFoundation.selectionDialogueIndices(subs, sel)) do
+            LineOps.checkCancelled()
+            local line = subs[index]
+            local text, count = ZeroTags.cleanText(line.text, styles[line.style], styles)
+            if count > 0 then
+                line.text = text
+                subs[index] = line
+                tagsChanged, linesChanged = tagsChanged + count, linesChanged + 1
+            end
+        end
+    end)
+    if linesChanged > 0 then context.undo("tool_zero_undo", "Rhea Signs: remove redundant zero tags") end
+    context.show(string.format(context.translate("tool_zero_done"), tagsChanged, linesChanged))
+    return sel
+end
+return ZeroTags
+end)()
+RheaOps.FrameChanges = (function()
+local Context, UI, Line = AssContext, KiteUI, AMLine
+local Media, Util = require("kite.Media"), require("arch.Util")
+local toolName = "Rhea Signs - Split at Visual Changes"
+local FC = {}
+local FREEZE, KEEP = "Congelar por tramo", "Conservar animación"
+local defaults = {tolerance = 8, global_percent = 0.5, block_percent = 25,
+    mode = FREEZE, keep_original = true, remove_guide = false}
+local settings = UI.settings(script_namespace .. ".FrameChanges", script_version, {main = defaults}, {})
+local floor, ceil, min, max, abs = math.floor, math.ceil, math.min, math.max, math.abs
+local finite, copy = Core.finiteNumber, LineOps.deepCopy
+
+local function requireValue(condition, message)
+    if not condition then error(message, 0) end
+end
+
+local function numericArgs(call)
+    local values = LineOps.splitArguments(call.value)
+    for i, value in ipairs(values) do
+        values[i] = finite(value)
+        requireValue(values[i], "Argumento no numérico en " .. call.raw)
+    end
+    return values
+end
+
+function FC.guide(text)
+    local guide, count, animated = nil, 0, false
+    for _, call in ipairs(LineOps.tagCalls(text, {"clip", "iclip"})) do
+        if not call.top_level then animated = true
+        else
+            count = count + 1
+            if call.name == "clip" then
+                local ok, values = pcall(numericArgs, call)
+                if ok and #values == 4 then
+                    guide = {x1 = values[1], y1 = values[2], x2 = values[3], y2 = values[4], call = call}
+                end
+            end
+        end
+    end
+    if count == 1 and not animated then return guide end
+end
+
+function FC.options(values, resX, resY, videoW, videoH, guide)
+    local out = copy(values)
+    for _, key in ipairs({"x1", "y1", "x2", "y2", "tolerance", "global_percent", "block_percent"}) do
+        out[key] = finite(out[key])
+        requireValue(out[key], "Introduce un número válido en " .. key .. ".")
+    end
+    requireValue(out.x1 >= 0 and out.y1 >= 0 and out.x2 <= resX and out.y2 <= resY
+        and out.x2 > out.x1 and out.y2 > out.y1,
+        "La región debe tener área positiva y estar dentro de la resolución del ASS.")
+    requireValue(out.tolerance >= 0 and out.tolerance <= 255, "La tolerancia debe estar entre 0 y 255.")
+    requireValue(out.global_percent >= 0 and out.global_percent <= 100
+        and out.block_percent >= 0 and out.block_percent <= 100, "Los porcentajes deben estar entre 0 y 100.")
+    requireValue(out.mode == FREEZE or out.mode == KEEP, "Modo de salida desconocido.")
+    requireValue(not out.remove_guide or guide, "No hay un único clip rectangular estático que pueda retirarse como guía.")
+    out.keep_original, out.remove_guide = out.keep_original == true, out.remove_guide == true
+    local rect = {x1 = floor(out.x1 * videoW / resX), y1 = floor(out.y1 * videoH / resY),
+        x2 = min(videoW, ceil(out.x2 * videoW / resX)), y2 = min(videoH, ceil(out.y2 * videoH / resY))}
+    rect.width, rect.height = rect.x2 - rect.x1, rect.y2 - rect.y1
+    return out, rect
+end
+
+
+
+function FC.sample(frame, rect)
+    requireValue(frame and type(frame.getPixel) == "function",
+        "Esta versión de Aegisub no ofrece frame:getPixel con tres valores RGB numéricos.")
+    local width, height = rect.width, rect.height
+    local function row(y)
+        LineOps.checkCancelled()
+        local raw, filtered = {}, {}
+        for x = 0, width - 1 do
+            local r, g, b = frame:getPixel(rect.x1 + x, rect.y1 + y)
+            requireValue(type(r) == "number" and type(g) == "number" and type(b) == "number"
+                and r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255,
+                "getPixel no devolvió tres canales RGB válidos (0–255).")
+            local i = x * 3
+            raw[i + 1], raw[i + 2], raw[i + 3] = r, g, b
+        end
+        for x = 0, width - 1 do
+            local i, left, right = x * 3, max(0, x - 1) * 3, min(width - 1, x + 1) * 3
+            for channel = 1, 3 do
+                filtered[i + channel] = raw[left + channel] + 2 * raw[i + channel] + raw[right + channel]
+            end
+        end
+        return filtered
+    end
+    local current = row(0)
+    local above, below = current, height > 1 and row(1) or current
+    local pixels = {}
+    for y = 0, height - 1 do
+        local offset = y * width * 3
+        for i = 1, width * 3 do pixels[offset + i] = (above[i] + 2 * current[i] + below[i]) / 16 end
+        above, current = current, below
+        if y + 2 < height then below = row(y + 2) else below = current end
+    end
+    return pixels
+end
+
+function FC.different(left, right, width, height, options)
+    local globalLimit = max(1, ceil(width * height * options.global_percent / 100))
+    local total = 0
+    for by = 0, height - 1, 8 do
+        LineOps.checkCancelled()
+        for bx = 0, width - 1, 8 do
+            local lastX, lastY = min(width - 1, bx + 7), min(height - 1, by + 7)
+            local blockLimit = max(1, ceil((lastX - bx + 1) * (lastY - by + 1) * options.block_percent / 100))
+            local changed = 0
+            for y = by, lastY do
+                for x = bx, lastX do
+                    local i = (y * width + x) * 3
+                    if max(abs(left[i + 1] - right[i + 1]), abs(left[i + 2] - right[i + 2]),
+                        abs(left[i + 3] - right[i + 3])) > options.tolerance then
+                        changed, total = changed + 1, total + 1
+                        if changed >= blockLimit or total >= globalLimit then return true end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+function FC.analyze(source, rect, options)
+    local first, finish = Context.frameRange(source)
+    requireValue(first and finish and finish > first, "La línea no cubre frames de vídeo disponibles.")
+    local runs, previous, anchor = {}, nil, nil
+    local started = os.clock()
+    for frameNumber = first, finish - 1 do
+        LineOps.progress("Split at Visual Changes: analizando frame " .. frameNumber, 100 * (frameNumber - first) / (finish - first))
+        local ok, frame = pcall(aegisub.get_frame, frameNumber, false)
+        requireValue(ok and frame, "No se pudo leer el frame " .. frameNumber .. ".")
+        local pixels = FC.sample(frame, rect)
+        frame = nil
+        local changed = not previous or FC.different(pixels, previous, rect.width, rect.height, options)
+            or (anchor ~= previous and FC.different(pixels, anchor, rect.width, rect.height, options))
+        if changed then
+            local boundary = #runs == 0 and source.start_time or Media.msFromFrame(frameNumber)
+            requireValue(finite(boundary) and boundary >= source.start_time and boundary < source.end_time,
+                "Los timecodes producen un corte fuera de la línea.")
+            if #runs > 0 then
+                requireValue(boundary > runs[#runs].start_time, "Los timecodes producen un tramo vacío.")
+                runs[#runs].end_time, runs[#runs].end_frame = boundary, frameNumber
+            end
+            runs[#runs + 1] = {first_frame = frameNumber, start_time = boundary}
+            anchor = pixels
+        end
+        previous = pixels
+    end
+    runs[#runs].end_time, runs[#runs].end_frame = source.end_time, finish
+    LineOps.progress("Split at Visual Changes: análisis terminado", 100)
+    return {runs = runs, first_frame = first, end_frame = finish, frame_count = finish - first,
+        cpu_seconds = os.clock() - started, rect = rect}
+end
+
+function FC.validateAnimation(source, mode)
+    local duration = source.end_time - source.start_time
+    requireValue(not tostring(source.effect or ""):lower():match("^%s*scroll")
+        and not tostring(source.effect or ""):lower():match("^%s*banner"),
+        "Los efectos temporales Scroll y Banner no se pueden dividir en esta versión.")
+    local counts = {}
+    for _, call in ipairs(LineOps.tagCalls(source.text)) do
+        local name = call.name
+        if name == "k" or name == "kf" or name == "ko" or name == "kt" then
+            requireValue(false, "Esta versión no divide karaoke (" .. call.raw .. ").")
+        elseif name == "t" then
+            requireValue(call.top_level, "Las transformaciones anidadas requieren una evaluación que esta versión no garantiza.")
+            local transform, err = Context.transform(call.value, duration, 0)
+            requireValue(transform, err)
+            requireValue(transform.accel > 0 and transform.endTime > transform.startTime,
+                "La transformación debe tener aceleración positiva y un intervalo creciente.")
+
+            for _, nested in ipairs(LineOps.tagCalls("{" .. transform.payload .. "}")) do
+                if nested.name == "clip" or nested.name == "iclip" then
+                    local ok, args = pcall(numericArgs, nested)
+                    requireValue(ok and #args == 4, "ASS no interpola clips vectoriales dentro de \\t; usa un clip rectangular animado.")
+                elseif nested.name == "move" or nested.name == "fad" or nested.name == "fade" then
+                    requireValue(false, "Etiqueta temporal no admitida dentro de \\t: " .. nested.raw)
+                end
+            end
+        elseif name == "move" or name == "fad" or name == "fade" then
+            counts[name] = (counts[name] or 0) + 1
+            local args = numericArgs(call)
+            requireValue(call.top_level and counts[name] == 1, "Etiqueta temporal duplicada o anidada: " .. call.raw)
+            requireValue((name == "move" and (#args == 4 or #args == 6))
+                or (name == "fad" and #args == 2) or (name == "fade" and #args == 7), "Argumentos inválidos en " .. call.raw)
+            if name == "fad" then
+                requireValue(args[1] >= 0 and args[2] >= 0 and args[1] + args[2] <= duration,
+                    "Los dos fundidos de \\fad deben ser no negativos y no solaparse.")
+            elseif name == "fade" then
+                requireValue(args[1] >= 0 and args[1] <= 255 and args[2] >= 0 and args[2] <= 255
+                    and args[3] >= 0 and args[3] <= 255 and args[4] <= args[5]
+                    and args[5] <= args[6] and args[6] <= args[7], "Valores o tiempos inválidos en " .. call.raw)
+            end
+        end
+    end
+    requireValue(not (counts.fad and counts.fade), "Usa un único fundido: \\fad o \\fade.")
+end
+
+
+
+local samplingASS = setmetatable({}, {__index = ASS})
+function samplingASS:parse(line)
+    local parsed = ASS:parse(line)
+    local function colors(collection)
+        local result = Core.copy(collection)
+        result.tags = Core.copy(collection.tags)
+        for name, tag in pairs(result.tags) do
+            if tag.class == ASS.Tag.Color then
+                tag = tag:copy()
+                for _, channel in ipairs({"r", "g", "b"}) do
+                    tag[channel].lerp = function(self, target, factor)
+                        local value = self:copy()
+                        value.value = (1 - factor) * self.value + target.value * factor
+                        return value
+                    end
+                end
+                result.tags[name] = tag
+            end
+        end
+        return result
+    end
+    return {getEffectiveTags = function(_, ...) return colors(parsed:getEffectiveTags(...)) end,
+        getDefaultTags = function(_, ...) return colors(parsed:getDefaultTags(...)) end}
+end
+
+local function freezeText(source, now, context)
+    local text = Context.sampleTransforms(source, now, samplingASS, Line, context)
+    local duration = source.end_time - source.start_time
+    local x, y = Context.explicitPosition(text, duration, now)
+    text = Context.samplePosition(text, duration, now)
+    if x then
+
+
+        text = LineOps.mapTagCalls(text, "pos", function(call)
+            if call.top_level then return string.format("\\pos(%.9f,%.9f)", x, y) end
+        end)
+    end
+    text = LineOps.mapTagCalls(text, {"fad", "fade"}, function(call)
+        if not call.top_level then return end
+        local v = numericArgs(call)
+        if call.name == "fad" then v = {255, 0, 255, 0, v[1], duration - v[2], duration} end
+        local a1, a2, a3, t1, t2, t3, t4 = unpack(v)
+        local alpha
+
+
+        if now < t1 then alpha = a1
+        elseif now < t2 then local factor = (now - t1) / (t2 - t1); alpha = a1 * (1 - factor) + a2 * factor
+        elseif now < t3 then alpha = a2
+        elseif now < t4 then local factor = (now - t3) / (t4 - t3); alpha = a2 * (1 - factor) + a3 * factor
+        else alpha = a3 end
+        alpha = floor(alpha)
+        return string.format("\\fade(%d,%d,%d,0,0,0,0)", alpha, alpha, alpha)
+    end)
+
+    return Context.sampleFade(source, text, now)
+end
+
+function FC.buildOutput(source, analysis, options, context, guide)
+    FC.validateAnimation(source, options.mode)
+    local base = copy(source)
+    if options.remove_guide then
+        requireValue(guide and base.text:sub(guide.call.start, guide.call.finish) == guide.call.raw,
+            "El clip guía ya no coincide con la línea analizada.")
+        base.text = base.text:sub(1, guide.call.start - 1) .. base.text:sub(guide.call.finish + 1)
+    end
+    local samplingSource = Core.copy(base)
+    samplingSource.parentCollection = context
+    local output = {}
+    for _, run in ipairs(analysis.runs) do
+        LineOps.checkCancelled()
+        local line = copy(base)
+        line.start_time, line.end_time = run.start_time, run.end_time
+        if options.mode == KEEP then
+            Context.retimeSlice(line, base)
+        else
+            local now = Util.exact_ms_from_frame(run.first_frame) - floor((base.start_time + 5) / 10) * 10
+            line.text = freezeText(samplingSource, now, context)
+        end
+        output[#output + 1] = line
+    end
+    return output
+end
+
+function FC.apply(subs, index, source, output, keepOriginal)
+    requireValue(#output > 0, "No se generaron líneas.")
+    return LineOps.transaction(subs, toolName, function()
+        local insertAt = index
+        if keepOriginal then
+            local original = copy(source)
+            original.comment = true
+            subs[index] = original
+            insertAt = index + 1
+        else subs.delete(index) end
+        local selection = LineOps.insertLines(subs, {{index = insertAt, lines = output}})
+        LineOps.checkCancelled()
+        return selection, selection[1]
+    end)
+end
+
+local function optionsDialog(values, resX, resY, guide)
+    local controls = {
+        {class="label", label="Región fija en coordenadas ASS (" .. resX .. " × " .. resY .. "). Solo se analiza el vídeo.", x=0,y=0,width=8},
+        {class="label", label=guide and "Clip rectangular detectado. Puedes ajustar la región sin alterar ese clip." or "Introduce las coordenadas; también puedes dibujar un clip rectangular estático y volver a abrir la macro.", x=0,y=1,width=8},
+    }
+    for i, key in ipairs({"x1", "y1", "x2", "y2"}) do
+        controls[#controls+1] = {class="label", label=key, x=(i-1)*2,y=2,width=1}
+        controls[#controls+1] = {class="edit", name=key, value=tostring(values[key] or ""), x=(i-1)*2+1,y=2,width=1}
+    end
+    local fields = {{"tolerance", "Diferencia de color (0–255):"}, {"global_percent", "Cambio mínimo en toda la región (%):"}, {"block_percent", "Cambio mínimo en un bloque de 8 × 8 (%):"}}
+    for i, field in ipairs(fields) do
+        controls[#controls+1] = {class="label", label=field[2], x=0,y=i+2,width=5}
+        controls[#controls+1] = {class="floatedit", name=field[1], value=values[field[1]], min=0,max=i==1 and 255 or 100,x=5,y=i+2,width=3}
+    end
+    controls[#controls+1] = {class="label", label="Salida:", x=0,y=6,width=2}
+    controls[#controls+1] = {class="dropdown", name="mode", items={FREEZE,KEEP}, value=values.mode,x=2,y=6,width=6}
+    controls[#controls+1] = {class="checkbox", name="keep_original", label="Conservar original comentada",value=values.keep_original,x=0,y=7,width=8}
+    if guide then controls[#controls+1] = {class="checkbox",name="remove_guide",label="Retirar de la salida el clip usado como guía",value=values.remove_guide,x=0,y=8,width=8} end
+    controls[#controls+1] = {class="label",label="El movimiento dentro de la región cuenta como cambio. Se conservan estados de un solo frame.",x=0,y=9,width=8}
+    return aegisub.dialog.display(controls, {"Analizar", "Cancelar"}, {ok="Analizar",close="Cancelar"})
+end
+
+function FC.report(analysis, options)
+    local rows = {string.format("%d frames → %d líneas. Región: %d × %d píxeles. CPU: %.3f s.",
+        analysis.frame_count, #analysis.runs, analysis.rect.width, analysis.rect.height, analysis.cpu_seconds),
+        "Modo: " .. options.mode, "Frames absolutos, numeración desde 0; el último frame indicado está incluido.", ""}
+    for i, run in ipairs(analysis.runs) do
+        rows[#rows+1] = string.format("%d. Frames %d–%d (%d) | %.0f–%.0f ms", i, run.first_frame,
+            run.end_frame - 1, run.end_frame - run.first_frame, run.start_time, run.end_time)
+    end
+    return table.concat(rows, "\n")
+end
+
+function FC.run(subs, selection)
+    requireValue(#selection == 1 and subs[selection[1]].class == "dialogue" and not subs[selection[1]].comment,
+        "Selecciona una única línea de diálogo sin comentar; puede estar vacía.")
+    local index, source = selection[1], copy(subs[selection[1]])
+    requireValue(finite(source.start_time) and finite(source.end_time) and source.end_time > source.start_time,
+        "La línea debe tener duración positiva.")
+    requireValue(type(aegisub.get_frame) == "function", "Se necesita Aegisub con acceso nativo a frames.")
+    local props = aegisub.project_properties()
+    requireValue(props and props.video_file and props.video_file ~= "", "Carga un vídeo antes de analizar.")
+    local videoW, videoH = aegisub.video_size()
+    local resX, resY = LineOps.scriptResolution(subs)
+    requireValue(finite(videoW) and finite(videoH) and videoW > 0 and videoH > 0
+        and finite(resX) and finite(resY) and resX > 0 and resY > 0, "No se pudieron determinar las resoluciones del vídeo y del ASS.")
+    local guide = FC.guide(source.text)
+    local values = settings:values("main")
+    values.remove_guide = false
+    if guide then for _, key in ipairs({"x1","y1","x2","y2"}) do values[key] = guide[key] end end
+    while true do
+        local button, entered = optionsDialog(values, resX, resY, guide)
+        if button ~= "Analizar" then return selection end
+        entered.remove_guide = guide and entered.remove_guide or false
+        values = entered
+        local ok, options, rect = pcall(FC.options, values, resX, resY, videoW, videoH, guide)
+        if not ok then UI.message(options, {title=toolName})
+        else
+            local valid, problem = pcall(FC.validateAnimation, source, options.mode)
+            if not valid then UI.message(problem, {title=toolName})
+            else
+                local analysis = FC.analyze(source, rect, options)
+                local output = FC.buildOutput(source, analysis, options, Context.fromSubtitles(subs), guide)
+                local action = UI.message(FC.report(analysis, options), {title=toolName,
+                    buttons={"Generar", "Ajustar", "Cancelar"}, close="Cancelar", width=65,height=18})
+                if action == "Generar" then
+                    local result, active = FC.apply(subs, index, source, output, options.keep_original)
+                    settings:update("main", options)
+                    local saved, saveError = settings:write()
+                    if not saved then UI.message("Las líneas se generaron, pero no se pudieron guardar las preferencias:\n" .. tostring(saveError), {title=toolName}) end
+                    return result, active
+                elseif action ~= "Ajustar" then return selection end
+            end
+        end
+    end
+end
+
+function FC.main(subs, selection)
+    local ok, result, active = pcall(FC.run, subs, selection)
+    if ok then return result, active end
+    if aegisub.progress.is_cancelled() then return selection end
+    UI.message(tostring(result), {title=toolName})
+    return selection
+end
+
+FC.defaults, FC.FREEZE, FC.KEEP = defaults, FREEZE, KEEP
+return FC
+end)()
+
 RheaOps.StyleTags = {main=function(subs, sel, _, context) return AssContext.styleBake.run(subs,sel,context) end}
 Rhea.Actions.Tools.StyleTags = "Style to Tags"
+Rhea.Actions.Tools.FrameChanges = "Split at Visual Changes"
+Rhea.Actions.Tools.ZeroTags = "Remove Redundant Zero Tags"
 RheaOps.ToolboxActions = {
+    Rhea.Actions.Tools.FrameChanges,
     Rhea.Actions.Tools.StyleTags,
+    Rhea.Actions.Tools.ZeroTags,
     Rhea.Actions.Tools.FontStyles,
     Rhea.Actions.Tools.Fades,
     Rhea.Actions.Tools.Shuffle,
 }
 RheaOps.Registry = {
+    [Rhea.Actions.Tools.FrameChanges] = RheaOps.FrameChanges,
     [Rhea.Actions.Tools.StyleTags] = RheaOps.StyleTags,
+    [Rhea.Actions.Tools.ZeroTags] = RheaOps.ZeroTags,
     [Rhea.Actions.Tools.Shapes] = RheaOps.Shapes,
     [Rhea.Actions.Tools.FontStyles] = RheaOps.FontStyles,
     [Rhea.Actions.Tools.Fades] = RheaOps.Fades,
@@ -7444,20 +8143,34 @@ function Rhea.Macros.shapes(action)
         }, RheaOps.context())
     end
 end
+KiteUI.actions.rename(script_namespace, {
+    [Rhea.Macros.hotkeyPath("TagOps")] = Rhea.Macros.hotkeyPath("Tag Editor"),
+    [Rhea.Macros.hotkeyPath("Fast Fades")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup"),
+    [Rhea.Macros.hotkeyPath("Fast Signs")] = Rhea.Macros.hotkeyPath("Sign Builder"),
+    [Rhea.Macros.hotkeyPath("Tools/Frame Changes")] = Rhea.Macros.hotkeyPath("Tools/Split at Visual Changes"),
+    [Rhea.Macros.hotkeyPath("Shapes/Unify Positions")] = Rhea.Macros.hotkeyPath("Shapes/Unify Drawing Pivots"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/In")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/In"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/Out")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Out"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/Clean")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Clean"),
+})
+
 local rheaMacros = {
+    { Rhea.Macros.hotkeyPath("Tools/Split at Visual Changes"), "Split a line at visual changes in a video region", Rhea.Macros.tool(Rhea.Actions.Tools.FrameChanges) },
     { Rhea.Macros.hotkeyPath("Tools/Style to Tags"), "Convert style values to override tags", Rhea.Macros.tool(Rhea.Actions.Tools.StyleTags) },
+    { Rhea.Macros.hotkeyPath("Tools/Remove Redundant Zero Tags"), "Remove harmless zero overrides from selected lines", Rhea.Macros.tool(Rhea.Actions.Tools.ZeroTags) },
     { Rhea.Macros.path(""), script_description, RheaOps.Tools.main },
-    { Rhea.Macros.hotkeyPath("TagOps"), "Tag operations", RheaOps.Tools.tagOpsGui },
-    { Rhea.Macros.hotkeyPath("Fast Signs"), "Generate fast signs", RheaOps.Tools.fastSigns },
+    { Rhea.Macros.hotkeyPath("Tag Editor"), "Tag operations", RheaOps.Tools.tagOpsGui },
+    { Rhea.Macros.hotkeyPath("Sign Builder"), "Generate fast signs", RheaOps.Tools.fastSigns },
     { Rhea.Macros.hotkeyPath("Signs Editor"), "Edit repeated sign text", RheaOps.Tools.massSigns },
-    { Rhea.Macros.hotkeyPath("Shapes/Unify Positions"), "Unify ASS drawing pivots", Rhea.Macros.shapes(Rhea.Actions.Shapes.Unify) },
+    { Rhea.Macros.hotkeyPath("Shapes/Simplify Drawing"), "Reduce nearly straight drawing segments with bounded deviation", Rhea.Macros.shapes(Rhea.Actions.Shapes.Simplify) },
+    { Rhea.Macros.hotkeyPath("Shapes/Unify Drawing Pivots"), "Unify ASS drawing pivots", Rhea.Macros.shapes(Rhea.Actions.Shapes.Unify) },
     { Rhea.Macros.hotkeyPath("Shapes/Place on Perimeter"), "Repeat multilayer shapes along a perimeter", Rhea.Macros.shapes(Rhea.Actions.Shapes.Perimeter) },
     { Rhea.Macros.hotkeyPath("Shapes/Shape Color Optimizer"), "Optimize drawing colors", Rhea.Macros.shapes(Rhea.Actions.Shapes.Optimize) },
     { Rhea.Macros.hotkeyPath("Font and Style Manager"), "Manage fonts and styles", Rhea.Macros.tool(Rhea.Actions.Tools.FontStyles) },
-    { Rhea.Macros.hotkeyPath("Fast Fades"), "Open frame fades and continuous cleanup", Rhea.Macros.tool(Rhea.Actions.Tools.Fades) },
-    { Rhea.Macros.hotkeyPath("Fast Fades/In"), "Set fade in from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.In) },
-    { Rhea.Macros.hotkeyPath("Fast Fades/Out"), "Set fade out from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.Out) },
-    { Rhea.Macros.hotkeyPath("Fast Fades/Clean"), "Clean continuous fades", Rhea.Macros.fade(Rhea.Actions.Fades.Clean) },
+    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup"), "Open frame fades and continuous cleanup", Rhea.Macros.tool(Rhea.Actions.Tools.Fades) },
+    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/In"), "Set fade in from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.In) },
+    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Out"), "Set fade out from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.Out) },
+    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Clean"), "Clean continuous fades", Rhea.Macros.fade(Rhea.Actions.Fades.Clean) },
     { Rhea.Macros.hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", Rhea.Macros.tool(Rhea.Actions.Tools.Shuffle) },
 }
 for _, entry in ipairs(rheaMacros) do

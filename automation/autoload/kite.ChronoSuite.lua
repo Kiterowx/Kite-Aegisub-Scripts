@@ -1,7 +1,7 @@
 script_name        = "Chrono Suite"
 script_description = "Suite for subtitle timing, QC, cleanup, and workflow toolkit"
 script_author      = "Kiterow"
-script_version     = "1.5.3"
+script_version     = "1.6.1"
 script_namespace   = "kite.ChronoSuite"
 
 include("karaskel.lua")
@@ -79,6 +79,7 @@ local latinUpperToLower = {
     [string.char(0xC3,0x9A)] = string.char(0xC3,0xBA), [string.char(0xC3,0x9C)] = string.char(0xC3,0xBC),
     [string.char(0xC3,0x91)] = string.char(0xC3,0xB1),
 }
+for upper, lower in pairs({["À"]="à",["È"]="è",["Ì"]="ì",["Ò"]="ò",["Ù"]="ù",["Â"]="â",["Ê"]="ê",["Î"]="î",["Ô"]="ô",["Û"]="û",["Ä"]="ä",["Ë"]="ë",["Ï"]="ï",["Ö"]="ö",["Ç"]="ç"}) do latinUpperToLower[upper] = lower end
 local latinLowerToUpper = {}
 for u, l in pairs(latinUpperToLower) do latinLowerToUpper[l] = u end
 
@@ -92,7 +93,7 @@ if DependencyControl then
     local ok, rec = pcall(DependencyControl, {
         feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.UI", version = "1.5.0",
+            { "kite.UI", version = "1.5.2",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
             { "kite.Timing", version = "1.4.1",
@@ -702,8 +703,8 @@ local localePatch = {
         err_not_inside_fold      = "Active line is not inside a fold.\nMove to a line within a fold group.",
         err_no_fold_group        = "Could not find complete fold group.",
         err_cannot_write_file    = "Could not write to:\n%s",
-        err_shift_min_two        = "Shift First requires at least 2 lines.",
-        err_shift_first_two      = "Shift First requires the first two selected lines to be dialogue lines.",
+        err_shift_min_two        = "Align to First Start requires at least 2 lines.",
+        err_shift_first_two      = "Align to First Start requires the first two selected lines to be dialogue lines.",
         err_tolerance_positive   = "Tolerance must be a positive number.",
         err_paste_mpvqc          = "Paste mpvQC text first.",
         err_no_mpvqc_comments    = "No mpvQC comments found.",
@@ -713,7 +714,7 @@ local localePatch = {
         msg_kite_done            = "Kite Timing: %d changes from %d selected lines.",
         msg_replacer_done        = "Text Replacer: %d lines modified.",
         msg_mpvqc_done           = "mpv QC done.\nLines modified: %d",
-        msg_remover_done         = "Remover Assistant done.\nLines modified: %d\nLines deleted: %d",
+        msg_remover_done         = "Text and Tag Cleanup done.\nLines modified: %d\nLines deleted: %d",
         err_remover_none         = "Select at least one remover option.",
         lbl_include_partial      = "Include partially overlapping lines",
         lbl_paste_dialogue       = "Paste text or Dialogue/Comment lines:",
@@ -724,7 +725,7 @@ local localePatch = {
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerance (ms):",
         lbl_mpvqc_paste          = "Paste mpvQC text:",
-        lbl_remover_title        = "Remover Assistant",
+        lbl_remover_title        = "Text and Tag Cleanup",
         lbl_remover_text         = "Visible text",
         lbl_remover_tags         = "Override tags",
         lbl_remover_comments     = "Comments",
@@ -764,8 +765,8 @@ local localePatch = {
         err_not_inside_fold      = "La línea activa no está dentro de un fold.\nMuévete a una línea dentro de un grupo fold.",
         err_no_fold_group        = "No se encontró un grupo fold completo.",
         err_cannot_write_file    = "No se pudo escribir en:\n%s",
-        err_shift_min_two        = "Shift First requiere al menos 2 líneas.",
-        err_shift_first_two      = "Shift First requiere que las dos primeras líneas seleccionadas sean diálogo.",
+        err_shift_min_two        = "Align to First Start requiere al menos 2 líneas.",
+        err_shift_first_two      = "Align to First Start requiere que las dos primeras líneas seleccionadas sean diálogo.",
         err_tolerance_positive   = "La tolerancia debe ser un número positivo.",
         err_paste_mpvqc          = "Pega primero el texto de mpvQC.",
         err_no_mpvqc_comments    = "No se encontraron comentarios de mpvQC.",
@@ -775,7 +776,7 @@ local localePatch = {
         msg_kite_done            = "Kite Timing: %d cambios en %d líneas seleccionadas.",
         msg_replacer_done        = "Text Replacer: %d líneas modificadas.",
         msg_mpvqc_done           = "mpv QC finalizado.\nLíneas modificadas: %d",
-        msg_remover_done         = "Remover Assistant finalizado.\nLíneas modificadas: %d\nLíneas eliminadas: %d",
+        msg_remover_done         = "Text and Tag Cleanup finalizado.\nLíneas modificadas: %d\nLíneas eliminadas: %d",
         err_remover_none         = "Selecciona al menos una opcion de limpieza.",
         lbl_include_partial      = "Incluir líneas con superposición parcial",
         lbl_paste_dialogue       = "Pega texto o líneas Dialogue/Comment:",
@@ -786,7 +787,7 @@ local localePatch = {
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerancia (ms):",
         lbl_mpvqc_paste          = "Pega el texto de mpvQC:",
-        lbl_remover_title        = "Remover Assistant",
+        lbl_remover_title        = "Text and Tag Cleanup",
         lbl_remover_text         = "Texto visible",
         lbl_remover_tags         = "Override tags",
         lbl_remover_comments     = "Comentarios",
@@ -826,8 +827,8 @@ local localePatch = {
         err_not_inside_fold      = "A linha ativa não está dentro de um fold.\nVá para uma linha dentro de um grupo fold.",
         err_no_fold_group        = "Grupo fold completo não encontrado.",
         err_cannot_write_file    = "Não foi possível gravar em:\n%s",
-        err_shift_min_two        = "Shift First requer pelo menos 2 linhas.",
-        err_shift_first_two      = "Shift First requer que as duas primeiras linhas selecionadas sejam diálogo.",
+        err_shift_min_two        = "Align to First Start requer pelo menos 2 linhas.",
+        err_shift_first_two      = "Align to First Start requer que as duas primeiras linhas selecionadas sejam diálogo.",
         err_tolerance_positive   = "A tolerância deve ser um número positivo.",
         err_paste_mpvqc          = "Cole primeiro o texto do mpvQC.",
         err_no_mpvqc_comments    = "Nenhum comentário do mpvQC encontrado.",
@@ -837,7 +838,7 @@ local localePatch = {
         msg_kite_done            = "Kite Timing: %d alterações em %d linhas selecionadas.",
         msg_replacer_done        = "Text Replacer: %d linhas modificadas.",
         msg_mpvqc_done           = "mpv QC concluído.\nLinhas modificadas: %d",
-        msg_remover_done         = "Remover Assistant concluido.\nLinhas modificadas: %d\nLinhas apagadas: %d",
+        msg_remover_done         = "Text and Tag Cleanup concluido.\nLinhas modificadas: %d\nLinhas apagadas: %d",
         err_remover_none         = "Selecione pelo menos uma opcao de limpeza.",
         lbl_include_partial      = "Incluir linhas com sobreposição parcial",
         lbl_paste_dialogue       = "Cole texto ou linhas Dialogue/Comment:",
@@ -848,7 +849,7 @@ local localePatch = {
         lbl_mpvqc_title          = "mpv QC",
         lbl_mpvqc_tolerance      = "Tolerância (ms):",
         lbl_mpvqc_paste          = "Cole o texto do mpvQC:",
-        lbl_remover_title        = "Remover Assistant",
+        lbl_remover_title        = "Text and Tag Cleanup",
         lbl_remover_text         = "Texto visivel",
         lbl_remover_tags         = "Override tags",
         lbl_remover_comments     = "Comentarios",
@@ -1039,19 +1040,19 @@ local UI = {
             ["Normalize Ellipsis"]="Normalize ellipsis", ["Add Ellipsis"]="Add ellipsis", ["Erase Leading Ellipsis"]="Erase leading ellipsis", ["Erase Inner Ellipsis"]="Erase inner ellipsis",
             ["Ellipsis to Comma"]="Ellipsis to comma", ["Ellipsis to Period"]="Ellipsis to period",
             ["Unify Quotes"]="Unify quotes", ["Normalize Dashes"]="Normalize dashes", ["Trim Trailing Spaces"]="Trim trailing spaces",
-            ["Remove Duplicate Letters"]="Remove duplicate letters", ["Stutter Manager"]="Stutter manager", ["Extract Tags"]="Extract tags",
-            ["Reinsert Tags"]="Reinsert tags", ["Remove Tags"]="Remove tags", ["Merge Tags"]="Merge tags", ["Remove Comments"]="Remove comments", ["Actor Parser"]="Actor parser",
-            ["Swap Comment"]="Swap comment", ["Delete Comment Lines"]="Delete comment lines", ["Comments to Top"]="Comments to top",
+            ["Remove Duplicate Letters"]="Remove duplicate letters", ["Normalize Stutter"]="Normalize stutter", ["Extract Tags"]="Extract tags",
+            ["Reinsert Tags"]="Reinsert tags", ["Remove Tags"]="Remove tags", ["Merge Tags"]="Merge tags", ["Remove Inline Comments"]="Remove inline comments", ["Extract Actors and Split"]="Extract actors and split",
+            ["Swap Text and Comments"]="Swap text and comments", ["Delete Comment Lines"]="Delete comment lines", ["Comments to Top"]="Comments to top",
             ["Comments to Bottom"]="Comments to bottom", ["Effects to Top"]="Effects to top", ["Fold by Identifier"]="Fold by identifier", ["Add Stutter"]="Add stutter",
             ["Add Ah Prefix"]="Add Ah prefix", ["Bidirectional Snapping"]="Bidirectional snapping", ["Start Snap Back"]="Start snap back", ["Start Snap Forward"]="Start snap forward", ["End Snap Back"]="End snap back", ["End Snap Forward"]="End snap forward", ["Remove Honorifics"]="Remove honorifics",
             ["Caption Clarifier"]="Caption clarifier", ["Complete Sentences"]="Complete sentences", ["Erase Blank Lines"]="Erase blank lines", ["Remove \\N"]="Remove \\N",
-            ["Frame Effect"]="Frame effect", ["Copy Fold"]="Copy fold", ["Smart Break"]="Smart break", ["Split by Sentence"]="Split by sentence",
-            ["Split by Comma"]="Split by comma", ["Join Lines"]="Join lines", ["Join Same Text"]="Join same text", ["Join Overlaps"]="Join overlaps", ["Join Overlap Sentences"]="Join overlap sentences", ["Divide by \\N"]="Divide by \\N",
-            ["Copy Times"]="Copy times", ["Time Picker"]="Time picker", ["Sort by Length"]="Sort by length", ["Sort by CPS"]="Sort by CPS",
+            ["Current Frame to Effect"]="Current frame to Effect", ["Copy Fold"]="Copy fold", ["Smart Break"]="Smart break", ["Split by Sentence"]="Split by sentence",
+            ["Split by Comma"]="Split by comma", ["Line Merge and Cleanup"]="Line merge and cleanup", ["Join Same Text"]="Join same text", ["Join Overlaps"]="Join overlaps", ["Join Overlap Sentences"]="Join overlap sentences", ["Divide by \\N"]="Divide by \\N",
+            ["Copy Times"]="Copy times", ["Select Time Range"]="Select time range", ["Sort by Text Length"]="Sort by text length", ["Sort by CPS"]="Sort by CPS",
             ["Sort Odd Even"]="Sort odd/even", ["Count CPS"]="Count CPS", ["Import Text"]="Import text", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Add lead-in left", ["Add Lead-In Right"]="Add lead-in right", ["Add Lead-Out Left"]="Add lead-out left", ["Add Lead-Out Right"]="Add lead-out right", ["Chain Left"]="Chain left", ["Chain Right"]="Chain right",
-            ["Shift First"]="Shift first", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
-            ["Properties and Cleanup"]="Properties and cleanup", ["AE Export"]="AE export", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
+            ["Align to First Start"]="Align to first start", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
+            ["Text and Tag Cleanup"]="Text and tag cleanup", ["Properties and Cleanup"]="Properties and cleanup", ["After Effects Keyframes"]="After Effects keyframes", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
         },
         es = {
             ["en"]="Inglés", ["es"]="Español", ["pt"]="Portugués",
@@ -1079,19 +1080,19 @@ local UI = {
             ["Normalize Ellipsis"]="Normalizar elipsis", ["Add Ellipsis"]="Añadir elipsis", ["Erase Leading Ellipsis"]="Borrar elipsis inicial", ["Erase Inner Ellipsis"]="Borrar elipsis interna",
             ["Ellipsis to Comma"]="Elipsis a coma", ["Ellipsis to Period"]="Elipsis a punto",
             ["Unify Quotes"]="Unificar comillas", ["Normalize Dashes"]="Normalizar guiones", ["Trim Trailing Spaces"]="Quitar espacios finales",
-            ["Remove Duplicate Letters"]="Quitar letras repetidas", ["Stutter Manager"]="Gestor de tartamudeo", ["Extract Tags"]="Extraer tags",
-            ["Reinsert Tags"]="Reinsertar tags", ["Remove Tags"]="Quitar tags", ["Merge Tags"]="Unir tags", ["Remove Comments"]="Quitar comentarios", ["Actor Parser"]="Parsear actor",
-            ["Swap Comment"]="Intercambiar comentario", ["Delete Comment Lines"]="Borrar líneas comentadas", ["Comments to Top"]="Comentarios arriba",
+            ["Remove Duplicate Letters"]="Quitar letras repetidas", ["Normalize Stutter"]="Normalizar tartamudeo", ["Extract Tags"]="Extraer tags",
+            ["Reinsert Tags"]="Reinsertar tags", ["Remove Tags"]="Quitar tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Quitar comentarios internos", ["Extract Actors and Split"]="Extraer actores y dividir",
+            ["Swap Text and Comments"]="Intercambiar texto y comentarios", ["Delete Comment Lines"]="Borrar líneas comentadas", ["Comments to Top"]="Comentarios arriba",
             ["Comments to Bottom"]="Comentarios abajo", ["Effects to Top"]="Con Effect arriba", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Añadir tartamudeo",
             ["Add Ah Prefix"]="Añadir Ah inicial", ["Bidirectional Snapping"]="Snap bidireccional", ["Start Snap Back"]="Inicio a KF previo", ["Start Snap Forward"]="Inicio a KF siguiente", ["End Snap Back"]="Final a KF previo", ["End Snap Forward"]="Final a KF siguiente", ["Remove Honorifics"]="Comentar honoríficos",
             ["Caption Clarifier"]="Limpiar acotaciones", ["Complete Sentences"]="Completar oraciones", ["Erase Blank Lines"]="Borrar líneas vacías", ["Remove \\N"]="Quitar \\N",
-            ["Frame Effect"]="Frame en Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Salto inteligente", ["Split by Sentence"]="Dividir por oración",
-            ["Split by Comma"]="Dividir por coma", ["Join Lines"]="Unir líneas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir solapes", ["Join Overlap Sentences"]="Unir solapes en frase", ["Divide by \\N"]="Dividir por \\N",
-            ["Copy Times"]="Copiar tiempos", ["Time Picker"]="Selector de tiempo", ["Sort by Length"]="Ordenar por longitud", ["Sort by CPS"]="Ordenar por CPS",
+            ["Current Frame to Effect"]="Fotograma actual a Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Salto inteligente", ["Split by Sentence"]="Dividir por oración",
+            ["Split by Comma"]="Dividir por coma", ["Line Merge and Cleanup"]="Combinar y limpiar líneas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir solapes", ["Join Overlap Sentences"]="Unir solapes en frase", ["Divide by \\N"]="Dividir por \\N",
+            ["Copy Times"]="Copiar tiempos", ["Select Time Range"]="Seleccionar por intervalo", ["Sort by Text Length"]="Ordenar por longitud del texto", ["Sort by CPS"]="Ordenar por CPS",
             ["Sort Odd Even"]="Ordenar impar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in izquierda", ["Add Lead-In Right"]="Lead-in derecha", ["Add Lead-Out Left"]="Lead-out izquierda", ["Add Lead-Out Right"]="Lead-out derecha", ["Chain Left"]="Encadenar izquierda", ["Chain Right"]="Encadenar derecha",
-            ["Shift First"]="Desplazar desde primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
-            ["Properties and Cleanup"]="Propiedades y limpieza", ["AE Export"]="Exportar AE", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
+            ["Align to First Start"]="Alinear al inicio de la primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
+            ["Text and Tag Cleanup"]="Limpiar texto y tags", ["Properties and Cleanup"]="Propiedades y limpieza", ["After Effects Keyframes"]="Fotogramas para After Effects", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
         },
         pt = {
             ["en"]="Inglês", ["es"]="Espanhol", ["pt"]="Português",
@@ -1119,19 +1120,19 @@ local UI = {
             ["Normalize Ellipsis"]="Normalizar reticências", ["Add Ellipsis"]="Adicionar reticências", ["Erase Leading Ellipsis"]="Apagar reticências iniciais", ["Erase Inner Ellipsis"]="Apagar reticências internas",
             ["Ellipsis to Comma"]="Reticências para vírgula", ["Ellipsis to Period"]="Reticências para ponto",
             ["Unify Quotes"]="Unificar aspas", ["Normalize Dashes"]="Normalizar travessões", ["Trim Trailing Spaces"]="Remover espaços finais",
-            ["Remove Duplicate Letters"]="Remover letras repetidas", ["Stutter Manager"]="Gestor de gaguejo", ["Extract Tags"]="Extrair tags",
-            ["Reinsert Tags"]="Reinserir tags", ["Remove Tags"]="Remover tags", ["Merge Tags"]="Unir tags", ["Remove Comments"]="Remover comentários", ["Actor Parser"]="Processar ator",
-            ["Swap Comment"]="Trocar comentário", ["Delete Comment Lines"]="Apagar linhas comentadas", ["Comments to Top"]="Comentários acima",
+            ["Remove Duplicate Letters"]="Remover letras repetidas", ["Normalize Stutter"]="Normalizar gaguejo", ["Extract Tags"]="Extrair tags",
+            ["Reinsert Tags"]="Reinserir tags", ["Remove Tags"]="Remover tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Remover comentários internos", ["Extract Actors and Split"]="Extrair atores e dividir",
+            ["Swap Text and Comments"]="Trocar texto e comentários", ["Delete Comment Lines"]="Apagar linhas comentadas", ["Comments to Top"]="Comentários acima",
             ["Comments to Bottom"]="Comentários abaixo", ["Effects to Top"]="Com Effect acima", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Adicionar gaguejo",
             ["Add Ah Prefix"]="Adicionar Ah inicial", ["Bidirectional Snapping"]="Snap bidirecional", ["Start Snap Back"]="Inicio ao KF anterior", ["Start Snap Forward"]="Inicio ao KF seguinte", ["End Snap Back"]="Fim ao KF anterior", ["End Snap Forward"]="Fim ao KF seguinte", ["Remove Honorifics"]="Comentar honoríficos",
             ["Caption Clarifier"]="Limpar indicações", ["Complete Sentences"]="Completar frases", ["Erase Blank Lines"]="Apagar linhas vazias", ["Remove \\N"]="Remover \\N",
-            ["Frame Effect"]="Frame em Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Quebra inteligente", ["Split by Sentence"]="Dividir por frase",
-            ["Split by Comma"]="Dividir por vírgula", ["Join Lines"]="Unir linhas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir sobreposições", ["Join Overlap Sentences"]="Unir sobreposições em frase", ["Divide by \\N"]="Dividir por \\N",
-            ["Copy Times"]="Copiar tempos", ["Time Picker"]="Seletor de tempo", ["Sort by Length"]="Ordenar por tamanho", ["Sort by CPS"]="Ordenar por CPS",
+            ["Current Frame to Effect"]="Quadro atual para Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Quebra inteligente", ["Split by Sentence"]="Dividir por frase",
+            ["Split by Comma"]="Dividir por vírgula", ["Line Merge and Cleanup"]="Combinar e limpar linhas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir sobreposições", ["Join Overlap Sentences"]="Unir sobreposições em frase", ["Divide by \\N"]="Dividir por \\N",
+            ["Copy Times"]="Copiar tempos", ["Select Time Range"]="Selecionar por intervalo", ["Sort by Text Length"]="Ordenar por tamanho do texto", ["Sort by CPS"]="Ordenar por CPS",
             ["Sort Odd Even"]="Ordenar ímpar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
             ["Add Lead-In Left"]="Lead-in esquerda", ["Add Lead-In Right"]="Lead-in direita", ["Add Lead-Out Left"]="Lead-out esquerda", ["Add Lead-Out Right"]="Lead-out direita", ["Chain Left"]="Encadear esquerda", ["Chain Right"]="Encadear direita",
-            ["Shift First"]="Deslocar desde primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
-            ["Properties and Cleanup"]="Propriedades e limpeza", ["AE Export"]="Exportar AE", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
+            ["Align to First Start"]="Alinhar ao início da primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
+            ["Text and Tag Cleanup"]="Limpar texto e tags", ["Properties and Cleanup"]="Propriedades e limpeza", ["After Effects Keyframes"]="Quadros para After Effects", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
         },
     },
 }
@@ -1153,8 +1154,14 @@ UI.labels.pt["MIXED-EMPHASIS"]  = "Ênfase mista"
 UI.labels.en["SEMICOLON"]       = "Semicolon"
 UI.labels.es["SEMICOLON"]       = "Punto y coma"
 UI.labels.pt["SEMICOLON"]       = "Ponto e vírgula"
+UI.labels.en["Smart Split"] = "Smart Split"
+UI.labels.en["Shift Following Lines"] = "Shift Following Lines"
 UI.labels.en["STUTTER"]         = "Stutter"
+UI.labels.es["Smart Split"] = "División inteligente"
+UI.labels.es["Shift Following Lines"] = "Desplazar posteriores"
 UI.labels.es["STUTTER"]         = "Tartamudeo"
+UI.labels.pt["Smart Split"] = "Divisão inteligente"
+UI.labels.pt["Shift Following Lines"] = "Deslocar seguintes"
 UI.labels.pt["STUTTER"]         = "Gagueira"
 UI.labels.en["SCREAM"]          = "Scream"
 UI.labels.es["SCREAM"]          = "Grito"
@@ -1377,7 +1384,7 @@ section during execution.
     - Add Stutter: inserts stutter formatting in the text.
     - Add Ah Prefix: inserts an "ah" prefix at the start of the
       dialogue.
-    - Stutter Manager: interactive dialog for stutter management.
+    - Normalize Stutter: normalizes repeated initials and applies stutter to [TT] lines.
 
 7.3. TAGS / COMMENTS
     - Fold by Identifier: groups lines sharing the same identifier into
@@ -1391,9 +1398,9 @@ section during execution.
     - Merge Tags: merges adjacent override tag blocks, deleting the
       }{ between them ({\an5}{\blur2} becomes {\an5\blur2}). Comment
       blocks and non-adjacent blocks are left untouched.
-    - Remove Comments: deletes comment blocks within the text.
-    - Actor Parser: extracts actor information from the text.
-    - Swap Comment: toggles the comment state of the line.
+    - Remove Inline Comments: deletes comment blocks within the text.
+    - Extract Actors and Split: extracts actor information from the text.
+    - Swap Text and Comments: exchanges visible text with inline comments; override tags remain in place.
     - Delete Comment Lines: deletes lines flagged as comments.
     - Comments to Top: reorders comments to the top of the selection.
     - Comments to Bottom: reorders comments to the bottom of the
@@ -1412,19 +1419,15 @@ section during execution.
       when the next text starts lowercase. Overlaps or non-lowercase
       continuations are marked as [POSSIBLE-JOIN] instead.
     - Erase Blank Lines: deletes blank lines.
-    - Frame Effect: writes the start-frame number into Effect.
+    - Current Frame to Effect: appends the current video-frame number to Effect.
     - Copy Fold: displays ASS event rows from the fold containing the
       first selected line for copying, then selects that fold.
 
 7.5. SPLIT / JOIN
-    - Smart Break: inserts a \N line break at the optimal position
-      only when the rendered text exceeds the available width.
     - Split by Sentence: splits the line by sentence.
     - Split by Comma: splits the line by comma.
     - Pivot \N: shifts the \N break within the line.
     - Remove \N: removes every \N from the line, collapsing whitespace.
-    - Join Lines: joins selected lines in grid order and spans their
-      earliest start and latest end, retaining the first row metadata.
     - Join Same Text: joins adjacent lines with identical text.
     - Join Overlaps: joins selected groups whose times overlap,
       expands the kept line to the group bounds, and preserves each
@@ -1436,8 +1439,8 @@ section during execution.
 
 7.6. TIME / SORT
     - Copy Times: copies timing from one line to others.
-    - Time Picker: selects lines within a time range.
-    - Sort by Length: sorts the lines by visible length.
+    - Select Time Range: selects lines within a time range.
+    - Sort by Text Length: sorts the lines by visible length.
     - Sort by CPS: sorts the lines by reading speed.
     - Sort Odd Even: sorts by the numeric value of the Effect field
       (odd and even).
@@ -1447,8 +1450,8 @@ section during execution.
     - Kite Timing: applies the Kite Timing algorithm (adaptive lead-in
       and lead-out, chaining, and edge protection) using the values
       from Config.
-    - Shift First: shifts the selection so the first line aligns with
-      the start of the second.
+    - Align to First Start: shifts rows after the first so the second starts
+      at the first row start; preserves their relative spacing.
     - Start Snap Back: snaps the start to the previous keyframe.
     - Start Snap Forward: snaps the start to the next keyframe.
     - End Snap Back: snaps the end to the previous keyframe.
@@ -1484,9 +1487,10 @@ empty box skips this section.
    8.1. Import Effects: copies the source Effect by time overlap.
    8.2. Import Text: copies visible text by time overlap.
    8.3. Import Actor: copies actor by best time overlap.
-   8.4. Import Tags: copies initial override tags from overlapping
-        source lines. Imported tags override matching initial tags in
-        the target line; inline tags after visible text are ignored.
+   8.4. Import Tags: replaces the complete initial override block from the
+        one source with greatest positive overlap. Ties keep pasted order.
+        A winning source without tags clears initial tags. No overlap leaves
+        the target unchanged. Target comments and inline tags are retained.
    8.5. Song Sync: duplicates or synchronizes groups using a Comment
         line on layer 50 as the sync anchor. The selected line's Effect
         is copied into each imported line's Effect; source Effects are
@@ -1501,7 +1505,7 @@ empty box skips this section.
 9. EXTRA TOOLS
 ______________
 
-   9.1. AE Export: exports motion data compatible with After Effects.
+   9.1. After Effects Keyframes: exports motion data compatible with After Effects.
    9.2. Text Replacer: replaces visible text while preserving override
         tags.
    9.3. mpv QC: reads notes exported from mpvQC in the format
@@ -1509,7 +1513,7 @@ ______________
         observation is written as [QC: …] in Effect and the suggestion
         is inserted as a comment block in the dialogue. Tolerance is
         defined in milliseconds.
-   9.4. Remover Assistant: removes selected visible signs, spacing
+   9.4. Text and Tag Cleanup: removes selected visible signs, spacing
         tokens, comments, and known override tags without toggling them
         back on when absent.
    9.5. Properties and Cleanup: edits script credits and title. The
@@ -1634,6 +1638,20 @@ Global configuration persisted between sessions.
 ___________
 
 Discord: https://discord.gg/Egq8us4xZC
+
+Integrated tools (1.6):
+Extra Tools / Line Merge and Cleanup uses direct buttons: Join, Keep Second (two rows),
+Keep Last, No Inner ... and One Phrase. Keep modes copy the chosen text exactly.
+The first row supplies other fields; times span every selected dialogue row.
+One Phrase also accepts one row: Hola. ¿Cómo estás? becomes Hola, ¿cómo estás?
+Abbreviations, decimals, ellipses and acronyms are protected; review proper names.
+Smart / Smart Split uses Wave2json and the shared Auto Timing waveform reader.
+Continuo preserves outer times; Raw trims to voice activity. [CS-*] in Effect
+marks estimated or uncertain boundaries. Drawings and animated text are skipped.
+Smart Break is in Smart. It balances visual width and natural pauses.
+Karaoke / Shift Following Lines shifts all dialogue rows BELOW the active row
+as one block, including comments, leaving 100 ms after the active row's end.
+It follows row order, preserves durations, and refuses negative times.
 ]],
     es = [[
 CHRONO SUITE · GUÍA DE USO
@@ -1827,7 +1845,7 @@ la sección durante la ejecución.
     - Remove Duplicate Letters: elimina letras consecutivas repetidas.
     - Add Stutter: inserta tartamudeo.
     - Add Ah Prefix: añade el prefijo "ah" al inicio del diálogo.
-    - Stutter Manager: diálogo interactivo para la gestión de
+    - Normalize Stutter: diálogo interactivo para la gestión de
       tartamudeos.
 
 7.3. TAGS / COMENTARIOS
@@ -1844,10 +1862,10 @@ la sección durante la ejecución.
     - Merge Tags: une bloques de override contiguos borrando el }{
       entre ellos ({\an5}{\blur2} pasa a {\an5\blur2}). Respeta los
       bloques de comentario y los no contiguos.
-    - Remove Comments: elimina los bloques de comentario dentro del
+    - Remove Inline Comments: elimina los bloques de comentario dentro del
       texto.
-    - Actor Parser: procesa información de actor a partir del texto.
-    - Swap Comment: alterna el estado comentado de la línea.
+    - Extract Actors and Split: procesa información de actor a partir del texto.
+    - Swap Text and Comments: intercambia texto visible y comentarios internos; conserva los tags.
     - Delete Comment Lines: elimina las líneas marcadas como
       comentario.
     - Comments to Top: reordena los comentarios al inicio de la
@@ -1868,19 +1886,16 @@ la sección durante la ejecución.
       cuando el texto posterior empieza en minúscula. Los solapes o
       continuaciones sin minúscula se marcan como [POSSIBLE-JOIN].
     - Erase Blank Lines: elimina las líneas vacías.
-    - Frame Effect: inscribe en Effect el número de frame
-      correspondiente al inicio de la línea.
+    - Current Frame to Effect: inscribe en Effect el número de frame
+      actual del vídeo, sin borrar el contenido previo.
     - Copy Fold: muestra las filas ASS del fold de la primera línea
       seleccionada para copiarlas y selecciona ese grupo.
 
 7.5. DIVIDIR / UNIR
-    - Smart Break: inserta un salto \N en la posición óptima
-      solo cuando el texto renderizado excede el ancho disponible.
     - Split by Sentence: divide la línea por oraciones.
     - Split by Comma: divide la línea por comas.
     - Pivot \N: desplaza el salto \N dentro de la línea.
     - Remove \N: elimina todos los \N de la línea y compacta espacios.
-    - Join Lines: une las líneas consecutivas seleccionadas.
     - Join Same Text: une las líneas adyacentes con texto idéntico.
     - Join Overlaps: une grupos seleccionados cuyos tiempos se solapan,
       expande la línea conservada a los límites del grupo y mantiene
@@ -1892,8 +1907,8 @@ la sección durante la ejecución.
 
 7.6. TIEMPO / ORDEN
     - Copy Times: copia los tiempos de una línea a otras.
-    - Time Picker: selecciona líneas comprendidas en un rango.
-    - Sort by Length: ordena las líneas por longitud.
+    - Select Time Range: selecciona líneas comprendidas en un rango.
+    - Sort by Text Length: ordena las líneas por longitud.
     - Sort by CPS: ordena las líneas por velocidad de lectura.
     - Sort Odd Even: ordena por valor numérico del Effect (impares y
       pares).
@@ -1903,8 +1918,8 @@ la sección durante la ejecución.
     - Kite Timing: aplica el algoritmo Kite Timing (lead-in y lead-out
       adaptativos, encadenado y protección de bordes) según los
       valores definidos en Config.
-    - Shift First: desplaza la selección de modo que la primera línea
-      coincida con el inicio de la segunda.
+    - Align to First Start: desplaza desde la segunda fila para que empiece
+      en el inicio de la primera; conserva las distancias relativas.
     - Start Snap Back: ajusta el inicio al keyframe anterior.
     - Start Snap Forward: ajusta el inicio al keyframe siguiente.
     - End Snap Back: ajusta el final al keyframe anterior.
@@ -1946,10 +1961,10 @@ vacía omite esta sección.
    8.2. Import Text: copia el texto visible por superposición temporal.
    8.3. Import Actor: copia el actor por la mejor superposición
         temporal.
-   8.4. Import Tags: copia override tags iniciales de las líneas de
-        origen solapadas. Los tags importados reemplazan tags iniciales
-        iguales en destino; los tags inline tras texto visible se
-        ignoran.
+   8.4. Import Tags: sustituye todos los tags iniciales por los de la fuente
+        con mayor solapamiento positivo. Un empate conserva el orden pegado.
+        Si la fuente ganadora no tiene tags, elimina los iniciales del destino.
+        Sin solapamiento no cambia nada. Conserva comentarios y tags internos.
    8.5. Song Sync: duplica o sincroniza grupos a partir de una línea
         Comment con layer 50 como punto de sincronización. El Effect de
         la línea seleccionada se copia al Effect de cada línea importada;
@@ -1964,7 +1979,7 @@ vacía omite esta sección.
 9. HERRAMIENTAS EXTRA
 _____________________
 
-   9.1. AE Export: exporta datos de movimiento compatibles con After
+   9.1. After Effects Keyframes: exporta datos de movimiento compatibles con After
         Effects.
    9.2. Text Replacer: reemplaza texto visible conservando los
         override tags.
@@ -1973,7 +1988,7 @@ _____________________
         se inscribe como [QC: …] en Effect y la sugerencia se inserta
         como bloque de comentario en el texto. La tolerancia se define
         en milisegundos.
-   9.4. Remover Assistant: elimina signos visibles, espacios,
+   9.4. Text and Tag Cleanup: elimina signos visibles, espacios,
         comentarios y override tags conocidos sin alternarlos si no
         existen.
 10. AUTO TIMING
@@ -2094,6 +2109,20 @@ Configuración global persistente entre sesiones.
 ___________
 
 Discord: https://discord.gg/Egq8us4xZC
+
+Herramientas integradas (1.6):
+Extra Tools / Line Merge and Cleanup tiene botones directos: Unir, Conservar segunda (dos
+filas), Conservar última, Sin ... internos y Una frase. Conservar copia el texto
+elegido exacto. Los demás campos son de la primera fila; el tiempo abarca todas.
+Una frase también acepta una sola fila: Hola. ¿Cómo estás? → Hola, ¿cómo estás?
+Protege abreviaturas, decimales, puntos suspensivos y siglas; revisa nombres propios.
+Smart / Smart Split usa Wave2json y comparte el lector de onda con Auto Timing.
+Continuo conserva los extremos; Raw ajusta a la actividad. Los marcadores [CS-*]
+en Effect señalan cortes estimados o dudosos. Omite dibujos y texto animado.
+Smart Break está en Smart y equilibra ancho visual y pausas naturales.
+Karaoke / Shift Following Lines desplaza en bloque todas las filas de diálogo
+POSTERIORES a la activa, incluidos comentarios, hasta dejar 100 ms tras su final.
+Sigue el orden de filas, conserva duraciones y rechaza tiempos negativos.
 ]],
     pt = [[
 CHRONO SUITE · GUIA DE USO
@@ -2287,7 +2316,7 @@ seção durante a execução.
     - Remove Duplicate Letters: remove letras consecutivas repetidas.
     - Add Stutter: insere gagueira no texto.
     - Add Ah Prefix: insere o prefixo "ah" no início do diálogo.
-    - Stutter Manager: diálogo interativo para gerenciar gagueira.
+    - Normalize Stutter: normaliza iniciais repetidas e aplica gagueira a linhas [TT].
 
 7.3. TAGS / COMENTÁRIOS
     - Fold by Identifier: agrupa em folds as linhas que compartilham
@@ -2302,9 +2331,9 @@ seção durante a execução.
     - Merge Tags: une blocos de override contíguos apagando o }{
       entre eles ({\an5}{\blur2} vira {\an5\blur2}). Preserva os
       blocos de comentário e os não contíguos.
-    - Remove Comments: apaga os blocos de comentário dentro do texto.
-    - Actor Parser: extrai informação de ator a partir do texto.
-    - Swap Comment: alterna o estado comentado da linha.
+    - Remove Inline Comments: apaga os blocos de comentário dentro do texto.
+    - Extract Actors and Split: extrai informação de ator a partir do texto.
+    - Swap Text and Comments: troca texto visível e comentários internos; preserva as tags.
     - Delete Comment Lines: apaga as linhas marcadas como comentário.
     - Comments to Top: reordena os comentários ao início da seleção.
     - Comments to Bottom: reordena os comentários ao final da
@@ -2323,19 +2352,16 @@ seção durante a execução.
       quando o texto posterior começa em minúscula. Sobreposições ou
       continuações sem minúscula são marcadas como [POSSIBLE-JOIN].
     - Erase Blank Lines: apaga linhas em branco.
-    - Frame Effect: inscreve em Effect o número de frame
-      correspondente ao início da linha.
+    - Current Frame to Effect: inscreve em Effect o número de frame
+      atual do vídeo, sem apagar o conteúdo anterior.
     - Copy Fold: mostra as linhas ASS do fold da primeira linha
       selecionada para copiar e seleciona esse grupo.
 
 7.5. DIVIDIR / UNIR
-    - Smart Break: insere uma quebra \N na posição ótima
-      apenas quando o texto renderizado excede a largura disponível.
     - Split by Sentence: divide a linha por frase.
     - Split by Comma: divide a linha por vírgula.
     - Pivot \N: desloca a quebra \N dentro da linha.
     - Remove \N: remove todos os \N da linha e compacta espaços.
-    - Join Lines: une as linhas consecutivas selecionadas.
     - Join Same Text: une as linhas adjacentes com texto idêntico.
     - Join Overlaps: une grupos selecionados cujos tempos se sobrepõem,
       expande a linha preservada aos limites do grupo e mantém cada
@@ -2347,8 +2373,8 @@ seção durante a execução.
 
 7.6. TEMPO / ORDEM
     - Copy Times: copia os tempos de uma linha para outras.
-    - Time Picker: seleciona linhas dentro de um intervalo.
-    - Sort by Length: ordena as linhas por comprimento.
+    - Select Time Range: seleciona linhas dentro de um intervalo.
+    - Sort by Text Length: ordena as linhas por comprimento.
     - Sort by CPS: ordena as linhas por velocidade de leitura.
     - Sort Odd Even: ordena pelo valor numérico do Effect (ímpares e
       pares).
@@ -2358,8 +2384,8 @@ seção durante a execução.
     - Kite Timing: aplica o algoritmo Kite Timing (lead-in e
       lead-out adaptativos, encadeamento e proteção de bordas) com
       os valores de Config.
-    - Shift First: desloca a seleção de modo que a primeira linha
-      coincida com o início da segunda.
+    - Align to First Start: desloca desde a segunda linha para começar
+      no início da primeira, mantendo as distâncias relativas.
     - Start Snap Back: ajusta o início ao keyframe anterior.
     - Start Snap Forward: ajusta o início ao keyframe seguinte.
     - End Snap Back: ajusta o fim ao keyframe anterior.
@@ -2398,9 +2424,10 @@ Dados. A caixa vazia salta esta seção.
         temporal.
    8.2. Import Text: copia o texto visível por sobreposição temporal.
    8.3. Import Actor: copia o ator pela melhor sobreposição temporal.
-   8.4. Import Tags: copia override tags iniciais das linhas de origem
-        sobrepostas. Os tags importados substituem tags iniciais iguais
-        no destino; tags inline após texto visível são ignorados.
+   8.4. Import Tags: substitui os tags iniciais pelos da fonte com maior
+        sobreposição positiva. Empates seguem a ordem colada. Uma fonte sem
+        tags limpa os iniciais. Sem sobreposição não altera a linha.
+        Comentários e tags internos do destino são preservados.
    8.5. Song Sync: duplica ou sincroniza grupos a partir de uma linha
         Comment com layer 50 como ponto de sincronia. O Effect da linha
         selecionada é copiado ao Effect de cada linha importada; os
@@ -2415,7 +2442,7 @@ Dados. A caixa vazia salta esta seção.
 9. FERRAMENTAS EXTRAS
 _____________________
 
-   9.1. AE Export: exporta dados de movimento compatíveis com o After
+   9.1. After Effects Keyframes: exporta dados de movimento compatíveis com o After
         Effects.
    9.2. Text Replacer: substitui texto visível preservando os
         override tags.
@@ -2424,7 +2451,7 @@ _____________________
         inscrita como [QC: …] em Effect e a sugestão é inserida como
         bloco de comentário no texto. A tolerância é definida em
         milissegundos.
-   9.4. Remover Assistant: remove sinais visíveis, espaços,
+   9.4. Text and Tag Cleanup: remove sinais visíveis, espaços,
         comentários e override tags conhecidos sem alterná-los quando
         ausentes.
 10. AUTO TIMING
@@ -2545,6 +2572,20 @@ Configuração global persistente entre sessões.
 ___________
 
 Discord: https://discord.gg/Egq8us4xZC
+
+Ferramentas integradas (1.6):
+Extra Tools / Line Merge and Cleanup tem botões diretos: Unir, Manter segunda (duas linhas),
+Manter última, Sem ... internos e Uma frase. Manter copia o texto escolhido exato.
+Os demais campos vêm da primeira linha; os tempos abrangem toda a seleção.
+Uma frase aceita uma linha: Hola. ¿Cómo estás? → Hola, ¿cómo estás?
+Protege abreviações, decimais, reticências e siglas; revise nomes próprios.
+Smart / Smart Split usa Wave2json e compartilha o leitor de onda do Auto Timing.
+Continuo preserva os extremos; Raw ajusta à atividade. [CS-*] em Effect marca
+cortes estimados ou incertos. Desenhos e texto animado são ignorados.
+Smart Break fica em Smart e equilibra largura visual e pausas naturais.
+Karaoke / Shift Following Lines desloca em bloco todas as linhas de diálogo
+ABAIXO da ativa, incluindo comentários, deixando 100 ms após seu final.
+Segue a ordem das linhas, preserva durações e rejeita tempos negativos.
 ]],
 }
 local function showHelp()
@@ -2703,7 +2744,7 @@ local function roundNumber(v, digits)
     if v >= 0 then return math.floor(v*m + 0.5)/m end
     return math.ceil(v*m - 0.5)/m
 end
-local function isWhitespaceChar(c) return c == NBSP or (#c == 1 and c:match("^%s$") ~= nil) end
+local function isWhitespaceChar(c) return c ~= nil and (c == NBSP or (#c == 1 and c:match("^%s$") ~= nil)) end
 local function isPunctuationChar(c) return utf8PunctuationChars[c] == true or (#c == 1 and c:match("^%p$") ~= nil) end
 local function isLetter(c)
     c = normalizeString(c); if c == "" then return false end
@@ -5420,73 +5461,710 @@ function TimingOperations.importText(subs, sel)
     return newSel
 end
 
-function TimingOperations.joinLines(subs, sel)
+function TimingOperations.joinLines(subs, sel, mode)
     sel = collectEditableSelection(subs, sel)
-    if #sel < 2 then return sel end
+    if #sel < (mode == "phrase" and 1 or 2) then return sel end
     table.sort(sel)
     local first = subs[sel[1]]
     local parts = {}
-    for _, i in ipairs(sel) do parts[#parts+1] = stripComments(stripTags(subs[i].text)) end
+    for _, i in ipairs(sel) do parts[#parts+1] = subs[i].text end
     local merged = cloneLine(first)
     for _, index in ipairs(sel) do
         merged.start_time = math.min(merged.start_time, subs[index].start_time)
         merged.end_time = math.max(merged.end_time, subs[index].end_time)
     end
     local leadTags = extractLeadingTagBlocks(first.text)
-    local mergedText = joinTextParts(parts)
-    merged.text = (leadTags ~= "" and leadTags or "") .. mergedText
+    local mergedText = TimingOperations.Join.text(parts, mode)
+    merged.text = leadTags .. mergedText
+    if mode == "second" or mode == "last" then merged.text = subs[sel[mode == "second" and 2 or #sel]].text end
     subs[sel[1]] = merged
     for k = #sel, 2, -1 do subs.delete(sel[k]) end
     return { sel[1] }
 end
 
-local function isSplitBoundary(c, comma) if sentenceSplitChars[c] then return true end; if comma == true and commaSplitChars[c] then return true end; return false end
-local function isSplitIndex(chars, i, comma)
-    local c = chars[i]
-    if isSplitBoundary(c, comma) then return true end
-    return c == "-" and chars[i-1] == " " and chars[i+1] == " "
+SmartOperations.Split = (function()
+local Core, LineOps, UI = Kite.Core, Kite.LineOps, KiteUI
+local Split = {}
+local floor, ceil, min, max, abs, log = math.floor, math.ceil, math.min, math.max, math.abs, math.log
+local trim, clamp = trimText, Core.clamp
+local settings = UI.settings(script_namespace .. ".SmartSplit", script_version, {main={mode="Continuo", wave_path=""}})
+local cache = {}
+local integerArray
+do
+    local lpeg = require("lpeg")
+    local P, S, R = lpeg.P, lpeg.S, lpeg.R
+    local space = S(" \t\r\n")^0
+    local integer = P("-")^-1 * (P("0") + R("19") * R("09")^0)
+    integerArray = P("[") * space * (integer * space * (P(",") * space * integer * space)^0)^-1 * P("]") * -P(1)
 end
+local CANCEL = {}
+local function checkCancelled()
+    if aegisub.progress and aegisub.progress.is_cancelled and aegisub.progress.is_cancelled() then error(CANCEL, 0) end
+end
+local function progress(label, percent)
+    checkCancelled()
+    LineOps.progress(label, percent)
+end
+local function round10(value) return Core.round(value / 10) * 10 end
+local function addFlag(flags, flag) flags[flag] = true end
 
-local function splitTextByPunctuation(text, comma)
-    local chars = splitUtf8Chars(text)
-    local segments, current, i = {}, {}, 1
+
+local terminals, closers = sentenceSplitChars, closingPunctuation
+local whitespace = isWhitespaceChar
+local hasText = hasVisibleSegmentText
+
+function Split.sentences(text, comma)
+    local chars, output, part, history = splitUtf8Chars(text), {}, {}, {}
+    local inherited, i = "", 1
+    local function flush()
+        local value = trim(table.concat(part))
+        if hasText(value) then
+            output[#output+1] = inherited .. value
+        elseif value ~= "" and #output > 0 then
+            output[#output] = output[#output] .. value
+        end
+        part = {}
+        inherited = table.concat(history)
+    end
     while i <= #chars do
         if chars[i] == "{" then
-            while i <= #chars do
-                current[#current+1] = chars[i]
-                if chars[i] == "}" then i = i + 1; break end
+            local block = {}
+            repeat
+                local ch = chars[i]
+                block[#block+1] = ch
                 i = i + 1
-            end
+                if ch == "}" then break end
+            until i > #chars
+            block = table.concat(block)
+            part[#part+1] = block
+            if block:match("^%{%s*\\") then history[#history+1] = block end
         else
-            current[#current+1] = chars[i]
-            if isSplitIndex(chars, i, comma) then
-                local j = i
-                while j + 1 <= #chars and isSplitBoundary(chars[j+1], comma) do
-                    j = j + 1; current[#current+1] = chars[j]
-                end
-                while j + 1 <= #chars and closingPunctuation[chars[j+1]] do
-                    j = j + 1; current[#current+1] = chars[j]
-                end
-                local seg = trimText(table.concat(current))
-                if hasVisibleSegmentText(seg) then segments[#segments+1] = seg end
-                current = {}; i = j + 1
-                while i <= #chars and isWhitespaceChar(chars[i]) do i = i + 1 end
-            else
-                i = i + 1
+            local ch = chars[i]
+            part[#part+1] = ch
+            local split = terminals[ch] or (comma and commaSplitChars[ch]) or (ch == "-" and chars[i-1] == " " and chars[i+1] == " ")
+            i = i + 1
+            if split then
+                while terminals[chars[i]] or (comma and commaSplitChars[chars[i]]) do part[#part+1] = chars[i]; i = i+1 end
+                while closers[chars[i]] do part[#part+1] = chars[i]; i = i+1 end
+                flush()
+                while whitespace(chars[i]) do i = i+1 end
             end
         end
     end
-    local tail = trimText(table.concat(current))
-    if hasVisibleSegmentText(tail) then segments[#segments+1] = tail end
-    if #segments < 2 then return nil end
-    local inherited = extractLeadingTagBlocks(text)
-    local final = {}
-    for _, seg in ipairs(segments) do
-        local n = ensureInheritedTags(seg, inherited)
-        if hasVisibleSegmentText(n) then final[#final+1] = n end
+    flush()
+    return output
+end
+
+local function textWeight(text)
+    local n = 0
+    for _, ch in ipairs(LineOps.graphemes(LineOps.visibleText(text))) do
+        if not whitespace(ch) and not ch:match("^%p$") and not utf8PunctuationChars[ch] then n = n+1 end
     end
-    if #final < 2 then return nil end
-    return final
+    return max(1, n)
+end
+
+
+
+function Split.readWave(path)
+    progress("Smart Split: leyendo onda...", 0)
+    local file, message = io.open(path, "rb")
+    if not file then error(message, 0) end
+    local content = file:read("*a")
+    file:close()
+    if not content then error("No se pudo leer el JSON de onda.", 0) end
+    local arrays = {}
+    local skeleton = content:gsub('("peaks"%s*:%s*)(%b[])', function(key, array)
+        checkCancelled()
+        if not integerArray:match(array) then error("Lista de picos inválida en un nivel de la onda.", 0) end
+        arrays[#arrays+1] = array
+        return key .. '"Smart SplitPeaks' .. #arrays .. '"'
+    end)
+    content = nil
+    checkCancelled()
+    local json = require("json")
+    local ok, meta = pcall(json.decode, skeleton, json.decode.strict)
+    skeleton = nil
+    if not ok or type(meta) ~= "table" or meta.type ~= "waveform" or meta.version ~= 1 then
+        error("JSON inválido: se necesita una onda Wave2json versión 1.", 0)
+    end
+    if meta.pointLayout ~= "interleavedMinMax" or type(meta.levels) ~= "table" then
+        error("La onda debe contener niveles con pares mínimo/máximo.", 0)
+    end
+    local best
+    for _, level in ipairs(meta.levels) do
+        local pm, count = Core.finiteNumber(level.pointMs), Core.finiteNumber(level.points)
+        local index = type(level.peaks) == "string" and tonumber(level.peaks:match("^Smart SplitPeaks(%d+)$"))
+        if not pm or pm <= 0 or not count or count < 1 or count ~= floor(count) or not index or not arrays[index] then
+            error("Un nivel contiene resolución, puntos o picos inválidos.", 0)
+        end
+        if not best or pm < best.pm then best = {pm=pm, count=count, index=index} end
+    end
+    if not best then error("La onda no contiene niveles.", 0) end
+    local duration = Core.finiteNumber(meta.durationMs)
+    local origin = meta.sourceStartMs == nil and 0 or Core.finiteNumber(meta.sourceStartMs)
+    if not origin or origin < 0 or not duration or duration <= 0 or
+        abs(best.count * best.pm - duration) > best.pm + 0.001 then
+        error("La duración o el desplazamiento temporal de la onda es inválido.", 0)
+    end
+    if meta.sourceEndMs ~= nil then
+        local finish = Core.finiteNumber(meta.sourceEndMs)
+        if not finish or finish <= origin or abs((finish-origin)-duration) > best.pm + 1 then
+            error("El rango de origen no corresponde a la duración de la onda.", 0)
+        end
+    end
+    local array = arrays[best.index]:sub(2, -2)
+    arrays, meta = nil, nil
+    collectgarbage("collect")
+    if array:match("^%s*,") or array:match(",%s*$") or array:match(",%s*,") then
+        error("Lista de picos inválida.", 0)
+    end
+    local prefix, count, pending, sum = {[0]=0}, 0, nil, 0
+    for token in array:gmatch("[^,]+") do
+        token = trim(token)
+        local value = token:match("^%-?%d+$") and Core.finiteNumber(token)
+        if not value or value < -32768 or value > 32767 then error("Pico inválido: se requieren enteros s16.", 0) end
+        if pending == nil then pending = value else
+            if pending > value then error("Un par de picos tiene el mínimo mayor que el máximo.", 0) end
+            count = count+1
+            sum = sum + max(abs(pending), abs(value))
+            prefix[count] = sum
+            pending = nil
+            if count % 100000 == 0 then progress("Smart Split: leyendo picos...", 15*count/best.count) end
+        end
+    end
+    if pending ~= nil or count ~= best.count then error("La cantidad de pares no coincide con points.", 0) end
+    return {prefix=prefix, n=count, point_ms=best.pm, origin=origin, duration=duration}
+end
+
+local function runs(mask)
+    local result, i = {}, 1
+    while i <= #mask do
+        local first, value = i, mask[i]
+        repeat i=i+1 until i>#mask or mask[i] ~= value
+        result[#result+1] = {a=first, b=i-1, active=value}
+    end
+    return result
+end
+local function percentile(sorted, fraction)
+    return sorted[max(1, min(#sorted, floor((#sorted-1)*fraction+1.5)))]
+end
+local function threshold(values)
+    local sorted = {}
+    for i,v in ipairs(values) do sorted[i]=v end
+    table.sort(sorted)
+    local lo, hi = percentile(sorted, 0.01), percentile(sorted, 0.99)
+    if hi-lo < 0.15 then return hi, lo, hi, false end
+    local bins, total, weighted = {}, #values, 0
+    for i=1,96 do bins[i]=0 end
+    for _,v in ipairs(values) do
+        local bin = clamp(floor((v-lo)/(hi-lo)*95)+1, 1, 96)
+        bins[bin]=bins[bin]+1
+        weighted=weighted+bin
+    end
+    local left, sum, best, cut = 0, 0, -1, 1
+    for i=1,95 do
+        left=left+bins[i]; sum=sum+i*bins[i]
+        if left>0 and left<total then
+            local difference=sum/left-(weighted-sum)/(total-left)
+            local score=left*(total-left)*difference*difference
+            if score>best then best,cut=score,i end
+        end
+    end
+    return lo+(cut-0.5)*(hi-lo)/96, lo, hi, true
+end
+
+function Split.analyze(wave, startMs, endMs)
+    if startMs < wave.origin or endMs > wave.origin+wave.duration+0.001 then return nil, "COVERAGE" end
+    local step = max(10, wave.point_ms)
+    local values, edges = {}, {startMs}
+    local time = startMs
+    while time < endMs do
+        local finish = min(endMs, time+step)
+        local a = clamp(floor((time-wave.origin)/wave.point_ms), 0, wave.n-1)
+        local b = clamp(ceil((finish-wave.origin)/wave.point_ms), a+1, wave.n)
+        values[#values+1] = log(1+(wave.prefix[b]-wave.prefix[a])/(b-a))
+        edges[#edges+1] = finish
+        time=finish
+        if #values % 10000 == 0 then checkCancelled() end
+    end
+    local high, noise, peak, structured = threshold(values)
+    local low = noise + (high-noise)*0.45
+    local support, raw = {}, {}
+    for i,v in ipairs(values) do support[i] = structured and v>low; raw[i]=false end
+
+    for _,run in ipairs(runs(support)) do
+        if run.active then
+            local seeded=false
+            for i=run.a,run.b do if values[i]>=high then seeded=true; break end end
+            if seeded then for i=run.a,run.b do raw[i]=true end end
+        end
+    end
+    local clean = {}
+    for i,v in ipairs(raw) do clean[i]=v end
+    local rawRuns=runs(raw)
+    for index,run in ipairs(rawRuns) do
+        if not run.active and index>1 and index<#rawRuns and edges[run.b+1]-edges[run.a]<=60 then
+            for i=run.a,run.b do clean[i]=true end
+        end
+    end
+    local cleaned=runs(clean)
+    for index,run in ipairs(cleaned) do
+        if run.active and index>2 and index<#cleaned-1 and edges[run.b+1]-edges[run.a]<60 then
+            for i=run.a,run.b do clean[i]=false end
+        end
+    end
+    local prefix, nextActive, prevActive = {[0]=0}, {}, {}
+    local last
+    for i,v in ipairs(raw) do
+        prefix[i]=prefix[i-1]+(v and edges[i+1]-edges[i] or 0)
+        if v then last=i end
+        prevActive[i]=last
+    end
+    last=nil
+    for i=#raw,1,-1 do
+        if raw[i] then last=i end
+        nextActive[i]=last
+    end
+    if prefix[#raw]<=0 then return nil, "NO-AUDIO" end
+    return {values=values, edges=edges, raw=raw, clean=clean, runs=rawRuns,
+        prefix=prefix, nextActive=nextActive, prevActive=prevActive,
+        step=step, high=high, low=low, noise=noise, peak=peak, n=#raw,
+        first=edges[nextActive[1]], last=edges[prevActive[#raw]+1]}
+end
+
+local function indexAt(analysis, time)
+    return clamp(floor((time-analysis.edges[1])/analysis.step)+1, 1, analysis.n)
+end
+local function activityAt(analysis, time)
+    if time<=analysis.edges[1] then return 0 end
+    if time>=analysis.edges[analysis.n+1] then return analysis.prefix[analysis.n] end
+    local i=indexAt(analysis,time)
+    return analysis.prefix[i-1]+(analysis.raw[i] and time-analysis.edges[i] or 0)
+end
+local function activeSpan(analysis, a, b)
+    local first=analysis.nextActive[indexAt(analysis,a)]
+    local last=analysis.prevActive[indexAt(analysis,b-0.00001)]
+    if not first or not last or first>last then return nil end
+    local s,e=max(a,analysis.edges[first]),min(b,analysis.edges[last+1])
+    if e<=s then return nil end
+    return s,e
+end
+
+function Split.candidates(analysis, weights, startMs, endMs)
+    local byTime={}
+    local function add(time, cost, kind, gapA, gapB)
+        time=round10(time)
+        if time<=startMs or time>=endMs then return end
+        if gapA and (time<gapA or time>gapB) then kind,cost="VALLEY",max(cost,2) end
+        local old=byTime[time]
+        if not old or cost<old.cost then byTime[time]={t=time,cost=cost,kind=kind,gap_a=gapA,gap_b=gapB} end
+    end
+    for index,run in ipairs(analysis.runs) do
+        if not run.active and index>1 and index<#analysis.runs then
+            local a,b=analysis.edges[run.a],analysis.edges[run.b+1]
+            local sum=0
+            for i=run.a,run.b do sum=sum+analysis.values[i] end
+            local depth=clamp((analysis.high-sum/(run.b-run.a+1))/max(0.01,analysis.high-analysis.noise),0,1)
+            local stable=false
+            for i=run.a,run.b do if not analysis.clean[i] then stable=true; break end end
+            local quality=0.65*min(1,(b-a)/250)+0.35*depth
+            add((a+b)/2,1-quality+(stable and 0 or 0.25),stable and "GAP" or "MICRO",a,b)
+        end
+    end
+
+
+    local stride=max(1,ceil(80/analysis.step))
+    for first=2,analysis.n-1,stride do
+        local best=first
+        for i=first,min(analysis.n-1,first+stride-1) do
+            if analysis.values[i]<analysis.values[best] then best=i end
+        end
+        if analysis.raw[best] then
+            local energy=clamp((analysis.values[best]-analysis.noise)/max(0.01,analysis.peak-analysis.noise),0,1)
+            add((analysis.edges[best]+analysis.edges[best+1])/2,2+energy,"VALLEY")
+        end
+    end
+    local total, accumulated=0,0
+    for _,w in ipairs(weights) do total=total+w end
+    for i=1,#weights-1 do
+        accumulated=accumulated+weights[i]
+        local target=analysis.prefix[analysis.n]*accumulated/total
+        local lo,hi=1,analysis.n
+        while lo<hi do
+            local mid=floor((lo+hi)/2)
+            if analysis.prefix[mid]<target then lo=mid+1 else hi=mid end
+        end
+        add(analysis.edges[lo]+target-analysis.prefix[lo-1],2.75,"VALLEY")
+        add(startMs+(endMs-startMs)*accumulated/total,3,"ESTIMATED")
+    end
+    local candidates={{t=startMs,cost=0,kind="EDGE"}}
+    for _,candidate in pairs(byTime) do candidates[#candidates+1]=candidate end
+    candidates[#candidates+1]={t=endMs,cost=0,kind="EDGE"}
+    table.sort(candidates,function(a,b) return a.t<b.t end)
+    for _,candidate in ipairs(candidates) do candidate.u=activityAt(analysis,candidate.t) end
+    return candidates
+end
+
+local function ratePenalty(actual, expected)
+    return min(2,abs(log(max(0.000001,actual)/max(0.000001,expected))))
+end
+
+function Split.align(analysis, weights, candidates)
+    local count, size=#weights,#candidates
+    local total, cumulative=0,{[0]=0}
+    for i,w in ipairs(weights) do total=total+w; cumulative[i]=total end
+    local voice=analysis.prefix[analysis.n]
+    local extent=analysis.last-analysis.first
+    local previous={[1]={{score=0}}}
+    local layers={}
+    local operations=0
+
+    for phrase=1,count do
+        local current={}
+        local jFirst,jLast=2,size-1
+        if phrase==count then jFirst,jLast=size,size end
+        for j=jFirst,jLast do
+            local right=candidates[j]
+            local best,second
+            for i=1,j-1 do
+                local states=previous[i]
+                local left=candidates[i]
+                if states and right.t-left.t>=10 and right.u>left.u then
+                    local a,b=activeSpan(analysis,left.t,right.t)
+                    if a then
+                        local expected=weights[phrase]/total
+                        local penalty=0.55*ratePenalty((right.u-left.u)/voice,expected)
+                            +0.20*ratePenalty((b-a)/extent,expected)
+                        if phrase<count then
+                            penalty=penalty+right.cost+0.15*abs(right.u/voice-cumulative[phrase]/total)
+                        end
+                        for rank,state in ipairs(states) do
+                            local candidate={score=state.score+penalty, previous=i, rank=rank}
+                            if not best or candidate.score<best.score then second,best=best,candidate
+                            elseif not second or candidate.score<second.score then second=candidate end
+                        end
+                    end
+                end
+                operations=operations+1
+                if operations%20000==0 then checkCancelled() end
+            end
+            if best then current[j]={best,second} end
+        end
+        layers[phrase]=current
+        previous=current
+    end
+    local final=previous[size]
+    if not final then return nil end
+    local function recover(rank)
+        local cuts,position={},size
+        for phrase=count,1,-1 do
+            local state=layers[phrase][position][rank]
+            cuts[phrase]=position
+            position,rank=state.previous,state.rank
+        end
+        cuts[0]=1
+        return cuts
+    end
+    local cuts,uncertain=recover(1),{}
+    if final[2] and final[2].score-final[1].score<=max(0.10,0.05*abs(final[1].score)) then
+        local alternative=recover(2)
+        for i=1,count-1 do
+            if abs(candidates[cuts[i]].t-candidates[alternative[i]].t)>=80 then uncertain[i]=true end
+        end
+    end
+    return {cuts=cuts, uncertain=uncertain, score=final[1].score,
+        second_score=final[2] and final[2].score, candidates=candidates}
+end
+
+local function estimated(weights,startMs,endMs)
+    local count,total=#weights,0
+    for _,w in ipairs(weights) do total=total+w end
+    local boundaries,accumulated={[0]=startMs},0
+    for i=1,count-1 do
+        accumulated=accumulated+weights[i]
+        local lower=ceil((boundaries[i-1]+10)/10)*10
+        local upper=floor((endMs-(count-i)*10)/10)*10
+        if lower>upper then return nil end
+        boundaries[i]=clamp(round10(startMs+(endMs-startMs)*accumulated/total),lower,upper)
+    end
+    boundaries[count]=endMs
+    return boundaries
+end
+
+function Split.planLine(line,wave,mode)
+    local phrases=Split.sentences(line.text)
+    if #phrases<2 then return nil,"ONE-SENTENCE" end
+    local startMs,endMs=Core.finiteNumber(line.start_time),Core.finiteNumber(line.end_time)
+    if not startMs or not endMs or startMs<0 or endMs-startMs<#phrases*10 then return nil,"DURATION" end
+    local weights={}
+    for i,text in ipairs(phrases) do weights[i]=textWeight(text) end
+    local fallback=estimated(weights,startMs,endMs)
+    if not fallback then return nil,"DURATION" end
+    local analysis,reason=Split.analyze(wave,startMs,endMs)
+    local alignment
+    if analysis then alignment=Split.align(analysis,weights,Split.candidates(analysis,weights,startMs,endMs)) end
+    if not alignment and not reason then reason="NO-PATH" end
+    local results={}
+    for i,text in ipairs(phrases) do
+        local flags={}
+        local a,b=fallback[i-1],fallback[i]
+        if alignment then
+            local left,right=alignment.candidates[alignment.cuts[i-1]],alignment.candidates[alignment.cuts[i]]
+            a,b=left.t,right.t
+            if (i>1 and left.kind~="GAP") or (i<#phrases and right.kind~="GAP") then addFlag(flags,"CUT") end
+            if alignment.uncertain[i-1] or alignment.uncertain[i] then addFlag(flags,"AMBIGUOUS") end
+            if mode=="Raw" then
+                local voiceA,voiceB=activeSpan(analysis,a,b)
+                local trimmedA=max(a,floor(voiceA/10)*10)
+                local trimmedB=min(b,ceil(voiceB/10)*10)
+
+                if i~=1 or voiceA-startMs>=max(30,2*analysis.step) then a=trimmedA end
+                if i~=#phrases or endMs-voiceB>=max(30,2*analysis.step) then b=trimmedB end
+            end
+            if analysis.step>20 then addFlag(flags,"RESOLUTION") end
+        else
+            addFlag(flags,"ESTIMATED"); addFlag(flags,reason)
+        end
+        local new=LineOps.copy(line)
+        new.text,new.start_time,new.end_time=text,a,b
+        local names={}
+        for flag in pairs(flags) do names[#names+1]=flag end
+        table.sort(names)
+        local effect=tostring(new.effect or "")
+        for _,flag in ipairs(names) do
+            local marker="[CS-"..flag.."]"
+            if not effect:find(marker,1,true) then effect=effect..(effect~="" and " " or "")..marker end
+        end
+        new.effect=effect
+        results[i]={line=new,flags=names}
+    end
+    return {segments=results,analysis=analysis,alignment=alignment,estimated=not alignment}
+end
+
+local function skipReason(line)
+    if line.class~="dialogue" or line.comment then return "COMMENT" end
+    if LineOps.hasDrawing(line.text) then return "DRAWING" end
+    local effect=tostring(line.effect or ""):lower()
+    if effect:find("template",1,true) or effect:find("karaoke",1,true) or effect:match("^code") then return "FX" end
+    for _,call in ipairs(LineOps.tagCalls(line.text)) do
+        local name=call.name:lower()
+        if name=="k" or name=="kf" or name=="ko" or name=="kt" or name=="t" or name=="move" or name=="fad" or name=="fade" then return "FX" end
+    end
+end
+
+function Split.process(subs,selection,wave,mode)
+    local indices=LineOps.normalizeIndices(subs,selection)
+    local plans,summary={}, {split=0,created=0,flagged=0,estimated=0,skipped=0,reasons={}}
+    for position,index in ipairs(indices) do
+        progress("Smart Split: analizando línea "..position.."/"..#indices,15+70*(position-1)/max(1,#indices))
+        local line=subs[index]
+        local reason=skipReason(line)
+        local plan
+        if not reason then plan,reason=Split.planLine(line,wave,mode) end
+        if plan then
+            plans[index]=plan
+            summary.split=summary.split+1
+            summary.created=summary.created+#plan.segments
+            if plan.estimated then summary.estimated=summary.estimated+1 end
+            for _,segment in ipairs(plan.segments) do if #segment.flags>0 then summary.flagged=summary.flagged+1 end end
+
+            plan.analysis,plan.alignment=nil,nil
+        else
+            summary.skipped=summary.skipped+1
+            summary.reasons[reason]=(summary.reasons[reason] or 0)+1
+        end
+    end
+    checkCancelled()
+    if summary.split==0 then return indices,summary end
+    local remapped={}
+    local offset=0
+    for _,index in ipairs(indices) do
+        local count=plans[index] and #plans[index].segments or 1
+        for i=0,count-1 do remapped[#remapped+1]=index+offset+i end
+        offset=offset+count-1
+    end
+    LineOps.transaction(subs,"Smart Split - "..mode,function()
+        for i=#indices,1,-1 do
+            checkCancelled()
+            local index=indices[i]
+            local plan=plans[index]
+            if plan then
+                subs[index]=plan.segments[1].line
+                for j=#plan.segments,2,-1 do subs.insert(index+1,plan.segments[j].line) end
+            end
+        end
+    end)
+    return remapped,summary
+end
+
+local reasonNames={COMMENT="Comentarios u otras filas",DRAWING="Dibujos",FX="Karaoke/efectos temporales",["ONE-SENTENCE"]="Una sola frase",DURATION="Duración insuficiente o inválida"}
+function Split.main(subs,selection)
+    local cfg=settings:values("main")
+    local path=cfg.wave_path or ""
+    local mode=cfg.mode=="Raw" and "Raw" or "Continuo"
+    while true do
+        local button,result=UI.workflow("Smart Split","Frases en orden · islas de voz · CPS como orientación",{
+            {class="label",label="JSON de onda:",x=0,y=0,width=7,height=1},
+            {class="edit",name="wave_path",text=path,x=7,y=0,width=33,height=1},
+            {class="label",label="Modo:",x=0,y=1,width=7,height=1},
+            {class="dropdown",name="mode",items={"Continuo","Raw"},value=mode,x=7,y=1,width=12,height=1},
+            {class="checkbox",name="reload",label="Recargar onda",value=false,x=20,y=1,width=20,height=1},
+            {class="label",label="Continuo conserva los extremos y corta en el centro de las pausas.",x=0,y=2,width=40,height=1},
+            {class="label",label="Raw ajusta cada frase a su actividad. Las dudas se marcan en Effect.",x=0,y=3,width=40,height=1},
+        },{"Dividir","Examinar...","Cancelar"},{ok="Dividir",close="Cancelar"})
+        if not button or button=="Cancelar" then return selection end
+        path,mode=trim(result.wave_path),result.mode=="Raw" and "Raw" or "Continuo"
+        if button=="Examinar..." then
+            local picked=aegisub.dialog.open("Elige el JSON de Wave2json","",path,"JSON (*.json)|*.json",false,true)
+            if picked and picked~="" then path=picked end
+        elseif button=="Dividir" then
+            if path=="" then UI.message("Selecciona el JSON de onda.") else
+                local ok,newSelection,summary=pcall(function()
+                    if result.reload or cache.path~=path or not cache.wave then
+                        local wave=Split.readWave(path)
+                        cache={path=path,wave=wave}
+                        collectgarbage("collect")
+                    end
+                    return Split.process(subs,selection,cache.wave,mode)
+                end)
+                if not ok then
+                    if newSelection==CANCEL then return selection end
+                    UI.message("Smart Split: "..tostring(newSelection))
+                    return selection
+                end
+                settings:update("main",{mode=mode,wave_path=path})
+                local saved,message=settings:write()
+                local lines={string.format("Divididas: %d | Frases: %d | Frases marcadas: %d\nOriginales con reparto estimado: %d | Omitidas: %d",summary.split,summary.created,summary.flagged,summary.estimated,summary.skipped)}
+                local reasons={}
+                for reason,count in pairs(summary.reasons) do reasons[#reasons+1]=(reasonNames[reason] or reason)..": "..count end
+                table.sort(reasons)
+                for _,reason in ipairs(reasons) do lines[#lines+1]=reason end
+                if not saved then lines[#lines+1]="No se guardaron las preferencias: "..tostring(message) end
+                UI.message(table.concat(lines,"\n"))
+                return newSelection,newSelection[1]
+            end
+        else return selection end
+    end
+end
+
+return Split
+end)()
+
+TimingOperations.Join = {}
+do
+    local Join = TimingOperations.Join
+    function Join.continues(text)
+        local chars = splitUtf8Chars(trimText(text))
+        while #chars > 0 and (closingPunctuation[chars[#chars]] or isWhitespaceChar(chars[#chars])) do table.remove(chars) end
+        local last = chars[#chars]
+        return last == "," or last == horizontalEllipsis or last == twoDotLeader
+            or (#chars >= 3 and last == "." and chars[#chars-1] == "." and chars[#chars-2] == ".")
+    end
+
+    function Join.onePhrase(text)
+        local chars, output = splitUtf8Chars(text), {}
+        local lower, index = false, 1
+        local abbreviations = {sr=true, sra=true, srta=true, dr=true, dra=true, prof=true, ud=true, uds=true, etc=true}
+        while index <= #chars do
+            local char = chars[index]
+            if char == "." and chars[index-1] ~= "." and chars[index+1] ~= "." and isWhitespaceChar(chars[index+1]) then
+                local word, cursor = {}, index - 1
+                while cursor > 0 and isLetter(chars[cursor]) do table.insert(word, 1, chars[cursor]); cursor = cursor - 1 end
+                local nextIndex = index + 1
+                while isWhitespaceChar(chars[nextIndex]) do nextIndex = nextIndex + 1 end
+                if chars[nextIndex] and #word > 1 and not abbreviations[unicodeLower(table.concat(word))] then
+                    char, lower = ",", true
+                end
+            elseif lower and isLetter(char) then
+                local word, cursor = {}, index
+                while chars[cursor] and isLetter(chars[cursor]) do word[#word+1] = chars[cursor]; cursor = cursor + 1 end
+                local value = table.concat(word)
+                if #word == 1 or unicodeUpper(value) ~= value then char = unicodeLower(char) end
+                lower = false
+            end
+            output[#output+1] = char
+            index = index + 1
+        end
+        return table.concat(output)
+    end
+
+    function Join.text(parts, mode)
+        local values, previous = {}, nil
+        for _, part in ipairs(parts) do
+            local value = trimText(Kite.LineOps.visibleText(part)):gsub("%s+", " ")
+            if value ~= "" then
+                if previous and Join.continues(previous) then value = changeFirstLetter(value, false) end
+                values[#values+1], previous = value, value
+            end
+        end
+        local text = joinTextParts(values)
+        if mode == "clean" then
+            local ending = text:match("(%.%.%.+)$") or (endsWith(text, horizontalEllipsis) and horizontalEllipsis)
+                or (endsWith(text, twoDotLeader) and twoDotLeader) or ""
+            if ending ~= "" then text = text:sub(1, #text - #ending) end
+            text = trimText(text:gsub(horizontalEllipsis, " "):gsub(twoDotLeader, " "):gsub("%.%.%.+", " ")):gsub("%s+", " ") .. ending
+        elseif mode == "phrase" then text = Join.onePhrase(text) end
+        return text
+    end
+end
+
+function TimingOperations.joinDialog(subs, sel)
+    local labels = {
+        en = {"Join", "Keep Second", "Keep Last", "No Inner ...", "One Phrase", "Cancel",
+            "Join: combines text. Keep Second: exactly two rows; keeps the second text.\nKeep Last: keeps the last selected text. No Inner ...: removes inner ellipses.\nOne Phrase: joins sentences with commas and lowers the next initial.\nKeeps the first row's fields and expands its time range. Review names in One Phrase."},
+        es = {"Unir", "Conservar segunda", "Conservar última", "Sin ... internos", "Una frase", "Cancelar",
+            "Unir: combina textos. Segunda: exige dos filas y conserva el segundo texto.\nÚltima: conserva el último texto seleccionado. Sin ...: quita puntos suspensivos internos.\nUna frase: une oraciones con comas y baja la inicial siguiente.\nConserva los campos de la primera fila y amplía sus tiempos. Revisa nombres en Una frase."},
+        pt = {"Unir", "Manter segunda", "Manter última", "Sem ... internos", "Uma frase", "Cancelar",
+            "Unir: combina textos. Segunda: exige duas linhas e mantém o segundo texto.\nÚltima: mantém o último texto selecionado. Sem ...: remove reticências internas.\nUma frase: une orações com vírgulas e baixa a inicial seguinte.\nMantém os campos da primeira linha e amplia os tempos. Revise nomes em Uma frase."},
+    }
+    local text = labels[currentConfig.language] or labels.en
+    local button = aegisub.dialog.display({{class="label", label=text[7], x=0, y=0, width=1, height=4}},
+        {text[1],text[2],text[3],text[4],text[5],text[6]}, {close=text[6]})
+    local modes = {[text[1]]="normal", [text[2]]="second", [text[3]]="last", [text[4]]="clean", [text[5]]="phrase"}
+    local mode = modes[button]
+    if not mode then return sel end
+    local indices = Kite.LineOps.normalizeIndices(subs, sel, isEditableDialogue)
+    if #indices < (mode == "phrase" and 1 or 2) or (mode == "second" and #indices ~= 2) then
+        showMsg(mode == "second" and "Keep Second: select exactly two dialogue lines." or "Select at least two dialogue lines.")
+        return sel
+    end
+    return Kite.LineOps.transaction(subs, "Chrono Suite - Line Merge and Cleanup", function()
+        Kite.LineOps.checkCancelled()
+        return TimingOperations.joinLines(subs, indices, mode)
+    end)
+end
+
+function TimingOperations.shiftFollowing(subs, sel, active)
+    if not active or active < 1 or active >= #subs or not isDialogue(subs[active]) then return sel, active end
+    local indices = {}
+    for index = active + 1, #subs do
+        if isDialogue(subs[index]) then indices[#indices+1] = index end
+    end
+    if #indices == 0 then return sel, active end
+    local delta = subs[active].end_time + 100 - subs[indices[1]].start_time
+    if delta == 0 then return sel, active end
+    for _, index in ipairs(indices) do
+        Kite.LineOps.checkCancelled()
+        local line = subs[index]
+        if line.start_time + delta < 0 or line.end_time + delta < 0 then
+            showMsg("Shift Following Lines: a lower row would start or end before 0 ms.")
+            return sel, active
+        end
+    end
+    return Kite.LineOps.transaction(subs, "Chrono Suite - Shift Following Lines", function()
+        for _, index in ipairs(indices) do
+            Kite.LineOps.checkCancelled()
+            local line = subs[index]
+            line.start_time, line.end_time = line.start_time + delta, line.end_time + delta
+            subs[index] = line
+        end
+        return sel, active
+    end)
+end
+
+local function splitTextByPunctuation(text, comma)
+    local segments = SmartOperations.Split.sentences(text, comma)
+    if #segments >= 2 then return segments end
 end
 
 local function splitLineByPunctuationFallback(subs, i, comma)
@@ -5611,138 +6289,326 @@ function TimingOperations.splitByLinebreak(subs, sel)
 end
 
 function TimingOperations.smartLineBreak(subs, sel)
-    local strongConj = {
-        ["pero"]=true,["mas"]=true,["sino"]=true,["aunque"]=true,["porque"]=true,["pues"]=true,
-        ["si"]=true,["aun"]=true,["cuando"]=true,["mientras"]=true,["donde"]=true,["como"]=true,
-        ["y"]=true,["e"]=true,["o"]=true,["u"]=true,["ni"]=true,
-        ["but"]=true,["and"]=true,["or"]=true,["so"]=true,["yet"]=true,["if"]=true,["when"]=true,
-        ["while"]=true,["because"]=true,["although"]=true,["though"]=true,["unless"]=true,["whereas"]=true,
-    }
-    local tightFollower = {
-        ["que"]=true,["cual"]=true,["cuales"]=true,["quien"]=true,["quienes"]=true,
-        ["cuyo"]=true,["cuya"]=true,["cuyos"]=true,["cuyas"]=true,
-        ["that"]=true,["which"]=true,["who"]=true,["whom"]=true,["whose"]=true,
-    }
-    local functionTrail = {
-        ["el"]=true,["la"]=true,["los"]=true,["las"]=true,
-        ["un"]=true,["una"]=true,["unos"]=true,["unas"]=true,["lo"]=true,
-        ["a"]=true,["ante"]=true,["bajo"]=true,["con"]=true,["contra"]=true,
-        ["de"]=true,["desde"]=true,["en"]=true,["entre"]=true,["hacia"]=true,
-        ["hasta"]=true,["para"]=true,["por"]=true,["sin"]=true,["sobre"]=true,["tras"]=true,
-        ["durante"]=true,["mediante"]=true,
-        ["mi"]=true,["mis"]=true,["tu"]=true,["tus"]=true,["su"]=true,["sus"]=true,
-        ["nuestro"]=true,["nuestra"]=true,["nuestros"]=true,["nuestras"]=true,
-        ["vuestro"]=true,["vuestra"]=true,["vuestros"]=true,["vuestras"]=true,
-        ["the"]=true,["an"]=true,["of"]=true,["to"]=true,["in"]=true,["on"]=true,["at"]=true,
-        ["by"]=true,["for"]=true,["with"]=true,["from"]=true,["into"]=true,["onto"]=true,["upon"]=true,
-        ["my"]=true,["your"]=true,["his"]=true,["her"]=true,["our"]=true,["their"]=true,["its"]=true,
-    }
-    local cfg = {
-        minLength = 15, imbalanceWeight = 1000,
-        shortCharsPenalty = 80, minChars = 5,
-        shortWordsPenalty = 150, minWords = 2,
-        overflowPenalty = 40, sentenceEndBonus = 14, softPauseBonus = 6,
-        conjunctionBonus = 40, tightFollowerPenalty = 25,
-        functionTrailPenalty = 18, orphanConjPenalty = 8,
-    }
-    local function firstWordLower(text)
-        local t = trimText(text); if t == "" then return nil end
-        if startsWith(t, invQuestion)    then t = t:sub(#invQuestion + 1) end
-        if startsWith(t, invExclamation) then t = t:sub(#invExclamation + 1) end
-        t = t:gsub("^[%-%(%[\"'%s]+", "")
-        local w = t:match("^([^%s%c%p]+)")
-        if not w or w == "" then return nil end
-        return unicodeLower(w)
-    end
-    local function lastWordLower(text)
-        local t = trimText(text); t = t:gsub("[%s%p]+$", "")
-        local w = t:match("([^%s%c%p]+)$")
-        if not w or w == "" then return nil end
-        return unicodeLower(w)
-    end
-    local meta, styles = nil, nil
+    local meta, styles
     if karaskel and type(karaskel.collect_head) == "function" then
         local ok, m, s = pcall(karaskel.collect_head, subs, false)
-        if ok then meta = m; styles = s end
+        if ok then meta, styles = m, s end
     end
-    local videoWidth = 1920
-    if aegisub and type(aegisub.video_size) == "function" then
-        local ok, w = pcall(aegisub.video_size)
-        if ok then
-            if type(w) == "table" and tonumber(w.width) then videoWidth = tonumber(w.width)
-            elseif tonumber(w) then videoWidth = tonumber(w) end
+    local scriptWidth = meta and normalizeNumber(meta.res_x, 0) or 0
+    if scriptWidth <= 0 then
+        local ok, w = pcall(function() return aegisub.video_size() end)
+        scriptWidth = ok and normalizeNumber(type(w) == "table" and w.width or w, 0) or 0
+        if scriptWidth <= 0 then scriptWidth = 1920 end
+    end
+    local function tagTokens(block)
+        if Kite.LineOps and Kite.LineOps.overrideTokens then
+            return Kite.LineOps.overrideTokens(block)
+        end
+        local tokens = {}
+
+        block = block:gsub("%b()", "")
+        for raw in block:gmatch("\\([^\\]+)") do
+            for _, name in ipairs({"fscx", "fscy", "fsp", "fn", "fs", "r", "b", "i", "p"}) do
+                if raw:sub(1, #name) == name then
+                    local value = trimText(raw:sub(#name + 1))
+                    if name == "fn" or name == "r" or value == "" or tonumber(value) then
+                        tokens[#tokens+1] = {name=name, value=value}
+                        break
+                    end
+                end
+            end
+        end
+        return tokens
+    end
+    local function sections(text)
+        if Kite.LineOps and Kite.LineOps.scanSections then return Kite.LineOps.scanSections(text) end
+        local out, cursor, drawing = {}, 1, false
+        while cursor <= #text do
+            local a, b = text:find("%b{}", cursor)
+            local finish = a and a - 1 or #text
+            if finish >= cursor then
+                out[#out+1] = {type=drawing and "drawing" or "text", start=cursor,
+                    finish=finish, text=text:sub(cursor, finish)}
+            end
+            if not a then break end
+            local block = text:sub(a+1, b-1)
+            out[#out+1] = {type="override", start=a, finish=b, text=block}
+            for _, token in ipairs(tagTokens(block)) do
+                if token.name == "p" then drawing = (tonumber(token.value) or 0) > 0
+                elseif token.name == "r" then drawing = false end
+            end
+            cursor = b + 1
+        end
+        return out
+    end
+    local function tokenize(text)
+        local tokens, hasBreak, hasDrawing = {}, false, false
+        for _, section in ipairs(sections(text)) do
+            if section.type ~= "text" then
+                tokens[#tokens+1] = {kind=section.type, raw=text:sub(section.start, section.finish),
+                    tags=section.type == "override" and tagTokens(section.text) or {}}
+                hasDrawing = hasDrawing or section.type == "drawing"
+            else
+                local cursor = 1
+                while cursor <= #section.text do
+                    local a, b = section.text:find("[ \t]+", cursor)
+                    local e = section.text:find("\\[Nnh]", cursor)
+                    if e and (not a or e < a) then a, b = e, e+1 end
+                    if not a then a, b = #section.text+1, #section.text end
+                    if a > cursor then
+                        tokens[#tokens+1] = {kind="text", raw=section.text:sub(cursor, a-1)}
+                    end
+                    if a <= #section.text then
+                        local raw = section.text:sub(a, b)
+                        local kind = raw == "\\h" and "hardspace"
+                            or (raw == "\\N" or raw == "\\n") and "break" or "space"
+                        tokens[#tokens+1] = {kind=kind, raw=raw}
+                        hasBreak = hasBreak or kind == "break"
+                    end
+                    cursor = b+1
+                end
+            end
+        end
+        return tokens, hasBreak, hasDrawing
+    end
+    local function join(tokens)
+        local out = {}; for _, token in ipairs(tokens) do out[#out+1] = token.raw end
+        return table.concat(out)
+    end
+    local function normalizeBreaks(tokens)
+        for i, token in ipairs(tokens) do
+            if token.kind == "break" and token.raw == "\\N" then
+                local j = i-1
+                while j > 0 do
+                    local previous = tokens[j]
+                    if previous.kind == "space" then previous.raw = ""
+                    elseif previous.kind ~= "override" and previous.kind ~= "comment" then break end
+                    j = j-1
+                end
+                local previous = tokens[j]
+                if previous and previous.kind == "text" and not endsWith(previous.raw, NBSP) then
+                    token.raw = " \\N"
+                end
+                j = i+1
+                while tokens[j] do
+                    local following = tokens[j]
+                    if following.kind == "space" then following.raw = ""
+                    elseif following.kind ~= "override" and following.kind ~= "comment" then break end
+                    j = j+1
+                end
+            end
         end
     end
-    local scriptWidth = meta and tonumber(meta.res_x) or nil
-    if not scriptWidth or scriptWidth <= 0 then scriptWidth = videoWidth end
-    local function getExtents(text, style)
-        local clean = stripComments(stripTags(text))
-        if aegisub and type(aegisub.text_extents) == "function" then
-            local ok, w = pcall(function() return aegisub.text_extents(style, clean) end)
-            if ok and type(w) == "number" then return w end
+    local numericTags = {fs="fontsize", fscx="scale_x", fscy="scale_y", fsp="spacing"}
+    local function measureRuns(tokens, baseStyle)
+        local style, runs, plain = cloneLine(baseStyle), {}, {}
+        local resetStyle = baseStyle
+        for i, token in ipairs(tokens) do
+            local previousStyle = style
+            if token.tags and #token.tags > 0 then style = cloneLine(style) end
+            local changed = false
+            for _, tag in ipairs(token.tags or {}) do
+                local value, field = trimText(tag.value), numericTags[tag.name]
+                if tag.name == "r" then
+                    resetStyle = (value ~= "" and styles and styles[value]) or baseStyle
+                    style = cloneLine(resetStyle)
+                    changed = true
+                elseif tag.name == "fn" then
+                    style.fontname = value ~= "" and value ~= "0" and value or resetStyle.fontname; changed = true
+                elseif field then
+                    local number = tonumber(value)
+                    if tag.name == "fs" and value:match("^[+-]") then
+                        number = (tonumber(style.fontsize) or 24) * (1 + (number or 0) / 10)
+                    end
+                    if tag.name == "fs" and number and number <= 0 then number = nil end
+                    if (tag.name == "fscx" or tag.name == "fscy") and number then number = math.max(0, number) end
+                    style[field] = number or resetStyle[field]; changed = true
+                elseif tag.name == "b" or tag.name == "i" then
+                    local key = tag.name == "b" and "bold" or "italic"
+                    style[key] = value == "" and resetStyle[key] or (tonumber(value) or 0) ~= 0
+                    changed = true
+                end
+            end
+            if not changed then style = previousStyle end
+            local visible = token.kind == "hardspace" and NBSP
+                or (token.kind == "text" or token.kind == "space") and token.raw or ""
+            token.visible = visible
+            plain[#plain+1] = visible
+            if visible ~= "" then
+                local run = runs[#runs]
+                if not run or run.style ~= style then
+                    run = {first=i, last=i, style=style, cache={}}; runs[#runs+1] = run
+                end
+                run.last = i
+            end
         end
-        local fs = 24
-        if type(style) == "table" and tonumber(style.fontsize) then fs = tonumber(style.fontsize) end
-        return countCharacters(clean) * math.max(1, fs * 0.5)
+        local function width(first, last)
+            local total = 0
+            for _, run in ipairs(runs) do
+                local a, b = math.max(first, run.first), math.min(last, run.last)
+                if a <= b then
+                    local parts = {}
+                    for i = a, b do parts[#parts+1] = tokens[i].visible end
+                    local text = table.concat(parts)
+                    local w = run.cache[text]
+                    if not w then
+                        local ok, measured = pcall(function() return aegisub.text_extents(run.style, text) end)
+                        w = ok and normalizeNumber(measured, nil) or nil
+                        if not w or w < 0 then
+                            w = unicodeLenSafe(text) * (tonumber(run.style.fontsize) or 24) * 0.5
+                                * (tonumber(run.style.scale_x) or 100) / 100
+                        end
+                        run.cache[text] = w
+                    end
+                    total = total + w
+                end
+            end
+            return total
+        end
+        return width, table.concat(plain)
+    end
+    local function breakWords(text)
+        local words = {}
+        for word, finish in text:gmatch("(%S+)()") do
+            local tail = word
+            while closingPunctuation[unicodeSub(tail, -1)] do tail = unicodeSub(tail, 1, -2) end
+            local punctuation = unicodeSub(tail, -1)
+            local chars = splitUtf8Chars(word)
+            while #chars > 0 and isPunctuationChar(chars[1]) do table.remove(chars, 1) end
+            while #chars > 0 and isPunctuationChar(chars[#chars]) do table.remove(chars) end
+            if #chars > 0 then
+                words[#words+1] = {finish=finish-1,
+                    pause=sentenceSplitChars[punctuation] and 2 or commaSplitChars[punctuation] and 1 or 0}
+            end
+        end
+        return words
+    end
+    local function chooseBreak(candidates, byWord, words, total, available)
+
+        local sizes, previous, gap = {}, 0, 0
+        for j, word in ipairs(words) do
+            local boundary = byWord[j]
+            local prefix = boundary and boundary.upper or total
+            word.width = math.max(0, prefix-previous-gap)
+            sizes[#sizes+1] = word.width
+            previous = prefix
+            gap = boundary and math.max(0, total-boundary.upper-boundary.lower) or 0
+        end
+        if #sizes == 0 then return nil end
+        table.sort(sizes)
+        local median = math.max(1e-6, (sizes[math.ceil(#sizes/2)] + sizes[math.floor(#sizes/2)+1])/2)
+        for _, word in ipairs(words) do word.compact = math.max(0, 1-word.width/median) end
+        local function affordable(candidate, completed)
+            return completed and completed.overflow <= candidate.overflow
+                and completed.maximum <= candidate.maximum + available*0.10
+        end
+        for _, candidate in ipairs(candidates) do
+            local j = candidate.words
+            local left, right = words[j], words[j+1]
+            local share = candidate.upper/math.max(1e-6, candidate.upper+candidate.lower)
+            local cost = 4000*(share-0.51)^2
+            if left.pause == 0 then
+                cost = cost + 16*right.compact^3
+
+                local valley = math.min(left.compact, right.compact)
+                if words[j-1] and words[j+2] and words[j-1].pause == 0 and right.pause == 0 then
+                    local scale = math.max(1e-6, math.min(words[j-1].width, words[j+2].width))
+                    valley = math.max(valley, math.max(0, 1-2*math.max(left.width,right.width)/scale))
+                end
+                cost = cost + 24*valley
+                if share < 0.5 then
+                    local head = j+1
+                    while words[head] and words[head].compact > 0.5 and words[head].pause == 0 do head = head+1 end
+                    if affordable(candidate, byWord[head]) then
+                        local scale = math.max(1e-6, words[head].width)
+                        local cohesion, start = math.max(0, 1-2*left.width/scale), j
+                        while cohesion > 0 and words[start-1] and words[start-1].width < scale/2 and words[start-1].pause == 0 do
+                            start = start-1
+                            cohesion = 1-(1-cohesion)*2*words[start].width/scale
+                        end
+
+                        cost = cost + 64*cohesion^2*math.min(1, (1-2*share)/0.04)
+                    end
+                end
+            end
+            if math.min(j,#words-j) < 2 then cost = cost+150
+            elseif math.abs(2*share-1) <= 0.20 then
+                if left.pause == 2 then cost = cost-40
+                elseif left.pause == 1 then
+                    cost = cost-40*math.min(1,available/math.max(1e-6,candidate.upper+candidate.lower))^2
+                end
+            end
+            candidate.cost, candidate.groupPenalty = cost, 0
+        end
+        local function protect(first, last)
+            for _, candidate in ipairs(candidates) do
+                if candidate.words >= first and candidate.words < last and affordable(candidate,byWord[last]) then
+                    candidate.groupPenalty = 40
+                end
+            end
+        end
+        local previousPause, span = nil, 0
+        for j, word in ipairs(words) do
+            span = span+word.width
+            if word.pause > 0 then
+
+                if previousPause and span <= total*0.20 then protect(previousPause+1,j) end
+                if word.pause == 1 and words[j+3] and words[j+1].pause == 0 and words[j+2].pause == 0
+                    and words[j+2].width < math.min(words[j+1].width,words[j+3].width)/2 then
+                    protect(j+1,j+3)
+                end
+                previousPause, span = word.pause == 1 and j or nil, 0
+            end
+        end
+        local best, bestCost, bestOverflow = nil, math.huge, math.huge
+        for _, candidate in ipairs(candidates) do
+            local cost = candidate.cost+candidate.groupPenalty
+            if candidate.overflow < bestOverflow or (candidate.overflow == bestOverflow and cost < bestCost) then
+                best, bestCost, bestOverflow = candidate.index, cost, candidate.overflow
+            end
+        end
+        return best
     end
     for _, i in ipairs(sel) do
         local line = subs[i]
         if isEditableDialogue(line) then
-            local measured = cloneLine(line)
-            if meta and styles and karaskel and karaskel.preproc_line then
-                pcall(function() karaskel.preproc_line(subs, meta, styles, measured) end)
-            end
-            if not normalizeString(line.text):find("\\N", 1, true) then
-                local rawText = normalizeString(line.text)
-                if unicodeLenSafe(stripComments(stripTags(rawText))) >= cfg.minLength then
-                    local style = measured.styleref or (styles and styles[line.style]) or {}
-                    local mL = normalizeNumber(line.margin_l, 0); local mR = normalizeNumber(line.margin_r, 0)
+            local tokens, hasBreak, hasDrawing = tokenize(normalizeString(line.text))
+
+            if not hasDrawing then
+                if hasBreak then
+                    normalizeBreaks(tokens)
+                    local text = join(tokens)
+                    if text ~= line.text then line.text = text; subs[i] = line end
+                else
+                    local style = (styles and styles[line.style]) or line.styleref or {}
+                    local mL, mR = normalizeNumber(line.margin_l, 0), normalizeNumber(line.margin_r, 0)
                     if mL <= 0 then mL = normalizeNumber(style.margin_l, 0) end
                     if mR <= 0 then mR = normalizeNumber(style.margin_r, 0) end
                     local available = scriptWidth - mL - mR
-                    local needs = available > 0 and getExtents(rawText, style) > available
-                    if needs then
-                        local bestSplit, bestCost = nil, math.huge
-                        local searchPos = 1
-                        while true do
-                            local sp = rawText:find(" ", searchPos, true); if not sp then break end
-                            local prefix = rawText:sub(1, sp)
-                            if countLiteral(prefix, "{") == countLiteral(prefix, "}") then
-                                local p1 = rawText:sub(1, sp - 1)
-                                local p2 = trimText(rawText:sub(sp + 1))
-                                if hasVisibleSegmentText(p1) and hasVisibleSegmentText(p2) then
-                                    local w1, w2 = getExtents(p1, style), getExtents(p2, style)
-                                    local total = w1 + w2
-                                    local imb = total > 0 and math.abs(w1 - w2) / total or 1
-                                    local cost = imb * imb * cfg.imbalanceWeight
-                                    if countCharacters(p2) < cfg.minChars then cost = cost + cfg.shortCharsPenalty end
-                                    if countWords(p2)      < cfg.minWords then cost = cost + cfg.shortWordsPenalty end
-                                    if w1 > available or w2 > available then cost = cost + cfg.overflowPenalty end
-                                    local cp1 = trimText(stripComments(stripTags(p1)))
-                                    local cp2 = trimText(stripComments(stripTags(p2)))
-                                    local lc = cp1:sub(-1)
-                                    if lc == "." or lc == "!" or lc == "?" then cost = cost - cfg.sentenceEndBonus
-                                    elseif lc == "," or lc == ";" or lc == ":" then cost = cost - cfg.softPauseBonus end
-                                    local fw = firstWordLower(cp2)
-                                    if fw then
-                                        if strongConj[fw]    then cost = cost - cfg.conjunctionBonus
-                                        elseif tightFollower[fw] then cost = cost + cfg.tightFollowerPenalty end
-                                    end
-                                    local lw = lastWordLower(cp1)
-                                    if lw then
-                                        if functionTrail[lw] then cost = cost + cfg.functionTrailPenalty
-                                        elseif strongConj[lw] then cost = cost + cfg.orphanConjPenalty end
-                                    end
-                                    if cost < bestCost then bestCost = cost; bestSplit = sp end
+                    local width, plain = measureRuns(tokens, style)
+                    local total = width(1, #tokens)
+                    if available > 0 and total > available then
+                        local words, candidates, byWord = breakWords(plain), {}, {}
+                        local offset, n1 = 0, 0
+                        for k, token in ipairs(tokens) do
+                            if token.kind == "space" then
+                                while words[n1+1] and words[n1+1].finish <= offset do n1 = n1+1 end
+                                local n2 = #words-n1
+                                if n1 > 0 and n2 > 0 then
+                                    local w1, w2 = width(1, k-1), width(k+1, #tokens)
+                                    local overflow = math.max(0, w1-available, w2-available)
+                                    local candidate = {index=k, words=n1, upper=w1, lower=w2,
+                                        maximum=math.max(w1,w2), overflow=overflow}
+                                    candidates[#candidates+1], byWord[n1] = candidate, candidate
                                 end
                             end
-                            searchPos = sp + 1
+                            offset = offset + #token.visible
                         end
-                        if bestSplit then
-                            local before = (rawText:sub(1, bestSplit - 1):gsub("%s+$", ""))
-                            local after = trimText(rawText:sub(bestSplit + 1))
-                            line.text = before .. " \\N" .. after
-                            subs[i] = line
+                        local best = chooseBreak(candidates, byWord, words, total, available)
+                        if best then
+                            tokens[best].kind, tokens[best].raw = "break", "\\N"
+                            normalizeBreaks(tokens)
+                            line.text = join(tokens); subs[i] = line
                         end
                     end
                 end
@@ -5861,129 +6727,56 @@ local function antActor(subs, sel, raw, sameLayers)
 end
 
 local DataImportOps = {}
-DataImportOps.tagNameOrder = {
-    "iclip","clip","move","pos","org","fade","fad","alpha","blur","bord","xbord","ybord",
-    "shad","xshad","yshad","fscx","fscy","fsp","frx","fry","fax","fay","fs","fn",
-    "be","b","i","u","s","q","pbo","p","r","t","kf","ko","k","K","fe",
-}
-
-function DataImportOps.tagName(token)
-    token = normalizeString(token)
-    if token:match("^\\[1234]c") then return token:match("^\\([1234]c)") end
-    if token:match("^\\c%f[^%a]") then return "1c" end
-    if token:match("^\\[1234]a") then return token:match("^\\([1234]a)") end
-    if token:match("^\\frz") or token:match("^\\fr[^%a]") then return "frz" end
-    if token:match("^\\an") or token:match("^\\a[^%a]") then return "an" end
-    if token:match("^\\pos") or token:match("^\\move") then return "position" end
-    if token:match("^\\i?clip") then return "clip" end
-    if token:match("^\\fad") or token:match("^\\fade") then return "fade" end
-    if token:match("^\\fn") then return "fn" end
-    if token:match("^\\r") then return "r" end
-    for _, name in ipairs(DataImportOps.tagNameOrder) do
-        if token:match("^\\+" .. name .. "%f[^%a]") then return name end
-    end
-    return token:match("^\\([%a%d]+)")
-end
-
-function DataImportOps.tagTokens(inner)
-    local out, pos, len = {}, 1, #normalizeString(inner)
-    inner = normalizeString(inner)
-    while pos <= len do
-        local s = inner:find("\\", pos, true)
-        if not s then break end
-        local nextSlash = inner:find("\\", s + 1, true) or (len + 1)
-        local rawName = inner:match("^\\([%a%d]+)", s) or ""
-        local p = s + 1 + #rawName
-        if inner:sub(p, p) == "(" then
-            local depth, j = 0, p
-            while j <= len do
-                local ch = inner:sub(j, j)
-                if ch == "(" then depth = depth + 1
-                elseif ch == ")" then
-                    depth = depth - 1
-                    if depth == 0 then j = j + 1; break end
-                end
-                j = j + 1
-            end
-            out[#out+1] = inner:sub(s, math.min(j - 1, len))
-            pos = math.max(j, s + 1)
-        else
-            out[#out+1] = inner:sub(s, nextSlash - 1)
-            pos = nextSlash
-        end
-    end
-    return out
-end
-
 function DataImportOps.splitInitial(text)
-    text = normalizeString(text)
     local comments, tags, cursor = {}, {}, 1
-    while text:sub(cursor, cursor) == "{" do
-        local s, e = text:find("%b{}", cursor)
-        if not s or s ~= cursor then break end
-        local block = text:sub(s, e)
-        if isOverrideBlock(block) then break end
-        comments[#comments+1] = block
-        cursor = e + 1
+    text = normalizeString(text)
+    for _, section in ipairs(Kite.LineOps.scanSections(text)) do
+        if section.type ~= "override" and section.type ~= "comment" then break end
+        if section.type == "override" then tags[#tags + 1] = section.text
+        else comments[#comments + 1] = text:sub(section.start, section.finish) end
+        cursor = section.finish + 1
     end
-    while text:sub(cursor, cursor) == "{" do
-        local s, e = text:find("%b{}", cursor)
-        if not s or s ~= cursor then break end
-        local block = text:sub(s, e)
-        if not isOverrideBlock(block) then break end
-        tags[#tags+1] = block:sub(2, -2)
-        cursor = e + 1
-    end
-    return table.concat(comments, ""), table.concat(tags, ""), text:sub(cursor)
+    return table.concat(comments), table.concat(tags), text:sub(cursor)
 end
 
 function DataImportOps.mergeInitialTags(text, importedInner)
-    local names, sourceTokens = {}, DataImportOps.tagTokens(importedInner)
-    for _, token in ipairs(sourceTokens) do
-        local name = DataImportOps.tagName(token)
-        if name and name ~= "" then names[name] = true end
-    end
-    if next(names) == nil then return text, false end
-    local comments, targetInner, rest = DataImportOps.splitInitial(text)
-    local kept = {}
-    for _, token in ipairs(DataImportOps.tagTokens(targetInner)) do
-        local name = DataImportOps.tagName(token)
-        if not (name and names[name]) then kept[#kept+1] = token end
-    end
-    local merged = comments .. "{" .. importedInner .. table.concat(kept) .. "}" .. rest
+    local comments, _, rest = DataImportOps.splitInitial(text)
+    local merged = comments .. (importedInner ~= "" and "{" .. importedInner .. "}" or "") .. rest
     return merged, merged ~= normalizeString(text)
 end
 
 function DataImportOps.importTags(subs, sel, raw, sameLayers)
-    local src = {}
-    for l in normalizeString(raw):gmatch("[^\r\n]+") do
-        local f = parseDialogue(l)
-        if f then
-            local s, e, ly = parseTime(f[2]), parseTime(f[3]), tonumber(f[1]) or 0
-            local _, tags = DataImportOps.splitInitial(f[10])
-            if s and e and tags ~= "" then src[#src+1] = { start = s, end_time = e, layer = ly, tags = tags } end
+    local sources = {}
+    for row in normalizeString(raw):gmatch("[^\r\n]+") do
+        local fields = parseDialogue(row)
+        if fields then
+            local first, last = parseTime(fields[2]), parseTime(fields[3])
+            if first and last and last > first then
+                local _, tags = DataImportOps.splitInitial(fields[10])
+                sources[#sources + 1] = {start=first, end_time=last, layer=tonumber(fields[1]) or 0, tags=tags}
+            end
         end
     end
-    if #src == 0 then return 0 end
-    local mod = 0
-    for _, i in ipairs(sel) do
-        local line = subs[i]
-        if isDialogue(line) then
-            local imported = {}
-            for _, s in ipairs(src) do
-                if sameLayerMatch(line, s, sameLayers) and timeInt(line.start_time, line.end_time, s.start, s.end_time) > 0 then
-                    imported[#imported+1] = s.tags
-                end
+    local changes = 0
+    for _, index in ipairs(Kite.LineOps.normalizeIndices(subs, sel, isDialogue)) do
+        Kite.LineOps.checkCancelled()
+        local line, best, overlap = subs[index], nil, 0
+        for _, source in ipairs(sources) do
+            if sameLayerMatch(line, source, sameLayers) then
+                local shared = timeInt(line.start_time, line.end_time, source.start, source.end_time)
+                if shared > overlap then best, overlap = source, shared end
             end
-            if #imported > 0 then
-                local changed
-                line.text, changed = DataImportOps.mergeInitialTags(line.text, table.concat(imported))
-                if changed then mod = mod + 1 end
+        end
+        if best then
+            local text, changed = DataImportOps.mergeInitialTags(line.text, best.tags)
+            if changed then
+                line.text = text
+                subs[index] = line
+                changes = changes + 1
             end
-            subs[i] = line
         end
     end
-    return mod
+    return changes
 end
 
 local function spParseDialogueLine(line)
@@ -6306,68 +7099,7 @@ local function isSpoken(line, cfg)
     return true
 end
 
-local function readAll(path)
-    local f, err = io.open(path, "rb")
-    if not f then error("Could not open the waveform JSON: " .. tostring(err)) end
-    local s, readError = f:read("*all")
-    local closed, closeError = f:close()
-    if not s then error("Could not read the waveform JSON: " .. tostring(readError)) end
-    if closed == nil then error("Could not close the waveform JSON: " .. tostring(closeError)) end
-    return s
-end
-
-local function parseWaveformJson(path)
-    progress("Reading waveform JSON...")
-    local content = readAll(path)
-    local pointMs = normalizeNumber(content:match('"pointMs"%s*:%s*([^,%s}%]]+)'))
-    if not pointMs or pointMs ~= pointMs or pointMs == math.huge or pointMs <= 0 then
-        error("The waveform has an invalid 'pointMs' value.")
-    end
-    local keyStart, keyEnd = content:find('"peaks"%s*:%s*%[')
-    if not keyStart then error("No 'peaks' array found in the JSON.") end
-    local arrStart = content:find("[", keyEnd, true)
-    local arrEnd = content:find("]", arrStart, true)
-    if not arrStart or not arrEnd then error("Could not delimit the 'peaks' array.") end
-    local arr = content:sub(arrStart + 1, arrEnd - 1)
-    content = nil
-    collectgarbage("collect")
-
-    progress("Parsing peaks (min/max)...")
-    local prefix = {}
-    prefix[0] = 0
-    local pending = nil
-    local count = 0
-    local sum = 0
-    local position = 1
-    while position <= #arr do
-        local comma = arr:find(",", position, true)
-        local token = arr:sub(position, comma and comma - 1 or #arr):match("^%s*(.-)%s*$")
-        local v = token:match("^%-?%d+$") and normalizeNumber(token)
-        if not v then error("The 'peaks' array must contain finite integer min/max values separated by commas.") end
-        if comma == #arr then error("The 'peaks' array has a trailing comma.") end
-        position = comma and comma + 1 or #arr + 1
-        if pending == nil then
-            pending = v
-        else
-            count = count + 1
-            local a = math.abs(pending)
-            local b = math.abs(v)
-            local env = (a > b) and a or b
-            sum = sum + env
-            prefix[count] = sum
-            pending = nil
-            if count % 200000 == 0 then
-                progress(string.format("Parsing peaks: %d points", count))
-                if aegisub.progress.is_cancelled() then error("cancelled") end
-            end
-        end
-    end
-    arr = nil
-    collectgarbage("collect")
-    if pending ~= nil then error("The 'peaks' array contains an unmatched min/max value.") end
-    if count == 0 then error("The 'peaks' array produced no envelope points.") end
-    return { prefix = prefix, n = count, point_ms = pointMs }
-end
+local parseWaveformJson = SmartOperations.Split.readWave
 
 local function smoothAt(wave, pointIndex, leftWindow, rightWindow)
     local n = wave.n
@@ -6567,12 +7299,13 @@ local function detectVoiceWaveform(it, wave, cfg)
     if endMs <= startMs then return nil end
 
     local outer = cfg.outer_search_ms or 0
-    local searchStart = math.max(0, startMs - outer)
-    local searchEnd = math.min(wave.n * pointMs, endMs + outer)
+    local origin = wave.origin or 0
+    local searchStart = math.max(origin, startMs - outer)
+    local searchEnd = math.min(origin + wave.n * pointMs, endMs + outer)
     if searchEnd <= searchStart + 10 then return nil end
 
-    local L0 = math.floor(searchStart / pointMs)
-    local R0 = math.floor(searchEnd / pointMs)
+    local L0 = math.floor((searchStart - origin) / pointMs)
+    local R0 = math.floor((searchEnd - origin) / pointMs)
     if R0 > wave.n then R0 = wave.n end
     if L0 < 0 then L0 = 0 end
     local len = R0 - L0
@@ -6605,6 +7338,7 @@ local function detectVoiceWaveform(it, wave, cfg)
     morphMask(mask, fillGap, minIsland)
 
     local comps = buildComponents(mask, values, threshold, L0, pointMs)
+    for _, component in ipairs(comps) do component.a, component.b = component.a + origin, component.b + origin end
     if #comps == 0 then return nil end
     comps = removeEdgeSpill(comps, startMs, endMs, cfg)
     if #comps == 0 then return nil end
@@ -7122,7 +7856,7 @@ local function atWaveEnvelope(wave)
     while i <= wave.n do
         local lo = math.max(1, i - step)
         local hi = math.min(wave.n, i + step)
-        ts[#ts + 1] = (i - 1) * pm
+        ts[#ts + 1] = (wave.origin or 0) + (i - 1) * pm
         vs[#vs + 1] = (wave.prefix[hi] - wave.prefix[lo - 1]) / (hi - lo + 1)
         i = i + step
     end
@@ -8059,7 +8793,7 @@ local function foldCopy(subs, sel)
 end
 
 local function aeKeyframeExport(subs, sel)
-    if not Kite.PyBridge then showMsg("AE Export requires kite.PyBridge."); return end
+    if not Kite.PyBridge then showMsg("After Effects Keyframes requires kite.PyBridge."); return end
     local FPS = getFps()
     local vw, vh = 1920, 1080
     if aegisub and type(aegisub.video_size) == "function" then
@@ -8131,7 +8865,7 @@ local function aeKeyframeExport(subs, sel)
     if aegisub.log then aegisub.log(payload) end
 end
 
-local function stutterManager(subs, sel)
+local function normalizeStutter(subs, sel)
     for _, i in ipairs(sel) do
         local l = subs[i]
         local hasTT = normalizeString(l.effect):find("%[TT%]") ~= nil
@@ -8272,7 +9006,7 @@ local utilitySections = {
             { name="Remove Duplicate Letters",          func = TextOperations.removeDuplicateLetters },
             { name="Add Stutter",                       func = SmartOperations.injectStutter },
             { name="Add Ah Prefix",                     func = SmartOperations.injectAhPrefix },
-            { name="Stutter Manager",                   func = stutterManager },
+            { name="Normalize Stutter",                   func = normalizeStutter },
         },
     },
     {
@@ -8285,9 +9019,9 @@ local utilitySections = {
             { name="Reinsert Tags",                     func = TagOperations.reinsertTags,          includeVector = true },
             { name="Remove Tags",                       func = TagOperations.removeAllTags },
             { name="Merge Tags",                        func = TagOperations.mergeTags,             includeVector = true },
-            { name="Remove Comments",                   func = TagOperations.removeComments },
-            { name="Actor Parser",                      func = TagOperations.parseActor,            returnsSelection = true },
-            { name="Swap Comment",                      func = TagOperations.swapComment },
+            { name="Remove Inline Comments",                   func = TagOperations.removeComments },
+            { name="Extract Actors and Split",                      func = TagOperations.parseActor,            returnsSelection = true },
+            { name="Swap Text and Comments",                      func = TagOperations.swapComment },
             { name="Delete Comment Lines",              func = SmartOperations.deleteCommentLines,  includeComments = true, includeVector = true, returnsSelection = true },
             { name="Comments to Top",                   func = SmartOperations.commentsToTop,       includeComments = true, includeVector = true },
             { name="Comments to Bottom",                func = SmartOperations.commentsToBottom,    includeComments = true, includeVector = true },
@@ -8299,12 +9033,14 @@ local utilitySections = {
         label_key = "lbl_section_smart",
         items = {
             { name="" },
+            { name="Smart Break", func = TimingOperations.smartLineBreak },
+            { name="Smart Split", func = SmartOperations.Split.main, returnsSelection = true, mutates = false },
             { name="Bidirectional Snapping",            func = SmartOperations.bidirectionalSnapping, includeComments = true, includeVector = true },
             { name="Remove Honorifics",                 func = SmartOperations.removeHonorifics },
             { name="Caption Clarifier",                 func = SmartOperations.clarifyCaption },
             { name="Complete Sentences",                func = SmartOperations.completeSentences, returnsSelection = true },
             { name="Erase Blank Lines",                 func = SmartOperations.eraseBlankLines,     returnsSelection = true },
-            { name="Frame Effect",     func = frameToEffect,                     includeVector = true },
+            { name="Current Frame to Effect",     func = frameToEffect,                     includeVector = true },
             { name="Copy Fold",    func = foldCopy,                           includeComments = true, includeVector = true, returnsSelection = true, mutates = false },
         },
     },
@@ -8313,12 +9049,10 @@ local utilitySections = {
         label_key = "lbl_section_split",
         items = {
             { name="" },
-            { name="Smart Break", func = TimingOperations.smartLineBreak },
             { name="Split by Sentence",                 func = TimingOperations.splitBySentence,    returnsSelection = true },
             { name="Split by Comma",                    func = TimingOperations.splitByComma,       returnsSelection = true },
             { name="Pivot \\N",                         func = TimingOperations.pivotLinebreak },
             { name="Remove \\N",                        func = TimingOperations.removeLinebreaks },
-            { name="Join Lines",               func = TimingOperations.joinLines,          returnsSelection = true },
             { name="Join Same Text",                    func = TimingOperations.joinSameText,       returnsSelection = true },
             { name="Join Overlaps",                     func = TimingOperations.joinOverlaps,       returnsSelection = true },
             { name="Join Overlap Sentences",            func = TimingOperations.joinOverlapSentences, returnsSelection = true },
@@ -8331,14 +9065,14 @@ local utilitySections = {
         items = {
             { name="" },
             { name="Copy Times",                        func = TimingOperations.copyTimes,          includeVector = true },
-            { name="Time Picker",                       func = TimingOperations.timePicker,         returnsSelection = true, includeVector = true, mutates = false },
-            { name="Sort by Length",                    func = TimingOperations.sortByLength },
+            { name="Select Time Range",                       func = TimingOperations.timePicker,         returnsSelection = true, includeVector = true, mutates = false },
+            { name="Sort by Text Length",                    func = TimingOperations.sortByLength },
             { name="Sort by CPS",                       func = TimingOperations.sortByCPS },
             { name="Sort Odd Even",                     func = TimingOperations.sortByEvenOdd,      includeComments = true, includeVector = true },
             { name="Count CPS",                         func = TimingOperations.showCPS, mutates = false },
             { name="Import Text",               func = TimingOperations.importText,         returnsSelection = true },
             { name="Kite Timing", func = kiteTiming,                       includeVector = true },
-            { name="Shift First",  func = shiftToFirst,                      includeComments = true },
+            { name="Align to First Start",  func = shiftToFirst,                      includeComments = true },
             { name="Start Snap Back",                   func = SmartOperations.startSnapBack, includeComments = true, includeVector = true },
             { name="Start Snap Forward",                func = SmartOperations.startSnapForward, includeComments = true, includeVector = true },
             { name="End Snap Back",                     func = SmartOperations.endSnapBack, includeComments = true, includeVector = true },
@@ -8356,6 +9090,7 @@ local utilitySections = {
         label_key = "lbl_section_kara",
         items = {
             { name="" },
+            { name="Shift Following Lines", func = TimingOperations.shiftFollowing, includeComments = true, includeVector = true, mutates = false, preserveActive = true },
             { name="Romaji Karaoker (Word → \\k)",      func = romajiKara },
         },
     },
@@ -8372,13 +9107,13 @@ local function findUtilityEntry(sectionId, name)
     return nil
 end
 
-local function runUtilityEntry(entry, subs, sel)
+local function runUtilityEntry(entry, subs, sel, active)
     if not entry or not entry.func then return sel end
     local target
     if entry.includeComments then target = collectDialogueSelection(subs, sel)
     elseif entry.includeVector   then target = collectEditableSelection(subs, sel)
     else                          target = collectEditableTextSelection(subs, sel) end
-    local result = entry.func(subs, target)
+    local result = entry.func(subs, target, active)
     if entry.returnsSelection and type(result) == "table" then return result end
     return sel
 end
@@ -8679,10 +9414,11 @@ end
 local suiteTools = {
     { name = "" },
     { name = "Properties and Cleanup", func = function(subs, sel) return require("kite.EventOps").properties.run(subs, sel, {language=currentConfig.language}) end, mutates=false, returnsSelection=true },
-    { name = "AE Export", func = aeKeyframeExport, mutates = false },
+    { name = "Line Merge and Cleanup", func = TimingOperations.joinDialog, returnsSelection = true, mutates = false },
+    { name = "After Effects Keyframes", func = aeKeyframeExport, mutates = false },
     { name = "Text Replacer",       func = remplacer },
     { name = "mpv QC", func = mpvQcTool },
-    { name = "Remover Assistant", func = RemoverOps.gui, returnsSelection = true },
+    { name = "Text and Tag Cleanup", func = RemoverOps.gui, returnsSelection = true },
 }
 local suiteToolNames = {}
 for _, t in ipairs(suiteTools) do suiteToolNames[#suiteToolNames+1] = t.name end
@@ -8691,7 +9427,7 @@ local function findSuiteTool(name)
     for _, t in ipairs(suiteTools) do if t.name == name then return t end end
 end
 
-local function rowMasterGui(subs, sel)
+local function rowMasterGui(subs, sel, active)
     if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
 
     resolveConfig()
@@ -8925,7 +9661,7 @@ local function rowMasterGui(subs, sel)
                                         local entry = findUtilityEntry(s.id, s.pick)
                                         if entry and entry.returnsSelection then returnsSelection = true end
                                         if entry and entry.mutates ~= false then mutated = true end
-                                        currentSel = runUtilityEntry(entry, subs, currentSel)
+                                        currentSel = runUtilityEntry(entry, subs, currentSel, active)
                                     end
                                 end
                             end
@@ -8993,33 +9729,11 @@ function HotkeyMenu.path(name)
 end
 
 function HotkeyMenu.addMigration(oldMacroName, newMacroName)
-    local function commandPath(macroName)
-        return "automation/lua/" .. script_namespace .. "/" .. macroName
-    end
-    local function escape(value)
-        return normalizeString(value):gsub("\\", "\\\\"):gsub('"', '\\"')
-    end
-    HotkeyMenu.migrations[escape(commandPath(oldMacroName))] = escape(commandPath(newMacroName))
+    HotkeyMenu.migrations[oldMacroName] = newMacroName
 end
 
 function HotkeyMenu.migrate()
-    if next(HotkeyMenu.migrations) == nil or not (aegisub and aegisub.decode_path) then return end
-    local okPath, path = pcall(aegisub.decode_path, "?user/hotkey.json")
-    if not okPath or not path or path == "" then return end
-    local content = Kite.PyBridge and Kite.PyBridge.readFile(path) or nil
-    if not content or content == "" then return end
-
-    local changed = false
-    for oldCommand, newCommand in pairs(HotkeyMenu.migrations) do
-        local oldKey = '"' .. oldCommand .. '"'
-        local newKey = '"' .. newCommand .. '"'
-        if content:find(oldKey, 1, true) and not content:find(newKey, 1, true) then
-            content = content:gsub(escapeLuaPattern(oldKey), function() return newKey end)
-            changed = true
-        end
-    end
-    if not changed then return end
-    if Kite.PyBridge then Kite.PyBridge.writeFile(path, content) end
+    require("kite.UI").actions.rename(script_namespace, HotkeyMenu.migrations)
 end
 
 local macros = {
@@ -9066,9 +9780,10 @@ local utilityMacroGroups = {
 }
 
 local function makeUtilityMacro(entry)
-    return function(subs, sel)
-        local result = runUtilityEntry(entry, subs, sel)
+    return function(subs, sel, active)
+        local result = runUtilityEntry(entry, subs, sel, active)
         if entry.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. entry.name) end
+        if entry.preserveActive then return result, active end
         return result
     end
 end
@@ -9102,6 +9817,33 @@ for _, tool in ipairs(suiteTools) do
         HotkeyMenu.addMigration(macroPath("Tools/" .. tool.name), newPath)
     end
 end
+
+HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Split Join/Smart Break"), HotkeyMenu.path("Utility/Smart/Smart Break"))
+HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Punctuation/Stutter Manager"), HotkeyMenu.path("Utility/Punctuation/Normalize Stutter"))
+
+HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Smart/Frame Effect"), HotkeyMenu.path("Utility/Smart/Current Frame to Effect"))
+HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Timing/Shift First"), HotkeyMenu.path("Utility/Timing/Align to First Start"))
+
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
+HotkeyMenu.addMigration("Chrono Suite/Tools/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Remover Assistant", ": Kite Hotkeys :/Chrono Suite/Text and Tag Cleanup")
+HotkeyMenu.addMigration("Chrono Suite/Tools/Remover Assistant", ": Kite Hotkeys :/Chrono Suite/Text and Tag Cleanup")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/AE Export", ": Kite Hotkeys :/Chrono Suite/After Effects Keyframes")
+HotkeyMenu.addMigration("Chrono Suite/Tools/AE Export", ": Kite Hotkeys :/Chrono Suite/After Effects Keyframes")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Tags/Actor Parser", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Extract Actors and Split")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Tags/Actor Parser", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Extract Actors and Split")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Tags/Swap Comment", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Swap Text and Comments")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Tags/Swap Comment", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Swap Text and Comments")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Tags/Remove Comments", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Remove Inline Comments")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Tags/Remove Comments", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Remove Inline Comments")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Timing/Time Picker", ": Kite Hotkeys :/Chrono Suite/Utility/Timing/Select Time Range")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Timing/Time Picker", ": Kite Hotkeys :/Chrono Suite/Utility/Timing/Select Time Range")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Timing/Sort by Length", ": Kite Hotkeys :/Chrono Suite/Utility/Timing/Sort by Text Length")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Timing/Sort by Length", ": Kite Hotkeys :/Chrono Suite/Utility/Timing/Sort by Text Length")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Smart/Start Frame to Effect", ": Kite Hotkeys :/Chrono Suite/Utility/Smart/Current Frame to Effect")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Smart/Start Frame to Effect", ": Kite Hotkeys :/Chrono Suite/Utility/Smart/Current Frame to Effect")
 
 HotkeyMenu.migrate()
 

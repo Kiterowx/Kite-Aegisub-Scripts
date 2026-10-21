@@ -2,7 +2,7 @@ export script_name = "Cliptomaniac"
 export script_description = "Clip toolbox for measuring, transforming, reshaping, fitting, and projecting ASS clips."
 export script_author = "Kiterow"
 export script_namespace = "kite.Cliptomaniac"
-export script_version = "0.4.4"
+export script_version = "0.4.5"
 
 local ZF, ASS, ArchPerspective, KiteCore, Functional, Util, AMLine, LineOps, depctrl, logger
 Core = {}
@@ -72,6 +72,7 @@ OPERATIONS = {
   "Text to clip"
   "Expand clip margin"
   "Copy clip/iclip"
+  "Merge clip/iclip"
   "Shape to clip"
   "Clip to shape"
   "Toggle clip/iclip"
@@ -115,6 +116,7 @@ operationLabels = {
     ["Text to clip"]: "text to clip"
     ["Expand clip margin"]: "expand/shrink clip margin"
     ["Copy clip/iclip"]: "copy clip/iclip"
+    ["Merge clip/iclip"]: "merge clip/iclip"
     ["Shape to clip"]: "shape to clip"
     ["Clip to shape"]: "clip to shape"
     ["Toggle clip/iclip"]: "toggle clip/iclip"
@@ -156,6 +158,7 @@ operationLabels = {
     ["Text to clip"]: "texto a clip"
     ["Expand clip margin"]: "expandir/reducir margen de clip"
     ["Copy clip/iclip"]: "copiar clip/iclip"
+    ["Merge clip/iclip"]: "combinar clip/iclip"
     ["Shape to clip"]: "dibujo a clip"
     ["Clip to shape"]: "clip a dibujo"
     ["Toggle clip/iclip"]: "toggle clip/iclip"
@@ -629,6 +632,7 @@ messageEs = {
   ["No selected line with \\pos could be aligned."]: "No se pudo alinear ninguna línea seleccionada con \\pos."
   ["No editable clip found."]: "No se encontró un clip editable."
   ["No source/target clip group found."]: "No se encontró grupo de clip fuente/destino."
+  ["Select a first line with a static clip and at least one later line with a static clip to merge."]: "Selecciona una primera línea con clip estático y al menos otra posterior con clip estático para combinar."
   ["No clip was expanded."]: "No se expandió ningún clip."
   ["Text outline tools are not available."]: "Las herramientas de contorno de texto no están disponibles."
   ["No clip could be autofit."]: "No se pudo autoajustar ningún clip."
@@ -2634,6 +2638,49 @@ Core.opCopyClip = (subs, sel, opts) ->
   aegisub.set_undo_point "Cliptomaniac - Copy clip"
   true
 
+Core.clipPathForMerge = (span) ->
+  return nil unless span and not span.in_transform
+  kind, scale, path = Core.clipInnerParts span.inner
+  if kind == "rect"
+    return Core.vectorClipInner(Core.rectPoints(path)), nil
+  if kind == "vector"
+
+    path = span.inner\match("^%s*%d+%s*,%s*(.*)$") if scale
+    return path, scale
+  nil
+
+Core.opMergeClip = (subs, sel, opts) ->
+  indices = Core.dialogueIndices subs, sel
+  source = indices[1] and subs[indices[1]]
+  sourcePath, sourceScale = nil, nil
+  sourcePath, sourceScale = Core.clipPathForMerge(Core.firstClipSpan(source.text)) if source
+  changed = 0
+  if sourcePath
+
+    sourcePath = sourcePath\gsub "^[nN]", "m"
+    for n = 2, #indices
+      Core.checkCancelled!
+      i = indices[n]
+      line = subs[i]
+      span = Core.firstClipSpan line.text
+      targetPath, scale = Core.clipPathForMerge span
+      continue unless targetPath
+      factor = Core.clipScaleFactor(scale) / Core.clipScaleFactor(sourceScale)
+      appendPath = sourcePath
+      if factor != 1
+        appendPath = sourcePath\gsub "(" .. numPattern .. ")", (value) -> Core.formatNum(tonumber(value) * factor, 12)
+      path = targetPath .. " " .. appendPath
+      inner = if scale then "#{scale},#{path}" else path
+      tag = Core.clipTagText span.name, inner
+      line.text = Core.replaceFirstClip line.text, tag
+      subs[i] = line
+      changed += 1
+  if changed == 0
+    Core.showMessage "Select a first line with a static clip and at least one later line with a static clip to merge."
+    return false
+  aegisub.set_undo_point "Cliptomaniac - Merge clip"
+  true
+
 Core.shapeInfo = (drawing) ->
   return nil, "Shape tools are not available." unless ZF and ZF.shape
   ok, shape = pcall -> ZF.shape drawing
@@ -4612,6 +4659,7 @@ actionMeta = {
   {"Circle from 2 points", "direct", "Makes a circle using the first guide stroke as its diameter."}
   {"New clip shape", "direct", "Starts a new clip shape from the last point of the current clip path."}
   {"Copy clip/iclip", "direct", "Copies the first clip to matching selected lines, or from the first line to the rest."}
+  {"Merge clip/iclip", "direct", "Appends all paths of the first selected line's static clip to the first static clip of each later selected line, preserving the destination clip/iclip type and scale. Lines without a usable clip are skipped."}
   {"Rect clip to vector", "direct", "Turns a simple rectangle clip into an editable path."}
   {"Vector clip to rect", "direct", "Turns an editable path clip into the smallest rectangle around it."}
   {"Add clip points", "options", "Adds points between existing clip points while preserving the current shape."}
@@ -4645,6 +4693,7 @@ actionHelpEs = {
   ["Text to clip"]: "Usa el texto real o el contorno del dibujo como forma del clip."
   ["Expand clip margin"]: "Crece o reduce el clip seleccionado por un margen en píxeles."
   ["Copy clip/iclip"]: "Copia el primer clip a líneas compatibles, o desde la primera línea al resto."
+  ["Merge clip/iclip"]: "Añade todos los trazos del clip estático de la primera línea seleccionada al primer clip estático de cada línea seleccionada posterior, conservando el tipo clip/iclip y la escala del destino. Omite líneas sin clip utilizable."
   ["Shape to clip"]: "Usa el dibujo seleccionado como área de clip."
   ["Clip to shape"]: "Convierte el primer clip en un dibujo editable."
   ["Toggle clip/iclip"]: "Alterna entre mostrar dentro del clip y ocultar dentro del clip."
@@ -5378,6 +5427,7 @@ Core.dispatch = (subs, sel, active, opts) ->
     when "Circle from 2 points" then Core.opHotkey subs, sel, "Circle from 2 points", opts
     when "New clip shape" then Core.opHotkey subs, sel, "New clip shape", opts
     when "Copy clip/iclip" then Core.opCopyClip subs, sel, opts
+    when "Merge clip/iclip" then Core.opMergeClip subs, sel, opts
     when "Rect clip to vector" then Core.opHotkey subs, sel, "Rect clip to vector", opts
     when "Vector clip to rect" then Core.opHotkey subs, sel, "Vector clip to rect", opts
     when "Add clip points" then Core.opHotkey subs, sel, "Add clip points", opts

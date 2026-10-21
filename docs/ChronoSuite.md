@@ -1,8 +1,8 @@
-# Chrono Suite 1.5.3
+# Chrono Suite 1.6.1
 
 English | [Español](es/ChronoSuite.md) | [Index](../README.md#documentation)
 
-Open **Chrono Suite** for the combined panel. **Chrono Suite/Config** and **Chrono Suite/Help** are the other direct entries. The 83 individual actions are registered under **: Kite Hotkeys :/Chrono Suite/**, including Autotiming, Extract KF (SCXvid), Scream Detector, Audit Markers, the 74 utility actions and the five extra tools. Utility submenus are Case, Punctuation, Tags, Smart, Split Join and Timing; Karaoke has its own branch. Existing command IDs are preserved.
+Open **Chrono Suite** for the combined panel. **Chrono Suite/Config** and **Chrono Suite/Help** are the other direct entries. The individual actions are registered under **: Kite Hotkeys :/Chrono Suite/**, including Autotiming, Extract KF (SCXvid), Scream Detector, Audit Markers, the utility actions and extra tools. Utility submenus are Case, Punctuation, Tags, Smart, Split Join and Timing; Karaoke has its own branch. Moved suite hotkeys are migrated to their new menu paths.
 
 ## Start with the intended operation
 
@@ -11,7 +11,7 @@ Open **Chrono Suite** for the combined panel. **Chrono Suite/Config** and **Chro
 - To edit text: choose a utility and execute with the intended selection. Multiple nonempty sections execute in the panel's defined order; leave unrelated sections empty.
 - To prepare delivery properties: open Properties and Cleanup. Editing credits is separate from its optional whole-file cleanup; this option deliberately exceeds the current selection.
 
-Most text utilities exclude commented events and vector drawings. Timing and tag operations can explicitly include drawings; sorting, folds and comment management have their own event scope. Deleting and splitting operations return remapped selections. Count CPS, Time Picker, Copy Fold and AE Export do not edit event text. Properties and Cleanup manages its own transaction. Use Undo to review a mutating operation, especially when combining utilities.
+Most text utilities exclude commented events and vector drawings. Timing and tag operations can explicitly include drawings; sorting, folds and comment management have their own event scope. Deleting and splitting operations return remapped selections. Count CPS, Select Time Range, Copy Fold and After Effects Keyframes do not edit event text. Properties and Cleanup manages its own transaction. Use Undo to review a mutating operation, especially when combining utilities.
 
 The main panel places Audit Markers on the left and Utility Tools on the right, with Data Import and Extra Tools below. Most audit results appear in the Effect field.
 
@@ -26,7 +26,7 @@ The panel is organized around the current selection. Actions are triggered by pr
 - **Audit Markers:** presets, thresholds, keyframe mode, and Single Marker.
 - **Utility Tools:** seven independent sections (Case, Punct/Text, Tags/Comments, Smart, Split/Join, Time/Sort, and Karaoke).
 - **Data Import:** import data from text pasted into the box.
-- **Extra Tools:** five independent tools.
+- **Extra Tools:** independent dialogs, including Line Merge and Cleanup.
 
 An empty dropdown skips its section during execution.
 
@@ -151,7 +151,7 @@ Each section offers an independent dropdown. An empty value skips that section d
 - Remove Duplicate Letters: removes consecutive duplicate letters.
 - Add Stutter: inserts stutter formatting in the text.
 - Add Ah Prefix: inserts an "ah" prefix at the start of the dialogue.
-- Stutter Manager: interactive dialog for stutter management.
+- Normalize Stutter: normalizes repeated initials and applies stutter to [TT] rows.
 
 ### Tags / Comments
 
@@ -160,9 +160,9 @@ Each section offers an independent dropdown. An empty value skips that section d
 - Reinsert Tags: returns override tags from Effect to the text and converts semicolons to commas inside override blocks.
 - Remove Tags: deletes override blocks from the visible dialogue.
 - Merge Tags: merges adjacent override tag blocks, deleting the }{ between them ({\an5}{\blur2} becomes {\an5\blur2}). Comment blocks and non-adjacent blocks are left untouched.
-- Remove Comments: deletes comment blocks within the text.
-- Actor Parser: extracts actor information from the text.
-- Swap Comment: toggles the comment state of the line.
+- Remove Inline Comments: deletes comment blocks within the text.
+- Extract Actors and Split: extracts actor information from the text.
+- Swap Text and Comments: exchanges visible text and inline comments while preserving override tags.
 - Delete Comment Lines: deletes lines flagged as comments.
 - Comments to Top: reorders comments to the top of the selection.
 - Comments to Bottom: reorders comments to the bottom of the selection.
@@ -170,22 +170,22 @@ Each section offers an independent dropdown. An empty value skips that section d
 
 ### Smart
 
+- Smart Break: balances visual width and natural pauses.
+- Smart Split: waveform-based sentence splitting.
 - Bidirectional Snapping: snaps both start and end to the nearest keyframe within the configured frame range.
 - Remove Honorifics: wraps Japanese honorifics in {…} comment blocks so they stay in the source but disappear from the visual render.
 - Caption Clarifier: standardizes caption brackets and indications.
 - Complete Sentences: joins an incomplete line with the next line when the next text starts lowercase. Overlaps or non-lowercase continuations are marked as [POSSIBLE-JOIN] instead.
 - Erase Blank Lines: deletes blank lines.
-- Frame Effect: writes the start-frame number into Effect.
+- Current Frame to Effect: appends the current video-frame number to Effect.
 - Copy Fold: displays ASS event rows from the fold containing the first selected line for copying, then selects that fold.
 
 ### Split / Join
 
-- Smart Break: inserts a \N line break at the optimal position only when the rendered text exceeds the available width.
 - Split by Sentence: splits the line by sentence.
 - Split by Comma: splits the line by comma.
 - Pivot \N: shifts the \N break within the line.
 - Remove \N: removes every \N from the line, collapsing whitespace.
-- Join Lines: joins selected lines in grid order and spans their earliest start and latest end, retaining the first row metadata.
 - Join Same Text: joins adjacent lines with identical text.
 - Join Overlaps: joins selected groups whose times overlap, expands the kept line to the group bounds, and preserves each source text separated by \N.
 - Join Overlap Sentences: joins selected overlapping groups in grid order as one sentence, keeps the first grid line as base, and extends the end time to the group end.
@@ -194,14 +194,14 @@ Each section offers an independent dropdown. An empty value skips that section d
 ### Time / Sort
 
 - Copy Times: copies timing from one line to others.
-- Time Picker: selects lines within a time range.
-- Sort by Length: sorts the lines by visible length.
+- Select Time Range: selects lines within a time range.
+- Sort by Text Length: sorts the lines by visible length.
 - Sort by CPS: sorts the lines by reading speed.
 - Sort Odd Even: sorts by the numeric value of the Effect field (odd and even).
 - Count CPS: shows the average CPS across the selection.
 - Import Text: imports text from an external source for controlled replacement.
 - Kite Timing: applies the Kite Timing algorithm (adaptive lead-in and lead-out, chaining, and edge protection) using the values from Config.
-- Shift First: shifts the selection so the first line aligns with the start of the second.
+- Align to First Start: shifts from the second selected row to align its start to the first row, retaining relative spacing.
 - Start Snap Back: snaps the start to the previous keyframe.
 - Start Snap Forward: snaps the start to the next keyframe.
 - End Snap Back: snaps the end to the previous keyframe.
@@ -224,17 +224,17 @@ The import source is the text pasted into the Data Import box. An empty box skip
 - **Import Effects:** copies the source Effect by time overlap.
 - **Import Text:** copies visible text by time overlap.
 - **Import Actor:** copies actor by best time overlap.
-- **Import Tags:** copies initial override tags from overlapping source lines. Imported tags override matching initial tags in the target line; inline tags after visible text are ignored.
+- **Import Tags:** replaces initial overrides from one source with greatest positive overlap; ties follow pasted order. See details below.
 - **Song Sync:** duplicates or synchronizes groups using a Comment line on layer 50 as the sync anchor. The selected line's Effect is copied into each imported line's Effect; source Effects are retained.
 - **Same Layers:** when checked, Import Effects, Import Text, Import Actor, and Import Tags only match source lines whose layer equals the target line layer.
 - **Import as comments:** wraps the imported text inside {…} comment blocks.
 
 ## Extra Tools
 
-- **AE Export:** exports motion data compatible with After Effects.
+- **After Effects Keyframes:** exports motion data compatible with After Effects.
 - **Text Replacer:** replaces visible text while preserving override tags.
 - **mpv QC:** reads notes exported from mpvQC in the format [hh:mm:ss.ms] [Type] Observation {suggested text}. The observation is written as [QC: …] in Effect and the suggestion is inserted as a comment block in the dialogue. Tolerance is defined in milliseconds.
-- **Remover Assistant:** removes selected visible signs, spacing tokens, comments, and known override tags without toggling them back on when absent.
+- **Text and Tag Cleanup:** removes selected visible signs, spacing tokens, comments, and known override tags without toggling them back on when absent.
 - **Properties and Cleanup:** edits script credits and title. The optional cleanup affects the whole file, removing project paths, extradata, comments, Actor, Effect and empty dialogue lines.
 
 ## Auto Timing
@@ -307,7 +307,7 @@ With **Clean the whole subtitle file**, the shared EventOps operation also remov
 
 ## Worked examples and boundaries
 
-- Join Lines with rows at 4–5 s and 1–2 s retains text in grid order but produces an event at 1–5 s. It preserves the first row's initial tags and metadata, not every row's inline formatting. Join Same Text additionally requires compatible style and adjacent selected rows.
+- Line Merge and Cleanup with rows at 4–5 s and 1–2 s retains text in grid order but produces an event at 1–5 s. It preserves the first row's initial tags and metadata, not every row's inline formatting. Join Same Text additionally requires compatible style and adjacent selected rows.
 - An Auto Timing overlap can involve more than three subsequent rows. The final pass checks all remaining candidates until their earliest possible start is beyond the current end; stacked original lines retain their existing handling.
 - A waveform file provides positive finite `pointMs` and alternating integer min/max `peaks`. Decimal/garbage peaks and incomplete pairs are rejected instead of partially read. Scientific notation in pointMs is read as a complete number. Changing the typed path invalidates the session cache; returning from a secondary window retains the typed path.
 - Durations stay nonnegative, smoothing and island controls enforce their minimum values, and percentages keep their 0–100 range. Increasing a search window can match unrelated speech, so select it according to the scene.
@@ -318,3 +318,23 @@ With **Clean the whole subtitle file**, the shared EventOps operation also remov
 Preferences are saved for each tool.
 
 The interface supports English, Spanish and Portuguese. Stable English action IDs keep existing hotkeys usable while display labels are localized.
+
+## Joining, splitting and shifting
+
+**Extra Tools → Line Merge and Cleanup** replaces ChronoJoin. Direct buttons have a fixed explanation:
+
+- **Join:** joins visible text, keeps the first row's initial tags and lowercases a continuation after a comma or ellipsis.
+- **Keep Second:** requires two rows and copies the second text exactly.
+- **Keep Last:** copies the last selected text exactly.
+- **No Inner ...:** joins and removes internal ellipses.
+- **One Phrase:** changes sentence periods to commas and lowers the next initial: `Hola. ¿Cómo estás?` → `Hola, ¿cómo estás?`. Also accepts one row. Protects common abbreviations, decimals, acronyms and ellipses; review proper names.
+
+All modes keep the first row's other fields and span the earliest start and latest end. Text follows subtitle row order.
+
+**Smart → Smart Split** replaces ChronoSplit. It shares the Wave2json reader with Auto Timing, selects the finest level and respects partial-export offsets. **Continuo** retains outer times and joins phrase boundaries; **Raw** trims each phrase to assigned activity. `[CS-*]` Effect markers identify estimates or uncertainty. Drawings, karaoke and temporally animated text are skipped. **Smart Break** is also in Smart and balances visual width and natural pauses while retaining existing breaks.
+
+**Karaoke → Shift Following Lines** replaces ChronoK. It shifts every dialogue row below the active row, including comments, to place the first one **100 ms** after the active row's end. Durations and relative spacing are preserved. Scope follows list order; negative resulting times reject the entire operation.
+
+**Import Tags** chooses one source with the greatest positive overlap. Ties use pasted order; touching intervals do not overlap. It replaces all target initial tags with that source's block; a winning tagless source clears initial overrides. Target comments, text and inline tags are retained. No overlap leaves the line unchanged. It never combines source blocks or accumulates tags on repeated import.
+
+**Normalize Stutter** normalizes repeated initials and applies stutter to `[TT]` lines. It is a direct action.

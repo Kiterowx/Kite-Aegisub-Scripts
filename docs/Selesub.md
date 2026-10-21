@@ -1,4 +1,4 @@
-# Selesub 2.1.8
+# Selesub 2.1.9
 
 English | [Español](es/Selesub.md) | [Index](../README.md#documentation)
 
@@ -108,3 +108,7 @@ Selesub remembers scope, action, advanced field/operator and option checkboxes a
 Scanning and mutation loops check cancellation. Comment/delete/import commits use shared transactions; file output uses the atomic writer. No arbitrary event-count or import-size ceiling is imposed.
 
 Install `myaa.ASSParser` and follow the [installation steps](../README.md#installation).
+
+## Same-text neighbors
+
+**`: Kite Hotkeys :/Selesub/Text/Same Text Neighbors`** selects the contiguous block around the active row. It ignores ASS blocks, compares case, whitespace and written line-break escapes exactly, and includes matching commented rows. It stops at a differing row or a non-dialogue row. The active row is retained; events are never edited.

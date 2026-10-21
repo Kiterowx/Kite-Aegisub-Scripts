@@ -1,8 +1,8 @@
-# PNG2ASS 1.6.4
+# PNG2ASS 1.7.1
 
 English | [Español](es/PNG2ASS.md) | [Index](../README.md#documentation)
 
-PNG2ASS converts raster images and SVG files into ASS drawings through `kite-png2ass` 1.4.2. A still image inherits the active selected line's timing. Multiple images form a sequence mapped to the selected lines' video frames. Originals remain in the subtitle file.
+PNG2ASS converts raster images and SVG files into ASS drawings through `kite-png2ass` 1.5.1. A still image inherits the active selected line's timing. Multiple images form a sequence mapped to the selected lines' video frames. Originals remain in the subtitle file.
 
 ## Convert a still image
 
@@ -23,9 +23,19 @@ The active line is used when it belongs to the selection; otherwise the first se
 | dark-matte / luma | Dark foreground over white, compositing transparency over white. | OpenCV |
 | color | Visible image content as colored layers. | VTracer + svg2ssa |
 
-Choose **source** color with **auto** to request color conversion instead of reducing the input to a mask. Explicit mask modes use the subtitle style's color. Color mode retains source colors. SVG goes directly through svg2ssa; **style** removes source color tags while retaining the SVG's opacity.
+Choose **source** color with **auto** to request color conversion instead of reducing the input to a mask. Explicit mask modes use the subtitle style's color. Color mode retains source colors. SVG goes directly through svgelements; **style** removes source color tags while retaining the SVG's opacity.
 
 OpenCV preserves holes by retaining the contour orientation returned by the contour finder. VTracer output is sanitized only for empty path elements; valid path data is retained.
+
+## SVG fidelity
+
+SVG imports start with source colors and position 0,0. Match the subtitle PlayRes to the SVG canvas. Nested matrix/translate/scale/rotate/skew transforms are baked into paths; rectangles, circles, ellipses and polygons are retained. SVG decimals (0–5) and Arc degrees (1–90) control coordinate precision and arc subdivision. Raster tracing controls do not apply to SVG.
+
+A single user-space clip and simple isotropic Gaussian blur are supported. Blur, group opacity and ASS borders are approximations; outline strokes for precise caps, joins and open paths. Expand live text, images, use/symbol, gradients, masks, complex filters, evenodd fills, dashed strokes and nested clips to compatible paths before importing. Unsupported painting returns an error. SVGO compression presets and the web converter's epsilon control are not included.
+
+Before insertion, PNG2ASS applies SVG clips directly to the drawing geometry using Everything Shape's Shape Clipper library (ZF.main 2.3.0). No clip tags remain. Curves stay unchanged when the whole shape is inside the clip; actual intersections flatten curves with a tolerance of at most 1/32 script pixel. Empty results are omitted. Blur and ASS borders are rendered after this geometric cut and can extend past its edge; the preview reports this limitation.
+
+Generated tags are compared against each destination line's style. Defaults such as bord0, shad0, scale, rotation, colors and alpha are omitted when redundant; necessary overrides remain. For example, bord0 remains when the destination style has an outline. Sequence frames use their own target style.
 
 ## Options
 

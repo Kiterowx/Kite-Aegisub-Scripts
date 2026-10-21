@@ -1,4 +1,4 @@
-local moduleVersion = "1.5.1"
+local moduleVersion = "1.5.2"
 local UI = { VERSION = moduleVersion, version = moduleVersion }
 
 local function safeRequire(name)
@@ -76,6 +76,40 @@ function Actions.configuration()
     saved.favorites_root = Core.trim(saved.favorites_root)~="" and saved.favorites_root or defaultFavoritesRoot
     saved.favorites = type(saved.favorites)=="table" and saved.favorites or {}
     return saved
+end
+
+function Actions.rename(owner, aliases)
+    local commands = {}
+    for old, new in pairs(aliases) do commands[Actions.command(owner, old)] = Actions.command(owner, new) end
+    local function replace(entries, field)
+        local changed = false
+        for _, entry in pairs(type(entries) == "table" and entries or {}) do
+            if type(entry) == "table" and commands[entry[field]] then
+                entry[field], changed = commands[entry[field]], true
+            end
+        end
+        return changed
+    end
+    for _, file in ipairs({"?user/hotkey.json", "?user/hotkeys.json"}) do
+        local data, changed = Settings.readJson(file), false
+        for _, bindings in pairs(type(data) == "table" and data or {}) do
+            if replace(bindings, "command") then changed = true end
+        end
+        if changed then
+            local ok, message = Settings.writeJson(file, data)
+            if not ok then UI.log(message, "Hotkey migration") end
+        end
+    end
+    local data = Settings.readJson(settingsPath)
+    local saved = type(data) == "table" and data["kite.Hotkeys"]
+    saved = type(saved) == "table" and saved.main
+    if type(saved) == "table" and replace(saved.favorites, "source") then
+        local ok, message = Settings.writeJson(settingsPath, data)
+        if not ok then UI.log(message, "Favorite migration") end
+    end
+    if configuration and replace(configuration.favorites, "source") then
+        for _, favorite in ipairs(configuration.favorites) do Actions.registerFavorite(configuration, favorite) end
+    end
 end
 
 function Actions.attach(owner)

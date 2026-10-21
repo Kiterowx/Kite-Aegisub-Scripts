@@ -1,4 +1,4 @@
-# Rhea Signs 2.1.4
+# Rhea Signs 2.2.1
 
 [English](../RheaSigns.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -11,17 +11,17 @@ Menú principal: **Rhea Signs**. Las acciones están bajo `: Kite Hotkeys :/Rhea
 | Comando | Función |
 | --- | --- |
 | Rhea Signs | Panel para combinar operaciones. |
-| TagOps | Copiar, conservar, redimensionar, transformar o alinear etiquetas. |
-| Fast Signs | Crear fondo, brillo y texto. |
+| Tag Editor | Copiar, conservar, redimensionar, transformar o alinear etiquetas. |
+| Sign Builder | Crear fondo, brillo y texto. |
 | Signs Editor | Sustituir texto repetido y regenerar degradados marcados. |
-| Shapes/Unify Positions | Compartir pivote conservando colocación. |
+| Shapes/Unify Drawing Pivots | Compartir pivote conservando colocación. |
 | Shapes/Place on Perimeter | Repetir dibujos sobre contornos cerrados. |
 | Shapes/Shape Color Optimizer | Combinar colores compatibles o reducir degradados. |
 | Tools/Style to Tags | Convertir propiedades del estilo en etiquetas. |
 | Font and Style Manager | Revisar o sustituir fuentes y editar o clonar estilos. |
-| Fast Fades | Elegir fundidos por fotograma o limpieza de continuidad. |
-| Fast Fades/In / Out | Fijar entrada / salida desde el fotograma actual. |
-| Fast Fades/Clean | Retirar fundidos internos entre grupos continuos. |
+| Frame Fades and Cleanup | Elegir fundidos por fotograma o limpieza de continuidad. |
+| Frame Fades and Cleanup/In / Out | Fijar entrada / salida desde el fotograma actual. |
+| Frame Fades and Cleanup/Clean | Retirar fundidos internos entre grupos continuos. |
 | Shuffle Line Text | Mezclar textos conservando propiedades de cada evento. |
 
 ## Panel principal
@@ -49,7 +49,7 @@ El texto se reparte proporcionalmente entre las secciones ASS existentes. Etique
 
 La regeneración puede actuar aunque no cambie el texto visible. El marcador identifica la etiqueta que se interpola, con color primario como alternativa. Usa referencias efectivas, añade valores por grafema y elimina los marcadores automáticos. Conserva marcas combinantes, emoji unidos, saltos ASS y caracteres de uso privado.
 
-## TagOps
+## Tag Editor
 
 ### Copy tags
 
@@ -159,7 +159,7 @@ Los planos se resuelven con estilo, resolución y geometría existente. Deben se
 | Restore Extradata | Devuelve el marcador a los datos extra. |
 | Identity reproject | Recalcula etiquetas del plano actual. |
 
-Los modos de copia siguen los grupos de fuente/destino descritos en TagOps. Hay copias exactas, espejos, giros y permutaciones. Se omiten cuadriláteros inválidos.
+Los modos de copia siguen los grupos de fuente/destino descritos en Tag Editor. Hay copias exactas, espejos, giros y permutaciones. Se omiten cuadriláteros inválidos.
 
 El origen puede conservar el del destino, usar el centro o minimizar fax. La escala compara PlayResY con LayoutResY o, si falta, con la altura de vídeo. Rhea consulta las diferencias relevantes y recuerda el aviso durante la sesión.
 
@@ -167,7 +167,7 @@ Los metadatos requieren cuatro pares de coordenadas y admiten signo, decimales y
 
 ## Shapes
 
-### Unify Positions
+### Unify Drawing Pivots
 
 Selecciona al menos dos dibujos estáticos. La línea activa seleccionada aporta el pivote; si no pertenece al grupo, se elige una referencia de la selección. Se reescriben posiciones compensando coordenadas locales para conservar colocación.
 
@@ -189,7 +189,7 @@ Optimiza dibujos estáticos compatibles mediante `kite.ShapeOptimizer`. Modos: A
 
 Se muestra la reducción propuesta y, si está activada, se confirma antes de aplicar. Si las formas son incompatibles o no existe una reducción aceptable, se conservan los originales.
 
-## Fast Signs
+## Sign Builder
 
 Agrupa eventos sin comentar que se superponen, coloca sus cajas lado a lado junto al desplazamiento superior y crea tres capas: fondo en la original, borde/brillo en la siguiente y texto arriba. La fuente se comenta y sus tiempos se conservan. Cada fundido se limita a la mitad de la duración.
 
@@ -219,10 +219,18 @@ Los formularios inválidos conservan el borrador. Los nombres clonados deben ser
 
 **Style to Tags** usa `AssContext.styleBake`. Permite elegir propiedades, proteger familias existentes, omitir ceros y expandir resets. La alineación explícita conserva su prioridad; los resets no introducen otra alineación de línea. Los resets activos usan sus estilos reales; se conservan comentarios y resets anidados. El acceso antiguo Taggerize abre esta herramienta.
 
-**Fast Fades/In** usa `tiempo del fotograma − inicio`; **Out**, `fin − tiempo del fotograma`. El cursor debe estar dentro de todos los diálogos sin comentar seleccionados. Se conserva el otro componente del fundido. Datos inválidos cancelan antes de editar.
+**Frame Fades and Cleanup/In** usa `tiempo del fotograma − inicio`; **Out**, `fin − tiempo del fotograma`. El cursor debe estar dentro de todos los diálogos sin comentar seleccionados. Se conserva el otro componente del fundido. Datos inválidos cancelan antes de editar.
 
 **Continuous Fade Cleanup** agrupa intervalos iguales y retira fundidos en los límites interiores de grupos continuos, conservando los exteriores. Requiere más de un grupo temporal. **Shuffle Line Text** mezcla solo texto; tiempos y otros campos permanecen en sus filas.
 
 ## Configuración
 
 La configuración se guarda entre sesiones. Los ajustes anteriores se importan automáticamente.
+
+## Split at Visual Changes y Simplify Drawing
+
+**Tools → Split at Visual Changes** integra el antiguo script suelto. Selecciona una línea, carga vídeo y define una región rectangular; un clip rectangular estático puede servir de guía. Ajusta diferencia de color, porcentaje global y porcentaje por bloque. Revisa los tramos antes de generar. **Conservar animación** reajusta los tiempos de los tags; **Congelar por tramo** evalúa el primer frame de cada tramo. Puede conservar la original comentada y retirar el clip guía. Rechaza karaoke y efectos temporales no compatibles antes de escribir.
+
+**Shapes → Simplify Drawing** reduce puntos sobre rectas y convierte Bézier cúbicas casi rectas en segmentos rectos. La tolerancia predeterminada es **0.05 unidades de dibujo en p1**, antes de escala o perspectiva; **0** elimina solo geometría colineal. Comprueba los puntos y controles originales para limitar el error de cada pasada, conserva extremos, esquinas, retrocesos, contornos separados y curvas con detalle. Los B-splines quedan intactos. Solo modifica secciones de dibujo de las líneas seleccionadas; conserva tags, texto y metadatos. Una tolerancia positiva permite una pequeña diferencia geométrica, que puede ampliarse con la escala. La rasterización de bordes puede variar ligeramente incluso con tolerancia cero.
+
+**Tools → Remove Redundant Zero Tags** limpia únicamente tags cero que no afectan al resultado, respetando estilos, resets y animaciones.

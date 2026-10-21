@@ -1,7 +1,7 @@
 script_name = "Allure"
 script_description = "Reusable ASS styling and pivot-aware sign posing"
 script_author = "Kiterow"
-script_version = "1.2.4"
+script_version = "1.2.5"
 script_namespace = "kite.Allure"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -2957,6 +2957,8 @@ Makeup:
 Insert restores a [TAG] adaptive style preset or an exact [GROUP] sign stack.
 Save style, Save group, Save both, and Delete preset are Action choices instead
 of dialog buttons. Presets remain in the Makeup library beside the subtitle.
+A successful save closes Allure after its confirmation. Failed saves and
+cancelled replacements leave the panel open.
 
 Config:
 Stores the language, three hotkey steps, hotkey rotation mode, and hotkey pivot.
@@ -2980,7 +2982,8 @@ Makeup:
 Insertar restaura un preset adaptativo [TAG] o un cartel exacto [GROUP]. Guardar
 estilo, Guardar grupo, Guardar ambos y Eliminar preset son opciones de Acción en
 vez de botones. Los presets permanecen en la biblioteca de Makeup junto al
-subtítulo.
+subtítulo. Al guardar correctamente, confirma el aviso y Allure se cierra.
+Si falla el guardado o cancelas un reemplazo, el panel permanece abierto.
 
 Config:
 Guarda el idioma, los tres pasos de hotkeys, su modo de rotación y su pivote.
@@ -3280,6 +3283,7 @@ local function runMakeup(subs, selection, active, state, index, byLabel, folder,
         elseif saved ~= false then
             local conjunction = currentLanguage == "es" and " y " or " and "
             notice(L("saved", table.concat(saved, conjunction)))
+            return selection, true, active
         end
         return selection
     end
@@ -3431,8 +3435,8 @@ local function main(subs, selection, active)
         elseif button == L("button_posing") then
             return Posing.applyTransform(subs, selection, posingValues(state.posing_action, state, false))
         elseif button == L("button_makeup") then
-            local updated, applied = runMakeup(subs, selection, active, state, index, byLabel, folder, folderError, indexError)
-            if applied then return updated, updated[1] end
+            local updated, completed, updatedActive = runMakeup(subs, selection, active, state, index, byLabel, folder, folderError, indexError)
+            if completed then return updated, updatedActive or updated[1] end
         end
     end
 end

@@ -1,8 +1,8 @@
-# AutoMask 2.5.5
+# AutoMask 2.5.6
 
 English | [Español](es/AutoMask.md) | [Index](../README.md#documentation)
 
-AutoMask samples the current video frame, uses each selected dialogue line as a guide and sends one region per line to `kite-automask` 0.4.2. Use it to cover lettering or defects on a surface, or to obtain the surface outline as an ASS drawing or clip.
+AutoMask samples the current video frame, uses each selected dialogue line as a guide and sends one region per line to `kite-automask` 0.4.3. Use it to cover lettering or defects on a surface, or to obtain the surface outline as an ASS drawing or clip.
 
 ## Choose the operation
 
@@ -49,6 +49,8 @@ The side panel scrolls on smaller displays. Editing shortcuts are inactive durin
 | Mouse wheel / middle drag | Zoom / pan |
 
 ## Outputs and subtitle changes
+
+Fill and Shape drawings explicitly set `\fscx100\fscy100` to preserve their proportions regardless of the destination style's scales. These neutral scales are also accepted when reusing the drawing as a guide.
 
 | Output | Subtitle operation | Properties |
 | --- | --- | --- |

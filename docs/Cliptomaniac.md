@@ -1,8 +1,8 @@
-# Cliptomaniac 0.4.4
+# Cliptomaniac 0.4.5
 
 English | [Español](es/Cliptomaniac.md) | [Index](../README.md#documentation)
 
-Cliptomaniac edits ASS clip geometry, uses drawn guides to position or reshape text, and converts animated clipped lines to frame-by-frame output. Open **Cliptomaniac** to select an action. **Cliptomaniac/Help** opens the action reference. The 39 individual actions remain under **: Kite Hotkeys :/Cliptomaniac/**; slashes within action names use the full-width slash to keep a single menu leaf.
+Cliptomaniac edits ASS clip geometry, uses drawn guides to position or reshape text, and converts animated clipped lines to frame-by-frame output. Open **Cliptomaniac** to select an action. **Cliptomaniac/Help** opens the action reference. The 40 individual actions remain under **: Kite Hotkeys :/Cliptomaniac/**; slashes within action names use the full-width slash to keep a single menu leaf.
 
 ## Choose the source geometry first
 
@@ -162,6 +162,12 @@ Runs immediately. Adds D to a three-point A-B-C clip by closing opposite directi
 ### Copy clip/iclip
 
 Runs immediately. Copies the first clip to matching selected lines, or from the first line to the rest.
+
+### Merge clip/iclip
+
+Runs immediately. The first selected dialogue line in subtitle order supplies its first clip; every later selected dialogue line with a clip receives all of its paths. The source stays unchanged. The destination keeps its own `clip` or `iclip` type and vector scale; rectangles become vector paths, and source coordinates are rescaled to match the destination. Effect groups do not change the source.
+
+Paths are appended as separate contours, preserving open guides, curves and multiple shapes. For example, `m 0 50 l 100 50` and `m 50 0 l 50 100` become two strokes forming a cross. This appends geometry, without performing a polygon union or changing contour winding. Only the first clip on each line is used; comments, unselected lines, lines without a usable clip and clips inside `\t(...)` are skipped.
 
 ### Create clip around text
 
