@@ -1,4 +1,4 @@
-# AddTexture 2.1.8
+# AddTexture 2.2.1
 
 [English](../AddTexture.md) | Español | [Índice](../../README.es.md#documentación)
 

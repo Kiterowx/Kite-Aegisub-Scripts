@@ -1,4 +1,4 @@
-# Moka Motion 3.7.6
+# Moka Motion 3.8.2
 
 English | [Español](es/MokaMotion.md) | [Index](../README.md#documentation)
 
@@ -148,3 +148,7 @@ Windows tools run through a hidden native process supervisor with structured exe
 ## Drawing coordinates and external processes
 
 Coordinate remapping uses `AssDrawing.mapCoordinates` for complete ASS paths, including spline commands. External commands use `kite.PyBridge` for argument quoting, Unicode support, completion and cancellation.
+
+## Shared engine
+
+Moka Motion uses `kite.MotionEngine` to import and apply tracking data. [Auto Motion](AutoMotion.md), inside Hephaestus, calculates tracking from the video and applies it through the same engine. Moka retains its own macro and controls.

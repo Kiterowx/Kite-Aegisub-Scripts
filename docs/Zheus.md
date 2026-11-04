@@ -1,4 +1,8 @@
-# Zheus Colormanager 4.7.4
+# Zheus Color 1.0.0
+
+Existing 4.x installations must replace kite.Zheus.lua manually to adopt version 1.0.0: the updater does not offer a lower version number as an upgrade. Settings and palette formats remain compatible.
+
+The selection panel uses a wider, taller report aligned with its control grid. Counts use plain labels such as `Actores: 1`.
 
 English | [Español](es/Zheus.md) | [Index](../README.md#documentation)
 
@@ -16,11 +20,11 @@ Color animations are identified, but a static summary does not describe every mo
 
 ## Panel and commands
 
-The main command is **Zheus Colormanager**. The other 17 actions are under `: Kite Hotkeys :/Zheus Colormanager/`.
+The main command is **Zheus Color**. The other 17 actions are under `: Kite Hotkeys :/Zheus Color/`. Existing shortcuts and favorites migrate when the macro loads; preferences retain their identifier.
 
 | Command | Function |
 | --- | --- |
-| Zheus Colormanager | Selection summary, managers, replacements and four quick gradients. |
+| Zheus Color | Selection summary, managers, replacements and four quick gradients. |
 | Editor de tramos | Edit a line's color spans and boundaries. |
 | Colores por actor | Fill, outline and shadow palettes by actor. |
 | Colores de 4 esquinas | Four corners by actor and channel. |

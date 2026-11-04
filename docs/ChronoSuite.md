@@ -1,17 +1,23 @@
-# Chrono Suite 1.6.1
+# Chrono Suite 1.8.0
+
+Chrono has direct **Cleanup**, **Joinator** and **Final Data** buttons. The remaining editors stay in Tools.
+
+**Import Lines**, in Data Import, replaces each selected dialogue with the complete pasted ASS group. Every copy keeps its destination start and end and the other pasted fields, including comments, tags and whitespace. Same Layers and Import as comments do not alter this copy.
+
+**Final Data** uses one box with eight rows: title, original script, translation, editing, timing, sync point, updated by and update details. Empty rows keep their field empty without shifting later fields. Copy or paste the entire block.
 
 English | [Español](es/ChronoSuite.md) | [Index](../README.md#documentation)
 
-Open **Chrono Suite** for the combined panel. **Chrono Suite/Config** and **Chrono Suite/Help** are the other direct entries. The individual actions are registered under **: Kite Hotkeys :/Chrono Suite/**, including Autotiming, Extract KF (SCXvid), Scream Detector, Audit Markers, the utility actions and extra tools. Utility submenus are Case, Punctuation, Tags, Smart, Split Join and Timing; Karaoke has its own branch. Moved suite hotkeys are migrated to their new menu paths.
+Open **Chrono Suite** for the combined panel. **Chrono Suite/Config** and **Chrono Suite/Help** are the other direct entries. The individual actions are registered under **: Kite Hotkeys :/Chrono Suite/**, including Audit Markers, the utility actions and extra tools. Utility submenus are Case, Punctuation, Tags, Smart, Split Join and Timing; Karaoke has its own branch. Moved suite hotkeys are migrated to their new menu paths.
 
 ## Start with the intended operation
 
-- To review existing timing: select dialogue, choose an Audit preset, inspect markers in Effect and correct flagged lines. Audit flags are review criteria, not automatic diagnoses.
-- To align dialogue to sound: open Auto Timing, choose Lazy or Busy and a mode, supply its input data, and inspect the resulting timing against audio. Use Raw voice to characterize detection before applying padding and keyframe polish.
+- To review existing timing: select dialogue, choose an Audit preset, inspect markers in Effect and correct flagged lines. Use the audit flags to guide a review of the scene.
+- To align dialogue to sound: open [Auto Timing in Hephaestus](AutoTiming.md), choose Lazy or Busy and a mode, supply its input data, and inspect the resulting timing against audio. Use Raw voice to characterize detection before applying padding and keyframe polish.
 - To edit text: choose a utility and execute with the intended selection. Multiple nonempty sections execute in the panel's defined order; leave unrelated sections empty.
-- To prepare delivery properties: open Properties and Cleanup. Editing credits is separate from its optional whole-file cleanup; this option deliberately exceeds the current selection.
+- To prepare delivery properties: open Final Data. Editing credits is separate from its optional whole-file cleanup; this option deliberately exceeds the current selection.
 
-Most text utilities exclude commented events and vector drawings. Timing and tag operations can explicitly include drawings; sorting, folds and comment management have their own event scope. Deleting and splitting operations return remapped selections. Count CPS, Select Time Range, Copy Fold and After Effects Keyframes do not edit event text. Properties and Cleanup manages its own transaction. Use Undo to review a mutating operation, especially when combining utilities.
+Most text utilities exclude commented events and vector drawings. Timing and tag operations can explicitly include drawings; sorting, folds and comment management have their own event scope. Deleting and splitting operations return remapped selections. Count CPS, Select Time Range and Copy Fold provide inspection and selection operations. Final Data manages its own transaction. Use Undo to review a mutating operation, especially when combining utilities.
 
 The main panel places Audit Markers on the left and Utility Tools on the right, with Data Import and Extra Tools below. Most audit results appear in the Effect field.
 
@@ -19,14 +25,14 @@ The main panel places Audit Markers on the left and Utility Tools on the right, 
 
 **Text as {...}** wraps imported text in comment blocks. Its tooltip gives the full description; the Spanish and Portuguese labels are **Texto en {...}** and **Texto em {...}**. **Keyframe seal** retains its existing behavior and shows its marker codes in a tooltip. These compact labels keep the main window narrow.
 
-The panel is organized around the current selection. Actions are triggered by pressing EXECUTE. The Auto Timing, Extract KF, Config, and Help buttons open their dialogs directly. Auto Timing respects the Apply to / Filter pair.
+The panel is organized around the current selection. Actions are triggered by pressing EXECUTE. The buttons are ordered **Execute, Cleanup, Joinator, Final Data, Config, Help, Cancel**. Cleanup opens Text and Tag Cleanup.
 
 - **Apply to:** defines the subset on which the panel sections act.
 - **Filter:** text or numeric value paired with Apply to.
 - **Audit Markers:** presets, thresholds, keyframe mode, and Single Marker.
 - **Utility Tools:** seven independent sections (Case, Punct/Text, Tags/Comments, Smart, Split/Join, Time/Sort, and Karaoke).
 - **Data Import:** import data from text pasted into the box.
-- **Extra Tools:** independent dialogs, including Line Merge and Cleanup.
+- **Tools:** Text Replacer and mpv QC. Cleanup, Joinator and Final Data have direct buttons.
 
 An empty dropdown skips its section during execution.
 
@@ -229,67 +235,19 @@ The import source is the text pasted into the Data Import box. An empty box skip
 - **Same Layers:** when checked, Import Effects, Import Text, Import Actor, and Import Tags only match source lines whose layer equals the target line layer.
 - **Import as comments:** wraps the imported text inside {…} comment blocks.
 
-## Extra Tools
+## Tools and direct buttons
 
-- **After Effects Keyframes:** exports motion data compatible with After Effects.
+- **After Effects Keyframes:** available in [Rhea Signs → Tools](RheaSigns.md#after-effects-keyframes).
 - **Text Replacer:** replaces visible text while preserving override tags.
 - **mpv QC:** reads notes exported from mpvQC in the format [hh:mm:ss.ms] [Type] Observation {suggested text}. The observation is written as [QC: …] in Effect and the suggestion is inserted as a comment block in the dialogue. Tolerance is defined in milliseconds.
 - **Text and Tag Cleanup:** removes selected visible signs, spacing tokens, comments, and known override tags without toggling them back on when absent.
-- **Properties and Cleanup:** edits script credits and title. The optional cleanup affects the whole file, removing project paths, extradata, comments, Actor, Effect and empty dialogue lines.
-
-## Auto Timing
-
-Auto Timing has two main methods, plus a separate Legacy path. Every control lives in this window and persists in the Chrono Suite configuration.
-
-- **Method:**
-- Lazy: reads spoken activity from a peaks JSON. It is the simple method and needs no extra module.
-- Busy: combines silence, VAD, flux, RMS envelope, and optional waveform data. It requires the bundled `kite.Timing` module.
-- **Mode for Lazy and Busy:**
-- Full + polish: detect the voice, then pad, chain, and snap to video keyframes.
-- Raw voice: move each line onto the detected voice start/end with no padding. It does not use keyframes.
-- Post current: keep the current in/out and only run the final padding, chaining, and video-keyframe pass.
-- **Waveform JSON:** a peaks file (min/max samples). Type a path or pick one with Browse...; it is cached for the session, and Reload waveform cache forces a fresh read.
-- Keyframes come from the loaded video, the same way the audit markers read them. Full + polish and Post current need them; Raw voice does not.
-- Busy Files... opens only the file inputs used by Busy. If Busy is processed without a JSON or Busy files, this window opens first.
-- Legacy... opens the Legacy method selector and silence files. Legacy aligns line edges to silence clusters, does not use video keyframes, and writes [LZ ...] tags.
-- **Style filter:** All, All Default, Default+Alt, or an exact style, plus a second exact style in the extra box.
-- Problem lines are marked in Effect with [TM-...] markers (no voice, weak match, overlap, short, fast CPS), cleaned on the next run.
-
-## Auto Timing: detection and margins
-
-Lazy smooths the peak envelope, thresholds it, cleans the mask, and keeps the speech span each line is then padded around. Busy reuses the same final margins on its combined match.
-
-- **Search ± (ms):** how far beyond the line's own in/out to look for the voice (0 = stay inside the line).
-- **Smoothing (ms):** width of the envelope smoothing window.
-- **Auto threshold (Otsu):** choose the speech/silence cut automatically; off falls back to a percentile sensitivity.
-- **Bridge gaps / Drop islands (ms):** close micro-silences and discard micro-blips before the span is measured.
-- **Trim small edge spill:** drop a faint, well-separated blip stuck to a line edge so it does not stretch the timing.
-- **Margins · post-timing:** lead-in / lead-out, chain max out / in, KF snap end / start, voice-cut limit, duration floor, and the CPS flag — the default criteria that shape how the raw span becomes the final in/out.
-
-## Extract KF
-
-Generates a keyframe log through SCXvid, with FFmpeg used for decoding. The SCXvid path, FFmpeg path, and log suffix are configured in Config → SCXvid.
-
-## Scream Detector
-
-Audio-level review tool. Runs FFmpeg astats on the loaded audio/video and writes the [SCREAM] marker to lines whose interval is statistically loud relative to the rest of the analysed set.
-
-- **Average line dB:** mean power inside each subtitle interval. Closer to 0 is stricter.
-- **Strong sample dB:** samples above this value count as strong evidence.
-- **Strong sample ratio (%):** minimum percent of strong samples per interval.
-- **Minimum samples:** ignores lines with too little audio evidence.
-- **Robust z-score:** compares each line against the median/MAD of the analysed set.
-- **Apply to:** All dialogue or Selected lines only.
-- **Clear previous SCREAM marks:** removes earlier [SCREAM] in scope before writing new ones.
-- **Reuse existing analysis log:** skips FFmpeg if a previous log exists. Useful for recalibration.
+- **Final Data:** edits script credits and title. The optional cleanup affects the whole file, removing project paths, extradata, comments, Actor, Effect and empty dialogue lines.
 
 ## Config
 
 Global configuration persisted between sessions.
 
 - **Language:** en, es, pt.
-- Auto Timing keeps its own source, mode, detection, margin, and silence controls in the Auto Timing window, not here.
-- **SCXvid:** SCXvid path, FFmpeg path, and log suffix.
 - **Lead-In / Lead-Out / Chain:** step in milliseconds for the lead utilities and max distance for Chain Left/Right.
 - **Kite Timing:** base and maximum lead-in, base and maximum lead-out, chain out, and maximum chain gap.
 - **Bidirectional Snapping:** frame range for the bidirectional snap, and directional range in milliseconds for the Start/End Snap tools.
@@ -299,19 +257,15 @@ Global configuration persisted between sessions.
 
 [Support Discord](https://discord.gg/Egq8us4xZC).
 
-## Properties and Cleanup in detail
+## Final Data in detail
 
-Edit Title, Original Script, Original Translation, Original Editing, Original Timing, Synch Point, Script Updated By and Update Details. Add episode from filename requires a saved subtitle filename with an episode number and a nonempty title. EventOps 1.3.1 ignores bracketed resolution/hash suffixes, recognizes SxxExx and preserves long episode numbers without numeric conversion. Cleanup checks cancellation during mutation and restores on failure. Invalid input returns to the edited form. Save updates the script info fields; Cancel leaves them unchanged.
+Edit Title, Original Script, Original Translation, Original Editing, Original Timing, Synch Point, Script Updated By and Update Details. Add episode from filename requires a saved subtitle filename with an episode number and a nonempty title. EventOps ignores bracketed resolution/hash suffixes, recognizes SxxExx and preserves long episode numbers without numeric conversion. Cleanup checks cancellation during mutation and restores on failure. Invalid input returns to the edited form. Save updates the script info fields; Cancel leaves them unchanged.
 
 With **Clean the whole subtitle file**, the shared EventOps operation also removes project path metadata, extradata, comment events and inline comments, clears Actor and Effect, and removes empty dialogue. This affects all events. Keep an editable working copy if those fields carry timing notes or workflow metadata.
 
 ## Worked examples and boundaries
 
-- Line Merge and Cleanup with rows at 4–5 s and 1–2 s retains text in grid order but produces an event at 1–5 s. It preserves the first row's initial tags and metadata, not every row's inline formatting. Join Same Text additionally requires compatible style and adjacent selected rows.
-- An Auto Timing overlap can involve more than three subsequent rows. The final pass checks all remaining candidates until their earliest possible start is beyond the current end; stacked original lines retain their existing handling.
-- A waveform file provides positive finite `pointMs` and alternating integer min/max `peaks`. Decimal/garbage peaks and incomplete pairs are rejected instead of partially read. Scientific notation in pointMs is read as a complete number. Changing the typed path invalidates the session cache; returning from a secondary window retains the typed path.
-- Durations stay nonnegative, smoothing and island controls enforce their minimum values, and percentages keep their 0–100 range. Increasing a search window can match unrelated speech, so select it according to the scene.
-- FFmpeg analysis and SCXvid extraction require the configured executables and readable media. Scream Detector marks relative loudness; it does not identify an emotion or speaker.
+- Joinator with rows at 4–5 s and 1–2 s retains text in grid order but produces an event at 1–5 s. It preserves the first row's initial tags and metadata, not every row's inline formatting. Join Same Text additionally requires compatible style and adjacent selected rows.
 
 ## Persistence and requirements
 
@@ -321,7 +275,7 @@ The interface supports English, Spanish and Portuguese. Stable English action ID
 
 ## Joining, splitting and shifting
 
-**Extra Tools → Line Merge and Cleanup** replaces ChronoJoin. Direct buttons have a fixed explanation:
+**Joinator** replaces ChronoJoin. Direct buttons have a fixed explanation:
 
 - **Join:** joins visible text, keeps the first row's initial tags and lowercases a continuation after a comma or ellipsis.
 - **Keep Second:** requires two rows and copies the second text exactly.

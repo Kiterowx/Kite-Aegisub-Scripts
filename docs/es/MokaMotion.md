@@ -1,4 +1,4 @@
-# Moka Motion 3.7.6
+# Moka Motion 3.8.2
 
 [English](../MokaMotion.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -142,3 +142,7 @@ El intermedio codificado y el MP4 final se decodifican para verificar su cantida
 **Trim Settings** guarda rutas de FFmpeg y x264 en `kite.MokaMotion`. Vacías usan `PATH`. Cancelar el selector conserva lo escrito; un fallo de guardado mantiene el formulario. Las opciones de movimiento y formas son borradores de cada ejecución.
 
 En Windows los procesos externos no abren consola, admiten rutas Unicode, espacios y apóstrofos, y recogen diagnósticos. La cancelación puede esperar a que termine el proceso nativo y se informa con código 130. PyBridge gestiona argumentos, finalización y cancelación; AssDrawing transforma trayectos ASS completos, incluidos splines.
+
+## Motor compartido
+
+Moka Motion usa `kite.MotionEngine` para importar y aplicar seguimiento. [Auto Motion](AutoMotion.md), dentro de Hephaestus, calcula el seguimiento desde el vídeo y lo aplica mediante el mismo motor. Moka conserva su macro y sus controles.

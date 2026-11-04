@@ -1,4 +1,4 @@
-# Selesub 2.1.9
+# Selesub 2.2.0
 
 English | [Español](es/Selesub.md) | [Index](../README.md#documentation)
 
@@ -76,6 +76,12 @@ The editable list contains values to **keep**. Delete a value from this list to 
 
 Changing Nature or Scope rebuilds the list before applying anything; edit the refreshed list and press Apply again. This prevents an old list from targeting a new group source. The manager includes Comment events. Its scope and action preferences are separate from the main window, although opening it initially uses the main window's action.
 
+## Assign fields with Fields
+
+**Fields** opens the grouped field assignment panel. Choose the grouping field, target field and scope, then assign one value per group with **Parallel list** or a common value with **Single value**. It uses the incoming selection, not the results of unexecuted filters.
+
+**Execute** applies one transaction and closes Selesub, selecting changed rows. **Cancel** returns to the main window with the search draft intact. Existing manager preferences are retained. See [Fields](SelesubFields.md) for supported fields, mixed groups and time validation.
+
 ## Export and import
 
 **Export** writes the incoming subtitle selection, not the unexecuted filter results. Select subtitle events first. Choose a path; `.ass` is appended if needed. The file includes the current script information, Aegisub project data, all styles and selected events in subtitle order. Event extra data is regenerated with its references. Source event text is not modified. Output is written through the shared atomic-file helper; failures are reported.
@@ -105,7 +111,7 @@ These actions work without installing the Hotkeys macro. Their registered paths 
 
 Selesub remembers scope, action, advanced field/operator and option checkboxes after a successful Run. It deliberately does not persist exact filter values or search/exclusion text. Manager Nature, Scope and Action are also remembered. Write failures are reported; an in-memory choice is not presented as successfully saved.
 
-Scanning and mutation loops check cancellation. Comment/delete/import commits use shared transactions; file output uses the atomic writer. No arbitrary event-count or import-size ceiling is imposed.
+Scanning and mutation loops check cancellation. Comment/delete/import commits use shared transactions; file output uses the atomic writer.
 
 Install `myaa.ASSParser` and follow the [installation steps](../README.md#installation).
 

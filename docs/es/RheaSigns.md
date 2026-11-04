@@ -1,4 +1,8 @@
-# Rhea Signs 2.2.1
+# Rhea Signs 2.4.0
+
+**After Effects Keyframes** está en Tools. Exporta Position, Scale y Rotation de la selección a un archivo de texto compatible con AE, sin cambiar los subtítulos. Los atajos existentes de Chrono se migran a Rhea.
+
+Los nombres de herramientas son **Font Manager**, **Frame Fades** y **Text Shuffler**; los atajos previos se conservan mediante migración.
 
 [English](../RheaSigns.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -18,11 +22,11 @@ Menú principal: **Rhea Signs**. Las acciones están bajo `: Kite Hotkeys :/Rhea
 | Shapes/Place on Perimeter | Repetir dibujos sobre contornos cerrados. |
 | Shapes/Shape Color Optimizer | Combinar colores compatibles o reducir degradados. |
 | Tools/Style to Tags | Convertir propiedades del estilo en etiquetas. |
-| Font and Style Manager | Revisar o sustituir fuentes y editar o clonar estilos. |
-| Frame Fades and Cleanup | Elegir fundidos por fotograma o limpieza de continuidad. |
-| Frame Fades and Cleanup/In / Out | Fijar entrada / salida desde el fotograma actual. |
-| Frame Fades and Cleanup/Clean | Retirar fundidos internos entre grupos continuos. |
-| Shuffle Line Text | Mezclar textos conservando propiedades de cada evento. |
+| Font Manager | Revisar o sustituir fuentes y editar o clonar estilos. |
+| Frame Fades | Elegir fundidos por fotograma o limpieza de continuidad. |
+| Frame Fades/In / Out | Fijar entrada / salida desde el fotograma actual. |
+| Frame Fades/Clean | Retirar fundidos internos entre grupos continuos. |
+| Text Shuffler | Mezclar textos conservando propiedades de cada evento. |
 
 ## Panel principal
 
@@ -177,9 +181,9 @@ Requiere una posición estática y una sección de dibujo inequívocas. Se recha
 
 El primer dibujo es el contorno base. Los demás forman unidades; las capas que comparten posición pertenecen a la misma. Su orden sigue la selección. La base se conserva y las plantillas se sustituyen por la distribución.
 
-Puedes recorrer solo exteriores o también huecos. Orientación y contención distinguen los contornos; cada uno cierra su período por separado. Elige un patrón sugerido o **Custom**, con números separados por espacios o comas, como `1, 2, 2, 3`. No hay un máximo de 16 pasos. Los números inválidos vuelven al borrador.
+Puedes recorrer solo exteriores o también huecos. Orientación y contención distinguen los contornos; cada uno cierra su período por separado. Elige un patrón sugerido o **Custom**, con números separados por espacios o comas, como `1, 2, 2, 3`. Los números inválidos vuelven al borrador.
 
-Repeticiones y huecos se calculan desde longitud del contorno y ancho de unidades. No hay un máximo fijo de 4000 salidas. Se puede cancelar. Un avance no positivo, tangente inválida o cierre imposible se rechaza.
+Repeticiones y huecos se calculan desde longitud del contorno y ancho de unidades. Se puede cancelar. Un avance no positivo, tangente inválida o cierre imposible se rechaza.
 
 ### Shape Color Optimizer
 
@@ -197,7 +201,7 @@ Configura colores RGB, alfas independientes de caja y brillo, color/alfa del tex
 
 El ancho máximo limita la caja; no reduce automáticamente el texto largo. Se retira el formato intermedio para crear esta composición uniforme. Las líneas nuevas quedan seleccionadas.
 
-## Font and Style Manager
+## Font Manager
 
 Lee estilos y etiquetas `fn` reales fuera de transformaciones. Omite nombres aparentes dentro de comentarios o transformaciones.
 
@@ -219,9 +223,9 @@ Los formularios inválidos conservan el borrador. Los nombres clonados deben ser
 
 **Style to Tags** usa `AssContext.styleBake`. Permite elegir propiedades, proteger familias existentes, omitir ceros y expandir resets. La alineación explícita conserva su prioridad; los resets no introducen otra alineación de línea. Los resets activos usan sus estilos reales; se conservan comentarios y resets anidados. El acceso antiguo Taggerize abre esta herramienta.
 
-**Frame Fades and Cleanup/In** usa `tiempo del fotograma − inicio`; **Out**, `fin − tiempo del fotograma`. El cursor debe estar dentro de todos los diálogos sin comentar seleccionados. Se conserva el otro componente del fundido. Datos inválidos cancelan antes de editar.
+**Frame Fades/In** usa `tiempo del fotograma − inicio`; **Out**, `fin − tiempo del fotograma`. El cursor debe estar dentro de todos los diálogos sin comentar seleccionados. Se conserva el otro componente del fundido. Datos inválidos cancelan antes de editar.
 
-**Continuous Fade Cleanup** agrupa intervalos iguales y retira fundidos en los límites interiores de grupos continuos, conservando los exteriores. Requiere más de un grupo temporal. **Shuffle Line Text** mezcla solo texto; tiempos y otros campos permanecen en sus filas.
+**Remove Inner Fades** agrupa intervalos iguales y retira fundidos en los límites interiores de grupos continuos, conservando los exteriores. Requiere más de un grupo temporal. **Text Shuffler** mezcla solo texto; tiempos y otros campos permanecen en sus filas.
 
 ## Configuración
 
@@ -234,3 +238,9 @@ La configuración se guarda entre sesiones. Los ajustes anteriores se importan a
 **Shapes → Simplify Drawing** reduce puntos sobre rectas y convierte Bézier cúbicas casi rectas en segmentos rectos. La tolerancia predeterminada es **0.05 unidades de dibujo en p1**, antes de escala o perspectiva; **0** elimina solo geometría colineal. Comprueba los puntos y controles originales para limitar el error de cada pasada, conserva extremos, esquinas, retrocesos, contornos separados y curvas con detalle. Los B-splines quedan intactos. Solo modifica secciones de dibujo de las líneas seleccionadas; conserva tags, texto y metadatos. Una tolerancia positiva permite una pequeña diferencia geométrica, que puede ampliarse con la escala. La rasterización de bordes puede variar ligeramente incluso con tolerancia cero.
 
 **Tools → Remove Redundant Zero Tags** limpia únicamente tags cero que no afectan al resultado, respetando estilos, resets y animaciones.
+
+## After Effects Keyframes
+
+En **Tools → After Effects Keyframes**, selecciona las líneas que contienen el movimiento y elige un archivo `.txt` de salida. Exporta **Position**, **Scale** y **Rotation**, recorriendo las filas en orden y numerando las muestras desde cero. Lee `\pos` o `\move`, `\fscx`, `\fscy` y `\frz`; usa los datos del vídeo para FPS y dimensiones.
+
+El exportador conserva el comportamiento que tenía en Chrono. Es una exportación de esos canales: para comprobar el resultado de etiquetas temporales o perspectiva, revisa el cartel en el renderizador. La extracción de cambios de escena SCXvid se encuentra en [Auto Timing](AutoTiming.md#keyframes).

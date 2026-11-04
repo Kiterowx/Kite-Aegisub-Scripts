@@ -1,4 +1,4 @@
-# Selesub 2.1.9
+# Selesub 2.2.0
 
 [English](../Selesub.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -40,7 +40,7 @@ La condición avanzada se combina con esos campos. **Invert advanced** invierte 
 | Start, End | Tiempo absoluto. |
 | Event Number | Número de evento desde 1 en el archivo completo, sin cabeceras ni estilos. La selección no reinicia la numeración. |
 
-Se rechazan resultados numéricos no finitos. No hay un máximo de coincidencias.
+Se rechazan resultados numéricos no finitos.
 
 ## Operadores
 
@@ -76,6 +76,12 @@ La lista editable contiene los valores que se van a **conservar**. Elimina uno d
 
 Cambiar Nature o Scope reconstruye la lista antes de actuar. Edita la lista nueva y pulsa Apply otra vez. El gestor incluye comentarios. Guarda su propio alcance y acción; al abrirlo toma inicialmente la acción del panel principal.
 
+## Asignar campos con Fields
+
+**Fields** abre el panel de asignación de campos por grupos. Elige el campo de agrupación, el campo que quieres escribir y el alcance; asigna un valor por grupo con **Parallel list** o uno común con **Single value**. Usa la selección de entrada, no el resultado de filtros todavía sin ejecutar.
+
+**Execute** aplica los cambios en una transacción y cierra Selesub; quedan seleccionadas las filas modificadas. **Cancel** vuelve al panel principal con el borrador de búsqueda intacto. Se conservan las preferencias anteriores del gestor. Consulta [Fields](SelesubFields.md) para ver los campos admitidos, los grupos mixtos y la validación de tiempos.
+
 ## Exportar e importar
 
 **Export** escribe la selección de entrada, no los resultados de filtros que todavía no hayas ejecutado. Primero selecciona eventos. Se añade `.ass` a la ruta si falta. Se exportan información del script, datos del proyecto, todos los estilos y eventos seleccionados en orden. Los datos extra se regeneran con sus referencias. La escritura es atómica y no cambia el texto de origen.
@@ -97,13 +103,13 @@ Bajo `: Kite Hotkeys :/Selesub`, **Style**, **Actor** y **Effect** ofrecen seis 
 | Block Start / Block End | Selecciona el primer o último evento del bloque contiguo de la línea activa. |
 | Select Block | Selecciona todo ese bloque y conserva la línea activa. |
 
-`Range/To Start` selecciona desde el primer evento hasta el activo; `Range/To End`, desde el activo hasta el último. Ambos incluyen la línea activa. Los comentarios participan en todas las acciones. Una línea activa inválida no altera la selección. No se requiere la macro Hotkeys.
+`Range/To Start` selecciona desde el primer evento hasta el activo; `Range/To End`, desde el activo hasta el último. Ambos incluyen la línea activa. Los comentarios participan en todas las acciones. Una línea activa inválida no altera la selección. Los atajos se registran desde la propia macro.
 
 ## Preferencias y dependencias
 
 Tras Run correcto se guardan alcance, acción, campo, operador y casillas. No se guardan valores exactos ni textos de búsqueda o exclusión. El gestor guarda Nature, Scope y Action. Los fallos de escritura se notifican.
 
-La búsqueda y las ediciones permiten cancelar. Comentar, borrar e importar usan transacciones; exportar usa escritura atómica. No hay un máximo fijo de eventos ni de tamaño de importación.
+La búsqueda y las ediciones permiten cancelar. Comentar, borrar e importar usan transacciones; exportar usa escritura atómica.
 
 Instala `myaa.ASSParser` y sigue los pasos de [instalación](../../README.es.md#instalación).
 

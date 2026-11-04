@@ -1,4 +1,4 @@
-# Hotkeys 2.0.2
+# Hotkeys 2.0.4
 
 [English](../Hotkeys.md) | Español | [Índice](../../README.es.md#documentación)
 

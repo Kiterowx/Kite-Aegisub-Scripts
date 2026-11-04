@@ -1,4 +1,4 @@
-# Cliptomaniac 0.4.5
+# Cliptomaniac 0.4.8
 
 English | [Español](es/Cliptomaniac.md) | [Index](../README.md#documentation)
 
@@ -258,7 +258,7 @@ Opens options. Resizes text tags to fit a rectangular clip. Vector clips are int
 - Remove guide clip: delete the rectangle clip after it has been used.
 - width/height: scale \fscx and \fscy.
 - spacing/outline/shadow/blur: scale those dimensions like Rhea's Rescale to Clip.
-- Vector clips are rejected. Use Rect clip to vector only after this operation, not before it.
+- Vector clips are rejected. Use Rect clip to vector after this operation.
 
 ### Shape to clip
 

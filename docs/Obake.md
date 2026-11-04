@@ -1,4 +1,4 @@
-# Obake 0.4.5
+# Obake 0.4.8
 
 English | [Español](es/Obake.md) | [Index](../README.md#documentation)
 
@@ -42,7 +42,7 @@ The common-tag grid provides text to copy into keyframe rows. Each row contains 
 
 Manual times use **Percent** of the line duration or **Milliseconds**, and are confined to that line's interval. Rows are sorted by time; the last row wins when several share a time. The earliest payload is the initial state, followed by transforms between consecutive retained rows. A single retained nonempty payload acts as a static initial state.
 
-The other shapes use the first and last payloads. Delay can be zero, milliseconds from the start, a percentage, or the current frame. It shifts the start of the animation, not the event's start time. A delay at the line's end leaves no animation interval.
+The other shapes use the first and last payloads. Delay can be zero, milliseconds from the start, a percentage, or the current frame. It shifts the animation start and preserves the event times. A delay at the line's end leaves no animation interval.
 
 Steps evaluate each target with ASSFoundation and the shared ASS context. Multiple scalar tags, colors, rectangular clips, style defaults and ordered resets use the same evaluation rules as frame sampling. For example, four steps from `\fscx100\fscy50` to `\fscx200\fscy150` target 125/75, 150/100, 175/125 and 200/150. These are successive transform targets, not instantaneous hold frames. ASS's restrictions on transformable properties still apply.
 
@@ -79,7 +79,7 @@ When valid karaoke cues are present, the start of the second karaoke block suppl
 | Split Line Fad | Keeps the first part and introduces the second on a higher layer with a 250 ms fade |
 | Split Title | Two simultaneous layers: hidden fill on the lower copy and zero outline on the upper copy |
 
-Color Pulse, Shake, Wobble and Glitch accept steps down to one millisecond. Dramatic Pulse retains its designed minimum 120 ms expansion and 180 ms settling endpoint, with the second endpoint also derived from 1.8 times Step. These are preset timings, not a generation budget. Border Pulse and Glow Pulse retain their historical names and each makes one transition.
+Color Pulse, Shake, Wobble and Glitch accept steps down to one millisecond. Dramatic Pulse retains its designed minimum 120 ms expansion and 180 ms settling endpoint, with the second endpoint also derived from 1.8 times Step. Border Pulse and Glow Pulse retain their historical names and each makes one transition.
 
 Shake resolves position through `AssContext`: it can inherit alignment, margins and resolution from the style/document when no explicit position is present. It creates a distant origin and rotates around it; its apparent movement depends on the selected axes and existing geometry. It is an artistic rotational effect rather than a translation track.
 

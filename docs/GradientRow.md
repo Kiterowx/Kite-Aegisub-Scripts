@@ -1,4 +1,4 @@
-# Gradient Row 1.8.9
+# Gradient Row 1.9.2
 
 English | [Español](es/GradientRow.md) | [Index](../README.md#documentation)
 
@@ -20,7 +20,7 @@ Spatial modes comment each source and insert colored clipped copies, selecting t
 
 The dialog groups the controls in a centered column: gradient type, strip thickness, acceleration, angle, color slots and vertically stacked colors. The column remains centered when navigation buttons appear. The palette shows up to eight colors per page. **Previous** and **Next** appear only when there is more than one page and navigate without losing edits on other pages. The Colors label then shows the visible range and total; hovering a swatch identifies its position. **Add+** duplicates the final color and opens its page; **Rem-** removes the final color, retaining at least two. **Reset** restores defaults in the draft; **Cancel** discards it. **Execute** saves preferences and processes the selection. Failed preference writes are logged separately.
 
-**Pixels per strip** sets integer spatial thickness, minimum one pixel. Larger values create fewer rows and a more visibly stepped gradient. **Acceleration** is a positive interpolation exponent; 1 is linear, larger values hold the earlier colors longer. Nonpositive stored input falls back to 1. Small positive values below 0.01 are accepted. **Angle** applies to Rotated mode. Choose one or more ASS color channels: primary, secondary, outline and shadow. These controls change colors, not their alpha.
+**Pixels per strip** sets integer spatial thickness, minimum one pixel. Larger values create fewer rows and a more visibly stepped gradient. **Acceleration** is a positive interpolation exponent; 1 is linear, larger values hold the earlier colors longer. Nonpositive stored input falls back to 1. Small positive values below 0.01 are accepted. **Angle** applies to Rotated mode. Choose one or more ASS color channels: primary, secondary, outline and shadow. These controls change colors and preserve alpha.
 
 For a three-position black-to-white gradient with acceleration 1, the center is approximately RGB 128/128/128. Raising acceleration changes the center while retaining the endpoints. The ratio is calculated before exponentiation so large exponents do not overflow into an undefined result.
 
@@ -32,11 +32,11 @@ For example, `{\c&H000000&}AB{\c&HFFFFFF&}CD` supplies primary-color anchors at 
 
 ## Geometry and perspective
 
-Spatial modes accept no source clip, one rectangular clip, or one four-corner vector clip before visible content. Multiple clips, inline clip changes, inverse clips and animated clips are rejected because replacing them with ordinary strips would change their semantics. Curved or multi-contour clips must first be converted to supported geometry; this is a supported-input condition, not an output-count budget.
+Spatial modes accept no source clip, one rectangular clip, or one four-corner vector clip before visible content. Multiple clips, inline clip changes, inverse clips and animated clips are rejected because replacing them with ordinary strips would change their semantics. Curved or multi-contour clips must first be converted to supported geometry.
 
 Without an explicit clip, the script uses ASSFoundation, optional SubInspector and font measurement to obtain bounds, with a rough measurement fallback. Positions can come from the style, alignment and margins through AssContext. Rotation and perspective use projected geometry where available. Quad subdivision uses arch.Perspective when possible and a geometric fallback otherwise. Small padding and neighboring-strip overlap reduce visible seams.
 
-A moving or transformed sign can change its geometry over time. Perspective preparation reports those cases because the spatial strips use prepared geometry; inspect the whole event or bake the changing geometry first using [Cliptomaniac](Cliptomaniac.md). A rough font bound is an estimate, not an exact outline. Font availability and renderer settings still affect appearance.
+A moving or transformed sign can change its geometry over time. Perspective preparation reports those cases because the spatial strips use prepared geometry; inspect the whole event or bake the changing geometry first using [Cliptomaniac](Cliptomaniac.md). Font bounds provide an estimate of the occupied area. Font availability and renderer settings still affect appearance.
 
 Leading comments stay comments when new clip and color tags are inserted. Static color replacement uses the shared tag parser and preserves nested color transforms. Other source metadata and timing are copied into generated rows.
 

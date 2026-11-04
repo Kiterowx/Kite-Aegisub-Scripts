@@ -1,4 +1,4 @@
-# Cliptomaniac 0.4.5
+# Cliptomaniac 0.4.8
 
 [English](../Cliptomaniac.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -24,7 +24,7 @@ Selecciona diálogos y abre una acción. Las directas se ejecutan inmediatamente
 
 FBF usa los tiempos del vídeo y excluye el límite final. Clip only conserva el texto original cuando solo se anima el clip; si otras etiquetas temporales necesitan evaluarse, usa el estado completo. Los tiempos de karaoke se ajustan a cada fragmento. Merge identical une eventos vecinos solo si coinciden su contenido y campos relevantes. Max frames limita la salida después de unir: empieza en 400, admite enteros no negativos y **0** lo desactiva.
 
-Create lines inserta una copia por franja y conserva la fuente; Comment source la comenta. Sin Create lines se aplica la primera franja a la fuente. Horizontal avanza en X y Vertical, en Y. Las franjas rectangulares vecinas se solapan medio píxel para reducir juntas. No hay un máximo fijo de filas. Se puede cancelar durante generación e inserción; un error o cancelación restaura el archivo.
+Create lines inserta una copia por franja y conserva la fuente; Comment source la comenta. Sin Create lines se aplica la primera franja a la fuente. Horizontal avanza en X y Vertical, en Y. Las franjas rectangulares vecinas se solapan medio píxel para reducir juntas. Se puede cancelar durante generación e inserción; un error o cancelación restaura el archivo.
 
 ## Acciones
 
@@ -50,7 +50,7 @@ Convierte la línea animada en eventos por fotograma. **Bake source** elige esta
 
 Ajusta el clip al texto. **Mode** elige la parte; **Section axis**, división horizontal o vertical; **Margin**, expansión o reducción; **Tolerance**, simplificación; **Sections**, cantidad; **Index**, sección personalizada; **Bleed**, solape entre secciones; **No shrink**, impide reducir respecto al clip anterior; **Style pad**, incluye borde, sombra y desenfoque.
 
-**Transform maxima** mide los límites renderizados de todos los fotogramas, respeta `\an` e ignora clips solo durante la medida. Necesita vídeo. No añade dos veces el margen de estilo. Consolida clips en uno estático conservando su tipo.
+**Transform maxima** mide los límites renderizados de todos los fotogramas, respeta `\an` e ignora clips solo durante la medida. Necesita vídeo. Consolida clips en uno estático conservando su tipo.
 
 ### Bezier clip to curved text
 
@@ -200,7 +200,7 @@ Acción directa. Convierte el trayecto en su rectángulo envolvente mínimo.
 
 ## Ejemplos y límites
 
-- Una guía de (100,200) a (140,220) representa (+40,+20) en Clip to reposition; no sitúa todas las líneas en el punto final.
+- Una guía de (100,200) a (140,220) representa (+40,+20) en Clip to reposition.
 - Trazos de longitud 100 y 150 dan una proporción 1.5. Adjust by clip scale la aplica; Measure & transform clip la anima.
 - Un evento de 120 ms a 25 FPS genera tres intervalos por fotograma sin unir. Un límite de 2 lo rechaza sin editar; cero lo permite.
 - Las medidas aproximadas de fuente requieren revisión visual. Transform maxima mide cada fotograma y puede tardar en eventos largos.

@@ -1,4 +1,4 @@
-# Obake 0.4.5
+# Obake 0.4.8
 
 [English](../Obake.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -27,7 +27,7 @@ Las preferencias se guardan entre sesiones. Cancelar cierra el formulario sin ap
 
 ## Cadenas de transformaciones
 
-La cuadrícula de etiquetas sirve para copiarlas a las filas de estados. Cada fila contiene tiempo y etiquetas sin llaves. Se muestran ocho por página. **Previous/Next** conserva ediciones; **Add+** duplica la última y abre su página; **Rem-** elimina la última, con un mínimo de dos; **Reset** restaura la cadena inicial. No hay un máximo de estados.
+La cuadrícula de etiquetas sirve para copiarlas a las filas de estados. Cada fila contiene tiempo y etiquetas sin llaves. Se muestran ocho por página. **Previous/Next** conserva ediciones; **Add+** duplica la última y abre su página; **Rem-** elimina la última, con un mínimo de dos; **Reset** restaura la cadena inicial.
 
 **Strip existing transforms** elimina `\t` fuera de transformaciones, respetando comentarios. La cadena se inserta en el bloque inicial o en uno nuevo antes del texto. Acceleration admite valores finitos positivos; los no positivos usan el predeterminado. Los valores pequeños no se redondean a cero.
 
@@ -42,7 +42,7 @@ La cuadrícula de etiquetas sirve para copiarlas a las filas de estados. Cada fi
 
 Los tiempos manuales usan **Percent** o **Milliseconds** y se limitan al intervalo de la línea. Las filas se ordenan; en tiempos repetidos prevalece la última. El primer contenido es el estado inicial y los siguientes son destinos de transformaciones. Un único contenido no vacío queda estático.
 
-Los demás modos usan el primer y último contenido. Delay puede ser cero, milisegundos, porcentaje o fotograma actual. Desplaza el inicio de la animación, no el del evento. Un retraso situado al final no deja intervalo para animar.
+Los demás modos usan el primer y último contenido. Delay puede ser cero, milisegundos, porcentaje o fotograma actual. Desplaza el inicio de la animación y conserva los tiempos del evento. Un retraso situado al final no deja intervalo para animar.
 
 Steps evalúa etiquetas escalares, colores, clips rectangulares, estilos y resets ordenados mediante ASSFoundation y AssContext. Cuatro pasos entre `\fscx100\fscy50` y `\fscx200\fscy150` generan destinos 125/75, 150/100, 175/125 y 200/150. Son transformaciones sucesivas, no estados mantenidos instantáneos. Siguen vigentes los límites de ASS sobre propiedades animables.
 
@@ -99,7 +99,7 @@ Las capas retiran las propiedades que entran en conflicto, incluidas sus animaci
 
 ## Retime transforms
 
-La acción directa toma el mayor fin explícito de transformación como duración de origen y escala los tiempos de `\t(t1,t2,...)` a la duración actual. No modifica tiempos del evento. La API también admite `retime_source`, `retime_target` y `retime_info`.
+La acción directa toma el mayor fin explícito de transformación como duración de origen y escala los tiempos de `\t(t1,t2,...)` a la duración actual. Conserva los tiempos del evento. La API también admite `retime_source`, `retime_target` y `retime_info`.
 
 `\t(tags)` y `\t(accel,tags)` siguen ligados a la duración de la línea. Se conservan argumentos anidados y se ignoran ejemplos dentro de comentarios. Si no hay transformaciones temporizadas que cambiar, se informa.
 
@@ -142,7 +142,7 @@ Con varias líneas y Count selection activo, se usa el orden normalizado de fila
 
 Con una fuente o Count selection desactivado, cada evento se divide usando los códigos de tiempo. Se conservan límites parciales. La variación se aplica antes de evaluar el estado al inicio de cada fragmento, con transformaciones ordenadas, movimiento, desvanecimientos, resets y karaoke. Los efectos no se reinician por fragmento.
 
-Un período mayor que uno mantiene el estado muestreado durante ese tramo. Usa 1 para muestrear cada fotograma. No hay un máximo fijo de período o eventos. Se puede cancelar y la inserción usa lotes para respetar los argumentos de Lua. Memoria y fotogramas disponibles limitan el trabajo.
+Un período mayor que uno mantiene el estado muestreado durante ese tramo. Usa 1 para muestrear cada fotograma. Se puede cancelar y la inserción usa lotes para respetar los argumentos de Lua. Memoria y fotogramas disponibles limitan el trabajo.
 
 El generador aleatorio es independiente del estado global de Lua. Se respetan los rangos de bytes de color/alfa, dominios discretos ASS, semilla y precisión.
 

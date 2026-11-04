@@ -1,4 +1,4 @@
-# Allure 1.2.5
+# Allure 1.2.8
 
 English | [Español](es/Allure.md) | [Index](../README.md#documentation)
 
@@ -57,7 +57,7 @@ Rectangular clip bands can be recognized as a common horizontal or vertical fami
 
 For a line without `\pos` or `\move`, Posing resolves position from PlayRes, style alignment, legacy `\a` or modern `\an`, and line/style margins. A line containing only a clip therefore still has a text anchor. Explicit `\move` endpoints move together; its time arguments remain unchanged.
 
-The group center is the center of the bounds of the selected anchors and move endpoints, not a measured visual center of every glyph. **First line** uses the first selected row, whereas the active source line is the reference for preset capture. A custom pivot uses script coordinates. Positive relative resize enlarges the stack; `-50` halves it. A resize must leave a positive size.
+The group center is the center of the bounds of the selected anchors and move endpoints. **First line** uses the first selected row, whereas the active source line is the reference for preset capture. A custom pivot uses script coordinates. Positive relative resize enlarges the stack; `-50` halves it. A resize must leave a positive size.
 
 Rotation and resize update existing appearance tags, nested transform values and named resets. A rotated static rectangle becomes a vector clip. A rectangular clip animated inside `\t` cannot be converted to an equivalent animated vector clip by this operation, so rotation is rejected; bake it frame by frame first. Individual rotation of a moving clipped line requires a fixed `\org` for the same reason. Lines containing both `\pos` and `\move` are rejected as ambiguous.
 

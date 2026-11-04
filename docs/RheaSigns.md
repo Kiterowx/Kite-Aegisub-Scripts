@@ -1,4 +1,8 @@
-# Rhea Signs 2.2.1
+# Rhea Signs 2.4.0
+
+**After Effects Keyframes** is in Tools. It exports Position, Scale and Rotation from the selection to an AE text file without changing subtitles. Existing Chrono shortcuts migrate to Rhea.
+
+Tools are named **Font Manager**, **Frame Fades** and **Text Shuffler**; previous shortcuts are migrated.
 
 English | [Español](es/RheaSigns.md) | [Index](../README.md#documentation)
 
@@ -18,12 +22,12 @@ Main menu: **Rhea Signs**. The dedicated commands are registered under `: Kite H
 | Shapes/Place on Perimeter | Repeat drawing units around closed contours |
 | Shapes/Shape Color Optimizer | Merge compatible colors or reduce a gradient |
 | Tools/Style to Tags | Bake selected style properties into override tags |
-| Font and Style Manager | Inspect fonts, replace fonts, edit or clone styles |
-| Frame Fades and Cleanup | Choose a frame fade or continuous cleanup |
-| Frame Fades and Cleanup/In | Set fade-in duration using the active video frame |
-| Frame Fades and Cleanup/Out | Set fade-out duration using the active video frame |
-| Frame Fades and Cleanup/Clean | Remove internal fades between continuous groups |
-| Shuffle Line Text | Shuffle text while retaining event properties |
+| Font Manager | Inspect fonts, replace fonts, edit or clone styles |
+| Frame Fades | Choose a frame fade or continuous cleanup |
+| Frame Fades/In | Set fade-in duration using the active video frame |
+| Frame Fades/Out | Set fade-out duration using the active video frame |
+| Frame Fades/Clean | Remove internal fades between continuous groups |
+| Text Shuffler | Shuffle text while retaining event properties |
 
 ## Main panel
 
@@ -127,9 +131,9 @@ Create Layer removes the source clip after constructing the mask. If the source 
 
 Library placement resolves the source event's position from tags or style/margins. It retains supported explicit origin/rotation tags. Replacement accepts active `p` drawing sections beyond `p1`, resets the replaced section to `p1` and 100% scale, and preserves following text sections.
 
-Saved masks live in `dramaturgy_masks.txt` in Aegisub's user directory. Saving normalizes drawing coordinates to `p1`, validates the complete path and updates an existing name. It does not keep appending duplicate entries. LF and CRLF records are accepted. Names cannot contain colons or line breaks; `from clip` is reserved.
+Saved masks live in `dramaturgy_masks.txt` in Aegisub's user directory. Saving normalizes drawing coordinates to `p1`, validates the complete path and updates an existing name. LF and CRLF records are accepted. Names cannot contain colons or line breaks; `from clip` is reserved.
 
-Built-in names can have a saved override. Deleting that override reveals the built-in again. The four built-ins are part of the script and are not removed from its source by Delete Shape. The library stores drawing geometry, not the source event's timing or full tag stack.
+Built-in names can have a saved override. Deleting that override reveals the built-in again. The four built-ins are part of the script and are not removed from its source by Delete Shape. The library stores drawing geometry for reuse with the destination event's properties.
 
 ## Sign layout
 
@@ -192,7 +196,7 @@ Plane metadata accepts signed decimal/exponent numbers and requires exactly four
 
 Select at least two static drawings. The active selected event supplies the pivot; otherwise the helper chooses its reference from the selection. It rewrites positions and compensates local drawing coordinates to preserve placement.
 
-The accepted profile requires an unambiguous static `pos` and drawing section. Movement, origin-dependent animation, unsupported transforms or inherited rotation are rejected when one static pivot cannot preserve the result. Existing 1/64-pixel compensation is a renderer precision convention, not a line-count cap.
+The accepted profile requires an unambiguous static `pos` and drawing section. Movement, origin-dependent animation, unsupported transforms or inherited rotation are rejected when one static pivot cannot preserve the result. Existing 1/64-pixel compensation follows the renderer's precision convention.
 
 ### Place on Perimeter
 
@@ -226,7 +230,7 @@ Configuration controls RGB colors, independent box/glow alpha, text color/alpha,
 
 The width setting caps the box; it does not automatically shrink a long caption to fit. Existing inline styling is removed from the source text for this standardized stack. Generated events are returned as the selection.
 
-## Font and Style Manager
+## Font Manager
 
 The manager scans file styles and real top-level `fn` overrides. Font-like text in comment blocks or transforms is not counted as an inline font replacement.
 
@@ -248,9 +252,9 @@ An invalid or incomplete form reopens with its draft intact. Color and clone for
 
 **Style to Tags** converts chosen style properties through `AssContext.styleBake`. The dialog supports property selection, protection of existing families, zero omission and reset expansion. Explicit alignment retains its first-tag priority; resets do not introduce a new line alignment. Active resets resolve their actual styles, while comments and nested resets remain intact. The legacy Taggerize entry calls this integrated tool.
 
-**Frame Fades and Cleanup/In** sets the incoming duration to `current frame time − start`. **Out** sets the outgoing duration to `end − current frame time`. The frame must be inside every selected non-comment event. The other component is preserved. Invalid fade data aborts before applying the batch.
+**Frame Fades/In** sets the incoming duration to `current frame time − start`. **Out** sets the outgoing duration to `end − current frame time`. The frame must be inside every selected non-comment event. The other component is preserved. Invalid fade data aborts before applying the batch.
 
-**Continuous Fade Cleanup** groups matching event intervals and cleans internal boundaries of continuous groups, retaining external fades. It requires more than one timing group. **Shuffle Line Text** shuffles only text among selected dialogue events; timing and other event fields remain attached to their rows.
+**Remove Inner Fades** groups matching event intervals and cleans internal boundaries of continuous groups, retaining external fades. It requires more than one timing group. **Text Shuffler** shuffles only text among selected dialogue events; timing and other event fields remain attached to their rows.
 
 ## Configuration and compatibility
 
@@ -265,3 +269,9 @@ Public menu paths, action names and existing helper aliases remain available. Sh
 **Shapes → Simplify Drawing** removes points on straight paths and converts nearly straight cubic Béziers to line segments. Default tolerance is **0.05 drawing units at p1**, before scale or perspective; **0** only removes collinear geometry. Original points and controls bound error per pass. Extrema, corners, backtracking, separate contours and detailed curves are retained. B-splines remain unchanged. Only selected drawing sections change; tags, text and metadata are preserved. Positive tolerance permits small geometric differences that scaling may magnify. Edge antialiasing can vary slightly even at zero tolerance.
 
 **Tools → Remove Redundant Zero Tags** removes only visually redundant zero tags, respecting styles, resets and animations.
+
+## After Effects Keyframes
+
+Choose **Tools → After Effects Keyframes**, select the motion lines and save a `.txt` file. It exports **Position**, **Scale** and **Rotation**, processing rows in selection order and numbering samples from zero. It reads `\pos` or `\move`, `\fscx`, `\fscy` and `\frz`, using the video's FPS and dimensions.
+
+The exporter retains its previous Chrono behavior. It exports these channels; use the renderer to inspect temporal tags and perspective. SCXvid scene-change extraction is available in [Auto Timing](AutoTiming.md#keyframes).

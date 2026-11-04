@@ -1,43 +1,91 @@
 # Dependencies
 
-English | [Español](es/Dependencies.md) | [Index](../README.md#documentation)
+English | [Español](es/Dependencies.md)
 
-The [installation guide](../README.md#installation) separates DependencyControl modules, environment libraries and external programs. Install third-party modules before copying macros into `autoload`.
+Install a macro through its normal entry or the Kite catalog and update its required libraries with DependencyControl. Third-party dependencies resolve from their own feeds. See [installation](../README.md#installation).
 
 ## Dependencies by script
 
-**aka.command** is a shared dependency of the scripts through the Kite modules. **dkjson** is bundled with DependencyControl and explicitly declared by Allure. This table adds script-specific modules using their **Modules:** names; the [name and identifier map](../README.md#3-third-party-modules-from-dependencycontrol) includes their feeds. Internal dependencies of those libraries are resolved from their catalogs.
+This table includes direct declarations and dependencies inherited through Kite modules. Aegisub libraries belong to the Automation environment.
 
-| Script | Additional modules in **Modules:** |
+| Script | Third-party modules |
 | --- | --- |
-| AddTexture | **ASSFoundation**, **ZF main** |
-| Allure | **dkjson** |
-| Chrono Suite | None beyond the shared dependency. |
-| Cliptomaniac | **(Almost) Functional Suite**, **ASSFoundation**, **Line**, **Perspective**, **Util**, **ZF main** |
-| Gradient Row | **ASSFoundation**, **Line**, **LineCollection**, **Perspective**, **SubInspector** |
-| Hotkeys | None beyond the shared dependency. |
-| Moka Motion | **ArchMath**, **ASSFoundation**, **LineCollection**, **Perspective**, **Tags**, **Util**, **ZF main** |
-| Obake | **ASSFoundation**, **Line** |
-| Rhea Signs | **(Almost) Functional Suite**, **ASSFoundation**, **Line**, **LineCollection**, **Perspective**, **Util** |
-| Selesub | **ASS Parser** |
-| Zheus Colormanager | None beyond the shared dependency. |
+| [AddTexture](AddTexture.md) | **ZF main**, **aka.command**, **ASSFoundation**, **Yutils (tstools)** |
+| [Allure](Allure.md) | **aka.command**, **dkjson** |
+| [Chrono Suite](ChronoSuite.md) | **aka.command** |
+| [Cliptomaniac](Cliptomaniac.md) | **ZF main**, **Line**, **aka.command**, **Perspective**, **Util**, **ASSFoundation**, **(Almost) Functional Suite**, **Yutils (tstools)** |
+| [Gradient Row](GradientRow.md) | **SubInspector**, **Line**, **LineCollection**, **aka.command**, **Perspective**, **ASSFoundation**, **Yutils (tstools)** |
+| [Hotkeys](Hotkeys.md) | **aka.command** |
+| [Moka Motion](MokaMotion.md) | **ZF main**, **LineCollection**, **Tags**, **aka.command**, **ArchMath**, **Perspective**, **Util**, **ASSFoundation**, **Yutils (tstools)** |
+| [Obake](Obake.md) | **Line**, **aka.command**, **ASSFoundation**, **Yutils (tstools)** |
+| [Rhea Signs](RheaSigns.md) | **Line**, **LineCollection**, **aka.command**, **Perspective**, **Util**, **ASSFoundation**, **(Almost) Functional Suite**, **Yutils (tstools)** |
+| [Selesub](Selesub.md) | **aka.command**, **ASS Parser** |
+| [Kiri-Shot](KiriShot.md) | **LineCollection**, **aka.command**, **ASSFoundation**, **ASS Parser**, **Yutils (tstools)** |
+| [Zheus Color](Zheus.md) | **aka.command** |
+| [Hephaestus Fansubber](Hephaestus.md) | **ZF main**, **LineCollection**, **Tags**, **aka.command**, **ArchMath**, **Perspective**, **Util**, **ASSFoundation**, **dkjson**, **Yutils (tstools)** |
 
-**SubInspector** is also installed as an **ASSFoundation** dependency. **Yutils** is required by **ZF main**, and used by ASSFoundation curve operations. **LuaJSON** (`json`) is needed by **Line** and to read waveforms in Chrono’s Smart Split. Yutils and LuaJSON are installed separately from this selector. The `aegisub.*` modules belong to the Aegisub environment.
+**Auto Blur → Use tracking data** optionally requests **DataWrapper** and its dependencies from Aegisub-Motion. `tstools.Yutils` provides Yutils; the distribution retains compatibility with `require("Yutils")`. DependencyControl includes `l0.dkjson`. Timing and some dependencies also use LuaJSON (`json`); keep its complete package and LPeg as described in the installation guide. Keep the libraries supplied with Aegisub (`karaskel`, `utils`, `aegisub.*`, LPeg and MoonScript).
+
+## Third-party catalogs
+
+In **DependencyControl → Install Script**, use **Modules:** for libraries and **Automation Scripts:** for macros. Add required feeds through **Manage Feeds**. Installed modules can be inspected in the update options.
+
+| Name in Modules | Identifier | Catalog |
+| --- | --- | --- |
+| **Yutils (tstools)** | `tstools.Yutils` | [TypesettingTools/Yutils](https://github.com/TypesettingTools/Yutils) · [feed](https://raw.githubusercontent.com/TypesettingTools/Yutils/master/DependencyControl.json) |
+| **ZF main** | `ZF.main` | [zeref](https://github.com/TypesettingTools/zeref-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json) |
+| **ASSFoundation** | `l0.ASSFoundation` | [ASSFoundation](https://github.com/TypesettingTools/ASSFoundation) · [feed](https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json) |
+| **(Almost) Functional Suite** | `l0.Functional` | [Functional](https://github.com/TypesettingTools/Functional) · [feed](https://raw.githubusercontent.com/TypesettingTools/Functional/master/DependencyControl.json) |
+| **Line** | `a-mo.Line` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **LineCollection** | `a-mo.LineCollection` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **Log** | `a-mo.Log` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **Tags** | `a-mo.Tags` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **ArchMath** | `arch.Math` | [arch1t3cht](https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json) |
+| **Perspective** | `arch.Perspective` | [arch1t3cht](https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json) |
+| **Util** | `arch.Util` | [arch1t3cht](https://github.com/TypesettingTools/arch1t3cht-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json) |
+| **SubInspector** | `SubInspector.Inspector` | [SubInspector](https://github.com/TypesettingTools/SubInspector) · [feed](https://raw.githubusercontent.com/TypesettingTools/SubInspector/master/DependencyControl.json) |
+| **aka.command** | `aka.command` | [Akatsumekusa](https://github.com/Akatmks/Akatsumekusa-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/Akatmks/Akatsumekusa-Aegisub-Scripts/master/DependencyControl.json) |
+| **ASS Parser** | `myaa.ASSParser` | [Myaamori](https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json) |
+| **dkjson** | `l0.dkjson` | [DependencyControl](https://github.com/TypesettingTools/DependencyControl) · [feed](https://raw.githubusercontent.com/TypesettingTools/DependencyControl/publish/DependencyControl.json) |
+| **DataWrapper** | `a-mo.DataWrapper` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **polyclipping** | `zpolyclipping.polyclipping` | [zeref](https://github.com/TypesettingTools/zeref-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json) |
+| **zimg** | `zimg.main` | [zeref](https://github.com/TypesettingTools/zeref-Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json) |
+| **Transform** | `a-mo.Transform` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **petzkuLib** | `petzku.util` | [petzku](https://github.com/petzku/Aegisub-Scripts) · [feed](https://raw.githubusercontent.com/petzku/Aegisub-Scripts/refs/heads/master/DependencyControl.json) |
+| **DataHandler** | `a-mo.DataHandler` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **ShakeShapeHandler** | `a-mo.ShakeShapeHandler` | [Aegisub-Motion](https://github.com/TypesettingTools/Aegisub-Motion) · [feed](https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json) |
+| **requireffi** | `requireffi.requireffi` | [ffi-experiments](https://github.com/TypesettingTools/ffi-experiments) · [feed](https://raw.githubusercontent.com/TypesettingTools/ffi-experiments/master/DependencyControl.json) |
 
 ## Included modules
 
-Copy the complete repository folder `automation/include/kite` to Aegisub’s `automation/include/kite`. Scripts load the modules they need; the modules are distributed together to keep compatible versions.
+The distribution includes **seven common modules**, plus Automatons and MotionEngine.
 
 | Module | Version | Responsibility |
 | --- | --- | --- |
-| `kite.AssContext` | 1.1.3 | ASS styles, tags and timing. |
-| `kite.Core` | 1.1.0 | Numbers and ASS formatting. |
-| `kite.EventOps` | 1.3.1 | Subtitle fields and cleanup. |
-| `kite.PyBridge` | 1.7.2 | External processes and Python backends. |
-| `kite.ShapeOptimizer` | 1.3.3 | Drawing and gradient optimization. |
-| `kite.Timing` | 1.4.3 | Timing and karaoke reconstruction. |
-| `kite.UI` | 1.5.2 | Dialogs, favorites and shortcuts. |
+| `kite.Core` | 2.0.0 | Primitives and ASS text; Core.LineOps. |
+| `kite.UI` | 2.0.3 | Dialogs, actions, shortcuts and UI.Settings. |
+| `kite.PyBridge` | 2.0.1 | Processes, files and PyBridge.Media. |
+| `kite.AssContext` | 2.0.1 | ASS state, temporal evaluation and AssContext.Color. |
+| `kite.ShapeOptimizer` | 2.0.1 | Geometry optimization and ShapeOptimizer.AssDrawing. |
+| `kite.EventOps` | 1.4.0 | Event operations, cleanup and Final Data. |
+| `kite.Timing` | 1.5.0 | Timing, karaoke, waveform reading and localization. |
+| `kite.Automatons` | 1.2.1 | Fansub Automatons installation, diagnosis and configuration. |
+| `kite.MotionEngine` | 3.8.2 | Shared Moka Motion and Auto Motion engine. |
 
-[DependencyControl.json](../DependencyControl.json) lists minimum versions by script. Installable files are under `automation/autoload` and `automation/include/kite`.
+## Migration
 
-FFmpeg, FFprobe, SCXvid, fonts and renderer support are covered by the [installation requirements](../README.md#5-external-programs-by-feature).
+Update macros and modules together. In custom scripts, replace former imports with these APIs:
+
+| Previous | Current |
+| --- | --- |
+| `require("kite.LineOps")` | `require("kite.Core").LineOps` |
+| `require("kite.Settings")` | `require("kite.UI").Settings` |
+| `require("kite.Media")` | `require("kite.PyBridge").Media` |
+| `require("kite.Color")` | `require("kite.AssContext").Color` |
+| `require("kite.AssDrawing")` | `require("kite.ShapeOptimizer").AssDrawing` |
+
+Store replaced copies in **Documents**, after checking their consumers. Keep one active copy of each macro. Auto Timing, audio and waveform controllers are integrated in Hephaestus; Timing supplies shared utilities and Automatons manages the backend.
+
+## Shared backend
+
+[Hephaestus](Hephaestus.md) manages **Fansub Automatons** through Install, Check and Configure. The package provides Auto Drawing, Auto Mask, Auto Motion and Auto Timing audio tools in one environment; Auto Blur analyzes video inside Aegisub. See [installation, space and recovery](FansubAutomatons.md).

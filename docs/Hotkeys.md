@@ -1,4 +1,4 @@
-# Hotkeys 2.0.2
+# Hotkeys 2.0.4
 
 English | [Español](es/Hotkeys.md) | [Index](../README.md#documentation)
 
@@ -6,7 +6,7 @@ Hotkeys exposes the shared action catalog, favorite management, hotkey migration
 
 ## Sync existing assignments
 
-Sync reads the configured Aegisub hotkey JSON and DependencyControl configuration, then proposes command-path changes caused by known namespace/menu renames or a changed custom menu. It preserves each keyboard context and its assigned keys. It does not assign new keys or choose shortcuts for you; use Aegisub's shortcut preferences for that.
+Sync reads the configured Aegisub hotkey JSON and DependencyControl configuration, then proposes command-path changes caused by known namespace/menu renames or a changed custom menu. It preserves each keyboard context and its assigned keys. Assign new keys in Aegisub's shortcut preferences.
 
 The review contains every proposed change, including old and new command paths. Apply performs the reviewed migration; Close/Cancel leaves the file unchanged. Several sources targeting the same command merge their key lists without duplicates. Chained migrations use the original source bindings, so moving A to B and B to C does not move A's keys twice. A no-op mapping does not delete a binding.
 

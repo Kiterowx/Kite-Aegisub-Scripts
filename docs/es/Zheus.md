@@ -1,4 +1,8 @@
-# Zheus Colormanager 4.7.4
+# Zheus Color 1.0.0
+
+Las instalaciones 4.x deben sustituir manualmente el archivo kite.Zheus.lua para adoptar la versión 1.0.0: el actualizador no considera una versión inferior como actualización. Las preferencias y los formatos de paleta siguen siendo compatibles.
+
+El panel de selección usa un informe más ancho y alto, alineado con la rejilla de controles. Los recuentos usan texto normal, como `Actores: 1`, con etiquetas simples como `Actores: 1`.
 
 [English](../Zheus.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -16,11 +20,11 @@ Las animaciones de color se identifican. El resumen estático no representa todo
 
 ## Panel y comandos
 
-El menú principal es **Zheus Colormanager**. Los otros 17 accesos están bajo `: Kite Hotkeys :/Zheus Colormanager/`. Los nombres registrados se mantienen para conservar los atajos existentes.
+El menú principal es **Zheus Color**. Los otros 17 accesos están bajo `: Kite Hotkeys :/Zheus Color/`. Los atajos y favoritos del nombre anterior se migran al cargar la macro; las preferencias conservan su identificador.
 
 | Acceso | Función |
 | --- | --- |
-| Zheus Colormanager | Panel con resumen de selección, gestores, cambios y cuatro degradados rápidos. |
+| Zheus Color | Panel con resumen de selección, gestores, cambios y cuatro degradados rápidos. |
 | Editor de tramos | Edita fronteras y colores de los tramos de una línea. |
 | Colores por actor | Abre la paleta de relleno, borde y sombra por actor. |
 | Colores de 4 esquinas | Abre las cuatro esquinas por actor y canal. |
@@ -107,7 +111,7 @@ Los resets con estilo conocido forman fronteras. Los colores abreviados y los co
 
 ## Auditoría y perfiles
 
-El informe compara relleno, secundario, borde y sombra, y recoge el peor contraste de los tramos estáticos. Identifica diferencias entre actores, transparencias, dibujos, colores animados y posibles pérdidas de separación en VSF. La comparación entre actores utiliza sus colores representativos; no enumera cada combinación posible de cada instante.
+El informe compara relleno, secundario, borde y sombra, y recoge el peor contraste de los tramos estáticos. Identifica diferencias entre actores, transparencias, dibujos, colores animados y posibles pérdidas de separación en VSF. La comparación entre actores utiliza sus colores representativos.
 
 El contraste de los colores no describe por sí solo la legibilidad sobre el vídeo: influyen el fondo, la opacidad y la presencia real del borde. Las simulaciones son aproximaciones visuales y la calibración registra preferencias; no determina una condición visual.
 
@@ -142,7 +146,7 @@ Las paletas de actores usan el formato de texto v3. Los nombres se codifican por
 
 Las paletas accesibles v3 son tablas de datos con versión, perfil, actores, colores originales, remapeo y degradados. Al exportar un resultado se guardan sus degradados remapeados. La importación acepta v3 y el formato antiguo v2; aplica los actores presentes en la selección e informa los demás.
 
-Las tablas antiguas se leen con `Settings.parseLiteralTable`, sin ejecutar código Lua. Se admiten tablas, claves, cadenas escapadas, booleanos y números finitos. No hay un tope de tamaño, profundidad o cantidad de actores impuesto por Zheus; se siguen rechazando programas y datos malformados. Las exportaciones se escriben de forma atómica y notifican fallos de escritura.
+Las tablas antiguas se leen con `Settings.parseLiteralTable`, sin ejecutar código Lua. Se admiten tablas, claves, cadenas escapadas, booleanos y números finitos. El lector rechaza programas y datos malformados. Las exportaciones se escriben de forma atómica y notifican fallos de escritura.
 
 La configuración y los perfiles personalizados se guardan entre sesiones. Los ajustes anteriores se importan automáticamente.
 

@@ -1,4 +1,4 @@
-# Allure 1.2.5
+# Allure 1.2.8
 
 [English](../Allure.md) | Español | [Índice](../../README.es.md#documentación)
 
@@ -43,7 +43,7 @@ El cambio de tamaño actualiza posiciones, extremos de movimiento, orígenes, cl
 
 Si una línea no tiene `\pos` ni `\move`, su posición se obtiene de PlayRes, la alineación `\a`/`\an` y los márgenes de línea y estilo. Una línea que solo contiene un clip sigue teniendo un punto de referencia de texto. Los extremos de `\move` se desplazan juntos y conservan sus tiempos.
 
-El centro del grupo se calcula con los puntos de referencia y extremos de movimiento seleccionados; no mide el centro visual de todos los caracteres. **First line** usa la primera fila seleccionada. La captura de preajustes usa la línea activa. El pivote personalizado se expresa en coordenadas del script. Un porcentaje positivo amplía el grupo; `-50` reduce su tamaño a la mitad. El resultado debe tener tamaño positivo.
+El centro del grupo se calcula con los puntos de referencia y extremos de movimiento seleccionados. **First line** usa la primera fila seleccionada. La captura de preajustes usa la línea activa. El pivote personalizado se expresa en coordenadas del script. Un porcentaje positivo amplía el grupo; `-50` reduce su tamaño a la mitad. El resultado debe tener tamaño positivo.
 
 Girar o redimensionar actualiza las etiquetas de apariencia, sus valores en transformaciones anidadas y los resets con nombre. Un clip rectangular estático girado pasa a ser vectorial. Si el rectángulo se anima dentro de `\t`, el giro se rechaza: conviértelo antes a fotogramas independientes. El giro individual de una línea con movimiento y clip requiere un `\org` fijo. Se rechazan líneas con `\pos` y `\move` simultáneos por su ambigüedad.
 

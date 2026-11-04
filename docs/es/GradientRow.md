@@ -1,4 +1,4 @@
-# Gradient Row 1.8.9
+# Gradient Row 1.9.2
 
 [English](../GradientRow.md) | Español | [Índice](../../README.es.md#documentación)
 
