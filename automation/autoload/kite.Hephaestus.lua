@@ -4,7 +4,7 @@ package.preload["Yutils"] = function() return require("tstools.Yutils") end
 script_name = "Hephaestus Fansubber"
 script_description = "Auto Blur, Motion, Mask, Drawing and Timing, with shared installation and diagnostics."
 script_author = "Kiterow"
-script_version = "1.2.0"
+script_version = "1.2.1"
 script_namespace = "kite.Hephaestus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -15,7 +15,7 @@ local dependencies = DependencyControl({
         {"ZF.main", version="2.3.0", feed="https://raw.githubusercontent.com/TypesettingTools/zeref-Aegisub-Scripts/main/DependencyControl.json"},
         {"aka.command", version="1.0.2", feed="https://raw.githubusercontent.com/Akatmks/Akatsumekusa-Aegisub-Scripts/master/DependencyControl.json"},
         {"kite.AssContext", version="2.0.1", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.Automatons", version="1.2.0", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.Automatons", version="1.2.1", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
         {"kite.Core", version="2.0.0", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
         {"kite.MotionEngine", version="3.8.2", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
         {"kite.PyBridge", version="2.0.1", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},

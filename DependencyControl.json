@@ -675,7 +675,7 @@
     },
     "kite.KiriShot": {
       "name": "Kiri-Shot",
-      "description": "Capturas PNG, secuencias, máscaras ASS y vídeo social en un mismo flujo",
+      "description": "Capturas PNG, secuencias, mÃƒÂ¡scaras ASS y vÃƒÂ­deo social en un mismo flujo",
       "author": "Kiterow",
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
@@ -816,8 +816,8 @@
       "channels": {
         "main": {
           "default": true,
-          "version": "1.2.0",
-          "released": "2026-11-03",
+          "version": "1.2.1",
+          "released": "2026-11-04",
           "requiredModules": [
             {
               "moduleName": "tstools.Yutils",
@@ -844,7 +844,7 @@
             {
               "moduleName": "kite.Automatons",
               "feed": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
-              "version": "1.2.0"
+              "version": "1.2.1"
             },
             {
               "moduleName": "kite.Core",
@@ -883,7 +883,7 @@
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/automation/autoload/kite.Hephaestus.lua",
               "localFilePath": "automation/autoload/kite.Hephaestus.lua",
-              "sha1": "9A2F218E58DA485CB6B299E0E6D98D8F04CB60A2"
+              "sha1": "0408BF29A7018B99A4F43544BE452D0EF29735F4"
             }
           ]
         }
@@ -1227,8 +1227,8 @@
       "channels": {
         "main": {
           "default": true,
-          "version": "1.2.0",
-          "released": "2026-11-03",
+          "version": "1.2.1",
+          "released": "2026-11-04",
           "requiredModules": [
             {
               "moduleName": "kite.UI",
@@ -1251,7 +1251,7 @@
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/automation/include/kite/Automatons.lua",
               "localFilePath": "automation/include/kite/Automatons.lua",
-              "sha1": "9E2A49E193A999D90DD5AC7A7198503FA72E778B"
+              "sha1": "05EFD6B8EA512C16F35593E65C0E30C45CD34BE2"
             }
           ]
         }

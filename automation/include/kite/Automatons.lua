@@ -1,5 +1,5 @@
 local DependencyControl = require("l0.DependencyControl")
-local depctrl = DependencyControl({name="kite.Automatons", moduleName="kite.Automatons", version="1.2.0",
+local depctrl = DependencyControl({name="kite.Automatons", moduleName="kite.Automatons", version="1.2.1",
     author="Kiterow", description="Fansub Automatons runtime and Hephaestus services",
     feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {{"kite.UI",version="2.0.2",feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}, {"kite.PyBridge",version="2.0.1",feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"}, {"l0.dkjson",version="0.7.0",feed="https://raw.githubusercontent.com/TypesettingTools/DependencyControl/publish/DependencyControl.json"}}})
@@ -176,16 +176,14 @@ function M.configure()
     local config = M.config()
     local settings = readJson(Bridge.joinPath(config.home,"olympus.json")) or {}
     local button, values = aegisub.dialog.display({
-        {class="label",label="Fansub Automatons release folder",x=0,y=0,width=5,height=1},
-        {class="edit",name="source",value=config.source or "",x=5,y=0,width=10,height=1},
-        {class="label",label="Installation folder",x=0,y=1,width=5,height=1},
-        {class="edit",name="home",value=config.home or "",x=5,y=1,width=10,height=1},
-        {class="label",label="Compute device",x=0,y=2,width=5,height=1},
-        {class="dropdown",name="device",items={"auto","cpu","cuda"},value=settings.device or "auto",x=5,y=2,width=4,height=1},
+        {class="label",label="Installation folder",x=0,y=0,width=5,height=1},
+        {class="edit",name="home",value=config.home or "",x=5,y=0,width=10,height=1},
+        {class="label",label="Compute device",x=0,y=1,width=5,height=1},
+        {class="dropdown",name="device",items={"auto","cpu","cuda"},value=settings.device or config.device or "auto",x=5,y=1,width=4,height=1},
     }, {"Save","Cancel"}, {ok="Save",close="Cancel"})
     if button~="Save" then return end
-    if values.source ~= "" and not Bridge.fileExists(Bridge.joinPath(values.source,"install.py")) then M.notice("Select the extracted release folder containing install.py."); return end
-    config.source, config.home, config.device = values.source,values.home,values.device
+    if not values.home or not values.home:match("%S") then M.notice("Choose an installation folder."); return end
+    config.home, config.device = values.home,values.device
     local manifest = readJson(Bridge.joinPath(config.home,"olympus.json")) or {}
     config.python = manifest.python or Bridge.joinPath(config.home,"runtime/Scripts/python.exe")
     if Bridge.fileExists(config.python) then
@@ -197,101 +195,149 @@ function M.configure()
 end
 
 local function acquireRelease(config)
-    local paths, message = Bridge.tempPaths("hephaestus_download", {script=".ps1"})
+    local paths, message = Bridge.tempPaths("hephaestus_download", {script=".ps1",result=".path"})
     if not paths then return nil, message end
     local script = [====[
-param([Parameter(Mandatory=$true)][string]$InstallRoot)
+param([Parameter(Mandatory=$true)][string]$InstallRoot, [Parameter(Mandatory=$true)][string]$ResultFile)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$tag = 'fansub-automatons-v1.2.0'
-$headers = @{'User-Agent'='Hephaestus-Fansubber';'Accept'='application/vnd.github+json'}
-$release = Invoke-RestMethod -Uri "https://api.github.com/repos/Kiterowx/Kite-Aegisub-Scripts/releases/tags/$tag" -Headers $headers
-$asset = @($release.assets | Where-Object name -eq 'Fansub-Automatons-1.2.0.zip')
-$checksum = @($release.assets | Where-Object name -eq 'Fansub-Automatons-1.2.0.zip.sha256')
-if ($asset.Count -ne 1 -or $checksum.Count -ne 1 -or $asset[0].size -le 0 -or $asset[0].size -gt 512MB) { throw 'The published backend package is missing or invalid.' }
-$root = [IO.Path]::GetFullPath($InstallRoot)
-$destination = [IO.Path]::GetFullPath((Join-Path $root ('releases\'+$tag)))
-if (-not $destination.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid installation path.' }
-[IO.Directory]::CreateDirectory($root) | Out-Null
-$drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
-if ($drive.AvailableFreeSpace -lt (2GB + 3*$asset[0].size)) { throw 'Not enough free space for the backend and the 2 GiB reserve.' }
-$checksumContent = (Invoke-WebRequest -UseBasicParsing -Uri $checksum[0].browser_download_url -Headers $headers).Content
-if ($checksumContent -is [byte[]]) { $checksumContent = [Text.Encoding]::UTF8.GetString($checksumContent) }
-$expected = ($checksumContent.Trim() -split '\s+')[0]
-if ($expected -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid backend checksum.' }
-$marker = Join-Path $destination 'release.sha256'
-if ((Test-Path -LiteralPath $marker) -and ((Get-Content -LiteralPath $marker -Raw).Trim() -eq $expected) -and (Test-Path -LiteralPath (Join-Path $destination 'Install.cmd'))) { Write-Output $destination; exit 0 }
-if (Test-Path -LiteralPath $destination) { throw 'An incomplete backend folder already exists. Review it in Hephaestus configuration before retrying.' }
-$archive = Join-Path $root ('download-'+[guid]::NewGuid().ToString('N')+'.zip')
-$pending = $destination+'.'+[guid]::NewGuid().ToString('N')+'.pending'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+
+function Get-Hash($Stream) {
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($hash.ComputeHash($Stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $hash.Dispose(); $Stream.Dispose() }
+}
+
+function Test-Package($Zip, $Folder, $Expected) {
+    $marker = Join-Path $Folder 'release.sha256'
+    if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { return $false }
+    if ((Get-Content -LiteralPath $marker -Raw).Trim() -ne $Expected) { return $false }
+    $entries = @($Zip.Entries | Where-Object Name)
+    $files = @(Get-ChildItem -LiteralPath $Folder -Recurse -Force -File)
+    if ($files.Count -ne $entries.Count + 1) { return $false }
+    foreach ($entry in $entries) {
+        $path = Join-Path $Folder $entry.FullName
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+        $file = Get-Item -LiteralPath $path
+        if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $file.Length -ne $entry.Length) { return $false }
+        if ((Get-Hash ([IO.File]::OpenRead($path))) -ne (Get-Hash ($entry.Open()))) { return $false }
+    }
+    return $true
+}
+
+$lock = $zip = $partial = $pending = $null
 try {
-    Invoke-WebRequest -UseBasicParsing -Uri $asset[0].browser_download_url -Headers $headers -OutFile $archive
-    if ((Get-Item -LiteralPath $archive).Length -ne $asset[0].size) { throw 'Incomplete backend download.' }
-    $hasher = [Security.Cryptography.SHA256]::Create()
-    $stream = [IO.File]::OpenRead($archive)
-    try { $actual = ([BitConverter]::ToString($hasher.ComputeHash($stream))).Replace('-','') } finally { $stream.Dispose(); $hasher.Dispose() }
-    if ($actual -ne $expected) { throw 'Backend checksum mismatch.' }
+    $root = [IO.Path]::GetFullPath($InstallRoot)
+    if ($root.TrimEnd('\') -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')) { throw 'Choose a dedicated installation folder.' }
+    $root = $root.TrimEnd('\')
+    [IO.Directory]::CreateDirectory($root) | Out-Null
+    $lock = [IO.File]::Open((Join-Path $root 'release.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    $headers = @{'User-Agent'='Hephaestus-Fansubber'; 'Accept'='application/vnd.github+json'}
+    $repository = 'https://api.github.com/repos/Kiterowx/Fansub-Automatons'
+    $release = Invoke-RestMethod -Uri ($repository + '/releases/latest') -Headers $headers -TimeoutSec 30
+    if ($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^v(\d+\.\d+\.[0-9])$') { throw 'No compatible stable backend release is available.' }
+    $version = $Matches[1]
+    if ([version]$version -lt [version]'1.2.1') { throw 'The backend release is too old.' }
+    $installed = Join-Path $root 'olympus.json'
+    if (Test-Path -LiteralPath $installed -PathType Leaf) {
+        $current = Get-Content -LiteralPath $installed -Raw | ConvertFrom-Json
+        if ($current.release -match '^\d+\.\d+\.\d+$' -and [version]$current.release -gt [version]$version) { throw 'A newer backend is already installed.' }
+    }
+    $name = 'Fansub-Automatons-' + $version + '.zip'
+    $asset = @($release.assets | Where-Object name -eq $name)
+    $checksum = @($release.assets | Where-Object name -eq ($name + '.sha256'))
+    if ($asset.Count -ne 1 -or $checksum.Count -ne 1 -or $asset[0].size -le 0 -or $asset[0].size -gt 512MB -or $checksum[0].size -gt 4096) { throw 'The backend package or checksum is missing or invalid.' }
+    $download = 'https://github.com/Kiterowx/Fansub-Automatons/releases/download/' + $release.tag_name + '/'
+    if ($asset[0].browser_download_url -ne ($download + $name) -or $checksum[0].browser_download_url -ne ($download + $name + '.sha256')) { throw 'Invalid backend download URL.' }
+    $content = (Invoke-WebRequest -UseBasicParsing -Uri $checksum[0].browser_download_url -Headers $headers -TimeoutSec 30).Content
+    if ($content -is [byte[]]) { $content = [Text.Encoding]::UTF8.GetString($content) }
+    if ($content -notmatch ('^\s*([a-fA-F0-9]{64})(?:[ \t]+\*?' + [regex]::Escape($name) + ')?\s*$')) { throw 'Invalid backend checksum.' }
+    $expected = $Matches[1].ToLowerInvariant()
+    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
+    if ($drive.AvailableFreeSpace -lt (2GB + 3*$asset[0].size)) { throw 'Not enough free space for the backend and the 2 GiB reserve.' }
+    $cache = Join-Path $root 'downloads'
+    [IO.Directory]::CreateDirectory($cache) | Out-Null
+    $archive = Join-Path $cache ($expected.Substring(0,12) + '-' + $name)
+    if ((Test-Path -LiteralPath $archive -PathType Leaf) -and (Get-Hash ([IO.File]::OpenRead($archive))) -ne $expected) { Remove-Item -LiteralPath $archive -Force }
+    if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+        $partial = $archive + '.' + [guid]::NewGuid().ToString('N') + '.part'
+        Invoke-WebRequest -UseBasicParsing -Uri $asset[0].browser_download_url -Headers $headers -TimeoutSec 120 -OutFile $partial
+        if ((Get-Item -LiteralPath $partial).Length -ne $asset[0].size -or (Get-Hash ([IO.File]::OpenRead($partial))) -ne $expected) { throw 'The backend download failed integrity verification.' }
+        Move-Item -LiteralPath $partial -Destination $archive
+    }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($archive)
-    try {
-        $total = 0L
-        foreach ($entry in $zip.Entries) {
-            $target = [IO.Path]::GetFullPath((Join-Path $pending $entry.FullName))
-            if (-not $target.StartsWith($pending+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe backend archive path.' }
-            $total += $entry.Length
-        }
-        if ($total -gt 768MB -or $drive.AvailableFreeSpace -lt (2GB+$total)) { throw 'Not enough free space to extract the backend.' }
-        [IO.Directory]::CreateDirectory($pending) | Out-Null
-        foreach ($entry in $zip.Entries) {
-            if (-not $entry.Name) { continue }
-            $target = [IO.Path]::GetFullPath((Join-Path $pending $entry.FullName))
-            [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$target,$false)
-        }
-    } finally { $zip.Dispose() }
-    if (-not (Test-Path -LiteralPath (Join-Path $pending 'Install.cmd')) -or -not (Test-Path -LiteralPath (Join-Path $pending 'install.py'))) { throw 'The backend archive has no installer.' }
+    $destination = Join-Path (Join-Path $root 'releases') ($release.tag_name + '-' + $expected.Substring(0,12))
+    $total = 0L
+    $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $zip.Entries) {
+        $target = [IO.Path]::GetFullPath((Join-Path $destination $entry.FullName))
+        if ($entry.FullName -match '(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))' -or -not $target.StartsWith($destination+'\',[StringComparison]::OrdinalIgnoreCase) -or (($entry.ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw 'Unsafe backend archive path.' }
+        if (-not $names.Add($target) -or $entry.FullName -eq 'release.sha256') { throw 'Duplicate or reserved backend archive path.' }
+        $total += $entry.Length
+    }
+    foreach ($required in @('Install.cmd','install.py','bootstrap.ps1','assets.json','pyproject.toml','installer_tools.py','installer_deploy.py','installer_reuse.py','src/fansub_automatons/__init__.py')) {
+        if (-not $names.Contains([IO.Path]::GetFullPath((Join-Path $destination $required)))) { throw 'The backend archive is incomplete.' }
+    }
+    if ($total -gt 768MB -or $drive.AvailableFreeSpace -lt (2GB+$total)) { throw 'Not enough free space to extract the backend.' }
+    if (Test-Path -LiteralPath $destination) {
+        if (Test-Package $zip $destination $expected) { [IO.File]::WriteAllText($ResultFile,$destination); exit 0 }
+        $destination += '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
+    }
+    $pending = $destination + '.' + [guid]::NewGuid().ToString('N').Substring(0,8) + '.pending'
+    [IO.Directory]::CreateDirectory($pending) | Out-Null
+    foreach ($entry in $zip.Entries) {
+        if (-not $entry.Name) { continue }
+        $target = [IO.Path]::GetFullPath((Join-Path $pending $entry.FullName))
+        [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$target,$false)
+    }
     [IO.File]::WriteAllText((Join-Path $pending 'release.sha256'),$expected)
-    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
     [IO.Directory]::Move($pending,$destination)
-    Write-Output $destination
+    [IO.File]::WriteAllText($ResultFile,$destination)
+} catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
 } finally {
-    if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
-    if (Test-Path -LiteralPath $pending) {
+    if ($zip) { $zip.Dispose() }
+    if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
+    if ($pending -and (Test-Path -LiteralPath $pending)) {
         $resolved = (Resolve-Path -LiteralPath $pending).Path
         if (-not $resolved.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase) -or -not $resolved.EndsWith('.pending')) { throw 'Unsafe cleanup path.' }
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
+    if ($lock) { $lock.Dispose() }
 }
-
 ]====]
     local written, detail = Bridge.writeFile(paths.script, script)
-    if not written then return nil, detail end
-    local called, ok, output = pcall(Bridge.runProcess, {executable="powershell.exe", args={"-NoProfile","-NonInteractive","-File",paths.script,"-InstallRoot",config.home}})
+    if not written then Bridge.cleanup(paths); return nil, detail end
+    local called, ok, output = pcall(Bridge.runProcess, {executable="powershell.exe", args={"-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",paths.script,"-InstallRoot",config.home,"-ResultFile",paths.result}})
+    local source = called and ok and Bridge.readFile(paths.result) or nil
     Bridge.cleanup(paths)
     if not called then return nil, ok end
     if not ok then return nil, output end
-    local source = tostring(output or ""):match("([^\r\n]+)%s*$")
-    if not source or not Bridge.fileExists(Bridge.joinPath(source,"Install.cmd")) then return nil, "The backend download did not return a valid installer." end
-    config.source = source
-    local saved, failure = Bridge.writeFile(configPath(),Json.encode(config,{indent=true}))
-    if not saved then return nil, failure end
+    if not source or not Bridge.fileExists(Bridge.joinPath(source,"install.py")) then return nil, "The backend download did not return a valid installer." end
     return source
 end
 
 function M.install(id)
+    if id and id~="tools" then entry(id) end
     local config = M.config()
-    if not Bridge.fileExists(Bridge.joinPath(config.source or "","Install.cmd")) then
-        local source, message = acquireRelease(config)
-        if not source then M.notice("The shared backend could not be downloaded.\n" .. tostring(message)); return end
-    end
-    local args = {"--modules",id or "all","--home",config.home,"--aegisub",Bridge.decodedPath("?user"),"--compute",config.device or "auto"}
-    if id=="tools" then args[2]="all"; args[#args+1]="--tools-only" end
-    local bootstrapped, diagnostic = Bridge.run(Bridge.commandLine(Bridge.joinPath(config.source,"Install.cmd"),{"--bootstrap-only"}))
+    local source, message = acquireRelease(config)
+    if not source then M.notice("The shared backend could not be downloaded.\n" .. tostring(message)); return end
+    local paths, failure = Bridge.tempPaths("hephaestus_bootstrap", {result=".path"})
+    if not paths then M.notice(failure); return end
+    local called, bootstrapped, diagnostic = pcall(Bridge.runProcess, {executable="powershell.exe",args={"-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",Bridge.joinPath(source,"bootstrap.ps1"),"-ResultFile",paths.result}})
+    local python = called and bootstrapped and Bridge.readFile(paths.result) or nil
+    Bridge.cleanup(paths)
+    if not called then M.notice(bootstrapped); return end
     if not bootstrapped then M.notice(diagnostic); return end
-    local python = Bridge.joinPath(os.getenv("LOCALAPPDATA"),"Kiterow/Fansub Automatons/python-3.13.7/tools/python.exe")
-    local arguments = {"-B","-X","utf8",Bridge.joinPath(config.source,"install.py")}
-    for _, value in ipairs(args) do arguments[#arguments+1]=value end
-    local ok, detail = Bridge.runProcess({executable=python,args=arguments})
+    if not python or not Bridge.fileExists(python) then M.notice("The Python bootstrap did not return a valid interpreter."); return end
+    local arguments = {"-B","-X","utf8",Bridge.joinPath(source,"install.py"),"--modules",id=="tools" and "all" or id or "all","--home",config.home,"--aegisub",Bridge.decodedPath("?user"),"--compute",config.device or "auto"}
+    if id=="tools" then arguments[#arguments+1]="--tools-only" end
+    local called, ok, detail = pcall(Bridge.runProcess, {executable=python,args=arguments})
+    if not called then M.notice(ok); return end
     M.notice((ok and "Installation completed. Reload Automation scripts to refresh menus.\n" or "Installation did not complete.\n") .. tostring(detail or ""))
 end
 
