@@ -1,7 +1,8 @@
-script_name        = "Zheus Colormanager"
+local function initializeScript()
+script_name        = "Zheus Color"
 script_description = "Gestor de color por actor, VSF y paletas accesibles"
 script_author      = "Kiterow"
-script_version     = "4.7.4"
+script_version     = "1.0.0"
 script_namespace   = "kite.Zheus"
 
 local DependencyControl = require("l0.DependencyControl")
@@ -13,28 +14,30 @@ local depRec = DependencyControl{
     namespace = script_namespace,
     feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
-        { "kite.PyBridge", version = "1.7.2",
+        { "kite.PyBridge", version = "2.0.1",
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.Core", version = "1.1.0",
+        { "kite.Core", version = "2.0.0",
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.LineOps", version = "1.7.4",
+        { "kite.Core", version = "2.0.0",
           url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        {"kite.Color", version = "1.2.2"},
-        {"kite.UI", version = "1.5.2"},
-        {"kite.AssContext", version = "1.1.3"},
-        {"kite.Settings", version = "1.0.1"},
+        {"kite.AssContext", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.UI", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.AssContext", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.UI", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
     },
 }
+depRec:requireModules()
 local PyBridge, Core, LineOps = depRec:requireModules()
+LineOps = LineOps.LineOps
 local AssContext = require("kite.AssContext")
-local Color = require("kite.Color")
+local Color = require("kite.AssContext").Color
 local KiteUI = require("kite.UI")
-local Settings = require("kite.Settings")
+local Settings = require("kite.UI").Settings
 
-local menuPath = "Zheus Colormanager"
+local menuPath = script_name
 local hotkeyMenuRoot = ": Kite Hotkeys :"
 local hotkeyMenuScript = script_name
 local hotkeyMenuPath = hotkeyMenuRoot .. "/" .. hotkeyMenuScript
@@ -58,7 +61,7 @@ local emptyActorLabel = "[Actor vacío]"
 
 local UI = {
     dashboard_width = 6,
-    audit_height = 5,
+    audit_height = 8,
     report_width = 36,
     report_height = 12,
     help_width = 36,
@@ -1595,14 +1598,14 @@ end
 
 function ActorColorFile.io(data, actors, mode)
     if mode == "Export" then
-        local fp = aegisub.dialog.save("Exportar paleta de colores - Zheus Colormanager", "", "", "*.txt", false)
+        local fp = aegisub.dialog.save("Exportar paleta de colores - Zheus Color", "", "", "*.txt", false)
         if not fp then return nil end
         local hasAnyVSF = false
         for _, a in ipairs(actors) do
             if data[a].has_vsf then hasAnyVSF = true; break end
         end
         local ok, err = PyBridge.withAtomicFile(fp, function(f)
-            assert(f:write("# Zheus Colormanager\n"))
+            assert(f:write("# Zheus Color\n"))
             assert(f:write("# Exportación de paleta de color por actor\n"))
             assert(f:write("# Versión de formato: " .. actorPaletteFormatVersion .. "\n"))
             assert(f:write("# Tipo de contenido: " .. (hasAnyVSF and "VSF" or "NORMAL") .. "\n"))
@@ -1626,7 +1629,7 @@ function ActorColorFile.io(data, actors, mode)
         return "Exportados " .. #actors .. " actores"
     end
 
-    local fn = aegisub.dialog.open("Importar paleta de colores - Zheus Colormanager", "", "", "*.txt", false, true)
+    local fn = aegisub.dialog.open("Importar paleta de colores - Zheus Color", "", "", "*.txt", false, true)
     if not fn then return nil end
     local content, readError = PyBridge.readFile(fn)
     if not content then return "Error al leer: " .. tostring(readError) end
@@ -3031,16 +3034,16 @@ local AccessibilityExportFile = {}
 function AccessibilityExportFile.export(data, actors, profile)
     profile = AccessibilityProfiles.get(profile)
 
-    local fp = aegisub.dialog.save("Exportar paleta accesible - Zheus Colormanager", "", "", "*.txt", false)
+    local fp = aegisub.dialog.save("Exportar paleta accesible - Zheus Color", "", "", "*.txt", false)
     if not fp then return nil end
     if not (fp:match("%.txt$") or fp:match("%.lua$")) then fp = fp .. ".txt" end
 
     local out = {
         version = 3,
         type = "ACCESSIBILITY",
-        application = "Zheus Colormanager",
+        application = "Zheus Color",
         script_version = script_version,
-        format = "Zheus Colormanager - Paleta accesible",
+        format = "Zheus Color - Paleta accesible",
         format_version = 3,
         profile = profile.id,
         profile_label = AccessibilityProfiles.label(profile.id),
@@ -3083,7 +3086,7 @@ function AccessibilityExportFile.export(data, actors, profile)
 end
 
 function AccessibilityExportFile.import(data, actors)
-    local fp = aegisub.dialog.open("Importar paleta accesible - Zheus Colormanager", "", "", "*.txt;*.lua", false, true)
+    local fp = aegisub.dialog.open("Importar paleta accesible - Zheus Color", "", "", "*.txt;*.lua", false, true)
     if not fp then return nil end
     local content, readError = PyBridge.readFile(fp)
     if not content then return "Error al leer el archivo: " .. tostring(readError) end
@@ -3357,7 +3360,7 @@ end
 
 pcall(AccessibilityConfig.load)
 
-local helpText = "ZHEUS COLORMANAGER " .. script_version .. [[
+local helpText = "ZHEUS COLOR " .. script_version .. [[
 
 Panel principal
 Gestores:
@@ -3451,7 +3454,7 @@ local function ejecutarGestorDeActores(subs, sel)
     local action, changed = gestorDeActores(subs, sel)
     if action ~= "done" then return false, action end
     if not changed or changed == 0 then return false, "nochange" end
-    aegisub.set_undo_point("Zheus Colormanager - Actores")
+    aegisub.set_undo_point("Zheus Color - Actores")
     return true, "done"
 end
 
@@ -3515,17 +3518,16 @@ function SelectionReport.format(subs, sel)
 
     w("# INFORME DE SELECCIÓN")
     w("")
-    w("Actores            : " .. #actors)
-    w("Líneas             : " .. stats.lineCount)
+    w("Actores: " .. #actors)
+    w("Líneas: " .. stats.lineCount)
     if stats.emptyActorLines > 0 then
-        w("Líneas sin actor   : " .. stats.emptyActorLines)
+        w("Líneas sin actor: " .. stats.emptyActorLines)
     end
     w("")
     w("COLORES DETECTADOS")
-    w("--------------------------------------------------")
-    w(string.format("  Sólidos (\\c, \\2c, \\3c, \\4c)  : %d", solidCount))
-    w(string.format("  VSFilterMod (\\vc)            : %d", vsfCount))
-    w(string.format("  Total único                  : %d", solidCount + vsfCount))
+    w(string.format("Sólidos (\\c, \\2c, \\3c, \\4c): %d", solidCount))
+    w(string.format("VSFilterMod (\\vc): %d", vsfCount))
+    w(string.format("Total único: %d", solidCount + vsfCount))
     if stats.anyVSF and stats.anySolid then
         w("  Selección mixta: conviven colores sólidos y VSF.")
     elseif stats.anyVSF then
@@ -3537,8 +3539,6 @@ function SelectionReport.format(subs, sel)
     end
     w("")
     w("CONTRASTE POR ACTOR (relleno vs borde y sombra)")
-    w("--------------------------------------------------")
-    w(string.format("  %-18s %7s %7s   %s", "Actor", "c<->3c", "c<->4c", "Estado"))
     local nOK, nWarn, nFail = 0, 0, 0
     for _, a in ipairs(actors) do
         local info = data[a]
@@ -3549,11 +3549,11 @@ function SelectionReport.format(subs, sel)
         elseif status == "REVISAR" then nWarn = nWarn + 1
         else                            nFail = nFail + 1 end
         local visibleStatus = status == "OK" and "BIEN" or status
-        w(string.format("  %-18s %7.1f %7.1f   %s",
+        w(string.format("%s: borde %.1f:1; sombra %.1f:1; %s",
             actorLabel(a), cr3, cr4, visibleStatus))
     end
     w("")
-    w(string.format("  %d BIEN   ·   %d REVISAR   ·   %d AJUSTAR",
+    w(string.format("%d BIEN · %d REVISAR · %d AJUSTAR",
         nOK, nWarn, nFail))
     w("")
     w("La auditoría completa de accesibilidad está en")
@@ -3591,7 +3591,7 @@ end
 local function buildVSFGradientPanel(cfg, auditText, status)
     local vsfY = 3 + UI.audit_height
     local ui = {
-        { class = "label",   label = "Zheus Colormanager v" .. script_version .. " - selección", x = 0, y = 0, width = UI.dashboard_width },
+        { class = "label",   label = "Zheus Color v" .. script_version .. " - selección", x = 0, y = 0, width = UI.dashboard_width },
         { class = "label",    label = "Gestores:", x = 0, y = 1, width = 2 },
         { class = "dropdown", name = "gestores", items = { "Colores por Actor", "Actores" }, value = "Colores por Actor", x = 2, y = 1, width = 4 },
         { class = "label",    label = "Cambios:", x = 0, y = 2, width = 2 },
@@ -3607,6 +3607,10 @@ local function buildVSFGradientPanel(cfg, auditText, status)
     addReplaceSlotControls(ui, cfg, vsfY + 7)
     if status and status ~= "" then
         table.insert(ui, { class = "label", label = status, x = 0, y = vsfY + 8, width = UI.dashboard_width })
+    end
+    for _, control in ipairs(ui) do
+        control.x = (control.x or 0) * 2
+        control.width = (control.width or 1) * 2
     end
     return ui
 end
@@ -3771,7 +3775,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                     showMsg(err)
                     status = "Error: " .. (err or "Error al aplicar VSF.")
                 else
-                    aegisub.set_undo_point("Zheus Colormanager VSF")
+                    aegisub.set_undo_point("Zheus Color VSF")
                     status = cnt .. " líneas con \\" .. vsfTag .. " aplicadas."
                     applied = cnt > 0
                     changedSelection = selected
@@ -3783,7 +3787,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                     showMsg(err)
                     status = "Error: " .. (err or "Error al aplicar.")
                 else
-                    aegisub.set_undo_point("Zheus Colormanager")
+                    aegisub.set_undo_point("Zheus Color")
                     status = cnt .. " líneas procesadas."
                     applied = cnt > 0
                     changedSelection = selected
@@ -3819,7 +3823,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                 cfg = Config.load()
             else
                 Config.save(res)
-                aegisub.set_undo_point("Zheus Colormanager VSF")
+                aegisub.set_undo_point("Zheus Color VSF")
 
                 if n and n > 0 then return end
                 invalidateAudit()
@@ -3844,7 +3848,7 @@ local function mainController(subs, sel, initMode, dataIn, actorsIn)
                 if err then
                     status = "Cambiar colores: " .. err
                 elseif n > 0 then
-                    aegisub.set_undo_point("Zheus Colormanager - Cambiar colores")
+                    aegisub.set_undo_point("Zheus Color - Cambiar colores")
                     return
                 elseif action == "back" then
                     status = "Cambiar colores: volvió sin aplicar."
@@ -3896,7 +3900,7 @@ local function runColorReplaceDirect(subs, sel)
     if replaceCfg then Config.save(replaceCfg) end
     if err then showMsg("Cambiar colores: " .. err); return end
     if n and n > 0 then
-        aegisub.set_undo_point("Zheus Colormanager - Cambiar colores")
+        aegisub.set_undo_point("Zheus Color - Cambiar colores")
         showMsg(n .. " líneas actualizadas.")
     elseif action == "nochange" then
         showMsg("Cambiar colores: sin cambios.")
@@ -4133,12 +4137,18 @@ local macroEntries = {
     { menuPath,                                   script_description,                    mainController },
 }
 
-require("kite.UI").actions.rename(script_namespace, {
-    [hotkeyMenuPath .. "/Colores"] = hotkeyMenuPath .. "/Colores por actor",
-    [hotkeyMenuPath .. "/VSF"] = hotkeyMenuPath .. "/Colores de 4 esquinas",
-    [hotkeyMenuPath .. "/Actores"] = hotkeyMenuPath .. "/Renombrar o fusionar actores",
-    [hotkeyMenuPath .. "/ColorRelay"] = hotkeyMenuPath .. "/Transiciones de color",
-})
+local previousMenuPath = "Zheus Colormanager"
+local previousHotkeyPath = hotkeyMenuRoot .. "/" .. previousMenuPath
+local menuAliases = { [previousMenuPath] = menuPath }
+for old, new in pairs({
+    Colores = "Colores por actor",
+    VSF = "Colores de 4 esquinas",
+    Actores = "Renombrar o fusionar actores",
+    ColorRelay = "Transiciones de color",
+}) do
+    menuAliases[hotkeyMenuPath .. "/" .. old] = hotkeyMenuPath .. "/" .. new
+    menuAliases[previousHotkeyPath .. "/" .. old] = hotkeyMenuPath .. "/" .. new
+end
 
 local hotkeyMacroEntries = {
     { "Editor de tramos", "Editar colores por tramos conservando texto y tags", ColorUtil.segments.run },
@@ -4161,12 +4171,15 @@ local hotkeyMacroEntries = {
 }
 
 for _, entry in ipairs(hotkeyMacroEntries) do
+    menuAliases[previousHotkeyPath .. "/" .. entry[1]] = hotkeyMenuPath .. "/" .. entry[1]
     macroEntries[#macroEntries + 1] = {
         hotkeyMenuPath .. "/" .. entry[1],
         entry[2],
         entry[3],
     }
 end
+
+KiteUI.actions.rename(script_namespace, menuAliases)
 
 for _, entry in ipairs(macroEntries) do
     local callback=entry[3]
@@ -4180,3 +4193,49 @@ end
 depRec:registerMacros(macroEntries, false)
 
 require("kite.UI").publishActions()
+
+end
+local registrations = {}
+local registerMacro = aegisub.register_macro
+local function loadScript()
+    registrations = {}
+    aegisub.register_macro = function(name, description, callback, validate, active)
+        registrations[#registrations+1] = {name, description, callback, validate, active}
+    end
+    local ok, message = pcall(initializeScript)
+    aegisub.register_macro = registerMacro
+    local available, control = pcall(require, "l0.DependencyControl")
+    if available and control.updater then control.updater:releaseLock() end
+    return ok, message
+end
+local loaded, failure = loadScript()
+if loaded then
+    for _, action in ipairs(registrations) do registerMacro(unpack(action)) end
+else
+    registerMacro(script_name, script_description, function(subs, selection, active)
+        if not loaded then
+            local available, control = pcall(require, "l0.DependencyControl")
+            if not available then error(control, 0) end
+            local loader = require("l0.DependencyControl.ModuleLoader")
+            for _, task in pairs(control.updater.tasks[control.Domain.ScriptType.Module]) do
+                if not task.updated and not task.running then loader.removeDummyRef(task.record) end
+            end
+            loaded, failure = loadScript()
+            if not loaded then error(failure, 0) end
+        end
+        local choices, actions = {}, {}
+        for _, action in ipairs(registrations) do
+            if not action[4] or action[4](subs, selection, active) then
+                choices[#choices+1] = action[1]
+                actions[action[1]] = action[3]
+            end
+        end
+        if #choices == 0 then return selection, active end
+        if #choices == 1 then return actions[choices[1]](subs, selection, active) end
+        local button, values = aegisub.dialog.display({
+            {class="dropdown", name="action", items=choices, value=choices[1], x=0,y=0,width=1,height=1}
+        }, {"Run","Cancel"}, {ok="Run",close="Cancel"})
+        if button == "Run" then return actions[values.action](subs, selection, active) end
+        return selection, active
+    end)
+end

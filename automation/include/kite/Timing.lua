@@ -1,30 +1,28 @@
-local moduleVersion = "1.4.3"
+local DependencyControl = require("l0.DependencyControl")
+local depctrl = DependencyControl({
+    name = "kite.Timing",
+    version = "1.5.0",
+    description = "Voice-timing engines: multi-signal/waveform onset detection and legacy silence timing",
+    author = "Kiterow",
+    url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    moduleName = "kite.Timing",
+    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+    {
+        {"kite.Core", version = "2.0.0", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.PyBridge", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.UI", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.AssContext", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+    },
+})
+depctrl:requireModules()
+
+local moduleVersion = "1.5.0"
 local function tryRequire(name) local ok, value = pcall(require, name); if ok then return value end end
-local DependencyControl = tryRequire("l0.DependencyControl")
 local Core = assert(tryRequire("kite.Core"), "kite.Core is required")
-local LineOps = assert(tryRequire("kite.LineOps"), "kite.LineOps is required")
-local Media = assert(tryRequire("kite.Media"), "kite.Media is required")
+local LineOps = assert(tryRequire("kite.Core"), "kite.Core is required").LineOps
+local Media = assert(tryRequire("kite.PyBridge"), "kite.PyBridge is required").Media
 local lfs = tryRequire("lfs")
-local depctrl
-if DependencyControl then
-    depctrl = DependencyControl({
-        name = "Timing",
-        version = moduleVersion,
-        description = "Voice-timing engines: multi-signal/waveform onset detection and legacy silence timing",
-        author = "Kiterow",
-        url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-        moduleName = "kite.Timing",
-        feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
-        {
-            {"kite.Core", version = "1.1.0"},
-            {"kite.LineOps", version = "1.7.2"},
-            {"kite.Media", version = "1.4.0"},
-            {"kite.UI",version="1.5.0"},
-            {"kite.AssContext",version="1.1.1"},
-            {"kite.Settings",version="1.0.0"},
-        },
-    })
-end
+
 
 local tune = {
     vote_fraction = 0.5,
@@ -123,6 +121,7 @@ local function classifyDataFile(name)
     if n:find("vad", 1, true) then return "vad" end
     if n:find("flux", 1, true) or n:find("onset", 1, true) then return "flux" end
     if n:find("env", 1, true) or n:find("rms", 1, true) or n:find("loud", 1, true) then return "env" end
+    if n:match("_spectrum%.tsv$") then return nil end
     if n:find("sil", 1, true) or n:find("silence", 1, true) or n:find("retime", 1, true) then
         if n:find("30", 1, true) then return "sil30" end
         if n:find("40", 1, true) then return "sil40" end
@@ -2935,7 +2934,7 @@ end
 
 function Reconstructor.run(subs, selection)
     local UI = require("kite.UI")
-    local store = require("kite.Settings").open("kite.MacariaRevert", "1.0.0", {main=defaults})
+    local store = require("kite.UI").Settings.open("kite.MacariaRevert", "1.0.0", {main=defaults})
     local state = mergedOptions(store:values("main"))
     state.res_x, state.res_y = nil, nil
     local report = "Select generated events. Preview lists the proposed bases. Reconstruct inserts them as comments after the selection."
@@ -2993,6 +2992,1046 @@ Reconstructor.canRun = canRun
 Reconstructor.reportSummary = reportSummary
 
 return Reconstructor
+end)()
+
+Timing.Locale = (function()
+local M = {}
+function M.new(getLanguage)
+local LANG = {
+    en = {
+        title_suite      = "═══ CHRONO SUITE ═══════════════════",
+        title_markers    = "═══ AUDIT MARKERS ════════════════════",
+        title_utilities  = "═══ UTILITY TOOLS ════════════════",
+        title_data_import  = "─── DATA IMPORT ─────────",
+        title_tools      = "─── Extra Tools ─",
+        lbl_apply_to     = "Apply to:",            lbl_filter      = "Filter:",
+        lbl_preset       = "Preset:",              lbl_kf_mode     = "KF Mode:", lbl_kf_dir = "KF Dir:",
+        lbl_short_ms     = "Short (ms):",          lbl_long_ms     = "Long (ms):",
+        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
+        lbl_overtime     = "Overtime (ms):",       lbl_min_cps     = "Min CPS:",
+        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Short gap (ms):",
+        lbl_max_width    = "Max Width (px):",      lbl_marker_dd   = "Single Marker:",
+        lbl_section_case  = "CASE:",
+        lbl_section_punct = "PUNCT/TEXT:",
+        lbl_section_tags  = "TAGS/COMM:",
+        lbl_section_smart = "SMART:",
+        lbl_section_split = "SPLIT/JOIN:",
+        lbl_section_time  = "TIME/SORT:",
+        lbl_section_kara  = "KARAOKE:",
+        lbl_data_import_mode = "Import Mode:",
+        lbl_suite_tool    = "Extra Tool:",
+        lbl_selection     = "Selection: %d lines",
+        chk_clear_old     = "Clear previous markers",
+        chk_gap_continuous= "Mark continuous (0ms)",
+        chk_gap_ignore_kf = "Ignore gap on KF",
+        chk_kf_seal       = "Keyframe seal",
+        chk_data_import_cmt = "Text as {...}",
+        chk_data_import_same_layers = "Same Layers",
+        chk_data_import_skip= "(empty box → skip Data Import)",
+        btn_execute       = "EXECUTE",
+        btn_autotiming    = "Auto Timing",
+        btn_browse        = "Browse...",
+        btn_extract_kf    = "Extract KF",
+        btn_cancel        = "Cancel",
+        btn_ok            = "OK",
+        btn_save          = "Save",
+        btn_process       = "Execute",
+        err_no_selection  = "No selection.",
+        err_filter_zero   = "Filter resulted in 0 lines.",
+        err_no_video      = "No video loaded.",
+        err_invalid_twin  = "Twin KF must be a number ≥ 0",
+        err_invalid_miss  = "Miss KF must be a number ≥ 0",
+        err_invalid_ov    = "Overtime must be a number ≥ 0",
+        msg_audit_done    = "Audit completed.\n\nLines audited: %d\nLines flagged: %d\n\nIssues:\n%s",
+        msg_avg_cps       = "Average CPS (%d lines): %.2f",
+        lbl_section_cps_gap          = "── CPS / Gap ──",
+        lbl_section_filters_header   = "──── AUDIT TAG & STRUCTURE FILTERS ──────────────────────────",
+        lbl_section_text_markers_hdr = "──── AUDIT TEXT MARKERS ─────────────────────────────────────",
+        lbl_dropdown_skip_hint       = "(empty dropdown = skip section)",
+        chk_has_n        = "\\N break [LINE-BREAK]",
+        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
+        chk_has_clip     = "\\clip [CLIP-TAG]",
+        chk_has_fad      = "\\fad [FADE-TAG]",
+        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
+        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
+        chk_has_comment  = "Comment {} [COMMENT-BLOCK]",
+        chk_has_num      = "Digits [HAS-DIGITS]",
+        chk_full_italic  = "Italic line [FULL-ITALIC]",
+        chk_has_cjk      = "CJK / kana [HAS-CJK]",
+        chk_dbl_space    = "Double space [DOUBLE-SPACE]",
+        chk_edge_space   = "Edge space [EDGE-SPACE]",
+        chk_uppercase      = "Uppercase [UPPERCASE]",
+        chk_3liner         = "3-Liner [THREE-LINES]",
+        chk_missing_punct  = "No end punctuation [NO-END-PUNCT]",
+        chk_punct_balance  = "Unpaired punctuation [UNPAIRED-PUNCT]",
+        chk_orphan_word    = "Short last line [SHORT-LAST-LINE]",
+        chk_orphan_tag     = "Broken tag [BROKEN-TAG]",
+        chk_overlap        = "Overlap [OVERLAP]",
+        chk_unstyled       = "Unstyled [DEFAULT-STYLE]",
+        chk_double_italics = "Dbl Italics [ITALIC-ERROR]",
+        chk_parentheses    = "Parentheses [PARENTHESES]",
+        chk_name_prefix    = "Name Prefix [NAME-PREFIX]",
+        chk_sentences      = "Sentences [MULTI-SENTENCE]",
+
+        lazyt_lbl_mode     = "Mode:",
+        lazyt_lbl_json     = "Waveform JSON:",
+        lazyt_chk_reload   = "Reload waveform cache",
+        lazyt_lbl_outer    = "Search ± (ms):",
+        lazyt_sec_detect   = "── Voice detection (waveform peaks) ──",
+        lazyt_lbl_smooth   = "Smoothing (ms):",
+        lazyt_chk_otsu     = "Auto threshold (Otsu)",
+        lazyt_lbl_bridge   = "Bridge gaps ≤ (ms):",
+        lazyt_lbl_island   = "Drop islands < (ms):",
+        lazyt_chk_spill    = "Trim small edge spill",
+        lazyt_sec_margins  = "── Margins · post-timing ──",
+        lazyt_lbl_leads    = "Lead-in / out (ms):",
+        lazyt_lbl_kfrange  = "KF snap end / start (ms):",
+        lazyt_lbl_chain    = "Chain max out / in (ms):",
+        lazyt_lbl_cut      = "Voice-cut limit (ms):",
+        lazyt_lbl_cps      = "CPS flag above:",
+        lazyt_lbl_floor    = "Duration floor (ms):",
+        lazyt_chk_signs    = "Skip sign/karaoke/fx styles",
+        lazyt_chk_stats    = "Show statistics",
+        lazyt_lbl_style    = "Style filter:",
+        lazyt_sum          = "Timed: %d/%d spoken | KF snaps: %d | Joins: %d | Flagged: %d",
+        lazyt_no_voice     = "No voice found in the waveform.",
+        lazyt_hint         = "Full/Post need keyframes. Raw only follows detected voice. Markers land in Effect as [TM-...].",
+        lazyt_open_title   = "Select the waveform JSON (peaks)",
+        lazyt_json_filter  = "JSON (*.json)|*.json|All files (*.*)|*.*",
+        lazyt_err_parse    = "Could not read the waveform JSON:\n%s",
+        lazyt_err_no_wave  = "This mode needs a waveform JSON (peaks). Pick one to continue.",
+        at_title           = "Auto Timing — %s",
+        at_lbl_detector    = "Method:",
+        at_msg_done        = "Auto Timing · %s\n%s",
+        at_hint            = "Lazy = JSON. Busy = Kite Timing files (+ JSON).",
+        at_hint_mode       = "Full=method+KFs. Raw=method only. Post=current+KFs. Legacy=no KFs.",
+        at_lbl_data        = "Busy files:",
+        at_busy_hint       = "Busy uses signal files from Kite Timing. Waveform JSON can be added in the main window.",
+        at_chk_discover    = "Find signal files next to the subtitle",
+        at_chk_discover_legacy = "Find silence files next to the subtitle",
+        at_lbl_sil         = "Silences 30/40/50:",
+        at_lbl_vad         = "VAD intervals:",
+        at_lbl_flux        = "Flux events:",
+        at_lbl_env         = "RMS/dB envelope:",
+        at_sec_legacy      = "── Legacy ──",
+        at_legacy_hint     = "Legacy uses silence files and does not use video keyframes.",
+        at_lbl_method      = "Method:",
+        at_lbl_limit       = "Limit (ms):",
+        at_chk_silonly     = "Silences only (ignore method)",
+        at_data_title      = "Pick Busy files (matched by name)",
+        at_legacy_data_title = "Pick Legacy silence files",
+        at_err_module      = "Busy and Legacy need the Kite Timing module. Install or update it with DependencyControl.",
+        at_err_busy_input  = "Busy needs a waveform JSON or at least one Busy file.",
+        at_err_sil         = "Legacy needs at least one silence file.",
+        at_legacy_done     = "Legacy: %d lines modified.",
+        btn_data           = "Busy Files...",
+        btn_legacy         = "Legacy...",
+        btn_run_legacy     = "Execute",
+        msg_config_saved   = "Config saved.",
+
+        data_import_paste_hint = "Paste 'Dialogue:' lines (or use one of the modes).",
+    },
+    es = {
+        title_suite      = "═══ CHRONO SUITE ═══════════════════",
+        title_markers    = "═══ MARCADORES AUDITORIA ═════════════════",
+        title_utilities  = "═══ UTILIDADES ═══════════════",
+        title_data_import  = "─── IMPORTAR DATOS ──────",
+        title_tools      = "─── Herramientas Extra ",
+        lbl_apply_to     = "Aplicar a:",           lbl_filter      = "Filtro:",
+        lbl_preset       = "Preset:",              lbl_kf_mode     = "Modo KF:", lbl_kf_dir = "Dir KF:",
+        lbl_short_ms     = "Corto (ms):",          lbl_long_ms     = "Largo (ms):",
+        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
+        lbl_overtime     = "Sobretiempo (ms):",    lbl_min_cps     = "Min CPS:",
+        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Gap corto (ms):",
+        lbl_max_width    = "Ancho máx (px):",      lbl_marker_dd   = "Marcador único:",
+        lbl_section_case  = "CAJA:",
+        lbl_section_punct = "PUNT/TEXTO:",
+        lbl_section_tags  = "TAGS/COMENT:",
+        lbl_section_smart = "INTELIG:",
+        lbl_section_split = "DIVIDIR/UNIR:",
+        lbl_section_time  = "TIEMPO/ORDEN:",
+        lbl_section_kara  = "KARAOKE:",
+        lbl_data_import_mode = "Modo Importación:",
+        lbl_suite_tool    = "Herramienta:",
+        lbl_selection     = "Selección: %d líneas",
+        chk_clear_old     = "Limpiar marcadores previos",
+        chk_gap_continuous= "Marcar continuas (0ms)",
+        chk_gap_ignore_kf = "Ignorar gap en KF",
+        chk_kf_seal       = "Sello de keyframe",
+        chk_data_import_cmt = "Texto en {...}",
+        chk_data_import_same_layers = "Same Layers",
+        chk_data_import_skip= "(caja vacía → omitir Importar Datos)",
+        btn_execute       = "EJECUTAR",
+        btn_autotiming    = "Auto Timing",
+        btn_browse        = "Buscar...",
+        btn_extract_kf    = "Extraer KF",
+        btn_cancel        = "Cancel",
+        btn_ok            = "OK",
+        btn_save          = "Guardar",
+        btn_process       = "Execute",
+        err_no_selection  = "Sin selección.",
+        err_filter_zero   = "El filtro resultó en 0 líneas.",
+        err_no_video      = "No hay vídeo cargado.",
+        err_invalid_twin  = "Twin KF debe ser un número ≥ 0",
+        err_invalid_miss  = "Miss KF debe ser un número ≥ 0",
+        err_invalid_ov    = "Sobretiempo debe ser un número ≥ 0",
+        msg_audit_done    = "Auditoría completada.\n\nLíneas auditadas: %d\nLíneas marcadas: %d\n\nProblemas:\n%s",
+        msg_avg_cps       = "CPS promedio (%d líneas): %.2f",
+        lbl_section_cps_gap          = "── CPS / Gap ──",
+        lbl_section_filters_header   = "──── FILTROS DE TAGS Y ESTRUCTURA (AUDIT) ────────────────────",
+        lbl_section_text_markers_hdr = "──── MARCADORES DE TEXTO (AUDIT) ────────────────────────────",
+        lbl_dropdown_skip_hint       = "(dropdown vacío = saltar sección)",
+        chk_has_n        = "Salto \\N [LINE-BREAK]",
+        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
+        chk_has_clip     = "\\clip [CLIP-TAG]",
+        chk_has_fad      = "\\fad [FADE-TAG]",
+        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
+        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
+        chk_has_comment  = "Comentario {} [COMMENT-BLOCK]",
+        chk_has_num      = "Dígitos [HAS-DIGITS]",
+        chk_full_italic  = "Línea cursiva [FULL-ITALIC]",
+        chk_has_cjk      = "CJK / kana [HAS-CJK]",
+        chk_dbl_space    = "Espacio doble [DOUBLE-SPACE]",
+        chk_edge_space   = "Espacio bordes [EDGE-SPACE]",
+        chk_uppercase      = "Mayúsculas [UPPERCASE]",
+        chk_3liner         = "3 Líneas [THREE-LINES]",
+        chk_missing_punct  = "Sin puntuación final [NO-END-PUNCT]",
+        chk_punct_balance  = "Puntuación sin pareja [UNPAIRED-PUNCT]",
+        chk_orphan_word    = "Última línea corta [SHORT-LAST-LINE]",
+        chk_orphan_tag     = "Tag roto [BROKEN-TAG]",
+        chk_overlap        = "Solapamiento [OVERLAP]",
+        chk_unstyled       = "Sin estilo [DEFAULT-STYLE]",
+        chk_double_italics = "Dbl Cursiva [ITALIC-ERROR]",
+        chk_parentheses    = "Paréntesis [PARENTHESES]",
+        chk_name_prefix    = "Nombre [NAME-PREFIX]",
+        chk_sentences      = "Oraciones [MULTI-SENTENCE]",
+        lazyt_lbl_mode     = "Modo:",
+        lazyt_lbl_json     = "JSON de onda:",
+        lazyt_chk_reload   = "Recargar caché de onda",
+        lazyt_lbl_outer    = "Buscar ± (ms):",
+        lazyt_sec_detect   = "── Detección de voz (picos de onda) ──",
+        lazyt_lbl_smooth   = "Suavizado (ms):",
+        lazyt_chk_otsu     = "Umbral automático (Otsu)",
+        lazyt_lbl_bridge   = "Unir huecos ≤ (ms):",
+        lazyt_lbl_island   = "Quitar islas < (ms):",
+        lazyt_chk_spill    = "Recortar derrames de borde",
+        lazyt_sec_margins  = "── Márgenes · post-timing ──",
+        lazyt_lbl_leads    = "Lead-in / out (ms):",
+        lazyt_lbl_kfrange  = "Snap KF fin / inicio (ms):",
+        lazyt_lbl_chain    = "Cadena máx out / in (ms):",
+        lazyt_lbl_cut      = "Corte de voz máx (ms):",
+        lazyt_lbl_cps      = "Marcar CPS sobre:",
+        lazyt_lbl_floor    = "Duración mínima (ms):",
+        lazyt_chk_signs    = "Omitir estilos sign/karaoke/fx",
+        lazyt_chk_stats    = "Mostrar estadísticas",
+        lazyt_lbl_style    = "Filtro de estilo:",
+        lazyt_sum          = "Cronometradas: %d/%d habladas | Snaps KF: %d | Uniones: %d | Marcadas: %d",
+        lazyt_no_voice     = "No se encontró voz en la onda.",
+        lazyt_hint         = "Completo/Post necesitan keyframes. Bruto solo sigue la voz detectada. Las marcas van al Effect como [TM-...].",
+        lazyt_open_title   = "Elige el JSON de onda (picos)",
+        lazyt_json_filter  = "JSON (*.json)|*.json|Todos los archivos (*.*)|*.*",
+        lazyt_err_parse    = "No pude leer el JSON de onda:\n%s",
+        lazyt_err_no_wave  = "Este modo necesita un JSON de onda (picos). Elige uno para continuar.",
+        at_title           = "Auto Timing — %s",
+        at_lbl_detector    = "Método:",
+        at_msg_done        = "Auto Timing · %s\n%s",
+        at_hint            = "Lazy = JSON. Busy = archivos Kite Timing (+ JSON).",
+        at_hint_mode       = "Completo=método+KFs. Bruto=solo método. Post=actual+KFs. Legacy=sin KFs.",
+        at_lbl_data        = "Archivos Busy:",
+        at_busy_hint       = "Busy usa archivos de señales de Kite Timing. El JSON de onda se suma desde la ventana principal.",
+        at_chk_discover    = "Buscar archivos Busy junto al subtítulo",
+        at_chk_discover_legacy = "Buscar silencios junto al subtítulo",
+        at_lbl_sil         = "Silencios 30/40/50:",
+        at_lbl_vad         = "Intervalos VAD:",
+        at_lbl_flux        = "Eventos flux:",
+        at_lbl_env         = "Envelope RMS/dB:",
+        at_sec_legacy      = "── Legacy ──",
+        at_legacy_hint     = "Legacy usa archivos de silencios y no usa keyframes del video.",
+        at_lbl_method      = "Método:",
+        at_lbl_limit       = "Límite (ms):",
+        at_chk_silonly     = "Solo silencios (ignora el método)",
+        at_data_title      = "Elige archivos Busy (por nombre)",
+        at_legacy_data_title = "Elige silencios para Legacy",
+        at_err_module      = "Busy y Legacy necesitan el módulo Kite Timing. Instálalo o actualízalo con DependencyControl.",
+        at_err_busy_input  = "Busy necesita un JSON de onda o al menos un archivo Busy.",
+        at_err_sil         = "Legacy necesita al menos un archivo de silencios.",
+        at_legacy_done     = "Legacy: %d líneas modificadas.",
+        btn_data           = "Archivos Busy...",
+        btn_legacy         = "Legacy...",
+        btn_run_legacy     = "Execute",
+        msg_config_saved   = "Configuración guardada.",
+        data_import_paste_hint = "Pega líneas 'Dialogue:' (o usa uno de los modos).",
+    },
+    pt = {
+        title_suite      = "═══ CHRONO SUITE ═══════════════════",
+        title_markers    = "═══ MARCADORES AUDITORIA ═════════════════",
+        title_utilities  = "═══ UTILIDADES ═══════════════",
+        title_data_import  = "─── IMPORTAR DADOS ──────",
+        title_tools      = "─── Ferramentas Extra",
+        lbl_apply_to     = "Aplicar em:",          lbl_filter      = "Filtro:",
+        lbl_preset       = "Preset:",              lbl_kf_mode     = "Modo KF:", lbl_kf_dir = "Dir KF:",
+        lbl_short_ms     = "Curto (ms):",          lbl_long_ms     = "Longo (ms):",
+        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
+        lbl_overtime     = "Sobretempo (ms):",     lbl_min_cps     = "Min CPS:",
+        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Gap curto (ms):",
+        lbl_max_width    = "Largura máx (px):",    lbl_marker_dd   = "Marcador único:",
+        lbl_section_case  = "CAIXA:",
+        lbl_section_punct = "PONT/TEXTO:",
+        lbl_section_tags  = "TAGS/COMENT:",
+        lbl_section_smart = "INTELIG:",
+        lbl_section_split = "DIVIDIR/UNIR:",
+        lbl_section_time  = "TEMPO/ORDEM:",
+        lbl_section_kara  = "KARAOKE:",
+        lbl_data_import_mode = "Modo Importação:",
+        lbl_suite_tool    = "Ferramenta:",
+        lbl_selection     = "Seleção: %d linhas",
+        chk_clear_old     = "Limpar marcadores prévios",
+        chk_gap_continuous= "Marcar contínuas (0ms)",
+        chk_gap_ignore_kf = "Ignorar gap em KF",
+        chk_kf_seal       = "Selo de keyframe",
+        chk_data_import_cmt = "Texto em {...}",
+        chk_data_import_same_layers = "Same Layers",
+        chk_data_import_skip= "(caixa vazia → ignorar Importar Dados)",
+        btn_execute       = "EXECUTAR",
+        btn_autotiming    = "Auto Timing",
+        btn_browse        = "Procurar...",
+        btn_extract_kf    = "Extrair KF",
+        btn_cancel        = "Cancel",
+        btn_ok            = "OK",
+        btn_save          = "Salvar",
+        btn_process       = "Execute",
+        err_no_selection  = "Sem seleção.",
+        err_filter_zero   = "O filtro resultou em 0 linhas.",
+        err_no_video      = "Nenhum vídeo carregado.",
+        err_invalid_twin  = "Twin KF deve ser um número ≥ 0",
+        err_invalid_miss  = "Miss KF deve ser um número ≥ 0",
+        err_invalid_ov    = "Sobretempo deve ser um número ≥ 0",
+        msg_audit_done    = "Auditoria concluída.\n\nLinhas auditadas: %d\nLinhas marcadas: %d\n\nProblemas:\n%s",
+        msg_avg_cps       = "CPS médio (%d linhas): %.2f",
+        lbl_section_cps_gap          = "── CPS / Gap ──",
+        lbl_section_filters_header   = "──── FILTROS DE TAGS E ESTRUTURA (AUDIT) ─────────────────────",
+        lbl_section_text_markers_hdr = "──── MARCADORES DE TEXTO (AUDIT) ─────────────────────────────",
+        lbl_dropdown_skip_hint       = "(dropdown vazio = saltar seção)",
+        chk_has_n        = "Quebra \\N [LINE-BREAK]",
+        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
+        chk_has_clip     = "\\clip [CLIP-TAG]",
+        chk_has_fad      = "\\fad [FADE-TAG]",
+        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
+        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
+        chk_has_comment  = "Comentário {} [COMMENT-BLOCK]",
+        chk_has_num      = "Dígitos [HAS-DIGITS]",
+        chk_full_italic  = "Linha itálica [FULL-ITALIC]",
+        chk_has_cjk      = "CJK / kana [HAS-CJK]",
+        chk_dbl_space    = "Espaço duplo [DOUBLE-SPACE]",
+        chk_edge_space   = "Espaço bordas [EDGE-SPACE]",
+        chk_uppercase      = "Maiúsculas [UPPERCASE]",
+        chk_3liner         = "3 Linhas [THREE-LINES]",
+        chk_missing_punct  = "Sem pontuação final [NO-END-PUNCT]",
+        chk_punct_balance  = "Pontuação sem par [UNPAIRED-PUNCT]",
+        chk_orphan_word    = "Última linha curta [SHORT-LAST-LINE]",
+        chk_orphan_tag     = "Tag quebrada [BROKEN-TAG]",
+        chk_overlap        = "Sobreposição [OVERLAP]",
+        chk_unstyled       = "Sem estilo [DEFAULT-STYLE]",
+        chk_double_italics = "Dbl Itálico [ITALIC-ERROR]",
+        chk_parentheses    = "Parênteses [PARENTHESES]",
+        chk_name_prefix    = "Nome [NAME-PREFIX]",
+        chk_sentences      = "Frases [MULTI-SENTENCE]",
+        lazyt_lbl_mode     = "Modo:",
+        lazyt_lbl_json     = "JSON da onda:",
+        lazyt_chk_reload   = "Recarregar cache da onda",
+        lazyt_lbl_outer    = "Buscar ± (ms):",
+        lazyt_sec_detect   = "── Detecção de voz (picos da onda) ──",
+        lazyt_lbl_smooth   = "Suavização (ms):",
+        lazyt_chk_otsu     = "Limiar automático (Otsu)",
+        lazyt_lbl_bridge   = "Unir lacunas ≤ (ms):",
+        lazyt_lbl_island   = "Remover ilhas < (ms):",
+        lazyt_chk_spill    = "Aparar derrames de borda",
+        lazyt_sec_margins  = "── Margens · pós-timing ──",
+        lazyt_lbl_leads    = "Lead-in / out (ms):",
+        lazyt_lbl_kfrange  = "Snap KF fim / início (ms):",
+        lazyt_lbl_chain    = "Cadeia máx out / in (ms):",
+        lazyt_lbl_cut      = "Corte de voz máx (ms):",
+        lazyt_lbl_cps      = "Marcar CPS acima de:",
+        lazyt_lbl_floor    = "Duração mínima (ms):",
+        lazyt_chk_signs    = "Pular estilos sign/karaokê/fx",
+        lazyt_chk_stats    = "Mostrar estatísticas",
+        lazyt_lbl_style    = "Filtro de estilo:",
+        lazyt_sum          = "Cronometradas: %d/%d faladas | Snaps KF: %d | Uniões: %d | Marcadas: %d",
+        lazyt_no_voice     = "Nenhuma voz encontrada na onda.",
+        lazyt_hint         = "Completo/Pós precisam de keyframes. Bruto só segue a voz detectada. As marcas vão ao Effect como [TM-...].",
+        lazyt_open_title   = "Escolha o JSON da onda (picos)",
+        lazyt_json_filter  = "JSON (*.json)|*.json|Todos os arquivos (*.*)|*.*",
+        lazyt_err_parse    = "Não consegui ler o JSON da onda:\n%s",
+        lazyt_err_no_wave  = "Este modo precisa de um JSON da onda (picos). Escolha um para continuar.",
+        at_title           = "Auto Timing — %s",
+        at_lbl_detector    = "Método:",
+        at_msg_done        = "Auto Timing · %s\n%s",
+        at_hint            = "Lazy = JSON. Busy = arquivos Kite Timing (+ JSON).",
+        at_hint_mode       = "Completo=método+KFs. Bruto=só método. Pós=atual+KFs. Legacy=sem KFs.",
+        at_lbl_data        = "Arquivos Busy:",
+        at_busy_hint       = "Busy usa arquivos de sinais do Kite Timing. O JSON da onda pode ser somado na janela principal.",
+        at_chk_discover    = "Buscar arquivos Busy junto da legenda",
+        at_chk_discover_legacy = "Buscar silêncios junto da legenda",
+        at_lbl_sil         = "Silêncios 30/40/50:",
+        at_lbl_vad         = "Intervalos VAD:",
+        at_lbl_flux        = "Eventos flux:",
+        at_lbl_env         = "Envelope RMS/dB:",
+        at_sec_legacy      = "── Legacy ──",
+        at_legacy_hint     = "Legacy usa arquivos de silêncios e não usa keyframes do vídeo.",
+        at_lbl_method      = "Método:",
+        at_lbl_limit       = "Limite (ms):",
+        at_chk_silonly     = "Só silêncios (ignora o método)",
+        at_data_title      = "Escolha arquivos Busy (por nome)",
+        at_legacy_data_title = "Escolha silêncios para Legacy",
+        at_err_module      = "Busy e Legacy precisam do módulo Kite Timing. Instale ou atualize com DependencyControl.",
+        at_err_busy_input  = "Busy precisa de um JSON da onda ou ao menos um arquivo Busy.",
+        at_err_sil         = "Legacy precisa de ao menos um arquivo de silêncios.",
+        at_legacy_done     = "Legacy: %d linhas modificadas.",
+        btn_data           = "Arquivos Busy...",
+        btn_legacy         = "Legacy...",
+        btn_run_legacy     = "Execute",
+        msg_config_saved   = "Configuração salva.",
+        data_import_paste_hint = "Cole linhas 'Dialogue:' (ou use um dos modos).",
+    },
+}
+
+local extraLang = {
+    en = {
+        btn_config="Config", btn_help="Help", help_btn_close="Cancel",
+        cfg_title="Chrono Suite Config", cfg_lbl_language="Language:",
+        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="SCXvid path:", cfg_lbl_ffmpeg_path="FFmpeg path:", cfg_lbl_log_suffix="Log suffix:",
+        cfg_lbl_leadutil="Lead-In / Lead-Out / Chain", cfg_lbl_lead_step="Step (ms):", cfg_lbl_chain_cap="Chain max (ms):",
+        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in max:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out max:", cfg_lbl_lead_out_chain="Chain out:", cfg_lbl_chain_gap_max="Chain gap:",
+        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Snap range (frames):", cfg_lbl_snap_protect="Directional range (ms):",
+        cfg_lbl_presets="Audit Presets", cfg_lbl_preset_start="Start T/M:", cfg_lbl_preset_end="End T/M:", cfg_lbl_preset_full_kf="Full T/M:", cfg_lbl_preset_full_time="Full S/L:", cfg_lbl_preset_full_read="Full CPS/W:", cfg_lbl_preset_full_gap="Full Gap S/L:", cfg_lbl_preset_duration="Duration S/L:", cfg_lbl_preset_cps="CPS Max:", cfg_lbl_preset_gaps="Gaps S/L:", cfg_lbl_preset_overtime="Overtime:",
+        cfg_msg_saved="Config saved.", cfg_msg_lang_changed="Language changed. Reopen the dialog.",
+        msg_bidir_done="Bidirectional snapping done.\n\nLines modified: %d\nStarts snapped: %d\nEnds snapped: %d\nRange: ±%d frames",
+        err_no_keyframes="No keyframes loaded.",
+        title_markers="=== AUDIT MARKERS ===", title_utilities="=== UTILITY TOOLS ===", title_data_import="--- DATA IMPORT ---", title_tools="--- EXTRA TOOLS ---",
+        lbl_section_case="CASE:", lbl_section_punct="PUNCT/TEXT:", lbl_section_tags="TAGS/COMMENTS:", lbl_section_smart="SMART:", lbl_section_split="SPLIT/JOIN:", lbl_section_time="TIME/SORT:", lbl_suite_tool="Extra Tool:", lbl_large_gap="Large gap (ms):",
+        chk_kf_seal="Keyframe seal", chk_data_import_skip="(empty box = skip Data Import)",
+        chk_has_n="Line break [LINE-BREAK]", chk_has_pos="Position tag [POSITION-TAG]", chk_has_clip="Clip tag [CLIP-TAG]", chk_has_fad="Fade tag [FADE-TAG]", chk_has_t="Transform tag [TRANSFORM-TAG]", chk_has_k="Karaoke tag [KARAOKE-TAG]", chk_has_comment="Comment block [COMMENT-BLOCK]", chk_has_num="Digits [HAS-DIGITS]", chk_full_italic="Full italic [FULL-ITALIC]", chk_dbl_space="Double space [DOUBLE-SPACE]", chk_edge_space="Edge space [EDGE-SPACE]",
+        chk_3liner="Three lines [THREE-LINES]", chk_missing_punct="No end punctuation [NO-END-PUNCT]", chk_punct_balance="Unpaired punctuation [UNPAIRED-PUNCT]", chk_orphan_word="Short last line [SHORT-LAST-LINE]", chk_orphan_tag="Broken tag [BROKEN-TAG]", chk_unstyled="Default style [DEFAULT-STYLE]", chk_double_italics="Italic error [ITALIC-ERROR]", chk_parentheses="Parentheses [PARENTHESES]", chk_name_prefix="Name prefix [NAME-PREFIX]", chk_sentences="Multiple sentences [MULTI-SENTENCE]",
+    },
+    es = {
+        btn_config="Config", btn_help="Ayuda", help_btn_close="Cancel",
+        cfg_title="Config de Chrono Suite", cfg_lbl_language="Idioma:",
+        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="Ruta de SCXvid:", cfg_lbl_ffmpeg_path="Ruta de FFmpeg:", cfg_lbl_log_suffix="Sufijo del log:",
+        cfg_lbl_leadutil="Lead-In / Lead-Out / Cadena", cfg_lbl_lead_step="Paso (ms):", cfg_lbl_chain_cap="Cadena máx (ms):",
+        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in máximo:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out máximo:", cfg_lbl_lead_out_chain="Salida en cadena:", cfg_lbl_chain_gap_max="Gap de cadena:",
+        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Rango de snap (frames):", cfg_lbl_snap_protect="Rango direccional (ms):",
+        cfg_lbl_presets="Presets de auditoría", cfg_lbl_preset_start="Inicio T/M:", cfg_lbl_preset_end="Final T/M:", cfg_lbl_preset_full_kf="Completa T/M:", cfg_lbl_preset_full_time="Completa C/L:", cfg_lbl_preset_full_read="Completa CPS/An:", cfg_lbl_preset_full_gap="Completa Gap C/L:", cfg_lbl_preset_duration="Duración C/L:", cfg_lbl_preset_cps="CPS máx:", cfg_lbl_preset_gaps="Gaps C/L:", cfg_lbl_preset_overtime="Sobretiempo:",
+        cfg_msg_saved="Configuración guardada.", cfg_msg_lang_changed="Idioma cambiado. Reabre el diálogo.",
+        msg_bidir_done="Bidirectional Snapping finalizado.\n\nLíneas modificadas: %d\nInicios ajustados: %d\nFinales ajustados: %d\nRango: ±%d frames",
+        err_no_keyframes="No hay keyframes cargados.",
+        title_markers="=== MARCADORES DE AUDITORÍA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DATOS ---", title_tools="--- HERRAMIENTAS EXTRA ---",
+        lbl_apply_to="Aplicar a:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap largo (ms):", lbl_section_case="CAJA:", lbl_section_punct="PUNT/TEXTO:", lbl_section_tags="TAGS/COMENTARIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TIEMPO/ORDEN:", lbl_suite_tool="Herramienta:", lbl_selection="Selección: %d líneas",
+        chk_clear_old="Limpiar marcadores previos", chk_gap_continuous="Marcar continuas (0 ms)", chk_gap_ignore_kf="Ignorar gap si cae en KF", chk_kf_seal="Sello de keyframe", chk_data_import_skip="(caja vacía = saltar Importar Datos)",
+        chk_has_n="Salto de línea [LINE-BREAK]", chk_has_pos="Tag de posición [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformación [TRANSFORM-TAG]", chk_has_k="Tag de karaoke [KARAOKE-TAG]", chk_has_comment="Bloque de comentario [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda en cursiva [FULL-ITALIC]", chk_dbl_space="Doble espacio [DOUBLE-SPACE]", chk_edge_space="Espacio al borde [EDGE-SPACE]",
+        chk_uppercase="Mayúsculas [UPPERCASE]", chk_3liner="Tres líneas [THREE-LINES]", chk_missing_punct="Sin puntuación final [NO-END-PUNCT]", chk_punct_balance="Puntuación sin pareja [UNPAIRED-PUNCT]", chk_orphan_word="Última línea corta [SHORT-LAST-LINE]", chk_orphan_tag="Tag roto [BROKEN-TAG]", chk_overlap="Solapamiento [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Error de cursiva [ITALIC-ERROR]", chk_parentheses="Paréntesis [PARENTHESES]", chk_name_prefix="Prefijo de nombre [NAME-PREFIX]", chk_sentences="Varias oraciones [MULTI-SENTENCE]",
+        msg_config_saved="Configuración guardada.", data_import_paste_hint="Pega líneas 'Dialogue:' o elige un modo de importación.",
+    },
+    pt = {
+        btn_config="Config", btn_help="Ajuda", help_btn_close="Cancel",
+        cfg_title="Config do Chrono Suite", cfg_lbl_language="Idioma:",
+        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="Caminho do SCXvid:", cfg_lbl_ffmpeg_path="Caminho do FFmpeg:", cfg_lbl_log_suffix="Sufixo do log:",
+        cfg_lbl_leadutil="Lead-In / Lead-Out / Cadeia", cfg_lbl_lead_step="Passo (ms):", cfg_lbl_chain_cap="Cadeia máx (ms):",
+        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in máximo:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out máximo:", cfg_lbl_lead_out_chain="Saída em cadeia:", cfg_lbl_chain_gap_max="Gap da cadeia:",
+        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Alcance de snap (frames):", cfg_lbl_snap_protect="Alcance direcional (ms):",
+        cfg_lbl_presets="Presets de auditoria", cfg_lbl_preset_start="Início T/M:", cfg_lbl_preset_end="Fim T/M:", cfg_lbl_preset_full_kf="Completa T/M:", cfg_lbl_preset_full_time="Completa C/L:", cfg_lbl_preset_full_read="Completa CPS/Lg:", cfg_lbl_preset_full_gap="Completa Gap C/L:", cfg_lbl_preset_duration="Duração C/L:", cfg_lbl_preset_cps="CPS máx:", cfg_lbl_preset_gaps="Gaps C/L:", cfg_lbl_preset_overtime="Sobretempo:",
+        cfg_msg_saved="Configuração salva.", cfg_msg_lang_changed="Idioma alterado. Reabra o diálogo.",
+        msg_bidir_done="Bidirectional Snapping concluído.\n\nLinhas modificadas: %d\nInícios ajustados: %d\nFinais ajustados: %d\nAlcance: ±%d frames",
+        err_no_keyframes="Nenhum keyframe carregado.",
+        title_markers="=== MARCADORES DE AUDITORIA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DADOS ---", title_tools="--- FERRAMENTAS EXTRA ---",
+        lbl_apply_to="Aplicar em:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap longo (ms):", lbl_section_case="CAIXA:", lbl_section_punct="PONT/TEXTO:", lbl_section_tags="TAGS/COMENTÁRIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TEMPO/ORDEM:", lbl_suite_tool="Ferramenta:", lbl_selection="Seleção: %d linhas",
+        chk_clear_old="Limpar marcadores anteriores", chk_gap_continuous="Marcar contínuas (0 ms)", chk_gap_ignore_kf="Ignorar gap se cair em KF", chk_kf_seal="Selo de keyframe", chk_data_import_skip="(caixa vazia = pular Importar Dados)",
+        chk_has_n="Quebra de linha [LINE-BREAK]", chk_has_pos="Tag de posição [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformação [TRANSFORM-TAG]", chk_has_k="Tag de karaokê [KARAOKE-TAG]", chk_has_comment="Bloco de comentário [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda em itálico [FULL-ITALIC]", chk_dbl_space="Espaço duplo [DOUBLE-SPACE]", chk_edge_space="Espaço nas bordas [EDGE-SPACE]",
+        chk_uppercase="Maiúsculas [UPPERCASE]", chk_3liner="Três linhas [THREE-LINES]", chk_missing_punct="Sem pontuação final [NO-END-PUNCT]", chk_punct_balance="Pontuação sem par [UNPAIRED-PUNCT]", chk_orphan_word="Última linha curta [SHORT-LAST-LINE]", chk_orphan_tag="Tag quebrada [BROKEN-TAG]", chk_overlap="Sobreposição [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Erro de itálico [ITALIC-ERROR]", chk_parentheses="Parênteses [PARENTHESES]", chk_name_prefix="Prefixo de nome [NAME-PREFIX]", chk_sentences="Várias frases [MULTI-SENTENCE]",
+        msg_config_saved="Configuração salva.", data_import_paste_hint="Cole linhas 'Dialogue:' ou escolha um modo de importação.",
+    },
+}
+
+local localePatch = {
+    en = {
+        err_no_active_dialogue   = "No valid active dialogue lines found.",
+        err_no_sync_point        = "Data Import — Songs: no sync point found.\nNeed Comment line with layer 50.",
+        err_scxvid_not_found     = "SCXvid not found:\n%s",
+        err_ffmpeg_not_found     = "FFmpeg not found:\n%s",
+        err_cannot_create_batch  = "Error: cannot create temp batch file",
+        err_cannot_create_directory = "Error: cannot create the working directory",
+        err_cannot_create_shell  = "Error: cannot create temp shell script",
+        err_no_lines_selected    = "No lines selected.",
+        err_not_inside_fold      = "Active line is not inside a fold.\nMove to a line within a fold group.",
+        err_no_fold_group        = "Could not find complete fold group.",
+        err_cannot_write_file    = "Could not write to:\n%s",
+        err_shift_min_two        = "Align to First Start requires at least 2 lines.",
+        err_shift_first_two      = "Align to First Start requires the first two selected lines to be dialogue lines.",
+        err_tolerance_positive   = "Tolerance must be a positive number.",
+        err_paste_mpvqc          = "Paste mpvQC text first.",
+        err_no_mpvqc_comments    = "No mpvQC comments found.",
+        msg_process_done         = "Process completed.\nLog: %s",
+        err_process_failed       = "Process failed.\n\n%s",
+        msg_ae_saved             = "AE keyframe data saved to:\n%s",
+        msg_kite_done            = "Kite Timing: %d changes from %d selected lines.",
+        msg_replacer_done        = "Text Replacer: %d lines modified.",
+        msg_mpvqc_done           = "mpv QC done.\nLines modified: %d",
+        msg_remover_done         = "Text and Tag Cleanup done.\nLines modified: %d\nLines deleted: %d",
+        err_remover_none         = "Select at least one remover option.",
+        lbl_include_partial      = "Include partially overlapping lines",
+        lbl_paste_dialogue       = "Paste text or Dialogue/Comment lines:",
+        lbl_import_as_comments   = "Import plain text as {…} comments",
+        lbl_original_text        = "ORIGINAL TEXT",
+        lbl_replacement_text     = "REPLACEMENT TEXT",
+        lbl_replacer_help        = "Each line in Original matches the corresponding line in Replacement. Tags preserved.",
+        lbl_mpvqc_title          = "mpv QC",
+        lbl_mpvqc_tolerance      = "Tolerance (ms):",
+        lbl_mpvqc_paste          = "Paste mpvQC text:",
+        lbl_remover_title        = "Text and Tag Cleanup",
+        lbl_remover_text         = "Visible text",
+        lbl_remover_tags         = "Override tags",
+        lbl_remover_comments     = "Comments",
+        chk_rem_n                = "Remove \\N",
+        chk_rem_h                = "Remove \\h",
+        chk_rem_double_space     = "Double spaces",
+        chk_rem_edge_space       = "Edge spaces",
+        chk_rem_excl             = "Exclamation signs",
+        chk_rem_quest            = "Question signs",
+        chk_rem_combo            = "Mixed ¡¿?! signs",
+        chk_rem_final_commas     = "Final commas",
+        chk_rem_all_commas       = "All commas",
+        chk_rem_quotes           = "Quotes",
+        chk_rem_apostrophes      = "Apostrophes",
+        chk_rem_stutter          = "Stutter X-X",
+        chk_rem_dup_letters      = "Duplicate letters",
+        chk_rem_leading_ellipsis = "Leading ellipsis",
+        chk_rem_ellipsis         = "All ellipsis",
+        chk_rem_italic_tags      = "\\i tags",
+        chk_rem_q_tags           = "\\q tags",
+        chk_rem_an8              = "\\an8",
+        chk_rem_comment_lines    = "Comment lines",
+        chk_rem_inline_comments  = "Inline comments {...}",
+        btn_import               = "Import",
+        btn_replace_all          = "Replace All",
+        btn_apply                = "Execute",
+    },
+    es = {
+        err_no_active_dialogue   = "No se encontraron líneas de diálogo activas válidas.",
+        err_no_sync_point        = "Importar datos — Songs: no se encontró punto de sincronización.\nSe requiere línea Comment con layer 50.",
+        err_scxvid_not_found     = "SCXvid no encontrado:\n%s",
+        err_ffmpeg_not_found     = "FFmpeg no encontrado:\n%s",
+        err_cannot_create_batch  = "Error: no se pudo crear el archivo batch temporal",
+        err_cannot_create_directory = "Error: no se pudo crear el directorio de trabajo",
+        err_cannot_create_shell  = "Error: no se pudo crear el script shell temporal",
+        err_no_lines_selected    = "Sin líneas seleccionadas.",
+        err_not_inside_fold      = "La línea activa no está dentro de un fold.\nMuévete a una línea dentro de un grupo fold.",
+        err_no_fold_group        = "No se encontró un grupo fold completo.",
+        err_cannot_write_file    = "No se pudo escribir en:\n%s",
+        err_shift_min_two        = "Align to First Start requiere al menos 2 líneas.",
+        err_shift_first_two      = "Align to First Start requiere que las dos primeras líneas seleccionadas sean diálogo.",
+        err_tolerance_positive   = "La tolerancia debe ser un número positivo.",
+        err_paste_mpvqc          = "Pega primero el texto de mpvQC.",
+        err_no_mpvqc_comments    = "No se encontraron comentarios de mpvQC.",
+        msg_process_done         = "Proceso finalizado.\nLog: %s",
+        err_process_failed       = "El proceso falló.\n\n%s",
+        msg_ae_saved             = "Datos AE guardados en:\n%s",
+        msg_kite_done            = "Kite Timing: %d cambios en %d líneas seleccionadas.",
+        msg_replacer_done        = "Text Replacer: %d líneas modificadas.",
+        msg_mpvqc_done           = "mpv QC finalizado.\nLíneas modificadas: %d",
+        msg_remover_done         = "Text and Tag Cleanup finalizado.\nLíneas modificadas: %d\nLíneas eliminadas: %d",
+        err_remover_none         = "Selecciona al menos una opcion de limpieza.",
+        lbl_include_partial      = "Incluir líneas con superposición parcial",
+        lbl_paste_dialogue       = "Pega texto o líneas Dialogue/Comment:",
+        lbl_import_as_comments   = "Importar texto plano como comentarios {…}",
+        lbl_original_text        = "TEXTO ORIGINAL",
+        lbl_replacement_text     = "TEXTO DE REEMPLAZO",
+        lbl_replacer_help        = "Cada línea de Original corresponde a la misma línea en Reemplazo. Los tags se conservan.",
+        lbl_mpvqc_title          = "mpv QC",
+        lbl_mpvqc_tolerance      = "Tolerancia (ms):",
+        lbl_mpvqc_paste          = "Pega el texto de mpvQC:",
+        lbl_remover_title        = "Text and Tag Cleanup",
+        lbl_remover_text         = "Texto visible",
+        lbl_remover_tags         = "Override tags",
+        lbl_remover_comments     = "Comentarios",
+        chk_rem_n                = "Quitar \\N",
+        chk_rem_h                = "Quitar \\h",
+        chk_rem_double_space     = "Espacios dobles",
+        chk_rem_edge_space       = "Espacios al borde",
+        chk_rem_excl             = "Signos de exclamacion",
+        chk_rem_quest            = "Signos de interrogacion",
+        chk_rem_combo            = "Signos mixtos ¡¿?!",
+        chk_rem_final_commas     = "Comas finales",
+        chk_rem_all_commas       = "Todas las comas",
+        chk_rem_quotes           = "Comillas",
+        chk_rem_apostrophes      = "Apostrofos",
+        chk_rem_stutter          = "Tartamudeo X-X",
+        chk_rem_dup_letters      = "Letras duplicadas",
+        chk_rem_leading_ellipsis = "Puntos suspensivos iniciales",
+        chk_rem_ellipsis         = "Todos los puntos suspensivos",
+        chk_rem_italic_tags      = "Tags \\i",
+        chk_rem_q_tags           = "Tags \\q",
+        chk_rem_an8              = "\\an8",
+        chk_rem_comment_lines    = "Lineas comentadas",
+        chk_rem_inline_comments  = "Comentarios inline {...}",
+        btn_import               = "Importar",
+        btn_replace_all          = "Reemplazar todo",
+        btn_apply                = "Execute",
+    },
+    pt = {
+        err_no_active_dialogue   = "Nenhuma linha de diálogo ativa válida encontrada.",
+        err_no_sync_point        = "Importar dados — Songs: ponto de sincronia não encontrado.\nNecessário linha Comment com layer 50.",
+        err_scxvid_not_found     = "SCXvid não encontrado:\n%s",
+        err_ffmpeg_not_found     = "FFmpeg não encontrado:\n%s",
+        err_cannot_create_batch  = "Erro: não foi possível criar o arquivo batch temporário",
+        err_cannot_create_directory = "Erro: não foi possível criar o diretório de trabalho",
+        err_cannot_create_shell  = "Erro: não foi possível criar o script shell temporário",
+        err_no_lines_selected    = "Nenhuma linha selecionada.",
+        err_not_inside_fold      = "A linha ativa não está dentro de um fold.\nVá para uma linha dentro de um grupo fold.",
+        err_no_fold_group        = "Grupo fold completo não encontrado.",
+        err_cannot_write_file    = "Não foi possível gravar em:\n%s",
+        err_shift_min_two        = "Align to First Start requer pelo menos 2 linhas.",
+        err_shift_first_two      = "Align to First Start requer que as duas primeiras linhas selecionadas sejam diálogo.",
+        err_tolerance_positive   = "A tolerância deve ser um número positivo.",
+        err_paste_mpvqc          = "Cole primeiro o texto do mpvQC.",
+        err_no_mpvqc_comments    = "Nenhum comentário do mpvQC encontrado.",
+        msg_process_done         = "Processo concluído.\nLog: %s",
+        err_process_failed       = "O processo falhou.\n\n%s",
+        msg_ae_saved             = "Dados AE salvos em:\n%s",
+        msg_kite_done            = "Kite Timing: %d alterações em %d linhas selecionadas.",
+        msg_replacer_done        = "Text Replacer: %d linhas modificadas.",
+        msg_mpvqc_done           = "mpv QC concluído.\nLinhas modificadas: %d",
+        msg_remover_done         = "Text and Tag Cleanup concluido.\nLinhas modificadas: %d\nLinhas apagadas: %d",
+        err_remover_none         = "Selecione pelo menos uma opcao de limpeza.",
+        lbl_include_partial      = "Incluir linhas com sobreposição parcial",
+        lbl_paste_dialogue       = "Cole texto ou linhas Dialogue/Comment:",
+        lbl_import_as_comments   = "Importar texto puro como comentários {…}",
+        lbl_original_text        = "TEXTO ORIGINAL",
+        lbl_replacement_text     = "TEXTO DE SUBSTITUIÇÃO",
+        lbl_replacer_help        = "Cada linha em Original corresponde à mesma linha em Substituição. Tags são preservados.",
+        lbl_mpvqc_title          = "mpv QC",
+        lbl_mpvqc_tolerance      = "Tolerância (ms):",
+        lbl_mpvqc_paste          = "Cole o texto do mpvQC:",
+        lbl_remover_title        = "Text and Tag Cleanup",
+        lbl_remover_text         = "Texto visivel",
+        lbl_remover_tags         = "Override tags",
+        lbl_remover_comments     = "Comentarios",
+        chk_rem_n                = "Remover \\N",
+        chk_rem_h                = "Remover \\h",
+        chk_rem_double_space     = "Espacos duplos",
+        chk_rem_edge_space       = "Espacos nas bordas",
+        chk_rem_excl             = "Sinais de exclamacao",
+        chk_rem_quest            = "Sinais de interrogacao",
+        chk_rem_combo            = "Sinais mistos ¡¿?!",
+        chk_rem_final_commas     = "Virgulas finais",
+        chk_rem_all_commas       = "Todas as virgulas",
+        chk_rem_quotes           = "Aspas",
+        chk_rem_apostrophes      = "Apostrofos",
+        chk_rem_stutter          = "Gagueira X-X",
+        chk_rem_dup_letters      = "Letras duplicadas",
+        chk_rem_leading_ellipsis = "Reticencias iniciais",
+        chk_rem_ellipsis         = "Todas as reticencias",
+        chk_rem_italic_tags      = "Tags \\i",
+        chk_rem_q_tags           = "Tags \\q",
+        chk_rem_an8              = "\\an8",
+        chk_rem_comment_lines    = "Linhas comentadas",
+        chk_rem_inline_comments  = "Comentarios inline {...}",
+        btn_import               = "Importar",
+        btn_replace_all          = "Substituir tudo",
+        btn_apply                = "Execute",
+    },
+}
+
+for code, tbl in pairs(extraLang) do
+    LANG[code] = LANG[code] or {}
+    for k, v in pairs(tbl) do LANG[code][k] = v end
+end
+
+for code, tbl in pairs(localePatch) do
+    LANG[code] = LANG[code] or {}
+    for k, v in pairs(tbl) do LANG[code][k] = v end
+end
+
+local emphasisLang = {
+    en = {
+        chk_strong_excl     = "Strong exclamation [STRONG-EXCL]",
+        chk_strong_quest    = "Strong question [STRONG-QUEST]",
+        chk_mixed_emphasis  = "Mixed emphasis [MIXED-EMPHASIS]",
+        chk_semicolon       = "Semicolon [SEMICOLON]",
+        chk_stutter         = "Stutter [STUTTER]",
+        btn_scream          = "Scream",
+        scream_title        = "Scream Detector",
+        scream_lbl_avg      = "Average line dB:",
+        scream_lbl_sample   = "Strong sample dB:",
+        scream_lbl_ratio    = "Strong sample ratio (%):",
+        scream_lbl_min      = "Minimum samples:",
+        scream_lbl_z        = "Robust z-score:",
+        scream_chk_clean    = "Clear previous SCREAM marks",
+        scream_chk_reuse    = "Reuse existing analysis log",
+        scream_btn_analyze  = "Analyze",
+        scream_msg_no_media = "Scream Detector: no audio or video file is loaded.",
+        scream_msg_no_folder= "Scream Detector: could not find a folder for the analysis files.",
+        scream_msg_no_batch = "Scream Detector: could not create the analysis workspace.",
+        scream_msg_running  = "Scream Detector: running FFmpeg analysis.\nThis can take a while.",
+        scream_msg_no_log   = "Scream Detector: no audio samples found in the analysis log.\nLog: %s",
+        scream_msg_done     = "Scream Detector: marked %d of %d lines.\nSamples: %d\nMedian avg: %.2f dB | MAD: %.2f dB",
+        scream_help         = "Scream Detector marks lines whose interval is statistically loud.\n\n"
+                              .. "Average line dB: mean power inside each subtitle interval (closer to 0 is stricter).\n"
+                              .. "Strong sample dB: samples above this value count as strong evidence.\n"
+                              .. "Strong sample ratio: minimum percent of strong samples per interval.\n"
+                              .. "Minimum samples: ignore lines with too little audio evidence.\n"
+                              .. "Robust z-score: compares each line against median/MAD of the current set.\n"
+                              .. "Reuse log skips FFmpeg if the analysis log already exists.",
+    },
+    es = {
+        chk_strong_excl     = "Exclamación fuerte [STRONG-EXCL]",
+        chk_strong_quest    = "Interrogación fuerte [STRONG-QUEST]",
+        chk_mixed_emphasis  = "Énfasis mixto [MIXED-EMPHASIS]",
+        chk_semicolon       = "Punto y coma [SEMICOLON]",
+        chk_stutter         = "Tartamudeo [STUTTER]",
+        btn_scream          = "Grito",
+        scream_title        = "Detector de Gritos",
+        scream_lbl_avg      = "Promedio dB:",
+        scream_lbl_sample   = "Muestra fuerte dB:",
+        scream_lbl_ratio    = "Ratio muestra fuerte (%):",
+        scream_lbl_min      = "Muestras mínimas:",
+        scream_lbl_z        = "z-score robusto:",
+        scream_chk_clean    = "Limpiar marcas SCREAM previas",
+        scream_chk_reuse    = "Reutilizar log de análisis existente",
+        scream_btn_analyze  = "Analizar",
+        scream_msg_no_media = "Scream Detector: no hay audio o vídeo cargado.",
+        scream_msg_no_folder= "Scream Detector: no se encontró carpeta para los archivos de análisis.",
+        scream_msg_no_batch = "Scream Detector: no se pudo crear el espacio de análisis.",
+        scream_msg_running  = "Scream Detector: ejecutando análisis de FFmpeg.\nPuede tardar un rato.",
+        scream_msg_no_log   = "Scream Detector: no se encontraron muestras en el registro de análisis.\nRegistro: %s",
+        scream_msg_done     = "Scream Detector: marcadas %d de %d líneas.\nMuestras: %d\nMediana promedio: %.2f dB | MAD: %.2f dB",
+        scream_help         = "Scream Detector marca líneas cuyo intervalo es estadísticamente fuerte.\n\n"
+                              .. "Promedio dB: potencia media en el intervalo de cada subtítulo (más cerca de 0 es más estricto).\n"
+                              .. "Muestra fuerte dB: muestras por encima de este valor cuentan como evidencia fuerte.\n"
+                              .. "Ratio muestra fuerte: porcentaje mínimo de muestras fuertes por intervalo.\n"
+                              .. "Muestras mínimas: ignora líneas con muy poca evidencia.\n"
+                              .. "z-score robusto: compara cada línea contra mediana/MAD del conjunto actual.\n"
+                              .. "Reutilizar log evita correr FFmpeg si ya existe el log de análisis.",
+    },
+    pt = {
+        chk_strong_excl     = "Exclamação forte [STRONG-EXCL]",
+        chk_strong_quest    = "Interrogação forte [STRONG-QUEST]",
+        chk_mixed_emphasis  = "Ênfase mista [MIXED-EMPHASIS]",
+        chk_semicolon       = "Ponto e vírgula [SEMICOLON]",
+        chk_stutter         = "Gagueira [STUTTER]",
+        btn_scream          = "Grito",
+        scream_title        = "Detector de Gritos",
+        scream_lbl_avg      = "Média dB:",
+        scream_lbl_sample   = "Amostra forte dB:",
+        scream_lbl_ratio    = "Razão amostra forte (%):",
+        scream_lbl_min      = "Amostras mínimas:",
+        scream_lbl_z        = "z-score robusto:",
+        scream_chk_clean    = "Limpar marcas SCREAM anteriores",
+        scream_chk_reuse    = "Reutilizar log de análise existente",
+        scream_btn_analyze  = "Analisar",
+        scream_msg_no_media = "Scream Detector: nenhum áudio ou vídeo carregado.",
+        scream_msg_no_folder= "Scream Detector: não foi encontrada pasta para os arquivos de análise.",
+        scream_msg_no_batch = "Scream Detector: não foi possível criar o espaço de análise.",
+        scream_msg_running  = "Scream Detector: executando análise do FFmpeg.\nPode demorar.",
+        scream_msg_no_log   = "Scream Detector: nenhuma amostra encontrada no registro de análise.\nRegistro: %s",
+        scream_msg_done     = "Scream Detector: marcadas %d de %d linhas.\nAmostras: %d\nMediana média: %.2f dB | MAD: %.2f dB",
+        scream_help         = "Scream Detector marca linhas cujo intervalo é estatisticamente forte.\n\n"
+                              .. "Média dB: potência média no intervalo de cada legenda (mais perto de 0 é mais estrito).\n"
+                              .. "Amostra forte dB: amostras acima deste valor contam como evidência forte.\n"
+                              .. "Razão amostra forte: porcentagem mínima de amostras fortes por intervalo.\n"
+                              .. "Amostras mínimas: ignora linhas com pouca evidência.\n"
+                              .. "z-score robusto: compara cada linha contra mediana/MAD do conjunto atual.\n"
+                              .. "Reutilizar log evita rodar FFmpeg se o log de análise já existir.",
+    },
+}
+
+for code, tbl in pairs(emphasisLang) do
+    LANG[code] = LANG[code] or {}
+    for k, v in pairs(tbl) do LANG[code][k] = v end
+end
+
+local function L(key)
+    return (LANG[getLanguage()] and LANG[getLanguage()][key]) or LANG.en[key] or key
+end
+
+local UI = {
+    labels = {
+        en = {
+            ["en"]="English", ["es"]="Spanish", ["pt"]="Portuguese",
+            ["All Selected"]="All selected", ["By Style"]="By style", ["By Actor"]="By actor", ["By Effect"]="By effect", ["By Layer"]="By layer",
+            ["Ends Only"]="Ends only", ["Start Only"]="Start only", ["Full Audit"]="Full audit", ["Duration"]="Duration", ["CPS"]="CPS", ["Short Gaps"]="Short gaps", ["Large Gaps"]="Large gaps", ["Both Gaps"]="Both gaps", ["Overtime"]="Overtime",
+            ["End Only"]="End only", ["Both"]="Both", ["End only"]="End only", ["Start only"]="Start only",
+            ["KF Back"]="Back", ["KF Forward"]="Forward", ["KF Both"]="Both",
+            ["Import Effects"]="Import effects", ["Import Actor"]="Import actor", ["Import Tags"]="Import tags", ["Song Sync"]="Song sync",
+            ["Full Timing"]="Full + polish", ["Post-Timing"]="Post current", ["Raw Timing"]="Raw voice",
+            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Table (±ms)",
+            ["Only changes"]="Only changes", ["Only 0ms"]="Only 0 ms", ["None"]="None",
+            ["All"]="All", ["All Default"]="All Default", ["Default+Alt"]="Default + Alt",
+            ["Number Effects"]="Number effects", ["Add Identifier"]="Add identifier",
+            ["UPPERCASE"]="Uppercase", ["THREE-LINES"]="Three lines", ["NO-END-PUNCT"]="No end punctuation", ["UNPAIRED-PUNCT"]="Unpaired punctuation",
+            ["SHORT-LAST-LINE"]="Short last line", ["BROKEN-TAG"]="Broken tag", ["OVERLAP"]="Overlap", ["DEFAULT-STYLE"]="Default style",
+            ["ITALIC-ERROR"]="Italic error", ["PARENTHESES"]="Parentheses", ["NAME-PREFIX"]="Name prefix", ["MULTI-SENTENCE"]="Multiple sentences",
+            ["TOO-WIDE"]="Too wide", ["TOO-SHORT"]="Too short", ["TOO-LONG"]="Too long", ["TOO-LONG-TIME"]="Too long duration",
+            ["FAST-CPS"]="Fast CPS", ["SLOW-CPS"]="Slow CPS", ["SHORT-GAP"]="Short gap", ["LARGE-GAP"]="Large gap", ["END-ON-KF/START-ON-KF"]="On keyframe",
+            ["NEAR-END-KF/NEAR-START-KF"]="Near keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Missed keyframe",
+            ["LINE-BREAK"]="Line break", ["POSITION-TAG"]="Position tag", ["CLIP-TAG"]="Clip tag", ["DRAWING-CLIP"]="Drawing + clip", ["FADE-TAG"]="Fade tag",
+            ["TRANSFORM-TAG"]="Transform tag", ["KARAOKE-TAG"]="Karaoke tag", ["COMMENT-BLOCK"]="Comment block", ["HAS-DIGITS"]="Digits",
+            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Full italic", ["DOUBLE-SPACE"]="Double space", ["EDGE-SPACE"]="Edge space",
+            ["Toggle \\an8"]="Toggle \\an8", ["Toggle Italics"]="Toggle italics", ["Uppercase"]="Uppercase", ["Lowercase"]="Lowercase",
+            ["Title Case"]="Title case", ["Sentence Case"]="Sentence case", ["Capitalize First"]="Capitalize first", ["Lowercase First"]="Lowercase first",
+            ["Normalize Ellipsis"]="Normalize ellipsis", ["Add Ellipsis"]="Add ellipsis", ["Erase Leading Ellipsis"]="Erase leading ellipsis", ["Erase Inner Ellipsis"]="Erase inner ellipsis",
+            ["Ellipsis to Comma"]="Ellipsis to comma", ["Ellipsis to Period"]="Ellipsis to period",
+            ["Unify Quotes"]="Unify quotes", ["Normalize Dashes"]="Normalize dashes", ["Trim Trailing Spaces"]="Trim trailing spaces",
+            ["Remove Duplicate Letters"]="Remove duplicate letters", ["Normalize Stutter"]="Normalize stutter", ["Extract Tags"]="Extract tags",
+            ["Reinsert Tags"]="Reinsert tags", ["Remove Tags"]="Remove tags", ["Merge Tags"]="Merge tags", ["Remove Inline Comments"]="Remove inline comments", ["Extract Actors and Split"]="Extract actors and split",
+            ["Swap Text and Comments"]="Swap text and comments", ["Delete Comment Lines"]="Delete comment lines", ["Comments to Top"]="Comments to top",
+            ["Comments to Bottom"]="Comments to bottom", ["Effects to Top"]="Effects to top", ["Fold by Identifier"]="Fold by identifier", ["Add Stutter"]="Add stutter",
+            ["Add Ah Prefix"]="Add Ah prefix", ["Bidirectional Snapping"]="Bidirectional snapping", ["Start Snap Back"]="Start snap back", ["Start Snap Forward"]="Start snap forward", ["End Snap Back"]="End snap back", ["End Snap Forward"]="End snap forward", ["Remove Honorifics"]="Remove honorifics",
+            ["Caption Clarifier"]="Caption clarifier", ["Complete Sentences"]="Complete sentences", ["Erase Blank Lines"]="Erase blank lines", ["Remove \\N"]="Remove \\N",
+            ["Current Frame to Effect"]="Current frame to Effect", ["Copy Fold"]="Copy fold", ["Smart Break"]="Smart break", ["Split by Sentence"]="Split by sentence",
+            ["Split by Comma"]="Split by comma", ["Line Merge and Cleanup"]="Line merge and cleanup", ["Join Same Text"]="Join same text", ["Join Overlaps"]="Join overlaps", ["Join Overlap Sentences"]="Join overlap sentences", ["Divide by \\N"]="Divide by \\N",
+            ["Copy Times"]="Copy times", ["Select Time Range"]="Select time range", ["Sort by Text Length"]="Sort by text length", ["Sort by CPS"]="Sort by CPS",
+            ["Sort Odd Even"]="Sort odd/even", ["Count CPS"]="Count CPS", ["Import Text"]="Import text", ["Kite Timing"]="Kite timing",
+            ["Add Lead-In Left"]="Add lead-in left", ["Add Lead-In Right"]="Add lead-in right", ["Add Lead-Out Left"]="Add lead-out left", ["Add Lead-Out Right"]="Add lead-out right", ["Chain Left"]="Chain left", ["Chain Right"]="Chain right",
+            ["Align to First Start"]="Align to first start", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
+            ["Text and Tag Cleanup"]="Text and tag cleanup", ["Properties and Cleanup"]="Properties and cleanup", ["After Effects Keyframes"]="After Effects keyframes", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
+        },
+        es = {
+            ["en"]="Inglés", ["es"]="Español", ["pt"]="Portugués",
+            ["All Selected"]="Toda la selección", ["By Style"]="Por estilo", ["By Actor"]="Por actor", ["By Effect"]="Por Effect", ["By Layer"]="Por capa",
+            ["Ends Only"]="Solo finales", ["Start Only"]="Solo inicios", ["Full Audit"]="Auditoría completa", ["Duration"]="Duración", ["CPS"]="CPS", ["Short Gaps"]="Gaps cortos", ["Large Gaps"]="Gaps largos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretiempo",
+            ["End Only"]="Solo final", ["Both"]="Ambos", ["End only"]="Solo final", ["Start only"]="Solo inicio",
+            ["KF Back"]="Atrás", ["KF Forward"]="Adelante", ["KF Both"]="Ambos",
+            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar actor", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronía de canción",
+            ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Post actual", ["Raw Timing"]="Voz bruta",
+            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Clúster (±ms)", ["Table (±ms)"]="Tabla (±ms)",
+            ["Only changes"]="Solo cambios", ["Only 0ms"]="Solo 0 ms", ["None"]="Ninguno",
+            ["All"]="Todo", ["All Default"]="Todo Default", ["Default+Alt"]="Default + Alt",
+            ["Number Effects"]="Numerar Effects", ["Add Identifier"]="Añadir identificador",
+            ["UPPERCASE"]="Mayúsculas", ["THREE-LINES"]="Tres líneas", ["NO-END-PUNCT"]="Sin puntuación final", ["UNPAIRED-PUNCT"]="Puntuación sin pareja",
+            ["SHORT-LAST-LINE"]="Última línea corta", ["BROKEN-TAG"]="Tag roto", ["OVERLAP"]="Solapamiento", ["DEFAULT-STYLE"]="Estilo Default",
+            ["ITALIC-ERROR"]="Error de cursiva", ["PARENTHESES"]="Paréntesis", ["NAME-PREFIX"]="Prefijo de nombre", ["MULTI-SENTENCE"]="Varias oraciones",
+            ["TOO-WIDE"]="Demasiado ancho", ["TOO-SHORT"]="Muy corta", ["TOO-LONG"]="Muy larga", ["TOO-LONG-TIME"]="Duración excesiva",
+            ["FAST-CPS"]="CPS alto", ["SLOW-CPS"]="CPS bajo", ["SHORT-GAP"]="Gap corto", ["LARGE-GAP"]="Gap largo", ["END-ON-KF/START-ON-KF"]="En keyframe",
+            ["NEAR-END-KF/NEAR-START-KF"]="Cerca de keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Keyframe omitido",
+            ["LINE-BREAK"]="Salto de línea", ["POSITION-TAG"]="Tag de posición", ["CLIP-TAG"]="Tag de clip", ["DRAWING-CLIP"]="Dibujo + clip", ["FADE-TAG"]="Tag de fade",
+            ["TRANSFORM-TAG"]="Tag de transformación", ["KARAOKE-TAG"]="Tag de karaoke", ["COMMENT-BLOCK"]="Bloque de comentario", ["HAS-DIGITS"]="Dígitos",
+            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda en cursiva", ["DOUBLE-SPACE"]="Doble espacio", ["EDGE-SPACE"]="Espacio al borde",
+            ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar cursiva", ["Uppercase"]="Mayúsculas", ["Lowercase"]="Minúsculas",
+            ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo oración", ["Capitalize First"]="Primera mayúscula", ["Lowercase First"]="Primera minúscula",
+            ["Normalize Ellipsis"]="Normalizar elipsis", ["Add Ellipsis"]="Añadir elipsis", ["Erase Leading Ellipsis"]="Borrar elipsis inicial", ["Erase Inner Ellipsis"]="Borrar elipsis interna",
+            ["Ellipsis to Comma"]="Elipsis a coma", ["Ellipsis to Period"]="Elipsis a punto",
+            ["Unify Quotes"]="Unificar comillas", ["Normalize Dashes"]="Normalizar guiones", ["Trim Trailing Spaces"]="Quitar espacios finales",
+            ["Remove Duplicate Letters"]="Quitar letras repetidas", ["Normalize Stutter"]="Normalizar tartamudeo", ["Extract Tags"]="Extraer tags",
+            ["Reinsert Tags"]="Reinsertar tags", ["Remove Tags"]="Quitar tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Quitar comentarios internos", ["Extract Actors and Split"]="Extraer actores y dividir",
+            ["Swap Text and Comments"]="Intercambiar texto y comentarios", ["Delete Comment Lines"]="Borrar líneas comentadas", ["Comments to Top"]="Comentarios arriba",
+            ["Comments to Bottom"]="Comentarios abajo", ["Effects to Top"]="Con Effect arriba", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Añadir tartamudeo",
+            ["Add Ah Prefix"]="Añadir Ah inicial", ["Bidirectional Snapping"]="Snap bidireccional", ["Start Snap Back"]="Inicio a KF previo", ["Start Snap Forward"]="Inicio a KF siguiente", ["End Snap Back"]="Final a KF previo", ["End Snap Forward"]="Final a KF siguiente", ["Remove Honorifics"]="Comentar honoríficos",
+            ["Caption Clarifier"]="Limpiar acotaciones", ["Complete Sentences"]="Completar oraciones", ["Erase Blank Lines"]="Borrar líneas vacías", ["Remove \\N"]="Quitar \\N",
+            ["Current Frame to Effect"]="Fotograma actual a Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Salto inteligente", ["Split by Sentence"]="Dividir por oración",
+            ["Split by Comma"]="Dividir por coma", ["Line Merge and Cleanup"]="Combinar y limpiar líneas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir solapes", ["Join Overlap Sentences"]="Unir solapes en frase", ["Divide by \\N"]="Dividir por \\N",
+            ["Copy Times"]="Copiar tiempos", ["Select Time Range"]="Seleccionar por intervalo", ["Sort by Text Length"]="Ordenar por longitud del texto", ["Sort by CPS"]="Ordenar por CPS",
+            ["Sort Odd Even"]="Ordenar impar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
+            ["Add Lead-In Left"]="Lead-in izquierda", ["Add Lead-In Right"]="Lead-in derecha", ["Add Lead-Out Left"]="Lead-out izquierda", ["Add Lead-Out Right"]="Lead-out derecha", ["Chain Left"]="Encadenar izquierda", ["Chain Right"]="Encadenar derecha",
+            ["Align to First Start"]="Alinear al inicio de la primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
+            ["Text and Tag Cleanup"]="Limpiar texto y tags", ["Properties and Cleanup"]="Propiedades y limpieza", ["After Effects Keyframes"]="Fotogramas para After Effects", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
+        },
+        pt = {
+            ["en"]="Inglês", ["es"]="Espanhol", ["pt"]="Português",
+            ["All Selected"]="Toda a seleção", ["By Style"]="Por estilo", ["By Actor"]="Por ator", ["By Effect"]="Por Effect", ["By Layer"]="Por camada",
+            ["Ends Only"]="Só finais", ["Start Only"]="Só inícios", ["Full Audit"]="Auditoria completa", ["Duration"]="Duração", ["CPS"]="CPS", ["Short Gaps"]="Gaps curtos", ["Large Gaps"]="Gaps longos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretempo",
+            ["End Only"]="Só final", ["Both"]="Ambos", ["End only"]="Só final", ["Start only"]="Só início",
+            ["KF Back"]="Para trás", ["KF Forward"]="Para frente", ["KF Both"]="Ambos",
+            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar ator", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronia da música",
+            ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Pós atual", ["Raw Timing"]="Voz bruta",
+            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Tabela (±ms)",
+            ["Only changes"]="Só mudanças", ["Only 0ms"]="Só 0 ms", ["None"]="Nenhum",
+            ["All"]="Tudo", ["All Default"]="Tudo Default", ["Default+Alt"]="Default + Alt",
+            ["Number Effects"]="Numerar Effects", ["Add Identifier"]="Adicionar identificador",
+            ["UPPERCASE"]="Maiúsculas", ["THREE-LINES"]="Três linhas", ["NO-END-PUNCT"]="Sem pontuação final", ["UNPAIRED-PUNCT"]="Pontuação sem par",
+            ["SHORT-LAST-LINE"]="Última linha curta", ["BROKEN-TAG"]="Tag quebrada", ["OVERLAP"]="Sobreposição", ["DEFAULT-STYLE"]="Estilo Default",
+            ["ITALIC-ERROR"]="Erro de itálico", ["PARENTHESES"]="Parênteses", ["NAME-PREFIX"]="Prefixo de nome", ["MULTI-SENTENCE"]="Várias frases",
+            ["TOO-WIDE"]="Larga demais", ["TOO-SHORT"]="Curta demais", ["TOO-LONG"]="Longa demais", ["TOO-LONG-TIME"]="Duração excessiva",
+            ["FAST-CPS"]="CPS alto", ["SLOW-CPS"]="CPS baixo", ["SHORT-GAP"]="Gap curto", ["LARGE-GAP"]="Gap longo", ["END-ON-KF/START-ON-KF"]="Em keyframe",
+            ["NEAR-END-KF/NEAR-START-KF"]="Perto de keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Keyframe perdido",
+            ["LINE-BREAK"]="Quebra de linha", ["POSITION-TAG"]="Tag de posição", ["CLIP-TAG"]="Tag de clip", ["DRAWING-CLIP"]="Desenho + clip", ["FADE-TAG"]="Tag de fade",
+            ["TRANSFORM-TAG"]="Tag de transformação", ["KARAOKE-TAG"]="Tag de karaokê", ["COMMENT-BLOCK"]="Bloco de comentário", ["HAS-DIGITS"]="Dígitos",
+            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda em itálico", ["DOUBLE-SPACE"]="Espaço duplo", ["EDGE-SPACE"]="Espaço nas bordas",
+            ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar itálico", ["Uppercase"]="Maiúsculas", ["Lowercase"]="Minúsculas",
+            ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo frase", ["Capitalize First"]="Primeira maiúscula", ["Lowercase First"]="Primeira minúscula",
+            ["Normalize Ellipsis"]="Normalizar reticências", ["Add Ellipsis"]="Adicionar reticências", ["Erase Leading Ellipsis"]="Apagar reticências iniciais", ["Erase Inner Ellipsis"]="Apagar reticências internas",
+            ["Ellipsis to Comma"]="Reticências para vírgula", ["Ellipsis to Period"]="Reticências para ponto",
+            ["Unify Quotes"]="Unificar aspas", ["Normalize Dashes"]="Normalizar travessões", ["Trim Trailing Spaces"]="Remover espaços finais",
+            ["Remove Duplicate Letters"]="Remover letras repetidas", ["Normalize Stutter"]="Normalizar gaguejo", ["Extract Tags"]="Extrair tags",
+            ["Reinsert Tags"]="Reinserir tags", ["Remove Tags"]="Remover tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Remover comentários internos", ["Extract Actors and Split"]="Extrair atores e dividir",
+            ["Swap Text and Comments"]="Trocar texto e comentários", ["Delete Comment Lines"]="Apagar linhas comentadas", ["Comments to Top"]="Comentários acima",
+            ["Comments to Bottom"]="Comentários abaixo", ["Effects to Top"]="Com Effect acima", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Adicionar gaguejo",
+            ["Add Ah Prefix"]="Adicionar Ah inicial", ["Bidirectional Snapping"]="Snap bidirecional", ["Start Snap Back"]="Inicio ao KF anterior", ["Start Snap Forward"]="Inicio ao KF seguinte", ["End Snap Back"]="Fim ao KF anterior", ["End Snap Forward"]="Fim ao KF seguinte", ["Remove Honorifics"]="Comentar honoríficos",
+            ["Caption Clarifier"]="Limpar indicações", ["Complete Sentences"]="Completar frases", ["Erase Blank Lines"]="Apagar linhas vazias", ["Remove \\N"]="Remover \\N",
+            ["Current Frame to Effect"]="Quadro atual para Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Quebra inteligente", ["Split by Sentence"]="Dividir por frase",
+            ["Split by Comma"]="Dividir por vírgula", ["Line Merge and Cleanup"]="Combinar e limpar linhas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir sobreposições", ["Join Overlap Sentences"]="Unir sobreposições em frase", ["Divide by \\N"]="Dividir por \\N",
+            ["Copy Times"]="Copiar tempos", ["Select Time Range"]="Selecionar por intervalo", ["Sort by Text Length"]="Ordenar por tamanho do texto", ["Sort by CPS"]="Ordenar por CPS",
+            ["Sort Odd Even"]="Ordenar ímpar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
+            ["Add Lead-In Left"]="Lead-in esquerda", ["Add Lead-In Right"]="Lead-in direita", ["Add Lead-Out Left"]="Lead-out esquerda", ["Add Lead-Out Right"]="Lead-out direita", ["Chain Left"]="Encadear esquerda", ["Chain Right"]="Encadear direita",
+            ["Align to First Start"]="Alinhar ao início da primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
+            ["Text and Tag Cleanup"]="Limpar texto e tags", ["Properties and Cleanup"]="Propriedades e limpeza", ["After Effects Keyframes"]="Quadros para After Effects", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
+        },
+    },
+}
+UI.labels.en["FINAL-COMMA"] = "Final comma"
+UI.labels.es["FINAL-COMMA"] = "Final con coma"
+UI.labels.pt["FINAL-COMMA"] = "Final com virgula"
+UI.labels.en["Pivot \\N"] = "Pivot \\N"
+UI.labels.es["Pivot \\N"] = "Pivotear \\N"
+UI.labels.pt["Pivot \\N"] = "Pivotar \\N"
+UI.labels.en["STRONG-EXCL"]     = "Strong exclamation"
+UI.labels.es["STRONG-EXCL"]     = "Exclamación fuerte"
+UI.labels.pt["STRONG-EXCL"]     = "Exclamação forte"
+UI.labels.en["STRONG-QUEST"]    = "Strong question"
+UI.labels.es["STRONG-QUEST"]    = "Interrogación fuerte"
+UI.labels.pt["STRONG-QUEST"]    = "Interrogação forte"
+UI.labels.en["MIXED-EMPHASIS"]  = "Mixed emphasis"
+UI.labels.es["MIXED-EMPHASIS"]  = "Énfasis mixto"
+UI.labels.pt["MIXED-EMPHASIS"]  = "Ênfase mista"
+UI.labels.en["SEMICOLON"]       = "Semicolon"
+UI.labels.es["SEMICOLON"]       = "Punto y coma"
+UI.labels.pt["SEMICOLON"]       = "Ponto e vírgula"
+UI.labels.en["Smart Split"] = "Smart Split"
+UI.labels.en["Shift Following Lines"] = "Shift Following Lines"
+UI.labels.en["STUTTER"]         = "Stutter"
+UI.labels.es["Smart Split"] = "División inteligente"
+UI.labels.es["Shift Following Lines"] = "Desplazar posteriores"
+UI.labels.es["STUTTER"]         = "Tartamudeo"
+UI.labels.pt["Smart Split"] = "Divisão inteligente"
+UI.labels.pt["Shift Following Lines"] = "Deslocar seguintes"
+UI.labels.pt["STUTTER"]         = "Gagueira"
+UI.labels.en["SCREAM"]          = "Scream"
+UI.labels.es["SCREAM"]          = "Grito"
+UI.labels.pt["SCREAM"]          = "Grito"
+UI.labels.en["All dialogue"]    = "All dialogue"
+UI.labels.es["All dialogue"]    = "Todo el diálogo"
+UI.labels.pt["All dialogue"]    = "Todo o diálogo"
+UI.labels.en["Selected lines"]  = "Selected lines"
+UI.labels.es["Selected lines"]  = "Líneas seleccionadas"
+UI.labels.pt["Selected lines"]  = "Linhas selecionadas"
+function UI.text(key)
+    return (UI.labels[getLanguage()] and UI.labels[getLanguage()][key]) or (UI.labels.en and UI.labels.en[key]) or key
+end
+function UI.options(values, current)
+    local data = { items = {}, map = {}, value = "" }
+    local n = 0
+    for _, key in ipairs(values) do
+        local shown = ""
+        if key ~= "" then n = n + 1; shown = tostring(n) .. ". " .. UI.text(key) end
+        data.items[#data.items+1] = shown
+        data.map[shown] = key
+        if key == current then data.value = shown end
+    end
+    return data
+end
+function UI.utilityOptions(section, current)
+    local values = {}
+    for _, it in ipairs(section.items) do values[#values+1] = it.name or "" end
+    return UI.options(values, current)
+end
+function UI.from(data, shown)
+    if not data then return shown end
+    return data.map[shown] ~= nil and data.map[shown] or shown
+end
+
+return L, UI
+end
+return M
+
+end)()
+
+Timing.Waveform = (function()
+local M = {}
+local Core = require("kite.Core")
+local floor, max, abs = math.floor, math.max, math.abs
+local trim = Core.trim
+local integerArray
+do
+    local lpeg = require("lpeg")
+    local P, S, R = lpeg.P, lpeg.S, lpeg.R
+    local space = S(" \t\r\n")^0
+    local integer = P("-")^-1 * (P("0") + R("19") * R("09")^0)
+    integerArray = P("[") * space * (integer * space * (P(",") * space * integer * space)^0)^-1 * P("]") * -P(1)
+end
+function M.read(path, progress, checkCancelled)
+    progress = progress or function() end
+    checkCancelled = checkCancelled or function() end
+    progress("Smart Split: leyendo onda...", 0)
+    local file, message = io.open(path, "rb")
+    if not file then error(message, 0) end
+    local content = file:read("*a")
+    file:close()
+    if not content then error("No se pudo leer el JSON de onda.", 0) end
+    local arrays = {}
+    local skeleton = content:gsub('("peaks"%s*:%s*)(%b[])', function(key, array)
+        checkCancelled()
+        if not integerArray:match(array) then error("Lista de picos inválida en un nivel de la onda.", 0) end
+        arrays[#arrays+1] = array
+        return key .. '"Smart SplitPeaks' .. #arrays .. '"'
+    end)
+    content = nil
+    checkCancelled()
+    local json = require("json")
+    local ok, meta = pcall(json.decode, skeleton, json.decode.strict)
+    skeleton = nil
+    if not ok or type(meta) ~= "table" or meta.type ~= "waveform" or meta.version ~= 1 then
+        error("JSON inválido: se necesita una onda Wave2json versión 1.", 0)
+    end
+    if meta.pointLayout ~= "interleavedMinMax" or type(meta.levels) ~= "table" then
+        error("La onda debe contener niveles con pares mínimo/máximo.", 0)
+    end
+    local best
+    for _, level in ipairs(meta.levels) do
+        local pm, count = Core.finiteNumber(level.pointMs), Core.finiteNumber(level.points)
+        local index = type(level.peaks) == "string" and tonumber(level.peaks:match("^Smart SplitPeaks(%d+)$"))
+        if not pm or pm <= 0 or not count or count < 1 or count ~= floor(count) or not index or not arrays[index] then
+            error("Un nivel contiene resolución, puntos o picos inválidos.", 0)
+        end
+        if not best or pm < best.pm then best = {pm=pm, count=count, index=index} end
+    end
+    if not best then error("La onda no contiene niveles.", 0) end
+    local duration = Core.finiteNumber(meta.durationMs)
+    local origin = meta.sourceStartMs == nil and 0 or Core.finiteNumber(meta.sourceStartMs)
+    if not origin or origin < 0 or not duration or duration <= 0 or
+        abs(best.count * best.pm - duration) > best.pm + 0.001 then
+        error("La duración o el desplazamiento temporal de la onda es inválido.", 0)
+    end
+    if meta.sourceEndMs ~= nil then
+        local finish = Core.finiteNumber(meta.sourceEndMs)
+        if not finish or finish <= origin or abs((finish-origin)-duration) > best.pm + 1 then
+            error("El rango de origen no corresponde a la duración de la onda.", 0)
+        end
+    end
+    local array = arrays[best.index]:sub(2, -2)
+    arrays, meta = nil, nil
+    collectgarbage("collect")
+    if array:match("^%s*,") or array:match(",%s*$") or array:match(",%s*,") then
+        error("Lista de picos inválida.", 0)
+    end
+    local prefix, count, pending, sum = {[0]=0}, 0, nil, 0
+    for token in array:gmatch("[^,]+") do
+        token = trim(token)
+        local value = token:match("^%-?%d+$") and Core.finiteNumber(token)
+        if not value or value < -32768 or value > 32767 then error("Pico inválido: se requieren enteros s16.", 0) end
+        if pending == nil then pending = value else
+            if pending > value then error("Un par de picos tiene el mínimo mayor que el máximo.", 0) end
+            count = count+1
+            sum = sum + max(abs(pending), abs(value))
+            prefix[count] = sum
+            pending = nil
+            if count % 100000 == 0 then progress("Smart Split: leyendo picos...", 15*count/best.count) end
+        end
+    end
+    if pending ~= nil or count ~= best.count then error("La cantidad de pares no coincide con points.", 0) end
+    return {prefix=prefix, n=count, point_ms=best.pm, origin=origin, duration=duration}
+end
+
+
+return M
+
 end)()
 
 if depctrl then

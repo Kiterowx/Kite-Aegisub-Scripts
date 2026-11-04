@@ -1,4 +1,20 @@
-local moduleVersion = "1.3.1"
+local DependencyControl = require("l0.DependencyControl")
+local depctrl = DependencyControl({
+    name = "kite.EventOps",
+    version = "1.4.0",
+    description = "Shared dialogue-event transformations for Kite macros",
+    author = "Kiterow",
+    url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
+    moduleName = "kite.EventOps",
+    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+    {
+        {"kite.Core", version = "2.0.0", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        {"kite.UI", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+    },
+})
+depctrl:requireModules()
+
+local moduleVersion = "1.4.0"
 local EventOps = { VERSION = moduleVersion, version = moduleVersion }
 
 local function safeRequire(name)
@@ -7,26 +23,9 @@ local function safeRequire(name)
     return nil
 end
 
-local DependencyControl = safeRequire("l0.DependencyControl")
 local Core = assert(safeRequire("kite.Core"), "kite.Core is required")
-local LineOps = assert(safeRequire("kite.LineOps"), "kite.LineOps is required")
-local depctrl
-if DependencyControl then
-    depctrl = DependencyControl({
-        name = "kite.EventOps",
-        version = moduleVersion,
-        description = "Shared dialogue-event transformations for Kite macros",
-        author = "Kiterow",
-        url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-        moduleName = "kite.EventOps",
-        feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
-        {
-            { "kite.Core", version = "1.1.0" },
-            { "kite.LineOps", version = "1.7.0" },
-            {"kite.UI",version="1.5.0"},
-        },
-    })
-end
+local LineOps = assert(safeRequire("kite.Core"), "kite.Core is required").LineOps
+
 
 local trim = Core.trim
 local copy = Core.deepCopy
@@ -317,9 +316,9 @@ local fields={"Title","Original Script","Original Translation","Original Editing
 local projectKeys={}
 for _,key in ipairs({"Last Style Storage","Audio File","Video File","Video AR Mode","Video AR Value","Video Zoom Percent","Video Position","Scroll Position","Active Line","Automation Scripts","Keyframes File","Timecodes File","Audio URI","Video URI"}) do projectKeys[key]=true end
 local labels={
-    en={title="Properties and Cleanup",save="Save",cancel="Cancel",episode="Add episode from filename",clean="Clean the whole subtitle file",hint="Cleanup removes project paths, extradata, comments, Actor, Effect and empty dialogue lines.",missing="Save the subtitle with an episode number in its filename first.",empty="Enter a title before adding an episode.",fields={"Title","Original script","Translation","Editing","Timing","Sync point","Updated by","Update details"}},
-    es={title="Propiedades y limpieza",save="Guardar",cancel="Cancelar",episode="Añadir episodio desde el nombre del archivo",clean="Limpiar todo el archivo de subtítulos",hint="La limpieza quita rutas del proyecto, extradata, comentarios, Actor, Effect y líneas de diálogo vacías.",missing="Guarda el subtítulo con un número de episodio en su nombre.",empty="Escribe un título antes de añadir el episodio.",fields={"Título","Guion original","Traducción","Edición","Tiempos","Punto de sincronía","Actualizado por","Detalles de actualización"}},
-    pt={title="Propriedades e limpeza",save="Salvar",cancel="Cancelar",episode="Adicionar episódio pelo nome do arquivo",clean="Limpar todo o arquivo de legendas",hint="A limpeza remove caminhos do projeto, extradata, comentários, Actor, Effect e linhas de diálogo vazias.",missing="Salve a legenda com um número de episódio no nome.",empty="Preencha o título antes de adicionar o episódio.",fields={"Título","Roteiro original","Tradução","Edição","Tempos","Ponto de sincronia","Atualizado por","Detalhes da atualização"}},
+    en={title="Final Data",save="Save",cancel="Cancel",episode="Add episode from filename",clean="Clean the whole subtitle file",hint="Cleanup removes project paths, extradata, comments, Actor, Effect and empty dialogue lines.",missing="Save the subtitle with an episode number in its filename first.",empty="Enter a title before adding an episode.",fields={"Title","Original script","Translation","Editing","Timing","Sync point","Updated by","Update details"}},
+    es={title="Final Data",save="Guardar",cancel="Cancelar",episode="Añadir episodio desde el nombre del archivo",clean="Limpiar todo el archivo de subtítulos",hint="La limpieza quita rutas del proyecto, extradata, comentarios, Actor, Effect y líneas de diálogo vacías.",missing="Guarda el subtítulo con un número de episodio en su nombre.",empty="Escribe un título antes de añadir el episodio.",fields={"Título","Guion original","Traducción","Edición","Tiempos","Punto de sincronía","Actualizado por","Detalles de actualización"}},
+    pt={title="Final Data",save="Salvar",cancel="Cancelar",episode="Adicionar episódio pelo nome do arquivo",clean="Limpar todo o arquivo de legendas",hint="A limpeza remove caminhos do projeto, extradata, comentários, Actor, Effect e linhas de diálogo vazias.",missing="Salve a legenda com um número de episódio no nome.",empty="Preencha o título antes de adicionar o episódio.",fields={"Título","Roteiro original","Tradução","Edição","Tempos","Ponto de sincronia","Atualizado por","Detalhes da atualização"}},
 }
 local function section(line)
     return (trim(line.section):lower():gsub("^%[", ""):gsub("%]$", ""))
@@ -405,14 +404,15 @@ local function run(subs,selection,context)
     context=context or {}
     local text=labels[context.language] or labels.en
     local values=read(subs)
+    local rows, names = {}, {}
+    for index,key in ipairs(fields) do rows[index]=values[key];names[index]=index .. ". " .. text.fields[index] end
+    local content=table.concat(rows,"\n")
     local addEpisode,clean=false,false
     while true do
         local width,labelWidth=40,12
         local dialog={{class="label",label=text.title,x=0,y=0,width=width,height=1}}
-        for index,key in ipairs(fields) do
-            dialog[#dialog+1]={class="label",label=text.fields[index],x=0,y=index+1,width=labelWidth,height=1}
-            dialog[#dialog+1]={class="edit",name="property"..index,value=values[key],x=labelWidth,y=index+1,width=width-labelWidth,height=1}
-        end
+        dialog[#dialog+1]={class="label",label=table.concat(names,"\n"),x=0,y=2,width=labelWidth,height=#fields}
+        dialog[#dialog+1]={class="textbox",name="values",text=content,x=labelWidth,y=2,width=width-labelWidth,height=#fields}
         local row=#fields+3
         dialog[#dialog+1]={class="checkbox",name="add_ep",label=text.episode,value=addEpisode,x=0,y=row,width=width,height=1}
         dialog[#dialog+1]={class="checkbox",name="clean_all",label=text.clean,value=clean,x=0,y=row+1,width=width,height=1}
@@ -420,11 +420,11 @@ local function run(subs,selection,context)
         local button,result=aegisub.dialog.display(dialog,{text.save,text.cancel},{ok=text.save,close=text.cancel})
         if button~=text.save then return selection end
         addEpisode,clean=result.add_ep==true,result.clean_all==true
-        for index,key in ipairs(fields) do values[key]=tostring(result["property"..index] or values[key]) end
+        content=tostring(result.values or content)
         local message
-        if result.values then
+        if content then
             local rows={}
-            for value in (result.values:gsub("\r\n","\n"):gsub("\r","\n").."\n"):gmatch("(.-)\n") do rows[#rows+1]=value end
+            for value in (content:gsub("\r\n","\n"):gsub("\r","\n").."\n"):gmatch("(.-)\n") do rows[#rows+1]=value end
             for index,key in ipairs(fields) do values[key]=rows[index] or "" end
             for index=#fields+1,#rows do if trim(rows[index])~="" then message=text.fields[#fields]..": "..rows[index] end end
         end

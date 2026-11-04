@@ -331,7 +331,7 @@ The interface supports English, Spanish and Portuguese. Stable English action ID
 
 All modes keep the first row's other fields and span the earliest start and latest end. Text follows subtitle row order.
 
-**Smart → Smart Split** replaces ChronoSplit. It shares the Wave2json reader with Auto Timing, selects the finest level and respects partial-export offsets. **Continuo** retains outer times and joins phrase boundaries; **Raw** trims each phrase to assigned activity. `[CS-*]` Effect markers identify estimates or uncertainty. Drawings, karaoke and temporally animated text are skipped. **Smart Break** is also in Smart and balances visual width and natural pauses while retaining existing breaks.
+**Smart → Smart Split** replaces ChronoSplit. It shares the waveform reader with Auto Timing, selects the finest level and respects partial-export offsets. **Continuo** retains outer times and joins phrase boundaries; **Raw** trims each phrase to assigned activity. `[CS-*]` Effect markers identify estimates or uncertainty. Drawings, karaoke and temporally animated text are skipped. **Smart Break** is also in Smart and balances visual width and natural pauses while retaining existing breaks.
 
 **Karaoke → Shift Following Lines** replaces ChronoK. It shifts every dialogue row below the active row, including comments, to place the first one **100 ms** after the active row's end. Durations and relative spacing are preserved. Scope follows list order; negative resulting times reject the entire operation.
 

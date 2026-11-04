@@ -1,47 +1,90 @@
-script_name = "Social Clip"
-script_description = "Crear máscaras de recorte animadas y exportar vídeo vertical continuo"
+local function initializeScript()
+script_name = "Kiri-Shot"
+script_description = "Capturas PNG, secuencias, máscaras ASS y vídeo social en un mismo flujo"
 script_author = "Kiterow"
-script_version = "1.0.3"
-script_namespace = "kite.SocialClip"
+script_version = "1.0.0"
+script_namespace = "kite.KiriShot"
 
-local LineCollection, KiteUI, ASS, Core, LineOps, Media, PyBridge, AssDrawing, ASSParser, AssContext, depctrl
-
-local DependencyControl = require "l0.DependencyControl"
-depctrl = DependencyControl {
-    feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
+package.preload["Yutils"] = function() return require("tstools.Yutils") end
+local DependencyControl = require("l0.DependencyControl")
+local feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"
+local depctrl = DependencyControl {
+    feed = feed,
     {
-        {"a-mo.LineCollection", version = "1.3.0", url = "https://github.com/TypesettingTools/Aegisub-Motion",
-            feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"},
-        {"kite.UI", version = "1.5.1", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"l0.ASSFoundation", version = "0.5.0", url = "https://github.com/TypesettingTools/ASSFoundation",
-            feed = "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"},
-        {"kite.Core", version = "1.1.0", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.LineOps", version = "1.7.3", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.Media", version = "1.4.0", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.PyBridge", version = "1.7.2", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.AssDrawing", version = "1.0.3", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"kite.AssContext", version = "1.1.3", url = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
-        {"myaa.ASSParser", version = "0.0.4", url = "https://github.com/TypesettingTools/Myaamori-Aegisub-Scripts",
-            feed = "https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json"}
+        {"tstools.Yutils", version="1.0.0", feed="https://raw.githubusercontent.com/TypesettingTools/Yutils/master/DependencyControl.json"},
+        {"a-mo.LineCollection", version="1.3.0", feed="https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json"},
+        {"kite.UI", version="2.0.3", feed=feed},
+        {"l0.ASSFoundation", version="0.5.0", feed="https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json"},
+        {"kite.Core", version="2.0.0", feed=feed},
+        {"kite.PyBridge", version="2.0.1", feed=feed},
+        {"kite.ShapeOptimizer", version="2.0.1", feed=feed},
+        {"kite.AssContext", version="2.0.1", feed=feed},
+        {"myaa.ASSParser", version="0.0.4", feed="https://raw.githubusercontent.com/TypesettingTools/Myaamori-Aegisub-Scripts/master/DependencyControl.json"},
     }
 }
-LineCollection, KiteUI, ASS, Core, LineOps, Media, PyBridge, AssDrawing, AssContext, ASSParser = depctrl:requireModules()
+local _, LineCollection, KiteUI, ASS, Core, PyBridge, ShapeOptimizer, AssContext, ASSParser = depctrl:requireModules()
+local LineOps, Media, AssDrawing = Core.LineOps, PyBridge.Media, ShapeOptimizer.AssDrawing
+local trim, finiteNumber = Core.trim, Core.finiteNumber
 
-local configFile = "kite-social-clip.json"
+local function choiceOrDefault(value, items, fallback)
+    for _, item in ipairs(items) do if value == item then return item end end
+    return fallback
+end
+
+local function baseName(path)
+    local name = tostring(path or ""):match("([^\\/]+)$") or tostring(path or "")
+    return (name:gsub("%.[^%.]*$", ""))
+end
+
+local function safeName(value, fallback)
+    local name = trim(value):gsub('[%z\1-\31\\/:*?"<>|]+', '_'):gsub('%s+', '_')
+    name = name:gsub('_+', '_'):gsub('^_+', ''):gsub('_+$', ''):gsub('[%.%s]+$', '')
+    local lower = name:lower():match('^[^%.]+') or ''
+    if name == '' or name:match('^%.+$') or lower == 'con' or lower == 'prn' or lower == 'aux'
+        or lower == 'nul' or lower:match('^com[1-9]$') or lower:match('^lpt[1-9]$') then
+        return fallback or 'kiri-shot'
+    end
+    return name
+end
+
+local function decodedPath(spec) return Media.decodedPath(spec) or '' end
+local function videoPath()
+    local path = decodedPath('?video')
+    if path ~= '' and PyBridge.fileExists(path) then return path end
+    path = Media.projectProperties().video_file or ''
+    if path ~= '' and PyBridge.fileExists(path) then return path end
+end
+local function projectFolder(video)
+    local folder = LineOps.subtitleFolder() or ''
+    if folder ~= '' then return folder end
+    folder = decodedPath('?script')
+    if folder ~= '' then return folder end
+    return PyBridge.parentPath(video) or ''
+end
+local function videoSize()
+    if not aegisub.video_size then return 0, 0 end
+    local ok, w, h = pcall(aegisub.video_size)
+    if not ok then return 0, 0 end
+    return tonumber(w) or 0, tonumber(h) or 0
+end
+local function filterPathQuote(value)
+    return Media.filterPath(Media.filterPath(tostring(value or ''):gsub('\\', '/')))
+end
+local function ffmpegExecutable(value)
+    local executable = trim(value)
+    if executable:match('^".*"$') or executable:match("^'.*'$") then executable = executable:sub(2, -2) end
+    return executable ~= '' and executable or 'ffmpeg'
+end
+local function showMessage(message, title)
+    return KiteUI.message(message, {title=title or script_name})
+end
+
+local Social = (function()
 local maskEffect = "Kite Social Mask"
 local previewEffect = "Kite Social Y Preview"
 local centerExtra = "_kite_socialclip_centered"
-local hotkeyPath = ": Kite Hotkeys :/Social Clip/Execute"
 local isWindows = PyBridge.isWindows
 local coordinateTolerance = 0.001
-local maximumCrf = 51
 local trajectoryErrorTolerance = 0.25
 
 local presets = {
@@ -72,7 +115,6 @@ local outputProfiles = {
     [outputProfileItems[3]] = {extension = ".mkv", burnDialogue = false, softDialogue = true}
 }
 
-local trim = Core.trim
 local clamp = Core.clamp
 local round = Core.roundTo
 local fileExists = PyBridge.fileExists
@@ -107,13 +149,6 @@ local function evenNearest(value, limit)
     return result
 end
 
-local function choiceOrDefault(value, items, fallback)
-    for _, item in ipairs(items) do
-        if value == item then return item end
-    end
-    return fallback
-end
-
 local function resolveOutputProfile(cfg)
     local name = choiceOrDefault(cfg and cfg.outputProfile, outputProfileItems, outputProfileItems[1])
     return outputProfiles[name], name
@@ -121,21 +156,6 @@ end
 
 local function dirName(path)
     return PyBridge.parentPath(path) or ""
-end
-
-local function baseName(path)
-    local name = tostring(path or ""):match("([^\\/]+)$") or tostring(path or "")
-    return (name:gsub("%.[^%.]*$", ""))
-end
-
-local function safeName(value, fallback)
-    local text = trim(value):gsub("[%z\1-\31\\/:*?\"<>|]+", "_"):gsub("%s+", "_")
-    text = text:gsub("_+", "_"):gsub("^_+", ""):gsub("_+$", ""):gsub("[%.%s]+$", "")
-    local lower = text:lower():match("^[^%.]+") or ""
-    local reserved = lower == "con" or lower == "prn" or lower == "aux" or lower == "nul"
-        or lower:match("^com[1-9]$") or lower:match("^lpt[1-9]$")
-    if text == "" or text == "." or text == ".." or reserved then return fallback or "social" end
-    return text
 end
 
 local function replaceExtension(path, extension)
@@ -168,30 +188,7 @@ local function samePath(left, right)
     return comparablePath(left) == comparablePath(right)
 end
 
-local function decodedPath(spec)
-    return Media.decodedPath(spec) or ""
-end
-
 local projectProperties = Media.projectProperties
-
-local function videoPath()
-    local path = decodedPath("?video")
-    if path ~= "" and fileExists(path) then return path end
-    path = projectProperties().video_file or ""
-    if path ~= "" and fileExists(path) then return path end
-    return nil
-end
-
-local function projectFolder(video)
-    local props = projectProperties()
-    for _, key in ipairs({"filename", "script_file"}) do
-        local folder = dirName(props[key])
-        if folder ~= "" then return folder end
-    end
-    local scriptFolder = decodedPath("?script")
-    if scriptFolder ~= "" then return scriptFolder end
-    return dirName(video)
-end
 
 local function activeScriptPath()
     local props = projectProperties()
@@ -217,11 +214,6 @@ local function confirmOverwrite(path)
     return button == "Sobrescribir"
 end
 
-local function filterPathQuote(value)
-    value = Media.filterPath(tostring(value or ""):gsub("\\", "/"))
-    return Media.filterPath(value)
-end
-
 local function processCommand(executable, arguments, fallback)
     executable = trim(executable)
     if executable == "" then executable = fallback end
@@ -233,9 +225,6 @@ local function nextTempBase(folder, label)
     return joinPath(folder, "_socialclip_" .. safeName(label, "run") .. "_" .. PyBridge.uniqueSuffix())
 end
 
-local function showMessage(text, title)
-    return KiteUI.message(text, {title=title or script_name})
-end
 local function normalizeOutputDimensions(cfg)
     local preset = presets[cfg.preset]
     local width = preset and preset.w or finitePositive(cfg.customW)
@@ -402,136 +391,6 @@ end
 
 local scriptResolution = LineOps.scriptResolution
 
-local function configHandler(interface)
-    return KiteUI.dialogHandler(interface, script_namespace, script_version, {
-        {path = "?user/" .. configFile, format = "json_sections"}
-    })
-end
-
-local function buildInterface(playX, videoW, videoH)
-    local defaultX = math.floor((tonumber(playX) or videoW) / 2 + 0.5)
-    return {
-        main = {
-            title = {class = "label", label = "Social Clip", x = 0, y = 0, width = 3, height = 1},
-            videoInfo = {class = "label", label = string.format("Vídeo: %dx%d", videoW, videoH), x = 3, y = 0, width = 5, height = 1},
-            presetLabel = {class = "label", label = "Formato", x = 0, y = 1, width = 2, height = 1},
-            preset = {class = "dropdown", value = presetItems[1], items = presetItems, config = true, x = 2, y = 1, width = 8, height = 1},
-            customLabel = {class = "label", label = "Personalizado", x = 10, y = 1, width = 2, height = 1},
-            customW = {class = "intedit", value = 1080, min = 2, config = true, x = 12, y = 1, width = 2, height = 1},
-            customX = {class = "label", label = "x", x = 14, y = 1, width = 1, height = 1},
-            customH = {class = "intedit", value = 1920, min = 2, config = true, x = 15, y = 1, width = 2, height = 1},
-            audioInfo = {class = "label", label = "Audio del origen", x = 0, y = 2, width = 2, height = 1},
-            audioTrackLabel = {class = "label", label = "Pista", x = 2, y = 2, width = 2, height = 1},
-            audioTrack = {class = "intedit", value = 1, min = 1, config = true, x = 4, y = 2, width = 2, height = 1},
-            outputLabel = {class = "label", label = "Salida", x = 6, y = 2, width = 2, height = 1},
-            outputProfile = {class = "dropdown", value = outputProfileItems[1], items = outputProfileItems, config = true, x = 8, y = 2, width = 9, height = 1},
-            fpsLabel = {class = "label", label = "FPS", x = 0, y = 3, width = 2, height = 1},
-            fps = {class = "dropdown", value = "30", items = fpsItems, config = true, x = 2, y = 3, width = 3, height = 1},
-            crfLabel = {class = "label", label = "CRF", x = 5, y = 3, width = 2, height = 1},
-            crf = {class = "intedit", value = 20, min = 0, max = maximumCrf, config = true, x = 7, y = 3, width = 2, height = 1},
-            aspectLabel = {class = "label", label = "Relación", x = 9, y = 3, width = 2, height = 1},
-            aspectMode = {class = "dropdown", value = aspectItems[1], items = aspectItems, config = true, x = 11, y = 3, width = 6, height = 1},
-            safeLabel = {class = "label", label = "Subtítulos: margen lateral %", x = 0, y = 4, width = 5, height = 1},
-            safeX = {class = "floatedit", value = 7.5, config = true, x = 5, y = 4, width = 2, height = 1},
-            bottomLabel = {class = "label", label = "inferior %", x = 7, y = 4, width = 2, height = 1},
-            safeBottom = {class = "floatedit", value = 12, config = true, x = 9, y = 4, width = 2, height = 1},
-            fontLabel = {class = "label", label = "fuente máx. % alto", x = 11, y = 4, width = 3, height = 1},
-            maxFont = {class = "floatedit", value = 8, config = true, x = 14, y = 4, width = 3, height = 1},
-            saveASS = {class = "checkbox", label = "Guardar ASS adaptado", value = false, config = true, x = 0, y = 5, width = 4, height = 1},
-            outputInfo = {class = "label", label = "Exacto conserva capas; Adaptado recoloca diálogo; MKV deja el diálogo activable.", x = 4, y = 5, width = 13, height = 1},
-            maskTitle = {class = "label", label = "Crear máscaras desde los tiempos seleccionados", x = 0, y = 6, width = 8, height = 1},
-            x1Label = {class = "label", label = "Centro X inicial", x = 0, y = 7, width = 3, height = 1},
-            maskX1 = {class = "floatedit", value = defaultX, config = true, x = 3, y = 7, width = 3, height = 1},
-            x2Label = {class = "label", label = "Centro X final", x = 6, y = 7, width = 3, height = 1},
-            maskX2 = {class = "floatedit", value = defaultX, config = true, x = 9, y = 7, width = 3, height = 1},
-            alphaLabel = {class = "label", label = "Alpha 0-255", x = 12, y = 7, width = 2, height = 1},
-            maskAlpha = {class = "intedit", value = 144, min = 0, max = 255, config = true, x = 14, y = 7, width = 3, height = 1},
-            maskInfo = {class = "label", label = "X se respeta. Y se corrige para aprovechar el cuadro. Las máscaras nuevas usan \\an5 y el \\pos marca su centro.", x = 0, y = 8, width = 17, height = 2},
-            sceneInfo = {class = "label", label = "Corregir Y modifica las máscaras seleccionadas: conserva X, ajusta Y y normaliza el origen a \\an5.", x = 0, y = 10, width = 17, height = 2}
-        },
-        config = {
-            title = {class = "label", label = "Social Clip - Configuración", x = 0, y = 0, width = 7, height = 1},
-            ffmpegLabel = {class = "label", label = "FFmpeg", x = 0, y = 1, width = 2, height = 1},
-            ffmpeg = {class = "edit", value = "ffmpeg", config = true, x = 2, y = 1, width = 13, height = 1},
-            ffprobeLabel = {class = "label", label = "FFprobe", x = 0, y = 2, width = 2, height = 1},
-            ffprobe = {class = "edit", value = "ffprobe", config = true, x = 2, y = 2, width = 13, height = 1},
-            presetLabel = {class = "label", label = "Preset x264", x = 0, y = 3, width = 2, height = 1},
-            x264Preset = {class = "dropdown", value = "fast", items = x264Presets, config = true, x = 2, y = 3, width = 4, height = 1},
-            bitrateLabel = {class = "label", label = "AAC", x = 7, y = 3, width = 2, height = 1},
-            audioBitrate = {class = "dropdown", value = "192k", items = audioBitrates, config = true, x = 9, y = 3, width = 3, height = 1}
-        }
-    }
-end
-
-local function showOptions(playX, videoW, videoH)
-    local interface = buildInterface(playX, videoW, videoH)
-    local options = configHandler(interface)
-    options:read()
-    options:updateInterface("main")
-    options:updateInterface("config")
-    local actions = {"Exportar vídeo", "Solo ASS", "Crear máscaras", "Corregir Y", "Centrar subs X"}
-    local function save(values, section)
-        options:updateConfiguration(values, section)
-        local ok, written, err = pcall(options.write, options)
-        if not ok or written == false then
-            showMessage("No se pudo guardar la configuración.\n" .. tostring(ok and err or written), "Social Clip - Configuración")
-        end
-    end
-    local function retain(values, section)
-        for name, value in pairs(values or {}) do
-            if interface[section][name] then interface[section][name].value = value end
-        end
-    end
-    while true do
-        local button, result = aegisub.dialog.display(interface.main,
-            {"Exportar vídeo", "Solo ASS", "Crear máscaras", "Corregir Y", "Centrar subs X", "Config...", "Cancelar"},
-            {ok = "Exportar vídeo", close = "Cancelar"})
-        if not button or button == "Cancelar" then return nil end
-        retain(result, "main")
-        if button == "Config..." then
-            local configButton, configResult = aegisub.dialog.display(interface.config, {"Guardar", "Cancelar"}, {ok = "Guardar", close = "Cancelar"})
-            if configButton == "Guardar" then
-                retain(configResult, "config")
-                save(configResult, "config")
-            end
-        elseif choiceOrDefault(button, actions) then
-            local cfg = {}
-            for _, section in ipairs({"main", "config"}) do
-                for name, control in pairs(interface[section]) do
-                    if control.config then cfg[name] = control.value end
-                end
-            end
-            local message
-            for _, name in ipairs({"customW", "customH", "audioTrack", "crf", "safeX", "safeBottom", "maxFont", "maskX1", "maskX2", "maskAlpha"}) do
-                cfg[name] = Core.finiteNumber(cfg[name])
-                if not cfg[name] then message = "Introduce un número finito en " .. name .. "." break end
-            end
-            if not message then
-                if cfg.customW < 2 or cfg.customH < 2 then message = "La resolución personalizada debe ser de al menos 2 × 2."
-                elseif cfg.audioTrack < 1 or cfg.audioTrack ~= math.floor(cfg.audioTrack) then message = "La pista de audio debe ser un entero positivo."
-                elseif cfg.safeX < 0 or cfg.safeX >= 50 then message = "El margen lateral debe estar entre 0 y menos de 50 %."
-                elseif cfg.safeBottom < 0 or cfg.safeBottom >= 100 then message = "El margen inferior debe estar entre 0 y menos de 100 %."
-                elseif cfg.maxFont <= 0 then message = "El tamaño máximo de fuente debe ser positivo."
-                elseif cfg.crf < 0 or cfg.crf > maximumCrf then message = "CRF debe estar entre 0 y " .. maximumCrf .. "."
-                elseif cfg.maskAlpha < 0 or cfg.maskAlpha > 255 then message = "Alpha debe estar entre 0 y 255." end
-            end
-            if message then showMessage(message)
-            else
-                cfg.preset = choiceOrDefault(cfg.preset, presetItems, presetItems[1])
-                cfg.outputProfile = choiceOrDefault(cfg.outputProfile, outputProfileItems, outputProfileItems[1])
-                cfg.fps = choiceOrDefault(cfg.fps, fpsItems, "30")
-                cfg.aspectMode = choiceOrDefault(cfg.aspectMode, aspectItems, aspectItems[1])
-                cfg.x264Preset = choiceOrDefault(cfg.x264Preset, x264Presets, "fast")
-                cfg.audioBitrate = choiceOrDefault(cfg.audioBitrate, audioBitrates, "192k")
-                cfg.maskAlpha, cfg.crf = math.floor(cfg.maskAlpha + 0.5), math.floor(cfg.crf + 0.5)
-                cfg.saveASS = cfg.saveASS == true
-                save(cfg, "main")
-                return button, cfg
-            end
-        else return nil end
-    end
-end
-
 local function drawingContentState(text)
     local hasDrawing, hasOutside = false, false
     for _, section in ipairs(LineOps.scanSections(text)) do
@@ -693,7 +552,7 @@ local function createMasks(subs, selection, cfg, videoW, videoH, playX, playY)
         end
         newSelection[#newSelection + 1] = #subs
     end
-    aegisub.set_undo_point("Social Clip - Crear máscaras")
+    aegisub.set_undo_point("Kiri-Shot - Crear máscaras")
     return newSelection, string.format("Se crearon %d máscara(s) de %.0fx%.0f PlayRes para una salida %dx%d.",
         #newSelection, shapeW, shapeH, outW, outH)
 end
@@ -1414,7 +1273,7 @@ local function centerSelectedSubtitlesX(subs, selection, plan, playX, playY, vid
         return nil, "No se centró ninguna línea.\n\n" .. table.concat(skipped, "\n")
     end
     for _, update in ipairs(updates) do LineOps.checkCancelled(); subs[update.index] = update.line end
-    aegisub.set_undo_point("Social Clip - Centrar subtítulos en X")
+    aegisub.set_undo_point("Kiri-Shot - Centrar subtítulos en X")
     local message = string.format("Centradas: %d | siguiendo movimiento X: %d | omitidas: %d", #updates, moving, #skipped)
     if #skipped > 0 then
         local details = {}
@@ -1577,7 +1436,7 @@ local function correctSelectedMasksY(subs, selection, cfg, playX, playY, videoW,
         offset = offset + #job.outputs - 1
     end
     newSelection = removeYPreviews(subs, newSelection)
-    aegisub.set_undo_point("Social Clip - Corregir Y")
+    aegisub.set_undo_point("Kiri-Shot - Corregir Y")
     return newSelection, string.format("Máscaras corregidas: %d | tramos resultantes: %d | cuadros con Y ajustada: %d. X se conservó y el origen quedó en \\an5.",
         #jobs, totalSegments, correctedFrames)
 end
@@ -1897,7 +1756,7 @@ local function selectOutputPath(video, outW, outH, extension)
     if extension == ".ass" then
         local active = activeScriptPath()
         if active ~= "" and samePath(path, active) then
-            showMessage("El ASS adaptado no puede sobrescribir el guion activo.", "Social Clip - Seguridad")
+            showMessage("El ASS adaptado no puede sobrescribir el guion activo.", "Kiri-Shot - Seguridad")
             return nil
         end
     end
@@ -1915,9 +1774,9 @@ local function exportAssOnly(subs, plan, cfg, outW, outH, playY, video)
     local path = selectOutputPath(video, outW, outH, ".ass")
     if not path then return end
     local ok, message, stats = writeAdaptedAss(subs, plan, cfg, outW, outH, playY, path)
-    if not ok then showMessage(message, "Social Clip - ASS") return end
+    if not ok then showMessage(message, "Kiri-Shot - ASS") return end
     showMessage(string.format("ASS adaptado escrito en:\n%s\n\n%d evento(s); %d línea(s) compleja(s) omitida(s); %d división(es) por escenas.",
-        path, stats.eventCount or 0, stats.skippedComplex or 0, stats.splitEvents or 0), "Social Clip - ASS")
+        path, stats.eventCount or 0, stats.skippedComplex or 0, stats.splitEvents or 0), "Kiri-Shot - ASS")
 end
 
 local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, temporary)
@@ -1925,7 +1784,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
     local outputPath = selectOutputPath(video, outW, outH, profile.extension)
     if not outputPath then return end
     if samePath(outputPath, video) then
-        showMessage("La salida no puede sobrescribir el vídeo de origen.", "Social Clip")
+        showMessage("La salida no puede sobrescribir el vídeo de origen.", "Kiri-Shot")
         return
     end
 
@@ -1937,13 +1796,13 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
     local hasAudio, probeError = probeAudioStream(audio, cfg, tempBase)
     if hasAudio == nil then
         cleanupPaths(temporary)
-        showMessage(probeError, "Social Clip - Audio")
+        showMessage(probeError, "Kiri-Shot - Audio")
         return
     elseif hasAudio then
         audioInput = samePath(audio, video) and 0 or 1
     elseif cfg.audioTrack > 1 then
         cleanupPaths(temporary)
-        showMessage(string.format("No existe la pista de audio %d en el origen. Elige otra pista.", cfg.audioTrack), "Social Clip - Audio")
+        showMessage(string.format("No existe la pista de audio %d en el origen. Elige otra pista.", cfg.audioTrack), "Kiri-Shot - Audio")
         return
     end
 
@@ -1954,7 +1813,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
         if cfg.saveASS then
             local active = activeScriptPath()
             if active ~= "" and samePath(adaptedPath, active) then
-                showMessage("El ASS adaptado no puede sobrescribir el guion activo.", "Social Clip - Seguridad")
+                showMessage("El ASS adaptado no puede sobrescribir el guion activo.", "Kiri-Shot - Seguridad")
                 return
             end
             if not confirmOverwrite(adaptedPath) then return end
@@ -1964,7 +1823,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
         if not adaptedOk and adaptedStats and adaptedStats.noEvents then
             adaptedPath = nil
         elseif not adaptedOk then
-            showMessage(adaptedError, "Social Clip - Subtítulos")
+            showMessage(adaptedError, "Kiri-Shot - Subtítulos")
             return
         elseif not cfg.saveASS then
             temporary[#temporary + 1] = adaptedPath
@@ -1977,7 +1836,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
         visualPath = nil
     elseif not visualOk then
         cleanupPaths(temporary)
-        showMessage(visualError, "Social Clip - Carteles y FX")
+        showMessage(visualError, "Kiri-Shot - Carteles y FX")
         return
     else
         temporary[#temporary + 1] = visualPath
@@ -1990,14 +1849,14 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
     local bundle, bundleError = createSubtitleBundle(video, visualPath, bundledAdaptedPath, cfg, tempBase)
     if bundleError then
         cleanupPaths(temporary)
-        showMessage(bundleError, "Social Clip - Subtítulos")
+        showMessage(bundleError, "Kiri-Shot - Subtítulos")
         return
     end
 
     local commandPaths, commandError = writeTrajectoryFiles(plan, tempBase, temporary)
     if not commandPaths then
         cleanupPaths(temporary)
-        showMessage(commandError, "Social Clip - Trayectoria")
+        showMessage(commandError, "Kiri-Shot - Trayectoria")
         return
     end
 
@@ -2007,13 +1866,13 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
         visualSubtitle, profile.burnDialogue and adaptedSubtitle or nil)
     if not graph then
         cleanupPaths(temporary)
-        showMessage(graphError, "Social Clip - Filtro")
+        showMessage(graphError, "Kiri-Shot - Filtro")
         return
     end
     local filterPath = tempBase .. "_filter.txt"
     if not writeFile(filterPath, graph) then
         cleanupPaths(temporary)
-        showMessage("No se pudo escribir el filtro temporal:\n" .. filterPath, "Social Clip")
+        showMessage("No se pudo escribir el filtro temporal:\n" .. filterPath, "Kiri-Shot")
         return
     end
     temporary[#temporary + 1] = filterPath
@@ -2029,7 +1888,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
         if not ok then errorMessage = "No se pudo guardar el vídeo terminado:\n" .. tostring(errorMessage) end
     end
     cleanupPaths(temporary)
-    if not ok then showMessage(errorMessage, "Social Clip - FFmpeg") return end
+    if not ok then showMessage(errorMessage, "Kiri-Shot - FFmpeg") return end
 
     local lines = {
         string.format("Vídeo %dx%d creado en:", outW, outH),
@@ -2053,7 +1912,7 @@ local function exportVideo(subs, plan, cfg, outW, outH, playX, playY, video, tem
     if not hasAudio then lines[#lines + 1] = "El origen no contiene audio; se exportó solo el vídeo." end
     if cfg.saveASS and adaptedPath then lines[#lines + 1] = "ASS adaptado: " .. adaptedPath end
     if needsAdapted and not adaptedPath then lines[#lines + 1] = "No había diálogo tradicional adaptable dentro de las escenas." end
-    showMessage(table.concat(lines, "\n"), "Social Clip - Listo")
+    showMessage(table.concat(lines, "\n"), "Kiri-Shot - Listo")
 end
 
 local function editSubtitles(subs, callback, ...)
@@ -2061,28 +1920,17 @@ local function editSubtitles(subs, callback, ...)
     return LineOps.transaction(subs, nil, function() return callback(subs, unpack(args)) end)
 end
 
-local function canRun(subs)
-    for i = 1, #(subs or {}) do
-        local line = subs[i]
-        if line and line.class == "dialogue" and tostring(line.effect or "") == previewEffect then return true end
+local function socialClip(subs, selection, action, cfg)
+    if action == "Limpiar vistas Y" then
+        local newSelection, removed = editSubtitles(subs, removeYPreviews, selection)
+        if removed > 0 then aegisub.set_undo_point(script_name .. " - Limpiar vistas Y") end
+        showMessage(string.format("Vistas Y retiradas: %d", removed))
+        return newSelection, newSelection[1]
     end
-    if not aegisub.frame_from_ms or not aegisub.ms_from_frame or not aegisub.video_size then
-        return false, "Carga un vídeo antes de ejecutar Social Clip."
-    end
-    if not videoPath() then return false, "Carga un vídeo real antes de ejecutar Social Clip." end
-    return true
-end
-
-local function socialClip(subs, selection)
     local video = videoPath()
     if not video then
-        local newSelection, removed = editSubtitles(subs, removeYPreviews, selection)
-        if removed > 0 then
-            aegisub.set_undo_point("Social Clip - Limpiar vista Y")
-            return newSelection, newSelection[1]
-        end
-        showMessage("Carga un vídeo real antes de ejecutar Social Clip.")
-        return
+        showMessage("Carga un vídeo real antes de ejecutar esta tarea.")
+        return selection
     end
     local ok, videoW, videoH = pcall(aegisub.video_size)
     videoW, videoH = tonumber(videoW) or 0, tonumber(videoH) or 0
@@ -2091,32 +1939,30 @@ local function socialClip(subs, selection)
         return
     end
     local playX, playY = scriptResolution(subs, videoW, videoH)
-    local action, cfg = showOptions(playX, videoW, videoH)
-    if not action then return end
 
     local outW, outH, resolutionError = normalizeOutputDimensions(cfg)
     if not outW then showMessage(resolutionError) return end
 
     if action == "Crear máscaras" then
         local newSelection, message = editSubtitles(subs, createMasks, selection, cfg, videoW, videoH, playX, playY)
-        if not newSelection then showMessage(message, "Social Clip - Máscaras") return end
-        showMessage(message, "Social Clip - Máscaras")
+        if not newSelection then showMessage(message, "Kiri-Shot - Máscaras") return end
+        showMessage(message, "Kiri-Shot - Máscaras")
         return newSelection, newSelection[1]
     end
 
     if action == "Corregir Y" then
         local correctedSelection, message = editSubtitles(subs, correctSelectedMasksY, selection, cfg, playX, playY, videoW, videoH, outW, outH)
-        if not correctedSelection then showMessage(message, "Social Clip - Corregir Y") return end
-        showMessage(message, "Social Clip - Corregir Y")
+        if not correctedSelection then showMessage(message, "Kiri-Shot - Corregir Y") return end
+        showMessage(message, "Kiri-Shot - Corregir Y")
         return correctedSelection, correctedSelection[1]
     end
 
     local plan, planError = prepareScenePlan(subs, {}, cfg, videoW, videoH, outW, outH)
-    if not plan then showMessage(planError, "Social Clip - Escenas") return end
+    if not plan then showMessage(planError, "Kiri-Shot - Escenas") return end
     if action == "Centrar subs X" then
         local centeredSelection, message = editSubtitles(subs, centerSelectedSubtitlesX, selection, plan, playX, playY, videoW)
-        if not centeredSelection then showMessage(message, "Social Clip - Centrar X") return end
-        showMessage(message, "Social Clip - Centrar X")
+        if not centeredSelection then showMessage(message, "Kiri-Shot - Centrar X") return end
+        showMessage(message, "Kiri-Shot - Centrar X")
         return centeredSelection, centeredSelection[1]
     elseif action == "Solo ASS" then
         exportAssOnly(subs, plan, cfg, outW, outH, playY, video)
@@ -2128,12 +1974,2180 @@ local function socialClip(subs, selection)
     end
 end
 
-if depctrl and depctrl.registerMacro then
-    depctrl:registerMacro(script_name, script_description, socialClip, canRun, nil, false)
-    depctrl:registerMacro(hotkeyPath, "Acción rápida. " .. script_description, socialClip, canRun, nil, false)
-else
-    aegisub.register_macro(script_name, script_description, socialClip, canRun)
-    aegisub.register_macro(hotkeyPath, "Acción rápida. " .. script_description, socialClip, canRun)
+return {run=socialClip, presets=presetItems, profiles=outputProfileItems, fps=fpsItems,
+    aspects=aspectItems, encoders=x264Presets, bitrates=audioBitrates}
+end)()
+
+local Snapshot = (function()
+local AssCentisecondMs = 10
+local FrameTimeToleranceMs = 1
+local MaxFfmpegErrorBytes = 12000
+local MaxVideoFrame = 2147483647
+local FilenameTextBytes = 96
+local CaptureModes = {
+  "Selected lines",
+  "Frame list",
+  "Frame sequence",
+  "Clip crop",
+  "Manual rectangle",
+  "Densest subtitle frame"
+}
+local TimingModes = {
+  "Midpoint",
+  "Start and end",
+  "Start, middle, end",
+  "Current video frame"
+}
+local ClipOutputs = {
+  "Rectangle crop",
+  "Clip alpha crop",
+  "Clip alpha full frame",
+  "Drawing alpha crop",
+  "Drawing alpha full frame"
+}
+local normalizeMode
+normalizeMode = function(value)
+  if value == "Rectangular clip" then
+    return "Clip crop"
+  else
+    return value
+  end
+end
+local normalizeClipOutput
+normalizeClipOutput = function(value)
+  local _exp_0 = value
+  if "Vector alpha crop" == _exp_0 then
+    return "Clip alpha crop"
+  elseif "Vector alpha full frame" == _exp_0 then
+    return "Clip alpha full frame"
+  else
+    return value
+  end
+end
+local readFile
+readFile = function(path, maxBytes)
+  local content = PyBridge.readFile(path, maxBytes)
+  return content or ""
+end
+local snapshotsFolder
+snapshotsFolder = function(video)
+  return PyBridge.joinPath(projectFolder(video), "Snapshots")
+end
+local fileTime
+fileTime = function(ms)
+  ms = math.max(0, LineOps.round(ms))
+  local h = math.floor(ms / 3600000)
+  local m = math.floor((ms % 3600000) / 60000)
+  local s = math.floor((ms % 60000) / 1000)
+  local mm = ms % 1000
+  return string.format("%02d-%02d-%02d-%03d", h, m, s, mm)
+end
+local frameSeekTime
+frameSeekTime = function(frame)
+  local milliseconds = Media.msFromFrame(frame)
+  assert(milliseconds, "Could not obtain the video frame timestamp.")
+  return Core.formatNumber(math.max(0, milliseconds - FrameTimeToleranceMs) / 1000, 6)
+end
+local cleanText
+cleanText = function(text)
+  return LineOps.trim(LineOps.visibleText(text))
+end
+local lastActiveFrame
+lastActiveFrame = function(startMs, endMs)
+  local frame = Media.exclusiveEndFrame(startMs, endMs)
+  if frame then
+    return frame - 1
+  else
+    return nil
+  end
+end
+local currentVideoFrame
+currentVideoFrame = function()
+  if not (aegisub.project_properties) then
+    return nil
+  end
+  local ok, props = pcall(aegisub.project_properties)
+  if not (ok and props) then
+    return nil
+  end
+  if props.video_position == nil then
+    return nil
+  end
+  local frame = finiteNumber(props.video_position)
+  if frame and frame >= 0 and frame <= MaxVideoFrame then
+    return math.floor(frame)
+  else
+    return nil
+  end
+end
+local lineIntervals
+lineIntervals = function(lines)
+  local raw = { }
+  for _index_0 = 1, #lines do
+    local line = lines[_index_0]
+    local startFrame = Media.frameFromMs(line.start_time)
+    local endFrame = lastActiveFrame(line.start_time, line.end_time)
+    if startFrame and endFrame then
+      if endFrame < startFrame then
+        endFrame = startFrame
+      end
+      table.insert(raw, {
+        first = startFrame,
+        last = endFrame
+      })
+    end
+  end
+  table.sort(raw, function(a, b)
+    if a.first == b.first then
+      return a.last < b.last
+    else
+      return a.first < b.first
+    end
+  end)
+  local merged = { }
+  for _index_0 = 1, #raw do
+    local item = raw[_index_0]
+    local last = merged[#merged]
+    if last and item.first <= last.last + 1 then
+      if item.last > last.last then
+        last.last = item.last
+      end
+    else
+      table.insert(merged, {
+        first = item.first,
+        last = item.last
+      })
+    end
+  end
+  return merged
+end
+local frameInIntervals
+frameInIntervals = function(frame, intervals)
+  local _list_0 = (intervals or { })
+  for _index_0 = 1, #_list_0 do
+    local item = _list_0[_index_0]
+    if frame >= item.first and frame <= item.last then
+      return true
+    end
+  end
+  return false
+end
+local collectEffectFrames
+collectEffectFrames = function(lines, intervals)
+  local seen, out = { }, { }
+  for _index_0 = 1, #lines do
+    local line = lines[_index_0]
+    local effect = tostring(line.effect or "")
+    for token in effect:gmatch("[^;,%s]+") do
+      local raw = token:match("^[Ff]?(%d+)$")
+      if not (raw) then
+        raw = token:match("^[Ff]?(%d+)[Ff]?$")
+      end
+      if raw then
+        local frame = tonumber(raw)
+        if frame and frameInIntervals(frame, intervals) and not seen[frame] then
+          seen[frame] = true
+          table.insert(out, frame)
+        end
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+local defaultFrameList
+defaultFrameList = function(lines)
+  if not (lines and #lines > 0) then
+    local frame = currentVideoFrame()
+    if frame then
+      return {
+        frame
+      }
+    else
+      return { }
+    end
+  end
+  local intervals = lineIntervals(lines)
+  local effectFrames = collectEffectFrames(lines, intervals)
+  if #effectFrames > 0 then
+    return effectFrames
+  end
+  local frame = currentVideoFrame()
+  if frame and frameInIntervals(frame, intervals) then
+    return {
+      frame
+    }
+  end
+  local out = { }
+  for _index_0 = 1, #intervals do
+    local item = intervals[_index_0]
+    table.insert(out, item.first)
+  end
+  return out
+end
+local parseFrameToken
+parseFrameToken = function(token)
+  token = LineOps.trim(token)
+  if token == "" then
+    return nil
+  end
+  local raw = token:match("^[Ff]?(%d+)[Ff]?$")
+  local frame = raw and finiteNumber(raw)
+  if frame and frame <= MaxVideoFrame then
+    return frame
+  else
+    return nil
+  end
+end
+local parseFrameList
+parseFrameList = function(text)
+  local frames, seen, errors = { }, { }, { }
+  for rawLine in tostring(text or ""):gmatch("[^\n]+") do
+    local line = LineOps.trim(rawLine:gsub("^%-%-%s*", ""))
+    if line ~= "" then
+      line = line:gsub("%f[%a][Ff][Aa][Dd][Ee]%f[%A]%s+[^,%s;]+", "")
+      line = line:match("^(.-)>") or line
+      for token in line:gmatch("[^,%s;]+") do
+        local frame = parseFrameToken(token)
+        if frame then
+          if not (seen[frame]) then
+            seen[frame] = true
+            table.insert(frames, frame)
+          end
+        else
+          table.insert(errors, "Invalid frame token: " .. tostring(token))
+        end
+      end
+    end
+  end
+  table.sort(frames)
+  return frames, errors
+end
+local buildFrameDefaults
+buildFrameDefaults = function(frames)
+  local items = { }
+  local _list_0 = (frames or { })
+  for _index_0 = 1, #_list_0 do
+    local frame = _list_0[_index_0]
+    table.insert(items, tostring(frame) .. "f")
+  end
+  return table.concat(items, " ")
+end
+local lineContainsFrame
+lineContainsFrame = function(line, frame)
+  if not (line and frame) then
+    return false
+  end
+  local startMs = tonumber(line.start_time) or 0
+  local endMs = tonumber(line.end_time) or startMs
+  local startFrame = Media.frameFromMs(startMs)
+  local endFrame = lastActiveFrame(startMs, endMs)
+  return startFrame and endFrame and frame >= startFrame and frame <= endFrame
+end
+local linePoints
+linePoints = function(line, timingMode, currentFrame)
+  if currentFrame == nil then
+    currentFrame = nil
+  end
+  local startMs = tonumber(line.start_time) or 0
+  local endMs = tonumber(line.end_time) or startMs
+  local midMs = startMs + (endMs - startMs) / 2
+  if timingMode == "Current video frame" then
+    local frame = currentFrame or currentVideoFrame()
+    if not (frame) then
+      return { }
+    end
+    frame = math.floor((tonumber(frame) or 0) + 0.5)
+    if not (lineContainsFrame(line, frame)) then
+      return { }
+    end
+    local time = Media.msFromFrame(frame)
+    if not (time) then
+      return { }
+    end
+    return {
+      {
+        key = "current",
+        label = "current frame",
+        time = time,
+        frame = frame
+      }
+    }
+  elseif timingMode == "Start and end" then
+    local lastFrame = lastActiveFrame(startMs, endMs)
+    local lastMs = lastFrame and Media.msFromFrame(lastFrame) or startMs
+    return {
+      {
+        key = "start",
+        label = "start",
+        time = startMs
+      },
+      {
+        key = "end",
+        label = "end",
+        time = lastMs
+      }
+    }
+  elseif timingMode == "Start, middle, end" then
+    local lastFrame = lastActiveFrame(startMs, endMs)
+    local lastMs = lastFrame and Media.msFromFrame(lastFrame) or startMs
+    return {
+      {
+        key = "start",
+        label = "start",
+        time = startMs
+      },
+      {
+        key = "mid",
+        label = "midpoint",
+        time = midMs
+      },
+      {
+        key = "end",
+        label = "end",
+        time = lastMs
+      }
+    }
+  else
+    return {
+      {
+        key = "mid",
+        label = "midpoint",
+        time = midMs
+      }
+    }
+  end
+end
+local selectedLines
+selectedLines = function(subs, sel)
+  local collection = LineCollection(subs, sel, (function(line)
+    return line.class == "dialogue" and not line.comment and line.end_time and line.end_time > line.start_time
+  end), true)
+  local lines = { }
+  local _list_0 = collection.lines
+  for _index_0 = 1, #_list_0 do
+    local line = _list_0[_index_0]
+    if line.end_time > line.start_time then
+      table.insert(lines, line)
+    end
+  end
+  table.sort(lines, function(a, b)
+    return (a.number or 0) < (b.number or 0)
+  end)
+  return collection, lines
+end
+local normalizeCrop
+normalizeCrop = function(x, y, w, h, padding, videoW, videoH)
+  x, y, w, h = finiteNumber(x), finiteNumber(y), finiteNumber(w), finiteNumber(h)
+  padding, videoW, videoH = finiteNumber(padding), finiteNumber(videoW), finiteNumber(videoH)
+  if not (x and y and w and h and padding and videoW and videoH) then
+    return nil
+  end
+  if w <= 0 or h <= 0 or videoW <= 0 or videoH <= 0 or padding < 0 then
+    return nil
+  end
+  local x1, y1 = math.max(0, math.floor(x - padding)), math.max(0, math.floor(y - padding))
+  local x2, y2 = math.min(videoW, math.ceil(x + w + padding)), math.min(videoH, math.ceil(y + h + padding))
+  if not (x2 > x1 and y2 > y1) then
+    return nil
+  end
+  return {
+    x = x1,
+    y = y1,
+    w = x2 - x1,
+    h = y2 - y1
+  }
+end
+local scaleClipRect
+scaleClipRect = function(rect, collection, cfg)
+  local videoW, videoH = cfg.videoW, cfg.videoH
+  local playX = tonumber(collection.meta and collection.meta.PlayResX) or videoW
+  local playY = tonumber(collection.meta and collection.meta.PlayResY) or videoH
+  local sx
+  if playX > 0 then
+    sx = videoW / playX
+  else
+    sx = 1
+  end
+  local sy
+  if playY > 0 then
+    sy = videoH / playY
+  else
+    sy = 1
+  end
+  local x1 = math.min(rect.x1, rect.x2) * sx
+  local y1 = math.min(rect.y1, rect.y2) * sy
+  local x2 = math.max(rect.x1, rect.x2) * sx
+  local y2 = math.max(rect.y1, rect.y2) * sy
+  return normalizeCrop(x1, y1, x2 - x1, y2 - y1, cfg.cropPadding, videoW, videoH)
+end
+local manualCrop
+manualCrop = function(cfg)
+  return normalizeCrop(cfg.manualX, cfg.manualY, cfg.manualW, cfg.manualH, cfg.cropPadding, cfg.videoW, cfg.videoH)
+end
+local extendBounds
+extendBounds = function(bounds, x, y)
+  x, y = finiteNumber(x), finiteNumber(y)
+  if not (x and y) then
+    return false
+  end
+  if bounds.x1 == nil then
+    bounds.x1, bounds.x2 = x, x
+    bounds.y1, bounds.y2 = y, y
+  else
+    bounds.x1 = math.min(bounds.x1, x)
+    bounds.y1 = math.min(bounds.y1, y)
+    bounds.x2 = math.max(bounds.x2, x)
+    bounds.y2 = math.max(bounds.y2, y)
+  end
+  return true
+end
+local boundsRect
+boundsRect = function(bounds)
+  if not (bounds and bounds.x1 ~= nil and bounds.y1 ~= nil and bounds.x2 ~= nil and bounds.y2 ~= nil) then
+    return nil
+  end
+  return {
+    x1 = bounds.x1,
+    y1 = bounds.y1,
+    x2 = bounds.x2,
+    y2 = bounds.y2
+  }
+end
+local rectFromPayload
+rectFromPayload = function(payload)
+  local values = LineOps.splitArguments(payload)
+  if not (#values == 4) then
+    return nil
+  end
+  local numbers = { }
+  for _index_0 = 1, #values do
+    local value = values[_index_0]
+    local number = finiteNumber(value)
+    if not (number) then
+      return nil
+    end
+    numbers[#numbers + 1] = number
+  end
+  return {
+    x1 = numbers[1],
+    y1 = numbers[2],
+    x2 = numbers[3],
+    y2 = numbers[4]
+  }
+end
+local clipInfoFromPayload
+clipInfoFromPayload = function(name, payload)
+  payload = LineOps.trim(payload)
+  local body, scale = payload, 1
+  local rawScale, drawing = payload:match("^([^,]+),%s*([mMnN].*)$")
+  if rawScale then
+    scale, body = finiteNumber(rawScale), drawing
+    if not (scale and scale >= 1 and scale == math.floor(scale)) then
+      return nil
+    end
+  end
+  local vector = body:match("^[mMnN]%s") ~= nil
+  local rect
+  if vector then
+    body = body:lower()
+    if not (AssDrawing.validatePath(body)) then
+      return nil
+    end
+    local divisor = finiteNumber(2 ^ (scale - 1))
+    if not (divisor and divisor > 0) then
+      return nil
+    end
+    local bounds, x = { }, nil
+    for token in body:gmatch("%S+") do
+      local number = finiteNumber(token)
+      if number then
+        if x == nil then
+          x = number
+        else
+          LineOps.checkCancelled()
+          extendBounds(bounds, x / divisor, number / divisor)
+          x = nil
+        end
+      end
+    end
+    rect = boundsRect(bounds)
+    if scale == 1 then
+      payload = body
+    else
+      payload = tostring(Core.formatNumber(scale, 0)) .. "," .. tostring(body)
+    end
+  else
+    rect = rectFromPayload(payload)
+  end
+  if not (rect) then
+    return nil
+  end
+  return {
+    rect = rect,
+    tag = "\\" .. tostring(name) .. "(" .. tostring(payload) .. ")",
+    isVector = vector,
+    inverse = name == "iclip"
+  }
+end
+local relevantClipEntries
+relevantClipEntries = function(text)
+  local entries = { }
+  local _list_0 = LineOps.tagCalls(text, {
+    clip = true,
+    iclip = true
+  })
+  for _index_0 = 1, #_list_0 do
+    local call = _list_0[_index_0]
+    if call.top_level then
+      table.insert(entries, {
+        start = call.start,
+        raw = call.raw,
+        static = true
+      })
+    end
+  end
+  local _list_1 = LineOps.tagCalls(text, "t")
+  for _index_0 = 1, #_list_1 do
+    local _continue_0 = false
+    repeat
+      local transform = _list_1[_index_0]
+      if not (transform.top_level) then
+        _continue_0 = true
+        break
+      end
+      local clips = LineOps.tagCalls("{" .. tostring(transform.raw) .. "}", {
+        clip = true,
+        iclip = true
+      })
+      if #clips == 0 then
+        _continue_0 = true
+        break
+      end
+      local value = tostring(transform.value or "")
+      if value:sub(1, 1) == "(" and value:sub(-1) == ")" then
+        value = value:sub(2, -2)
+      end
+      local firstTag = value:find("\\", 1, true)
+      if not (firstTag) then
+        _continue_0 = true
+        break
+      end
+      local prefix = value:sub(1, firstTag - 1)
+      local clipTags
+      do
+        local _accum_0 = { }
+        local _len_0 = 1
+        for _index_1 = 1, #clips do
+          local call = clips[_index_1]
+          _accum_0[_len_0] = call.raw
+          _len_0 = _len_0 + 1
+        end
+        clipTags = _accum_0
+      end
+      table.insert(entries, {
+        start = transform.start,
+        raw = "\\t(" .. tostring(prefix) .. tostring(table.concat(clipTags, '')) .. ")",
+        animated = true
+      })
+      _continue_0 = true
+    until true
+    if not _continue_0 then
+      break
+    end
+  end
+  table.sort(entries, function(a, b)
+    return a.start < b.start
+  end)
+  return entries
+end
+local clipInfoFromTags
+clipInfoFromTags = function(text)
+  local entries = relevantClipEntries(text)
+  local info = nil
+  for _index_0 = 1, #entries do
+    local entry = entries[_index_0]
+    if entry.static then
+      local name, raw = entry.raw:match("^\\(i?clip)%s*(%b())$")
+      local parsed
+      if name and raw then
+        parsed = clipInfoFromPayload(name, raw:sub(2, -2))
+      end
+      if parsed then
+        info = parsed
+      end
+    end
+  end
+  if info then
+    info.entries = entries
+    for _index_0 = 1, #entries do
+      local item = entries[_index_0]
+      if item.animated then
+        info.animated = true
+      end
+    end
+  end
+  return info
+end
+local lineClipInfo
+lineClipInfo = function(line, playX, playY)
+  local info = clipInfoFromTags(line.text)
+  if info then
+    return info
+  end
+  local entries = relevantClipEntries(line.text)
+  if #entries == 0 or not playX or not playY then
+    return nil
+  end
+  info = clipInfoFromPayload("clip", "0,0," .. tostring(playX) .. "," .. tostring(playY))
+  info.entries, info.animated = entries, true
+  return info
+end
+local drawingMaskText
+drawingMaskText = function(line)
+  local parts, hasDrawing = { }, false
+  local _list_0 = LineOps.scanSections(line and line.text or "")
+  for _index_0 = 1, #_list_0 do
+    local section = _list_0[_index_0]
+    if section.type == "drawing" then
+      parts[#parts + 1] = section.text
+      if LineOps.trim(section.text) ~= "" then
+        hasDrawing = true
+      end
+    elseif section.type == "override" or section.type == "comment" then
+      parts[#parts + 1] = "{" .. tostring(section.text) .. "}"
+    end
+  end
+  if hasDrawing then
+    return table.concat(parts)
+  else
+    return nil
+  end
+end
+local lineDrawingInfo
+lineDrawingInfo = function(line)
+  local text = drawingMaskText(line)
+  if not (text) then
+    return nil
+  end
+  return {
+    text = text
+  }
+end
+local densestFrame
+densestFrame = function(lines)
+  local events = { }
+  for _index_0 = 1, #lines do
+    local _continue_0 = false
+    repeat
+      local line = lines[_index_0]
+      LineOps.checkCancelled()
+      local startFrame = Media.frameFromMs(line.start_time)
+      local endFrame = lastActiveFrame(line.start_time, line.end_time)
+      if not (startFrame and endFrame) then
+        _continue_0 = true
+        break
+      end
+      endFrame = math.max(startFrame, endFrame)
+      table.insert(events, {
+        frame = startFrame,
+        delta = 1
+      })
+      table.insert(events, {
+        frame = endFrame + 1,
+        delta = -1
+      })
+      _continue_0 = true
+    until true
+    if not _continue_0 then
+      break
+    end
+  end
+  table.sort(events, function(a, b)
+    if a.frame == b.frame then
+      return a.delta > b.delta
+    else
+      return a.frame < b.frame
+    end
+  end)
+  local active, bestCount, bestFrame = 0, 0, nil
+  local i = 1
+  while i <= #events do
+    local frame = events[i].frame
+    while i <= #events and events[i].frame == frame do
+      active = active + events[i].delta
+      i = i + 1
+    end
+    if active > bestCount then
+      bestCount = active
+      bestFrame = frame
+    end
+  end
+  return bestFrame, bestCount
+end
+local shotName
+shotName = function(seq, line, point, _mode, includeText, extra)
+  if extra == nil then
+    extra = nil
+  end
+  local parts = {
+    string.format("%04d", seq),
+    line and string.format("L%04d", line.number or 0) or "dense",
+    point.key,
+    fileTime(point.time)
+  }
+  if extra then
+    table.insert(parts, extra)
+  end
+  if includeText and line then
+    local units, bytes = { }, 0
+    local _list_0 = LineOps.graphemes(safeName(cleanText(line.text), ""))
+    for _index_0 = 1, #_list_0 do
+      local unit = _list_0[_index_0]
+      if bytes + #unit > FilenameTextBytes then
+        break
+      end
+      units[#units + 1], bytes = unit, bytes + #unit
+    end
+    local label = table.concat(units)
+    if label ~= "" then
+      table.insert(parts, label)
+    end
+  end
+  return table.concat(parts, "_") .. ".png"
+end
+local frameShotName
+frameShotName = function(seq, frame, time)
+  return string.format("%04d_F%06d_%s.png", seq, frame, fileTime(time))
+end
+local clipOutputExtra
+clipOutputExtra = function(clipOutput)
+  local _exp_0 = clipOutput
+  if "Clip alpha crop" == _exp_0 then
+    return "clip_alpha_crop"
+  elseif "Clip alpha full frame" == _exp_0 then
+    return "clip_alpha_full"
+  elseif "Drawing alpha crop" == _exp_0 then
+    return "drawing_alpha_crop"
+  elseif "Drawing alpha full frame" == _exp_0 then
+    return "drawing_alpha_full"
+  else
+    return "crop"
+  end
+end
+local drawRectShape
+drawRectShape = function(w, h)
+  w = math.floor((tonumber(w) or 1) + 0.5)
+  h = math.floor((tonumber(h) or 1) + 0.5)
+  return "m 0 0 l " .. tostring(w) .. " 0 " .. tostring(w) .. " " .. tostring(h) .. " 0 " .. tostring(h)
+end
+local clipMaskText
+clipMaskText = function(clipInfo, playX, playY)
+  local entries = clipInfo.entries or { }
+  local tags = table.concat((function()
+    local _accum_0 = { }
+    local _len_0 = 1
+    for _index_0 = 1, #entries do
+      local entry = entries[_index_0]
+      _accum_0[_len_0] = entry.raw
+      _len_0 = _len_0 + 1
+    end
+    return _accum_0
+  end)(), "")
+  local hasStatic = false
+  for _index_0 = 1, #entries do
+    local entry = entries[_index_0]
+    if entry.static then
+      hasStatic = true
+    end
+  end
+  if not (hasStatic) then
+    tags = clipInfo.tag .. tags
+  end
+  return "{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\blur0\\1c&HFFFFFF&\\alpha&H00&" .. tostring(tags) .. "}" .. tostring(drawRectShape(playX, playY))
+end
+local makeJobs
+makeJobs = function(collection, lines, cfg)
+  local jobs, skipped, errors, seq = { }, { }, { }, 0
+  local mode = normalizeMode(cfg.mode)
+  if mode == "Frame list" then
+    local frames, parseErrors = parseFrameList(cfg.frameText)
+    if #parseErrors > 0 then
+      return jobs, skipped, parseErrors
+    end
+    if #frames == 0 then
+      return jobs, skipped, {
+        "No valid frames were listed."
+      }
+    end
+    for _index_0 = 1, #frames do
+      local frame = frames[_index_0]
+      local time = Media.msFromFrame(frame)
+      if time then
+        seq = seq + 1
+        table.insert(jobs, {
+          time = time,
+          frame = frame,
+          name = frameShotName(seq, frame, time),
+          subtitle = "",
+          label = "frame " .. tostring(frame),
+          mode = mode
+        })
+      else
+        table.insert(errors, "Could not convert frame to milliseconds: " .. tostring(frame))
+      end
+    end
+    return jobs, skipped, errors
+  end
+  if not (lines and #lines > 0) then
+    return jobs, skipped, {
+      "Select at least one timed dialogue line."
+    }
+  end
+  local manualRect
+  if mode == "Manual rectangle" then
+    manualRect = manualCrop(cfg)
+  end
+  if mode == "Manual rectangle" and not manualRect then
+    return jobs, skipped, {
+      "The manual rectangle does not intersect the video."
+    }
+  end
+  local currentFrame = nil
+  if cfg.timing == "Current video frame" then
+    currentFrame = currentVideoFrame()
+    if not (currentFrame) then
+      return jobs, skipped, {
+        "Current video frame is unavailable. Open a video and place the playhead on the frame you want."
+      }
+    end
+  end
+  if mode == "Densest subtitle frame" then
+    local frame, count = densestFrame(lines)
+    if not (frame) then
+      return jobs, skipped, errors
+    end
+    local time = Media.msFromFrame(frame)
+    seq = seq + 1
+    table.insert(jobs, {
+      time = time,
+      frame = frame,
+      name = shotName(seq, nil, {
+        key = "dense",
+        time = time
+      }, mode, false, tostring(count) .. "lines"),
+      subtitle = "",
+      label = "densest frame",
+      mode = mode,
+      overlap = count
+    })
+    return jobs, skipped, errors
+  end
+  local currentFrameTouchesLine = false
+  for _index_0 = 1, #lines do
+    local _continue_0 = false
+    repeat
+      local line = lines[_index_0]
+      LineOps.checkCancelled()
+      local rect = nil
+      local alphaMaskText, alphaDetectCrop = nil, false
+      if currentFrame and lineContainsFrame(line, currentFrame) then
+        currentFrameTouchesLine = true
+      end
+      if mode == "Clip crop" then
+        if cfg.clipOutput == "Drawing alpha crop" or cfg.clipOutput == "Drawing alpha full frame" then
+          local drawingInfo = lineDrawingInfo(line)
+          if drawingInfo then
+            alphaMaskText = drawingInfo.text
+            alphaDetectCrop = cfg.clipOutput == "Drawing alpha crop"
+          else
+            table.insert(skipped, line.number)
+            _continue_0 = true
+            break
+          end
+        else
+          local clipInfo = lineClipInfo(line, cfg.playX, cfg.playY)
+          if clipInfo and clipInfo.rect then
+            if cfg.clipOutput == "Clip alpha crop" then
+              alphaMaskText = clipMaskText(clipInfo, cfg.playX, cfg.playY)
+              alphaDetectCrop = true
+            elseif cfg.clipOutput == "Clip alpha full frame" then
+              alphaMaskText = clipMaskText(clipInfo, cfg.playX, cfg.playY)
+            else
+              if clipInfo.inverse then
+                table.insert(errors, "Line " .. tostring(line.number) .. ": Rectangle crop cannot represent \\iclip. Choose Clip alpha crop/full frame.")
+                _continue_0 = true
+                break
+              end
+              if clipInfo.animated then
+                table.insert(errors, "Line " .. tostring(line.number) .. ": Rectangle crop cannot follow an animated clip. Choose Clip alpha crop/full frame.")
+                _continue_0 = true
+                break
+              end
+              rect = scaleClipRect(clipInfo.rect, collection, cfg)
+              if not (rect) then
+                table.insert(errors, "Line " .. tostring(line.number) .. ": the clip does not intersect the video.")
+                _continue_0 = true
+                break
+              end
+            end
+          else
+            table.insert(skipped, line.number)
+            _continue_0 = true
+            break
+          end
+        end
+      elseif mode == "Manual rectangle" then
+        rect = manualRect
+      end
+      local points = linePoints(line, cfg.timing, currentFrame)
+      if #points == 0 then
+        _continue_0 = true
+        break
+      end
+      for _index_1 = 1, #points do
+        local point = points[_index_1]
+        seq = seq + 1
+        local extra
+        if rect or alphaMaskText then
+          extra = clipOutputExtra(cfg.clipOutput)
+        else
+          extra = nil
+        end
+        local maskDurationMs = math.max(1, (tonumber(line.end_time) or 0) - (tonumber(line.start_time) or 0))
+        local maskStartMs = tonumber(line.start_time) or 0
+        table.insert(jobs, {
+          time = point.time,
+          frame = point.frame or Media.frameFromMs(point.time),
+          name = shotName(seq, line, point, mode, cfg.includeText, extra),
+          subtitle = line.number,
+          label = point.label,
+          mode = mode,
+          crop = rect,
+          alphaMaskText = alphaMaskText,
+          maskSource = (function()
+            if cfg.clipOutput == "Drawing alpha crop" or cfg.clipOutput == "Drawing alpha full frame" then
+              return line
+            else
+              return nil
+            end
+          end)(),
+          alphaDetectCrop = alphaDetectCrop,
+          maskDurationMs = maskDurationMs,
+          maskStartMs = maskStartMs
+        })
+      end
+      _continue_0 = true
+    until true
+    if not _continue_0 then
+      break
+    end
+  end
+  if cfg.timing == "Current video frame" and #jobs == 0 and not currentFrameTouchesLine then
+    table.insert(errors, "The current video frame is not inside any selected line.")
+  end
+  return jobs, skipped, errors
+end
+local cropFilter
+cropFilter = function(crop)
+  return string.format("crop=%d:%d:%d:%d", crop.w, crop.h, crop.x, crop.y)
+end
+local runCommand
+runCommand = function(command, errPath)
+  if errPath == nil then
+    errPath = nil
+  end
+  local ok, output, exitCode = PyBridge.runProcess(command)
+  if errPath and errPath ~= "" then
+    PyBridge.writeFile(errPath, output or "")
+  end
+  return ok, output, exitCode
+end
+local ffmpegErrorPath
+ffmpegErrorPath = function(outDir, job, suffix)
+  if suffix == nil then
+    suffix = "error"
+  end
+  return PyBridge.joinPath(outDir, "_snapshoter_ffmpeg_" .. tostring(safeName(baseName(job.name), "capture")) .. "_" .. tostring(suffix) .. ".txt")
+end
+local ffmpegErrorMessage
+ffmpegErrorMessage = function(label, path, errPath)
+  local details = LineOps.trim(readFile(errPath, 6000))
+  local message = "FFmpeg returned an error while " .. tostring(label) .. ":\n" .. tostring(path)
+  if details ~= "" then
+    message = message .. "\n\nFFmpeg:\n" .. tostring(details)
+  else
+    message = message .. "\n\nFFmpeg did not return diagnostic output."
+  end
+  return message
+end
+local runFfmpeg
+runFfmpeg = function(command, outDir, job, label, path)
+  local errPath = ffmpegErrorPath(outDir, job, safeName(label, "error"))
+  local ok, _, exitCode = runCommand(command, errPath)
+  if ok and Media.verifyPng(path) then
+    PyBridge.removeFile(errPath)
+    return true, nil
+  end
+  if ok then
+    PyBridge.writeFile(errPath, "FFmpeg exited successfully but did not create a non-empty output file.")
+  end
+  local message = ffmpegErrorMessage(label, path, errPath)
+  PyBridge.removeFile(errPath)
+  PyBridge.removeFile(path)
+  return false, (function()
+    if exitCode == 130 then
+      return "Capture cancelled."
+    else
+      return message
+    end
+  end)()
+end
+local maskAssPath
+maskAssPath = function(outDir, job)
+  return PyBridge.joinPath(outDir, "_snapshoter_mask_" .. tostring(safeName(baseName(job.name), "mask")) .. ".ass")
+end
+local alphaTempPath
+alphaTempPath = function(outDir, job)
+  return PyBridge.joinPath(outDir, "_snapshoter_alpha_" .. tostring(safeName(baseName(job.name), "alpha")) .. ".png")
+end
+local maskAssText
+maskAssText = function(text)
+  text = tostring(text or ""):gsub("\r\n", "\\N")
+  return text:gsub("[\r\n]", "\\N")
+end
+local writeMaskAss
+writeMaskAss = function(path, maskText, playX, playY, durationMs, sourceLine, styles, scriptInfo, startMs)
+  if sourceLine == nil then
+    sourceLine = nil
+  end
+  if styles == nil then
+    styles = nil
+  end
+  if scriptInfo == nil then
+    scriptInfo = nil
+  end
+  if startMs == nil then
+    startMs = 0
+  end
+  if not (finiteNumber(playX) and finiteNumber(playY) and playX > 0 and playY > 0) then
+    return false
+  end
+  durationMs = math.max(AssCentisecondMs, finiteNumber(durationMs) or 1000)
+  local info = scriptInfo or {
+    {
+      class = "info",
+      key = "ScriptType",
+      value = "v4.00+"
+    },
+    {
+      class = "info",
+      key = "PlayResX",
+      value = tostring(playX)
+    },
+    {
+      class = "info",
+      key = "PlayResY",
+      value = tostring(playY)
+    }
+  }
+  local line
+  if sourceLine then
+    line = ASSParser.create_dialogue_line({
+      style = sourceLine.style,
+      margin_l = sourceLine.margin_l,
+      margin_r = sourceLine.margin_r,
+      margin_t = sourceLine.margin_t,
+      text = maskAssText(maskText),
+      end_time = durationMs
+    })
+  else
+    line = ASSParser.create_dialogue_line({
+      text = maskAssText(maskText),
+      end_time = durationMs,
+      style = "Mask"
+    })
+  end
+  line.start_time = startMs
+  line.end_time = startMs + durationMs
+  local outputStyles
+  do
+    local _accum_0 = { }
+    local _len_0 = 1
+    local _list_0 = (styles or { })
+    for _index_0 = 1, #_list_0 do
+      local style = _list_0[_index_0]
+      _accum_0[_len_0] = style
+      _len_0 = _len_0 + 1
+    end
+    outputStyles = _accum_0
+  end
+  if not (sourceLine) then
+    outputStyles[#outputStyles + 1] = ASSParser.create_style_line({
+      name = "Mask",
+      align = 7,
+      outline = 0,
+      shadow = 0,
+      margin_l = 0,
+      margin_r = 0,
+      margin_t = 0
+    })
+  end
+  local chunks = { }
+  ASSParser.generate_file(info, nil, outputStyles, {
+    line
+  }, { }, function(chunk)
+    chunks[#chunks + 1] = chunk
+  end)
+  return PyBridge.writeFile(path, table.concat(chunks))
+end
+local jobFrame
+jobFrame = function(job)
+  local frame = finiteNumber(job.frame) or Media.frameFromMs(job.time)
+  assert(frame and frame >= 0 and frame <= MaxVideoFrame and frame == math.floor(frame), "Invalid video frame.")
+  return frame
+end
+local captureCommand
+captureCommand = function(video, ffmpeg, job, outPath)
+  local arguments = {
+    "-hide_banner",
+    "-nostdin",
+    "-loglevel",
+    "error",
+    "-y",
+    "-ss",
+    frameSeekTime(jobFrame(job)),
+    "-i",
+    video,
+    "-map",
+    "0:V:0",
+    "-an",
+    "-frames:v",
+    "1",
+    "-fps_mode",
+    "passthrough"
+  }
+  if job.crop then
+    arguments[#arguments + 1] = "-vf"
+    arguments[#arguments + 1] = cropFilter(job.crop)
+  end
+  arguments[#arguments + 1] = outPath
+  return {
+    executable = ffmpegExecutable(ffmpeg),
+    args = arguments
+  }
+end
+local alphaCaptureCommand
+alphaCaptureCommand = function(video, ffmpeg, job, outPath, maskPath, _videoW, _videoH)
+  local assFilter = filterPathQuote(maskPath)
+  local filter = "[0:V:0]split[base][maskSource];[maskSource]format=rgba,colorchannelmixer=rr=0:gg=0:bb=0:aa=0,subtitles=" .. tostring(assFilter) .. ":alpha=1,alphaextract[mask];[base]format=rgba[baseRgba];[baseRgba][mask]alphamerge[out]"
+  return {
+    executable = ffmpegExecutable(ffmpeg),
+    args = {
+      "-hide_banner",
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-y",
+      "-copyts",
+      "-ss",
+      frameSeekTime(jobFrame(job)),
+      "-i",
+      video,
+      "-filter_complex",
+      filter,
+      "-map",
+      "[out]",
+      "-frames:v",
+      "1",
+      outPath
+    }
+  }
+end
+local alphaBoundsCommand
+alphaBoundsCommand = function(ffmpeg, imagePath)
+  return {
+    executable = ffmpegExecutable(ffmpeg),
+    args = {
+      "-hide_banner",
+      "-loglevel",
+      "info",
+      "-y",
+      "-i",
+      imagePath,
+      "-vf",
+      "alphaextract,bbox=min_val=0",
+      "-frames:v",
+      "1",
+      "-f",
+      "null",
+      "-"
+    }
+  }
+end
+local parseAlphaBounds
+parseAlphaBounds = function(text)
+  local crop = nil
+  for w, h, x, y in tostring(text or ""):gmatch("crop=(%d+):(%d+):(%d+):(%d+)") do
+    crop = {
+      w = tonumber(w),
+      h = tonumber(h),
+      x = tonumber(x),
+      y = tonumber(y)
+    }
+  end
+  return crop
+end
+local detectAlphaCrop
+detectAlphaCrop = function(ffmpeg, imagePath, outDir, job)
+  local errPath = ffmpegErrorPath(outDir, job, "alpha_bounds")
+  local ok = runCommand(alphaBoundsCommand(ffmpeg, imagePath), errPath)
+  local details = readFile(errPath, MaxFfmpegErrorBytes)
+  PyBridge.removeFile(errPath)
+  local detailsText = LineOps.trim(details)
+  if not (ok) then
+    return nil, "FFmpeg returned an error while detecting alpha bounds:\n" .. tostring(imagePath) .. "\n\nFFmpeg:\n" .. tostring(detailsText)
+  end
+  local crop = parseAlphaBounds(details)
+  if not (crop) then
+    return nil, "FFmpeg could not detect a non-transparent alpha area in:\n" .. tostring(imagePath)
+  end
+  return crop, nil
+end
+local cropPngCommand
+cropPngCommand = function(ffmpeg, imagePath, crop, outPath)
+  return {
+    executable = ffmpegExecutable(ffmpeg),
+    args = {
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      imagePath,
+      "-vf",
+      cropFilter(crop),
+      "-frames:v",
+      "1",
+      outPath
+    }
+  }
+end
+local runCaptureJobs
+runCaptureJobs = function(video, outDir, cfg, jobs)
+  local made, makeError = PyBridge.ensureDir(outDir)
+  if not (made) then
+    return false, "Could not create output folder: " .. tostring(makeError or outDir)
+  end
+  local total = #jobs
+  for index, job in ipairs(jobs) do
+    LineOps.progress("Capturing " .. tostring(index) .. "/" .. tostring(total), 100 * (index - 1) / math.max(1, total))
+    local outPath = PyBridge.joinPath(outDir, job.name)
+    local maskPath
+    if job.alphaMaskText then
+      maskPath = maskAssPath(outDir, job)
+    end
+    local tempPath
+    if job.alphaDetectCrop then
+      tempPath = alphaTempPath(outDir, job)
+    end
+    local protected, ok, message = pcall(function()
+      if not (job.alphaMaskText) then
+        return runFfmpeg(captureCommand(video, cfg.ffmpeg, job, outPath), outDir, job, "writing PNG", outPath)
+      end
+      local written = writeMaskAss(maskPath, job.alphaMaskText, cfg.playX, cfg.playY, job.maskDurationMs, job.maskSource, cfg.styles, cfg.scriptInfo, job.maskStartMs or 0)
+      if not (written) then
+        return false, "Kiri-Shot could not write the temporary vector mask."
+      end
+      local alphaPath = tempPath or outPath
+      local captured, failure = runFfmpeg(alphaCaptureCommand(video, cfg.ffmpeg, job, alphaPath, maskPath, cfg.videoW, cfg.videoH), outDir, job, "writing alpha PNG", alphaPath)
+      if not (captured) then
+        return false, failure
+      end
+      if tempPath then
+        local crop
+        crop, failure = detectAlphaCrop(cfg.ffmpeg, tempPath, outDir, job)
+        if not (crop) then
+          return false, failure
+        end
+        return runFfmpeg(cropPngCommand(cfg.ffmpeg, tempPath, crop, outPath), outDir, job, "writing cropped PNG", outPath)
+      end
+      return true
+    end)
+    if maskPath then
+      PyBridge.removeFile(maskPath)
+    end
+    if tempPath then
+      PyBridge.removeFile(tempPath)
+    end
+    if not (protected and ok) then
+      PyBridge.removeFile(outPath)
+    end
+    if not (protected) then
+      error(ok, 0)
+    end
+    if not (ok) then
+      return false, message
+    end
+  end
+  LineOps.progress("Capture complete", 100)
+  return true, nil
+end
+local dialogueAssLine
+dialogueAssLine = function(line, range)
+  if not (line and line.class == "dialogue" and not line.comment) then
+    return nil
+  end
+  local startMs, endMs = finiteNumber(line.start_time), finiteNumber(line.end_time)
+  if not (startMs and endMs and endMs > startMs and endMs > range.startMs and startMs < range.endMs) then
+    return nil
+  end
+  return ASSParser.line_to_raw(line)
+end
+local sequenceRange
+sequenceRange = function(lines)
+  local intervals = lineIntervals(lines)
+  if not (#intervals > 0) then
+    return nil
+  end
+  local startFrame = intervals[1].first
+  local endFrame = intervals[1].last
+  for _index_0 = 1, #intervals do
+    local item = intervals[_index_0]
+    startFrame = math.min(startFrame, item.first)
+    endFrame = math.max(endFrame, item.last)
+  end
+  local startMs = Media.msFromFrame(startFrame)
+  local endMs = Media.msFromFrame(endFrame + 1)
+  if not (startMs and endMs and endMs > startMs) then
+    return nil
+  end
+  return {
+    startFrame = startFrame,
+    endFrame = endFrame,
+    frameCount = endFrame - startFrame + 1,
+    startMs = startMs,
+    endMs = endMs,
+    durationMs = endMs - startMs
+  }
+end
+local writeSequenceAss
+writeSequenceAss = function(subs, assPath, range, videoW, videoH)
+  local rows = {
+    "[Script Info]"
+  }
+  local hasScriptType, hasPlayResX, hasPlayResY = false, false, false
+  for i = 1, #subs do
+    LineOps.checkCancelled()
+    local line = subs[i]
+    if line and line.class == "info" and line.key and (not line.section or line.section == "[Script Info]") then
+      local key = LineOps.trim(line.key)
+      local value = tostring(line.value or "")
+      if key ~= "" then
+        local lower = key:lower()
+        if lower == "scripttype" then
+          hasScriptType = true
+        end
+        if lower == "playresx" then
+          hasPlayResX = true
+        end
+        if lower == "playresy" then
+          hasPlayResY = true
+        end
+        table.insert(rows, tostring(key) .. ": " .. tostring(value))
+      end
+    end
+  end
+  if not (hasScriptType) then
+    table.insert(rows, "ScriptType: v4.00+")
+  end
+  if not (hasPlayResX or videoW <= 0) then
+    table.insert(rows, "PlayResX: " .. tostring(Core.formatNumber(videoW, 0)))
+  end
+  if not (hasPlayResY or videoH <= 0) then
+    table.insert(rows, "PlayResY: " .. tostring(Core.formatNumber(videoH, 0)))
+  end
+  table.insert(rows, "")
+  table.insert(rows, "[V4+ Styles]")
+  table.insert(rows, "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
+  local styleCount = 0
+  for i = 1, #subs do
+    LineOps.checkCancelled()
+    local line = subs[i]
+    if line and line.class == "style" then
+      table.insert(rows, ASSParser.line_to_raw(line))
+      styleCount = styleCount + 1
+    end
+  end
+  if styleCount == 0 then
+    table.insert(rows, ASSParser.line_to_raw(ASSParser.create_style_line()))
+  end
+  table.insert(rows, "")
+  table.insert(rows, "[Events]")
+  table.insert(rows, "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
+  local rendered = 0
+  for i = 1, #subs do
+    LineOps.checkCancelled()
+    local line = subs[i]
+    local row = dialogueAssLine(line, range)
+    if row then
+      table.insert(rows, row)
+      rendered = rendered + 1
+    end
+  end
+  local ok = PyBridge.writeFile(assPath, table.concat(rows, "\n"))
+  return ok, rendered
+end
+local sequenceOutputs
+sequenceOutputs = function(cfg)
+  return {
+    clean = (function()
+      if cfg.captureClean == nil then
+        return true
+      else
+        return cfg.captureClean == true
+      end
+    end)(),
+    withSubtitles = cfg.captureWithSubtitles == true,
+    subtitlesOnly = cfg.captureSubtitlesOnly == true
+  }
+end
+local sequenceOutputCount
+sequenceOutputCount = function(outputs)
+  local count = 0
+  if outputs.clean then
+    count = count + 1
+  end
+  if outputs.withSubtitles then
+    count = count + 1
+  end
+  if outputs.subtitlesOnly then
+    count = count + 1
+  end
+  return count
+end
+local runId
+runId = function(prefix)
+  local suffix
+  if PyBridge.uniqueSuffix then
+    suffix = PyBridge.uniqueSuffix()
+  else
+    suffix = tostring(os.time())
+  end
+  return safeName(tostring(prefix) .. "_" .. tostring(os.date("%Y%m%d_%H%M%S")) .. "_" .. tostring(suffix), "snapshoter")
+end
+local prefixJobNames
+prefixJobNames = function(jobs, prefix)
+  if not (jobs and prefix and prefix ~= "") then
+    return
+  end
+  for _index_0 = 1, #jobs do
+    local job = jobs[_index_0]
+    if job and job.name then
+      job.name = tostring(prefix) .. "_" .. tostring(job.name)
+    end
+  end
+end
+local captureBatchFolder
+captureBatchFolder = function(jobs)
+  local first = jobs and jobs[1]
+  local prefix
+  if first and first.mode then
+    prefix = first.mode
+  else
+    prefix = "captures"
+  end
+  return runId(prefix)
+end
+local sequenceFolderName
+sequenceFolderName = function(range)
+  return runId(string.format("sequence_%06d-%06d", range.startFrame, range.endFrame))
+end
+local sequenceOutputItems
+sequenceOutputItems = function(outputs, assPath)
+  local items = { }
+  if outputs.clean then
+    table.insert(items, {
+      key = "clean",
+      label = "No subtitles",
+      filter = ""
+    })
+  end
+  if outputs.withSubtitles or outputs.subtitlesOnly then
+    local assFilter = filterPathQuote(assPath)
+    if outputs.withSubtitles then
+      table.insert(items, {
+        key = "with_subtitles",
+        label = "With subtitles",
+        filter = "subtitles=" .. tostring(assFilter)
+      })
+    end
+    if outputs.subtitlesOnly then
+      table.insert(items, {
+        key = "subtitles_only",
+        label = "Subtitles only",
+        filter = "format=rgba,colorchannelmixer=aa=0,subtitles=" .. tostring(assFilter) .. ":alpha=1,format=rgba"
+      })
+    end
+  end
+  return items
+end
+local sequenceCommand
+sequenceCommand = function(video, ffmpeg, range, filter, pattern)
+  local filters = { }
+  if filter and filter ~= "" then
+    filters[#filters + 1] = filter
+  end
+  filters[#filters + 1] = "setpts=PTS-STARTPTS"
+  return {
+    executable = ffmpegExecutable(ffmpeg),
+    args = {
+      "-hide_banner",
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-y",
+      "-copyts",
+      "-ss",
+      frameSeekTime(range.startFrame),
+      "-i",
+      video,
+      "-map",
+      "0:V:0",
+      "-an",
+      "-vf",
+      table.concat(filters, ","),
+      "-frames:v",
+      tostring(range.frameCount),
+      "-start_number",
+      tostring(range.startFrame),
+      "-fps_mode",
+      "passthrough",
+      pattern
+    }
+  }
+end
+local sequenceOutputDir
+sequenceOutputDir = function(snapshotsDir, sequenceDir, itemCount, item, flatten)
+  if flatten then
+    return snapshotsDir
+  end
+  if itemCount == 1 then
+    return sequenceDir
+  end
+  return PyBridge.joinPath(sequenceDir, item.key)
+end
+local sequenceOutputPattern
+sequenceOutputPattern = function(dir, item, _range, flatten, sequenceName)
+  if flatten then
+    return PyBridge.joinPath(dir, tostring(sequenceName) .. "_" .. tostring(item.key) .. "_%06d.png")
+  else
+    return PyBridge.joinPath(dir, "frame_%06d.png")
+  end
+end
+local sequenceFramePath
+sequenceFramePath = function(pattern, frame)
+  local path, count = tostring(pattern or ""):gsub("%%06d", string.format("%06d", frame), 1)
+  if count == 1 then
+    return path
+  else
+    return nil
+  end
+end
+local sequenceOutputComplete
+sequenceOutputComplete = function(pattern, range)
+  for frame = range.startFrame, range.endFrame do
+    LineOps.checkCancelled()
+    local path = sequenceFramePath(pattern, frame)
+    if not (path and Media.verifyPng(path)) then
+      return false
+    end
+  end
+  return true
+end
+local runFrameSequence
+runFrameSequence = function(subs, lines, video, outDir, cfg)
+  if not (lines and #lines > 0) then
+    return false, "Select at least one timed dialogue line for Frame sequence."
+  end
+  local range = sequenceRange(lines)
+  if not (range) then
+    return false, "Could not build a frame range from the selected lines."
+  end
+  local made, makeError = PyBridge.ensureDir(outDir)
+  if not (made) then
+    return false, "Could not create output folder: " .. tostring(makeError or outDir)
+  end
+  local outputs = sequenceOutputs(cfg)
+  if sequenceOutputCount(outputs) == 0 then
+    return false, "Select at least one Frame sequence output."
+  end
+  local sequenceName = sequenceFolderName(range)
+  local assPath, rendered = "", 0
+  if outputs.withSubtitles or outputs.subtitlesOnly then
+    assPath = PyBridge.joinPath(outDir, "_snapshoter_" .. tostring(sequenceName) .. ".ass")
+    local ok, count = writeSequenceAss(subs, assPath, range, cfg.videoW, cfg.videoH)
+    if not (ok) then
+      PyBridge.removeFile(assPath)
+      return false, "Kiri-Shot could not write the temporary ASS file."
+    end
+    rendered = count
+  end
+  aegisub.progress.title(script_name)
+  aegisub.progress.task("Extracting frame sequence with FFmpeg")
+  local sequenceDir
+  if cfg.flatSnapshots then
+    sequenceDir = outDir
+  else
+    sequenceDir = PyBridge.joinPath(outDir, sequenceName)
+  end
+  if not (cfg.flatSnapshots) then
+    made, makeError = PyBridge.ensureDir(sequenceDir)
+    if not (made) then
+      if assPath ~= "" then
+        PyBridge.removeFile(assPath)
+      end
+      return false, "Could not create sequence folder: " .. tostring(makeError or sequenceDir)
+    end
+  end
+  local items = sequenceOutputItems(outputs, assPath)
+  local outputDirs = { }
+  for _index_0 = 1, #items do
+    local item = items[_index_0]
+    local dir = sequenceOutputDir(outDir, sequenceDir, #items, item, cfg.flatSnapshots)
+    made, makeError = PyBridge.ensureDir(dir)
+    if not (made) then
+      if assPath ~= "" then
+        PyBridge.removeFile(assPath)
+      end
+      return false, "Could not create sequence output folder: " .. tostring(makeError or dir)
+    end
+    outputDirs[item.key] = dir
+    local pattern = sequenceOutputPattern(dir, item, range, cfg.flatSnapshots, sequenceName)
+    local ok, details = PyBridge.runProcess(sequenceCommand(video, cfg.ffmpeg, range, item.filter, pattern))
+    if not (ok) then
+      if assPath ~= "" then
+        PyBridge.removeFile(assPath)
+      end
+      return false, "FFmpeg returned an error while writing sequence frames to:\n" .. tostring(dir) .. "\n\n" .. tostring(details or '')
+    end
+    local checked, complete = pcall(sequenceOutputComplete, pattern, range)
+    if not (checked or assPath == "") then
+      PyBridge.removeFile(assPath)
+    end
+    if not (checked) then
+      error(complete, 0)
+    end
+    if not (complete) then
+      if assPath ~= "" then
+        PyBridge.removeFile(assPath)
+      end
+      return false, "FFmpeg did not create the complete requested frame range in:\n" .. tostring(dir)
+    end
+  end
+  if assPath ~= "" then
+    PyBridge.removeFile(assPath)
+  end
+  local message = "Frame sequence written to:\n" .. tostring(outDir)
+  message = message .. "\nFrames: " .. tostring(range.startFrame) .. "-" .. tostring(range.endFrame) .. " (" .. tostring(range.frameCount) .. ")"
+  message = message .. "\nSubtitle lines rendered: " .. tostring(rendered or 0)
+  if not (cfg.flatSnapshots) then
+    local folders = { }
+    if #items == 1 then
+      table.insert(folders, sequenceDir)
+    else
+      for _index_0 = 1, #items do
+        local item = items[_index_0]
+        table.insert(folders, outputDirs[item.key])
+      end
+    end
+    message = message .. ("\nFolders:\n" .. table.concat(folders, "\n"))
+  else
+    message = message .. "\nImages were written directly in Snapshots."
+  end
+  return true, message
+end
+local snapshoter
+snapshoter = function(subs, sel, cfg)
+  local video = videoPath()
+  if not (video) then
+    showMessage("Load a video before running Kiri-Shot.")
+    return
+  end
+  local collection, lines = selectedLines(subs, sel or { })
+  if cfg.ffmpeg == "" then
+    cfg.ffmpeg = "ffmpeg"
+  end
+  cfg.videoW, cfg.videoH = videoSize()
+  if cfg.videoW <= 0 or cfg.videoH <= 0 then
+    showMessage("Could not obtain the loaded video's dimensions.")
+    return
+  end
+  cfg.playX = tonumber(collection.meta and collection.meta.PlayResX)
+  cfg.playY = tonumber(collection.meta and collection.meta.PlayResY)
+  if not (cfg.playX and cfg.playX > 0) then
+    cfg.playX = cfg.videoW
+  end
+  if not (cfg.playY and cfg.playY > 0) then
+    cfg.playY = cfg.videoH
+  end
+  cfg.styles, cfg.scriptInfo = { }, { }
+  for index = 1, #subs do
+    local line = subs[index]
+    if line.class == "style" then
+      cfg.styles[#cfg.styles + 1] = line
+    elseif line.class == "info" and (not line.section or line.section == "[Script Info]") then
+      cfg.scriptInfo[#cfg.scriptInfo + 1] = line
+    end
+  end
+  cfg.scriptInfo[#cfg.scriptInfo + 1] = {
+    class = "info",
+    key = "PlayResX",
+    value = tostring(cfg.playX)
+  }
+  cfg.scriptInfo[#cfg.scriptInfo + 1] = {
+    class = "info",
+    key = "PlayResY",
+    value = tostring(cfg.playY)
+  }
+  local outDir = snapshotsFolder(video)
+  local made, makeError = PyBridge.ensureDir(outDir)
+  if not (made) then
+    showMessage("Could not create Snapshots folder: " .. tostring(makeError or outDir))
+    return
+  end
+  if cfg.mode == "Frame sequence" then
+    local _, message = runFrameSequence(subs, lines, video, outDir, cfg)
+    showMessage(message)
+    return
+  end
+  local jobs, skipped, errors = makeJobs(collection, lines, cfg)
+  if #errors > 0 then
+    showMessage(table.concat(errors, "\n"))
+    return
+  end
+  if #jobs == 0 then
+    showMessage("No captures were queued. Clip modes need \\clip/\\iclip; drawing modes need a selected \\p vector line.")
+    return
+  end
+  local captureDir
+  if cfg.flatSnapshots or #jobs == 1 then
+    captureDir = outDir
+  else
+    captureDir = PyBridge.joinPath(outDir, captureBatchFolder(jobs))
+  end
+  if captureDir == outDir then
+    prefixJobNames(jobs, runId("capture"))
+  end
+  aegisub.progress.title(script_name)
+  aegisub.progress.task("Capturing PNG frames with FFmpeg")
+  local ok, errorMessage = runCaptureJobs(video, captureDir, cfg, jobs)
+  if ok then
+    local message = tostring(#jobs) .. " PNG capture"
+    if #jobs ~= 1 then
+      message = message .. "s"
+    end
+    message = message .. " written to:\n" .. tostring(captureDir)
+    if captureDir ~= outDir then
+      message = message .. "\nSnapshots root:\n" .. tostring(outDir)
+    end
+    if #skipped > 0 then
+      message = message .. "\nSkipped " .. tostring(#skipped) .. " line(s) without usable \\clip/\\iclip."
+    end
+    return showMessage(message)
+  else
+    return showMessage(errorMessage)
+  end
+end
+return {
+  run = snapshoter,
+  selectedLines = selectedLines,
+  frameDefaults = function(lines)
+    return buildFrameDefaults(defaultFrameList(lines))
+  end,
+  parseFrameList = parseFrameList,
+  normalizeMode = normalizeMode,
+  normalizeClipOutput = normalizeClipOutput,
+  modes = CaptureModes,
+  timings = TimingModes,
+  clipOutputs = ClipOutputs
+}
+end)()
+
+local tasks = {
+    "Capturas · líneas seleccionadas", "Capturas · lista de fotogramas", "Capturas · secuencia PNG",
+    "Recorte · clip o dibujo", "Recorte · rectángulo manual", "Captura · mayor superposición",
+    "Vídeo social", "Preparar máscaras",
+}
+local modeByTask, taskByMode = {}, {}
+for i, mode in ipairs(Snapshot.modes) do modeByTask[tasks[i]], taskByMode[mode] = mode, tasks[i] end
+local timingNames = {"Punto medio", "Inicio y final", "Inicio, medio y final", "Fotograma actual"}
+local clipNames = {"Rectángulo del clip", "Alfa del clip · recortado", "Alfa del clip · cuadro completo",
+    "Alfa del dibujo · recortado", "Alfa del dibujo · cuadro completo"}
+local maskActions = {"Crear máscaras", "Corregir Y", "Centrar subs X", "Limpiar vistas Y"}
+
+local function translated(value, source, target)
+    for i, item in ipairs(source) do if value == item then return target[i] end end
+    return target[1]
 end
 
-require("kite.UI").publishActions()
+local function defaults(centerX)
+    return {
+        main={task=tasks[1], maskAction=maskActions[1], migrated=false},
+        common={ffmpeg="ffmpeg", ffprobe="ffprobe", x264Preset="fast", audioBitrate="192k"},
+        capture={mode="Selected lines", timing="Midpoint", clipOutput="Rectangle crop", includeText=true,
+            flatSnapshots=false, captureClean=true, captureWithSubtitles=false, captureSubtitlesOnly=false,
+            cropPadding=0, manualX=0, manualY=0, manualW=320, manualH=180},
+        social={preset=Social.presets[1], customW=1080, customH=1920, audioTrack=1,
+            outputProfile=Social.profiles[1], fps="30", crf=20, aspectMode=Social.aspects[1],
+            safeX=7.5, safeBottom=12, maxFont=8, saveASS=false, maskX1=centerX, maskX2=centerX, maskAlpha=144},
+    }
+end
+
+local function readStore(namespace, version, values, legacy)
+    local store = KiteUI.settings(namespace, version, values, legacy or {})
+    local _, loaded, message = store:load()
+    if loaded == false then error(message or "No se pudieron leer las preferencias.", 0) end
+    return store
+end
+
+local function loadState(centerX)
+    local initial = defaults(centerX)
+    local store = readStore(script_namespace, script_version, initial)
+    local state = {}
+    for section in pairs(initial) do state[section] = store:values(section) end
+    if not state.main.migrated then
+        local previousCapture = readStore("kite.Snapshoter", "1.6.11", {main=initial.capture, config={ffmpeg="ffmpeg"}},
+            {{path="?user/kite-snapshoter.json", format="json_sections"}})
+        local previousSocial = readStore("kite.SocialClip", "1.0.6", {main=initial.social, config=initial.common},
+            {{path="?user/kite-social-clip.json", format="json_sections"}})
+        state.capture, state.social = previousCapture:values("main"), previousSocial:values("main")
+        state.common = previousSocial:values("config")
+        local otherFfmpeg = trim(previousCapture:values("config").ffmpeg)
+        if trim(state.common.ffmpeg) == "" or state.common.ffmpeg == "ffmpeg" then
+            state.common.ffmpeg = otherFfmpeg ~= "" and otherFfmpeg or "ffmpeg"
+        elseif otherFfmpeg ~= "" and otherFfmpeg ~= "ffmpeg" and otherFfmpeg ~= state.common.ffmpeg then
+            state.notice = "Había dos rutas de FFmpeg. Se conserva la de Social Clip; puedes cambiarla en Ajustes."
+        end
+        state.main.task = taskByMode[Snapshot.normalizeMode(state.capture.mode)] or tasks[1]
+        state.main.migrated = true
+    end
+    state.capture.mode = choiceOrDefault(Snapshot.normalizeMode(state.capture.mode), Snapshot.modes, Snapshot.modes[1])
+    state.capture.clipOutput = choiceOrDefault(Snapshot.normalizeClipOutput(state.capture.clipOutput), Snapshot.clipOutputs, Snapshot.clipOutputs[1])
+    state.main.task = choiceOrDefault(state.main.task, tasks, tasks[1])
+    state.main.maskAction = choiceOrDefault(state.main.maskAction, maskActions, maskActions[1])
+    state.capture.timing = choiceOrDefault(state.capture.timing, Snapshot.timings, Snapshot.timings[1])
+    for key, choices in pairs({preset=Social.presets, outputProfile=Social.profiles, fps=Social.fps, aspectMode=Social.aspects}) do
+        state.social[key] = choiceOrDefault(state.social[key], choices, initial.social[key])
+    end
+    state.common.x264Preset = choiceOrDefault(state.common.x264Preset, Social.encoders, "fast")
+    state.common.audioBitrate = choiceOrDefault(state.common.audioBitrate, Social.bitrates, "192k")
+    return state, store, initial
+end
+
+local function saveState(state, store, initial)
+    for section, values in pairs(initial) do
+        local keys = {}; for key in pairs(values) do keys[#keys+1] = key end
+        store:update(section, state[section], keys)
+    end
+    local ok, written, message = pcall(store.write, store)
+    if not ok or written == false then
+        showMessage("No se pudieron guardar las preferencias:\n" .. tostring(ok and message or written))
+    end
+end
+
+local function label(dialog, text, x, y, width, height)
+    dialog[#dialog+1] = {class="label", label=text, x=x, y=y, width=width, height=height or 1}
+end
+local function field(dialog, kind, name, title, value, x, y, width, items, min, max)
+    label(dialog, title, x, y, width)
+    dialog[#dialog+1] = {class=kind, name=name, value=value, x=x, y=y+1, width=width, height=1, items=items, min=min, max=max}
+end
+local function check(dialog, name, title, value, x, y, width)
+    dialog[#dialog+1] = {class="checkbox", name=name, label=title, value=value, x=x, y=y, width=width, height=1}
+end
+local function header(context, title)
+    local dialog = {}
+    label(dialog, "KIRI-SHOT  /  " .. title, 0, 0, 24)
+    local video = context.video and baseName(context.video) or "Sin vídeo cargado"
+    local glyphs = LineOps.graphemes(video)
+    if #glyphs > 48 then video = table.concat(glyphs, "", 1, 45) .. "..." end
+    label(dialog, string.format("%s  ·  %d × %d  ·  %d diálogos seleccionados", video, context.width, context.height, context.count), 0, 1, 24)
+    return dialog
+end
+
+local function formatFields(dialog, cfg, y)
+    field(dialog, "dropdown", "preset", "Formato de salida", cfg.preset, 0, y, 12, Social.presets)
+    field(dialog, "intedit", "customW", "Ancho personalizado", cfg.customW, 12, y, 6, nil, 2)
+    field(dialog, "intedit", "customH", "Alto personalizado", cfg.customH, 18, y, 6, nil, 2)
+    field(dialog, "dropdown", "aspectMode", "Relación entre máscara y salida", cfg.aspectMode, 0, y+2, 24, Social.aspects)
+end
+
+local function homeDialog(context, state)
+    local dialog = header(context, "Elige una tarea")
+    field(dialog, "dropdown", "task", "Qué quieres preparar", state.main.task, 0, 3, 24, tasks)
+    label(dialog, "CAPTURAS  ·  PNG por líneas, fotogramas, secuencias, clips o dibujos.\nVÍDEO SOCIAL  ·  Une escenas y adapta el encuadre y los subtítulos.\nMÁSCARAS  ·  Prepara y corrige las regiones del recorte.", 0, 6, 24, 3)
+    label(dialog, "PNG: carpeta del proyecto / Snapshots.\nVídeo y ASS: eliges el archivo al exportar.", 0, 10, 24, 2)
+    if state.notice then label(dialog, state.notice, 0, 13, 24, 2) end
+    return dialog
+end
+
+local function captureDialog(context, state)
+    local cfg, mode = state.capture, modeByTask[state.main.task]
+    local dialog = header(context, state.main.task)
+    local y = 3
+    if mode == "Frame list" then
+        label(dialog, "Fotogramas desde cero: 120f, 130f o una entrada por línea.", 0, y, 24)
+        dialog[#dialog+1] = {class="textbox", name="frameText", text=cfg.frameText, x=0, y=y+1, width=24, height=5}
+        y = y + 7
+    elseif mode == "Frame sequence" then
+        label(dialog, "Salidas de la secuencia  ·  activa al menos una", 0, y, 24)
+        check(dialog, "captureClean", "Vídeo sin subtítulos", cfg.captureClean, 0, y+1, 8)
+        check(dialog, "captureWithSubtitles", "Vídeo con subtítulos", cfg.captureWithSubtitles, 8, y+1, 8)
+        check(dialog, "captureSubtitlesOnly", "Subtítulos transparentes", cfg.captureSubtitlesOnly, 16, y+1, 8)
+        label(dialog, "La selección define el intervalo completo, incluidos los huecos.\nSe renderizan los eventos del guion que coinciden con ese intervalo.", 0, y+3, 24, 2)
+        y = y + 6
+    elseif mode ~= "Densest subtitle frame" then
+        field(dialog, "dropdown", "timingChoice", "Instantes que se capturan", translated(cfg.timing, Snapshot.timings, timingNames), 0, y, 24, timingNames)
+        y = y + 3
+    else
+        label(dialog, "Se captura el primer fotograma con más diálogos seleccionados superpuestos.", 0, y, 24, 2)
+        y = y + 3
+    end
+    if mode == "Clip crop" then
+        field(dialog, "dropdown", "clipChoice", "Forma y transparencia del recorte", translated(cfg.clipOutput, Snapshot.clipOutputs, clipNames), 0, y, 18, clipNames)
+        field(dialog, "intedit", "cropPadding", "Margen del rectángulo", cfg.cropPadding, 18, y, 6, nil, 0)
+        label(dialog, "Las salidas alfa siguen el clip o dibujo renderizado. El margen solo afecta al rectángulo.", 0, y+2, 24, 2)
+        y = y + 5
+    elseif mode == "Manual rectangle" then
+        for i, item in ipairs({{"manualX", "X"}, {"manualY", "Y"}, {"manualW", "Ancho"}, {"manualH", "Alto"}}) do
+            field(dialog, "intedit", item[1], item[2] .. " · píxeles", cfg[item[1]], (i-1)*6, y, 6, nil, i>2 and 1 or nil)
+        end
+        field(dialog, "intedit", "cropPadding", "Margen adicional · píxeles", cfg.cropPadding, 0, y+2, 12, nil, 0)
+        y = y + 5
+    end
+    label(dialog, "Archivos PNG  ·  carpeta del proyecto / Snapshots", 0, y, 24)
+    if mode ~= "Frame sequence" then check(dialog, "includeText", "Añadir texto del subtítulo al nombre", cfg.includeText, 0, y+1, 14) end
+    check(dialog, "flatSnapshots", "Todo en la carpeta raíz", cfg.flatSnapshots, 14, y+1, 10)
+    return dialog
+end
+
+local function socialDialog(context, state, masks)
+    local cfg = state.social
+    local dialog = header(context, masks and "Preparar máscaras" or "Vídeo social")
+    local y = 3
+    if masks then
+        field(dialog, "dropdown", "maskAction", "Operación sobre el guion", state.main.maskAction, 0, y, 24, maskActions)
+        y = y + 3
+    end
+    formatFields(dialog, cfg, y)
+    y = y + 5
+    if masks then
+        field(dialog, "floatedit", "maskX1", "Centro X inicial · PlayRes", cfg.maskX1, 0, y, 8)
+        field(dialog, "floatedit", "maskX2", "Centro X final · PlayRes", cfg.maskX2, 8, y, 8)
+        field(dialog, "intedit", "maskAlpha", "Transparencia · 0–255", cfg.maskAlpha, 16, y, 8, nil, 0, 255)
+        label(dialog, "Crear: usa los tiempos seleccionados y conserva las líneas originales.\nCorregir Y y centrar X: modifican solo la selección. Se pueden deshacer.\nLimpiar vistas Y: retira únicamente los antiguos eventos auxiliares.", 0, y+3, 24, 3)
+    else
+        field(dialog, "dropdown", "outputProfile", "Subtítulos en la salida", cfg.outputProfile, 0, y, 24, Social.profiles)
+        field(dialog, "dropdown", "fps", "Fotogramas por segundo", cfg.fps, 0, y+2, 8, Social.fps)
+        field(dialog, "intedit", "crf", "Calidad CRF · menor = mejor", cfg.crf, 8, y+2, 8, nil, 0, 51)
+        field(dialog, "intedit", "audioTrack", "Pista de audio · desde 1", cfg.audioTrack, 16, y+2, 8, nil, 1)
+        field(dialog, "floatedit", "safeX", "Margen lateral · %", cfg.safeX, 0, y+4, 8)
+        field(dialog, "floatedit", "safeBottom", "Margen inferior · %", cfg.safeBottom, 8, y+4, 8)
+        field(dialog, "floatedit", "maxFont", "Fuente máxima · % alto", cfg.maxFont, 16, y+4, 8)
+        check(dialog, "saveASS", "Guardar además el ASS adaptado", cfg.saveASS, 0, y+6, 24)
+        label(dialog, "Se exportan las escenas de las máscaras del guion y se omiten los huecos.\n«Solo ASS» guarda el diálogo adaptado sin codificar vídeo.", 0, y+8, 24, 2)
+    end
+    return dialog
+end
+
+local function settingsDialog(context, state)
+    local cfg = state.common
+    local dialog = header(context, "Ajustes compartidos")
+    field(dialog, "edit", "ffmpeg", "FFmpeg · ejecutable o nombre en PATH", cfg.ffmpeg, 0, 3, 24)
+    field(dialog, "edit", "ffprobe", "FFprobe · inspección del audio", cfg.ffprobe, 0, 5, 24)
+    field(dialog, "dropdown", "x264Preset", "Velocidad de codificación de vídeo", cfg.x264Preset, 0, 7, 12, Social.encoders)
+    field(dialog, "dropdown", "audioBitrate", "Tasa de audio AAC", cfg.audioBitrate, 12, 7, 12, Social.bitrates)
+    label(dialog, "La ruta de FFmpeg se usa para capturas y vídeo.\nGuardar vuelve a la tarea. Cancelar conserva los ajustes anteriores.", 0, 10, 24, 2)
+    return dialog
+end
+
+local function retain(values, target)
+    for key, value in pairs(values or {}) do if target[key] ~= nil then target[key] = value end end
+end
+local function validate(state, action)
+    local mode, cfg = modeByTask[state.main.task], state.capture
+    if mode then
+        if mode == "Frame list" then
+            local frames, errors = Snapshot.parseFrameList(cfg.frameText)
+            if #errors > 0 then return table.concat(errors, "\n") end
+            if #frames == 0 then return "Introduce al menos un fotograma." end
+        elseif mode == "Frame sequence" then
+            if not (cfg.captureClean or cfg.captureWithSubtitles or cfg.captureSubtitlesOnly) then return "Activa al menos una salida de secuencia." end
+        end
+        if mode == "Manual rectangle" or (mode == "Clip crop" and cfg.clipOutput == "Rectangle crop") then
+            local padding = finiteNumber(cfg.cropPadding)
+            if not padding or padding < 0 then return "El margen debe ser un número finito no negativo." end
+            if mode == "Manual rectangle" then
+                for _, key in ipairs({"manualX", "manualY", "manualW", "manualH"}) do
+                    local value = finiteNumber(cfg[key])
+                    if not value or ((key == "manualW" or key == "manualH") and value <= 0) then return "Introduce coordenadas finitas y un ancho y alto positivos." end
+                end
+            end
+        end
+    else
+        cfg = state.social
+        if action == "Limpiar vistas Y" then return end
+        if cfg.preset == "Personalizado" then
+            if not finiteNumber(cfg.customW) or not finiteNumber(cfg.customH) or cfg.customW < 2 or cfg.customH < 2 then return "La resolución personalizada debe ser de al menos 2 × 2." end
+        end
+        if action == "Crear máscaras" then
+            if not finiteNumber(cfg.maskX1) or not finiteNumber(cfg.maskX2) or not finiteNumber(cfg.maskAlpha) or cfg.maskAlpha < 0 or cfg.maskAlpha > 255 then return "Introduce centros X finitos y una transparencia de 0 a 255." end
+            cfg.maskAlpha = math.floor(cfg.maskAlpha + 0.5)
+        elseif state.main.task == "Vídeo social" then
+            if not finiteNumber(cfg.audioTrack) or cfg.audioTrack < 1 or cfg.audioTrack ~= math.floor(cfg.audioTrack) then return "La pista de audio debe ser un entero positivo." end
+            if not finiteNumber(cfg.crf) or cfg.crf < 0 or cfg.crf > 51 then return "La calidad CRF debe estar entre 0 y 51." end
+            for _, key in ipairs({"safeX", "safeBottom", "maxFont"}) do if not finiteNumber(cfg[key]) then return "Introduce porcentajes finitos para el diálogo adaptado." end end
+            if cfg.safeX < 0 or cfg.safeX >= 50 or cfg.safeBottom < 0 or cfg.safeBottom >= 100 or cfg.maxFont <= 0 then return "Márgenes: lateral de 0 a menos de 50 %, inferior de 0 a menos de 100 %; fuente máxima positiva." end
+            cfg.crf = math.floor(cfg.crf + 0.5)
+        end
+    end
+end
+
+local function main(subs, selection, active, entry)
+    local video = videoPath()
+    local width, height = videoSize()
+    local _, lines = Snapshot.selectedLines(subs, selection or {})
+    local playX = LineOps.scriptResolution(subs, width > 0 and width or 1920, height > 0 and height or 1080)
+    local ok, state, store, initial = pcall(loadState, math.floor(playX/2+0.5))
+    if not ok then showMessage(tostring(state)); return selection, active end
+    state.capture.frameText = video and Snapshot.frameDefaults(lines) or ""
+    local context = {video=video, width=width, height=height, count=#lines}
+    local page = "home"
+    if entry then
+        state.main.task = entry == "social" and "Vídeo social" or taskByMode[state.capture.mode] or tasks[1]
+        page = entry == "social" and "social" or "capture"
+    end
+    while true do
+        local dialog, buttons, primary
+        if page == "home" then
+            dialog, buttons, primary = homeDialog(context, state), {"Abrir tarea", "Ajustes", "Cerrar"}, "Abrir tarea"
+        elseif page == "capture" then
+            dialog, buttons, primary = captureDialog(context, state), {"Capturar PNG", "Cambiar tarea", "Ajustes", "Cerrar"}, "Capturar PNG"
+        elseif page == "masks" then
+            dialog, buttons, primary = socialDialog(context, state, true), {"Aplicar", "Cambiar tarea", "Ajustes", "Cerrar"}, "Aplicar"
+        else
+            dialog, buttons, primary = socialDialog(context, state, false), {"Exportar vídeo", "Solo ASS", "Cambiar tarea", "Ajustes", "Cerrar"}, "Exportar vídeo"
+        end
+        local button, values = aegisub.dialog.display(dialog, buttons, {ok=primary, close="Cerrar"})
+        if not button or button == "Cerrar" then return selection, active end
+        if page == "home" then
+            state.main.task = choiceOrDefault(values.task, tasks, state.main.task)
+        elseif page == "capture" then
+            retain(values, state.capture)
+            if values.timingChoice then state.capture.timing = translated(values.timingChoice, timingNames, Snapshot.timings) end
+            if values.clipChoice then state.capture.clipOutput = translated(values.clipChoice, clipNames, Snapshot.clipOutputs) end
+        else
+            retain(values, state.social)
+            if values.maskAction then state.main.maskAction = choiceOrDefault(values.maskAction, maskActions, state.main.maskAction) end
+        end
+        if button == "Cambiar tarea" then page = "home"
+        elseif button == "Ajustes" then
+            local pressed, config = aegisub.dialog.display(settingsDialog(context, state), {"Guardar", "Cancelar"}, {ok="Guardar", close="Cancelar"})
+            if pressed == "Guardar" then
+                retain(config, state.common)
+                state.common.ffmpeg = ffmpegExecutable(state.common.ffmpeg)
+                if trim(state.common.ffprobe) == "" then state.common.ffprobe = "ffprobe" end
+                saveState(state, store, initial)
+            end
+        elseif button == "Abrir tarea" and page == "home" then
+            if modeByTask[state.main.task] then state.capture.mode = modeByTask[state.main.task] end
+            page = modeByTask[state.main.task] and "capture" or state.main.task == "Vídeo social" and "social" or "masks"
+        elseif button == primary or (page == "social" and button == "Solo ASS") then
+            local action = page == "masks" and state.main.maskAction or button
+            local problem = validate(state, action)
+            if action ~= "Limpiar vistas Y" and (not video or width <= 0 or height <= 0) then problem = "Carga un vídeo real en Aegisub antes de ejecutar esta tarea." end
+            if problem then showMessage(problem)
+            else
+                saveState(state, store, initial)
+                local cfg = Core.copy(page == "capture" and state.capture or state.social)
+                for key, value in pairs(state.common) do cfg[key] = value end
+                cfg.ffmpeg = ffmpegExecutable(cfg.ffmpeg)
+                if page == "capture" then
+                    cfg.mode = modeByTask[state.main.task]
+                    Snapshot.run(subs, selection, cfg)
+                    return selection, active
+                end
+                local output, current = Social.run(subs, selection, action, cfg)
+                return output or selection, current or active
+            end
+        else return selection, active end
+    end
+end
+
+local hotkeyRoot = ": Kite Hotkeys :/Kiri-Shot/"
+local function captureEntry(subs, selection, active) return main(subs, selection, active, "capture") end
+local function socialEntry(subs, selection, active) return main(subs, selection, active, "social") end
+depctrl:registerMacro(script_name, script_description, main, nil, nil, false)
+depctrl:registerMacro(hotkeyRoot .. "Capturas", "Abrir directamente las capturas de Kiri-Shot", captureEntry, nil, nil, false)
+depctrl:registerMacro(hotkeyRoot .. "Vídeo social", "Abrir directamente el vídeo social de Kiri-Shot", socialEntry, nil, nil, false)
+KiteUI.actions.rename("kite.Snapshoter", {Snapshoter=hotkeyRoot .. "Capturas"}, script_namespace)
+KiteUI.actions.rename("kite.SocialClip", {
+    ["Social Clip"]=hotkeyRoot .. "Vídeo social", [": Kite Hotkeys :/Social Clip/Execute"]=hotkeyRoot .. "Vídeo social",
+}, script_namespace)
+for _, owner in ipairs({"kite.Snapshoter", "kite.SocialClip"}) do
+    local retired = KiteUI.settings("kite.Actions." .. owner, "1.0.0", {main={commands={}}})
+    local _, loaded = retired:load()
+    if loaded ~= false and next(retired:values("main").commands) then
+        retired:update("main", {commands={}}, {"commands"})
+        local ok, written, message = pcall(retired.write, retired)
+        if not ok or written == false then KiteUI.log(tostring(ok and message or written), "Kiri-Shot: catálogo de acciones") end
+    end
+end
+KiteUI.publishActions()
+
+end
+local registrations = {}
+local registerMacro = aegisub.register_macro
+local function loadScript()
+    registrations = {}
+    aegisub.register_macro = function(name, description, callback, validate, active)
+        registrations[#registrations+1] = {name, description, callback, validate, active}
+    end
+    local ok, message = pcall(initializeScript)
+    aegisub.register_macro = registerMacro
+    local available, control = pcall(require, "l0.DependencyControl")
+    if available and control.updater then control.updater:releaseLock() end
+    return ok, message
+end
+local loaded, failure = loadScript()
+if loaded then
+    for _, action in ipairs(registrations) do registerMacro(unpack(action)) end
+else
+    registerMacro(script_name, script_description, function(subs, selection, active)
+        if not loaded then
+            local available, control = pcall(require, "l0.DependencyControl")
+            if not available then error(control, 0) end
+            local loader = require("l0.DependencyControl.ModuleLoader")
+            for _, task in pairs(control.updater.tasks[control.Domain.ScriptType.Module]) do
+                if not task.updated and not task.running then loader.removeDummyRef(task.record) end
+            end
+            loaded, failure = loadScript()
+            if not loaded then error(failure, 0) end
+        end
+        local choices, actions = {}, {}
+        for _, action in ipairs(registrations) do
+            if not action[4] or action[4](subs, selection, active) then
+                choices[#choices+1] = action[1]
+                actions[action[1]] = action[3]
+            end
+        end
+        if #choices == 0 then return selection, active end
+        if #choices == 1 then return actions[choices[1]](subs, selection, active) end
+        local button, values = aegisub.dialog.display({
+            {class="dropdown", name="action", items=choices, value=choices[1], x=0,y=0,width=1,height=1}
+        }, {"Run","Cancel"}, {ok="Run",close="Cancel"})
+        if button == "Run" then return actions[values.action](subs, selection, active) end
+        return selection, active
+    end)
+end

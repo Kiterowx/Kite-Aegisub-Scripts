@@ -290,7 +290,7 @@ Se guardan las preferencias de cada herramienta.
 
 Todos conservan los demás campos de la primera fila y abarcan el inicio mínimo y el final máximo. El orden del texto es el orden de filas.
 
-**Smart → Smart Split** sustituye a ChronoSplit. Comparte la lectura de Wave2json con Auto Timing, elige el nivel más fino y respeta el desplazamiento de exportaciones parciales. **Continuo** conserva los extremos y enlaza frases; **Raw** recorta cada frase a la actividad asignada. Los marcadores `[CS-*]` en Effect señalan estimaciones o dudas. Omite dibujos, karaoke y texto con animación temporal. **Smart Break** también está en Smart y equilibra ancho visual y pausas, respetando los saltos existentes.
+**Smart → Smart Split** sustituye a ChronoSplit. Comparte la lectura de formas de onda con Auto Timing, elige el nivel más fino y respeta el desplazamiento de exportaciones parciales. **Continuo** conserva los extremos y enlaza frases; **Raw** recorta cada frase a la actividad asignada. Los marcadores `[CS-*]` en Effect señalan estimaciones o dudas. Omite dibujos, karaoke y texto con animación temporal. **Smart Break** también está en Smart y equilibra ancho visual y pausas, respetando los saltos existentes.
 
 **Karaoke → Shift Following Lines** sustituye a ChronoK. Desde la fila activa desplaza todas las filas de diálogo posteriores, incluidos comentarios, para dejar **100 ms** antes de la primera. Conserva duraciones y distancias relativas, sigue el orden de la lista y rechaza toda la operación si genera tiempos negativos.
 

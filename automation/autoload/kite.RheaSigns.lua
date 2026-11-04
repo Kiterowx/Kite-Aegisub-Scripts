@@ -1,7 +1,10 @@
+local function initializeScript()
+package.preload["Yutils"] = function() return require("tstools.Yutils") end
+
 script_name        = "Rhea Signs"
 script_description = "Typesetting and sign operations suite"
 script_author      = "Kiterow"
-script_version     = "2.2.1"
+script_version     = "2.4.0"
 script_namespace   = "kite.RheaSigns"
 local rheaZeroEpsilon = 1e-9
 local rheaDimensionEpsilon = 0.0001
@@ -12,6 +15,7 @@ local DependencyControl = require("l0.DependencyControl")
 local depRec = DependencyControl{
     feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
+        {"tstools.Yutils", version = "1.0.0", feed = "https://raw.githubusercontent.com/TypesettingTools/Yutils/master/DependencyControl.json"},
         { "l0.ASSFoundation", version = "0.5.0",
           url  = "https://github.com/TypesettingTools/ASSFoundation",
           feed = "https://raw.githubusercontent.com/TypesettingTools/ASSFoundation/master/DependencyControl.json" },
@@ -27,40 +31,42 @@ local depRec = DependencyControl{
         { "a-mo.Line", version = "1.5.3",
           url  = "https://github.com/TypesettingTools/Aegisub-Motion",
           feed = "https://raw.githubusercontent.com/TypesettingTools/Aegisub-Motion/DepCtrl/DependencyControl.json" },
-        { "kite.Core", version = "1.1.0",
+        { "kite.Core", version = "2.0.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.UI", version = "1.5.2",
+        { "kite.UI", version = "2.0.3",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.LineOps", version = "1.7.4",
+        { "kite.Core", version = "2.0.0",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.PyBridge", version = "1.7.1",
+        { "kite.PyBridge", version = "2.0.1",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.EventOps", version = "1.3.0",
+        { "kite.EventOps", version = "1.3.3",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.ShapeOptimizer", version = "1.3.3",
+        { "kite.ShapeOptimizer", version = "2.0.1",
           url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
           feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-        { "kite.AssContext", version = "1.1.3" },
-        { "kite.AssDrawing", version = "1.0.3" },
-        { "kite.Color", version = "1.2.1" },
-        { "kite.Media", version = "1.4.0" },
-        { "arch.Util", version = "0.1.0" },
+        { "kite.AssContext", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        { "kite.ShapeOptimizer", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        { "kite.AssContext", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        { "kite.PyBridge", version = "2.0.1", feed= "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json"},
+        { "arch.Util", version = "0.1.0", feed= "https://raw.githubusercontent.com/TypesettingTools/arch1t3cht-Aegisub-Scripts/main/DependencyControl.json"},
     },
 }
-local ASS, Functional, ArchPersp, LineCollection, AMLine, Core, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
+depRec:requireModules()
+local _, ASS, Functional, ArchPersp, LineCollection, AMLine, Core, KiteUI, LineOps, PyBridge, EventOps, ShapeOptimizer = depRec:requireModules()
+LineOps = LineOps.LineOps
 local AssContext = require("kite.AssContext")
 local function ConfigHandler(interface, fileName, _, version)
     return KiteUI.dialogHandler(interface, script_namespace, version, {
         { path = "?user/" .. fileName, format = "json_sections" },
     })
 end
-local AssDrawing = require("kite.AssDrawing")
-local Color = require("kite.Color")
+local AssDrawing = require("kite.ShapeOptimizer").AssDrawing
+local Color = require("kite.AssContext").Color
 local LANG = {
     en = {
         mask_err_name = "Enter a mask name without colons or line breaks.",
@@ -111,9 +117,9 @@ local LANG = {
         btn_continue = "Execute",
         btn_ok = "OK",
         err_no_selection = "No selection.",
-        tool_font_manager = "Font and style manager",
-        tool_fade_suite = "Frame Fades and Cleanup",
-        tool_shuffle_line_text = "Shuffle line text",
+        tool_font_manager = "Font Manager",
+        tool_fade_suite = "Frame Fades",
+        tool_shuffle_line_text = "Text Shuffler",
         tool_err_shuffle_lines = "Select at least two dialogue lines.",
         tool_undo_shuffle_line_text = "Rhea Signs: shuffle line text",
         lbl_initial = "Initial",
@@ -214,8 +220,8 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sin seleccion.",
         tool_font_manager = "Gestor de fuentes y estilos",
-        tool_fade_suite = "Frame Fades and Cleanup",
-        tool_shuffle_line_text = "Mezclar texto de líneas",
+        tool_fade_suite = "Frame Fades",
+        tool_shuffle_line_text = "Mezclar textos",
         tool_err_shuffle_lines = "Selecciona al menos dos líneas de diálogo.",
         tool_undo_shuffle_line_text = "Rhea Signs: mezclar texto de líneas",
         lbl_initial = "Inicial",
@@ -316,8 +322,8 @@ local LANG = {
         btn_ok = "OK",
         err_no_selection = "Sem selecao.",
         tool_font_manager = "Gerenciador de fontes e estilos",
-        tool_fade_suite = "Frame Fades and Cleanup",
-        tool_shuffle_line_text = "Embaralhar texto das linhas",
+        tool_fade_suite = "Frame Fades",
+        tool_shuffle_line_text = "Embaralhar textos",
         tool_err_shuffle_lines = "Selecione ao menos duas falas.",
         tool_undo_shuffle_line_text = "Rhea Signs: embaralhar texto das linhas",
         lbl_initial = "Inicial",
@@ -429,14 +435,19 @@ local extraLang = {
         msg_no_vector_align = "No vector clip found in selection for align.",
         msg_no_usable_path_align = "Vector clip has no usable path for align.",
         signs_editor_title = "== SIGNS EDITOR ==",
+        signs_lerp = "Regenerate detected per-character numeric tags (frz, fsp, scale...)",
+        signs_fit = "Fit font size inside the original area (sign plane)",
+        signs_fit_hint = "Measures original and edited glyphs with libass, before perspective. Keeps position, perspective and clips. Limits width and height. Animated geometry is skipped.",
+        signs_plain_only = "Enter plain text only; use \\N for a line break. Braces and override tags are not allowed. No changes applied.",
+        signs_fit_skipped = "%d lines could not be fitted reliably. Their text was edited; their font size was preserved.",
         signs_skip_vec = "Skip vector drawings (\\p1)",
-        signs_auto_gbc = "Auto-detect and regenerate GBC gradients",
+        signs_auto_gbc = "Detect and regenerate color/alpha gradients",
         signs_use_cap = "Apply character limit",
         signs_no_editable = "No editable lines found in selection.",
         signs_original = "ORIGINAL (read-only)",
         signs_modified = "MODIFIED (edit here)",
-        signs_regen_gbc = "Regenerate marked GBC gradients",
-        signs_info = "%d unique texts, %d total lines. %d GBC detected.",
+        signs_regen_gbc = "Regenerate detected color/alpha gradients",
+        signs_info = "%d unique texts, %d total lines. %d lines with per-character patterns.",
         signs_skipped_vectors = " Skipped %d vectors.",
         signs_skipped_over_limit = " Skipped %d over limit.",
         signs_line_mismatch = "Line count mismatch: expected %d, got %d.\nNo changes applied.",
@@ -542,14 +553,19 @@ local extraLang = {
         msg_no_vector_align = "No se encontro clip vectorial en la seleccion para alinear.",
         msg_no_usable_path_align = "El clip vectorial no tiene ruta usable para alinear.",
         signs_editor_title = "== EDITOR DE CARTELES ==",
+        signs_lerp = "Regenerar tags numéricos detectados por letra (frz, fsp, escala...)",
+        signs_fit = "Ajustar tamaño de fuente al área original (plano del cartel)",
+        signs_fit_hint = "Mide los glifos originales y editados con libass, antes de la perspectiva. Conserva posición, perspectiva y clips. Limita ancho y altura. Omite geometría animada.",
+        signs_plain_only = "Introduce solo texto; usa \\N para un salto. No se admiten llaves ni tags. No se aplicaron cambios.",
+        signs_fit_skipped = "No se pudo ajustar con fiabilidad el tamaño de %d líneas. Se editó su texto y se conservó su tamaño de fuente.",
         signs_skip_vec = "Omitir dibujos vectoriales (\\p1)",
-        signs_auto_gbc = "Detectar y regenerar gradientes GBC automaticamente",
+        signs_auto_gbc = "Detectar y regenerar gradientes de color y alfa",
         signs_use_cap = "Aplicar limite de caracteres",
         signs_no_editable = "No se encontraron lineas editables en la seleccion.",
         signs_original = "ORIGINAL (referencia)",
         signs_modified = "MODIFICADO (editar aqui)",
-        signs_regen_gbc = "Regenerar gradientes GBC en lineas modificadas",
-        signs_info = "%d textos unicos, %d lineas totales. %d GBC detectados.",
+        signs_regen_gbc = "Regenerar gradientes de color y alfa detectados",
+        signs_info = "%d textos unicos, %d lineas totales. %d líneas con patrones por letra.",
         signs_skipped_vectors = " %d vectores omitidos.",
         signs_skipped_over_limit = " %d omitidas por limite.",
         signs_line_mismatch = "Cantidad de lineas incorrecta: se esperaban %d, hay %d.\nNo se aplicaron cambios.",
@@ -655,14 +671,19 @@ local extraLang = {
         msg_no_vector_align = "Nenhum clip vetorial encontrado na selecao para alinhar.",
         msg_no_usable_path_align = "O clip vetorial nao tem caminho usavel para alinhar.",
         signs_editor_title = "== EDITOR DE PLACAS ==",
+        signs_lerp = "Regenerar tags numéricas detectadas por letra (frz, fsp, escala...)",
+        signs_fit = "Ajustar tamanho da fonte à área original (plano da placa)",
+        signs_fit_hint = "Mede os glifos originais e editados com libass antes da perspectiva. Mantém posição, perspectiva e clips. Limita largura e altura. Ignora geometria animada.",
+        signs_plain_only = "Digite apenas texto; use \\N para uma quebra. Chaves e tags não são permitidas. Nenhuma alteração aplicada.",
+        signs_fit_skipped = "Não foi possível ajustar %d linhas com confiança. O texto foi editado; o tamanho da fonte foi mantido.",
         signs_skip_vec = "Ignorar desenhos vetoriais (\\p1)",
-        signs_auto_gbc = "Detectar e regenerar gradientes GBC automaticamente",
+        signs_auto_gbc = "Detectar e regenerar gradientes de cor e alfa",
         signs_use_cap = "Aplicar limite de caracteres",
         signs_no_editable = "Nenhuma linha editavel encontrada na selecao.",
         signs_original = "ORIGINAL (referência)",
         signs_modified = "MODIFICADO (editar aqui)",
-        signs_regen_gbc = "Regenerar gradientes GBC marcados",
-        signs_info = "%d textos unicos, %d linhas totais. %d GBC detectados.",
+        signs_regen_gbc = "Regenerar gradientes de cor e alfa detectados",
+        signs_info = "%d textos unicos, %d linhas totais. %d linhas com padrões por letra.",
         signs_skipped_vectors = " %d vetores ignorados.",
         signs_skipped_over_limit = " %d ignoradas por limite.",
         signs_line_mismatch = "Quantidade de linhas incorreta: esperadas %d, recebidas %d.\nNenhuma alteracao aplicada.",
@@ -1044,9 +1065,6 @@ function RheaFoundation.insertTags(text, payload, mode)
     end
     return Rhea.injectFirst(text, payload)
 end
-function RheaFoundation.stripAutoMarkers(text)
-    return (tostring(text or ""):gsub("{%*[^}]*}", ""))
-end
 function RheaFoundation.firstClipTag(textOrLine)
     local ok, eff = pcall(function()
         local data = RheaFoundation.parseLine(textOrLine)
@@ -1183,112 +1201,6 @@ function RheaFoundation.multilineTextExtents(style, text)
         height = height + math.max(tonumber(h) or 0, 0)
     end
     return width, height
-end
-function RheaFoundation.groupByTagState(ass, tagName)
-    local groups, group = {}, nil
-    ass:callback(function(section, sections, i)
-        local isAnchor = (i == 1) or (section.instanceOf and section.instanceOf[ASS.Section.Tag] and #section:getTags(tagName) > 0)
-        if isAnchor then
-            local state = section:getEffectiveTags(true).tags[tagName]
-            if group then group.endTagState = state end
-            group = { sections = {}, startTagState = state, firstLineIndex = i }
-            groups[#groups + 1] = group
-        elseif i == #sections then
-            group.endTagState = section:getEffectiveTags(true).tags[tagName]
-        end
-        if group then group.sections[#group.sections + 1] = section end
-    end)
-    return groups
-end
-function RheaFoundation.lerpGroup(sections, startTagState, endTagState)
-    if not startTagState or not endTagState then return false end
-    local tokens, total = {}, 0
-    for i, section in ipairs(sections) do
-        if section.instanceOf and section.instanceOf[ASS.Section.Text] then
-            tokens[i] = LineOps.graphemes(section.value)
-            total = total + #tokens[i]
-        end
-    end
-    if total == 0 then return false end
-    local output, processed = {}, 0
-    for i, section in ipairs(sections) do
-        LineOps.checkCancelled()
-        if not tokens[i] then output[#output + 1] = section
-        else
-            for j, value in ipairs(tokens[i]) do
-                local tag = startTagState:lerp(endTagState, processed / total)
-                local previous = output[#output]
-                if j == 1 and previous and previous.instanceOf and previous.instanceOf[ASS.Section.Tag] then
-                    previous:removeTags(startTagState.__tag.name)
-                    previous:insertTags(tag)
-                else output[#output + 1] = ASS.Section.Tag({tag}) end
-                output[#output + 1] = ASS.Section.Text(value)
-                processed = processed + 1
-            end
-        end
-    end
-    return output
-end
-function RheaFoundation.visibleFromASS(ass)
-    local out = {}
-    ass:callback(function(section)
-        if section.instanceOf and section.instanceOf[ASS.Section.Text] then
-            out[#out + 1] = section.value
-        end
-    end)
-    return table.concat(out)
-end
-function RheaFoundation.replaceVisibleText(ass, newVisible)
-    local sections, sizes, total = {}, {}, 0
-    ass:callback(function(section)
-        if section.instanceOf and section.instanceOf[ASS.Section.Text] then
-            sections[#sections + 1] = section
-            local size = #Rhea.tokenizeVisible(section.value)
-            sizes[#sizes + 1] = size
-            total = total + size
-        end
-    end)
-    if #sections == 0 then return false end
-    local elems = Rhea.tokenizeVisible(newVisible)
-    local newTotal = #elems
-    if total == 0 then
-        sections[1].value = newVisible
-        for i = 2, #sections do sections[i].value = "" end
-        return true
-    end
-    local used, cumulative = 0, 0
-    for i, section in ipairs(sections) do
-        cumulative = cumulative + sizes[i]
-        local boundary = Rhea.round(newTotal * cumulative / total)
-        local pieces = {}
-        for j = used + 1, boundary do pieces[#pieces + 1] = elems[j].content end
-        section.value = table.concat(pieces)
-        used = boundary
-    end
-    return true
-end
-function RheaFoundation.detectGBCTag(text)
-    local star = tostring(text or ""):match("{%*([^}]+)}")
-    if not star then return nil end
-    local raw = star:match("^\\([1-4]?[A-Za-z]+)")
-    if not raw then return nil end
-    return rheaTagToAss[raw] or raw
-end
-function RheaFoundation.lerpLine(ass, tagName)
-    local groups = RheaFoundation.groupByTagState(ass, tagName)
-    local insertOffset = 0
-    local applied = false
-    for _, group in ipairs(groups) do
-        local lerped = RheaFoundation.lerpGroup(group.sections, group.startTagState, group.endTagState)
-        if lerped then
-            ass:removeSections(insertOffset + group.firstLineIndex, insertOffset + group.firstLineIndex + #group.sections - 1)
-            ass:insertSections(lerped, insertOffset + group.firstLineIndex)
-            insertOffset = insertOffset + #lerped - #group.sections
-            applied = true
-        end
-    end
-    if applied then ass:cleanTags(4) end
-    return applied
 end
 function RheaConfig.key(prefix, key)
     return tostring(prefix or "rhea") .. "_" .. tostring(key)
@@ -3033,49 +2945,304 @@ RheaOps.Sign.typeModes = signTypeItems
 RheaOps.Sign.rotations = signRotItems
 end
 do
-local function detectLerpTag(text)
-    return RheaFoundation.detectGBCTag(text) or "color1"
+
+local Editor = {}
+local numeric = {frz=true, frx=true, fry=true, fax=true, fay=true, fsp=true,
+    fs=true, fscx=true, fscy=true, bord=true, xbord=true, ybord=true,
+    shad=true, xshad=true, yshad=true, blur=true, be=true}
+local colors = {c=true, ["1c"]=true, ["2c"]=true, ["3c"]=true, ["4c"]=true}
+local alphas = {alpha=true, ["1a"]=true, ["2a"]=true, ["3a"]=true, ["4a"]=true}
+local angles = {frz=true, frx=true, fry=true}
+local function canonical(name)
+    if name == "1c" then return "c" end
+    if name == "fr" then return "frz" end
+    return name
 end
-local function processLine(line, newVisible, doLerp)
-    local sourceText = line.text or ""
-    local probe = Rhea.cloneLine(line)
-    probe.text = RheaFoundation.stripAutoMarkers(sourceText)
-    local ass = RheaFoundation.tryParseLine(probe)
-    if not ass then return false, false end
-    if newVisible ~= nil then
-        if not RheaFoundation.replaceVisibleText(ass, newVisible) then return false, false end
-        ass:commit(probe)
-        ass = RheaFoundation.tryParseLine(probe)
-        if not ass then return false, false end
+local function valueOf(token)
+    local name = canonical(token.name)
+    if numeric[name] then return tonumber(token.value) end
+    if colors[name] or alphas[name] then
+        local hex = token.value:match("^%s*&[Hh](%x+)&?%s*$")
+        if hex then return tonumber(hex, 16) end
     end
-    local regenerated = doLerp and RheaFoundation.lerpLine(ass, detectLerpTag(sourceText)) or false
-    ass:commit(probe)
-    line.text = probe.text
-    return regenerated, true
 end
+local function number(value) return Core.formatNumber(value, 4) end
+local function tagValue(name, value)
+    if colors[name] then return string.format("&H%06X&", math.floor(value + 0.5)) end
+    if alphas[name] then return string.format("&H%02X&", math.floor(value + 0.5)) end
+    return number(value)
+end
+local function space(unit) return unit == "\\h" or unit:match("^%s+$") ~= nil end
+local function words(units)
+    local result, active = {}, false
+    for i, unit in ipairs(units) do
+        local visible = not space(unit) and unit ~= "\\N" and unit ~= "\\n"
+        if visible and not active then result[#result + 1] = {first=i-1, last=i} end
+        if visible then result[#result].last = i end
+        active = visible
+    end
+    return result
+end
+function Editor.analyze(text)
+    local model = {units={}, blocks={}, channels={}, plain="", drawing=false}
+    local state, reset = {}, false
+    for _, section in ipairs(LineOps.scanSections(text)) do
+        if section.type == "text" then
+            for _, unit in ipairs(LineOps.graphemes(section.text)) do
+                model.units[#model.units + 1] = unit
+            end
+        else
+            local block = {offset=#model.units, raw=section.type == "drawing" and section.text or "{"..section.text.."}",
+                drawing=section.type == "drawing", starred=section.text:match("^%*") ~= nil}
+            model.blocks[#model.blocks + 1] = block
+            if block.drawing then model.drawing = true end
+            if section.type == "override" then
+                for _, token in ipairs(LineOps.overrideTokens(section.text)) do
+                    local name, value = canonical(token.name), valueOf(token)
+                    if name == "r" then reset = true end
+                    if value ~= nil then
+                        local channel = model.channels[name] or {points={}, marked=false}
+                        model.channels[name] = channel
+                        local points = channel.points
+                        local point = {x=#model.units, value=value}
+                        if points[#points] and points[#points].x == point.x then points[#points] = point
+                        else points[#points+1] = point end
+                        channel.marked = channel.marked or block.starred
+                    end
+                end
+            end
+        end
+    end
+    model.plain = table.concat(model.units)
+    model.words = words(model.units)
+    model.names = {}
+    for name, channel in pairs(model.channels) do
+        local points, covered, distinct = {}, 0, false
+        for _, point in ipairs(channel.points) do
+
+            if point.x < #model.units then
+                points[#points+1] = point
+                if #points > 1 and point.value ~= points[1].value then distinct = true end
+                if not space(model.units[point.x+1]) then covered = covered + 1 end
+            end
+        end
+        channel.points = points
+        local count = 0
+        for _, unit in ipairs(model.units) do
+            if not space(unit) and unit ~= "\\N" and unit ~= "\\n" then count = count + 1 end
+        end
+
+        channel.detected = not reset and distinct and #points >= 2 and
+            (channel.marked or (#points >= math.min(3, count) and covered >= count * 0.65))
+        if channel.detected then model.names[#model.names+1] = name end
+    end
+    table.sort(model.names)
+    return model
+end
+local function mapOffset(offset, source, target)
+    if offset == 0 then return 0 end
+    if offset >= #source.units then return #target.units end
+
+    if #source.words == #target.words then
+        for i, word in ipairs(source.words) do
+            if offset == word.first then return target.words[i].first end
+            if offset == word.last then return target.words[i].last end
+        end
+    end
+    return math.floor(offset * #target.units / math.max(1, #source.units) + 0.5)
+end
+local function sample(channel, x, name)
+    local points = channel.points
+    if x <= points[1].x then return points[1].value end
+    for i=2,#points do
+        local a, b = points[i-1], points[i]
+        if x <= b.x then
+            if x == b.x then return b.value end
+            local t = (x-a.x)/(b.x-a.x)
+            if colors[name] then
+                local result = 0
+                for shift=0,2 do
+                    local div = 256^shift
+                    local left, right = math.floor(a.value/div)%256, math.floor(b.value/div)%256
+                    result = result + math.floor(left+(right-left)*t+0.5)*div
+                end
+                return result
+            end
+            local delta = b.value-a.value
+            if angles[name] then delta = (delta+180)%360-180 end
+            return a.value+delta*t
+        end
+    end
+    return points[#points].value
+end
+function Editor.replace(text, visible, options)
+    options = options or {}
+    local source = Editor.analyze(text)
+    if visible == source.plain then return text, source end
+    if visible:find("[{}\r\n]") then return nil, "plain_text" end
+    local target = {units=LineOps.graphemes(visible)}
+    target.words = words(target.units)
+    local selected = {}
+    for _, name in ipairs(source.names) do
+        if (colors[name] or alphas[name]) and options.gradients or numeric[name] and options.lerp then
+            selected[name] = true
+        end
+    end
+    local buckets = {}
+    for _, block in ipairs(source.blocks) do
+        local raw = block.raw
+        if not block.drawing then
+            raw = LineOps.mapTagCalls(raw, nil, function(call)
+                if selected[canonical(call.name)] then return "" end
+            end)
+            if raw ~= block.raw and raw:match("^{%*?%s*}$") then raw = "" end
+        end
+        local offset = mapOffset(block.offset, source, target)
+        buckets[offset] = (buckets[offset] or "") .. raw
+    end
+    local result = {}
+    for offset=0,#target.units do
+        result[#result+1] = buckets[offset] or ""
+        local unit = target.units[offset+1]
+        if unit then
+            local tags = {}
+            if unit ~= "\\N" and unit ~= "\\n" then
+                local x = #target.units <= 1 and 0 or offset*(#source.units-1)/(#target.units-1)
+                for _, name in ipairs(source.names) do
+                    if selected[name] and x >= source.channels[name].points[1].x then
+                        tags[#tags+1] = "\\"..name..tagValue(name, sample(source.channels[name], x, name))
+                    end
+                end
+            end
+            if #tags > 0 then result[#result+1] = "{"..(offset > 0 and offset < #target.units-1 and "*" or "")..table.concat(tags).."}" end
+            result[#result+1] = unit
+        end
+    end
+    return table.concat(result), source
+end
+
+local probeRemove = {pos=true, move=true, org=true, clip=true, iclip=true, an=true, a=true,
+    fr=true, frz=true, frx=true, fry=true, fax=true, fay=true, q=true, t=true,
+    bord=true, xbord=true, ybord=true, shad=true, xshad=true, yshad=true, blur=true, be=true,
+    alpha=true, ["1a"]=true, ["2a"]=true, ["3a"]=true, ["4a"]=true, fad=true, fade=true,
+    k=true, kf=true, ko=true, kt=true}
+local probeDefaults = "\\frz0\\frx0\\fry0\\fax0\\fay0\\bord0\\shad0\\blur0\\be0\\alpha&H00&"
+local function resetStyle(call, base, styles)
+    local name = LineOps.trim(call.value)
+    return name == "" and base or styles[name]
+end
+
+
+function Editor.measurementText(text, style, styles, scale)
+    local mapped = LineOps.mapTagCalls(text, nil, function(call)
+        if probeRemove[call.name] then return "" end
+        if call.name == "r" then
+            local reset = resetStyle(call, style, styles)
+            assert(reset, "Unknown reset style")
+            return call.raw..probeDefaults.."\\q2\\fscx"..number((reset.scale_x or 100)*scale).."\\fscy"..number((reset.scale_y or 100)*scale)
+        end
+        if call.name == "fscx" or call.name == "fscy" then
+            return "\\"..call.raw_name..number(assert(tonumber(call.value))*scale)
+        end
+    end)
+    return "{\\an7\\pos(32,32)\\q2"..probeDefaults.."\\fscx"..number((style.scale_x or 100)*scale)..
+        "\\fscy"..number((style.scale_y or 100)*scale).."}"..mapped
+end
+function Editor.resizeFont(text, style, styles, factor)
+    local mapped = LineOps.mapTagCalls(text, {fs=true, r=true}, function(call)
+        if call.name == "r" then
+            local reset = resetStyle(call, style, styles)
+            assert(reset and tonumber(reset.fontsize), "Unknown reset style")
+            return call.raw.."\\fs"..number(reset.fontsize*factor)
+        end
+        assert(not call.value:match("^%s*[+-]"), "Relative font size")
+        return "\\fs"..number(assert(tonumber(call.value))*factor)
+    end)
+    return "{\\fs"..number(assert(tonumber(style.fontsize))*factor).."}"..mapped
+end
+function Editor.fit(original, edited, style, styles, measure)
+    if original == edited then return edited, {factor=1} end
+    for _, call in ipairs(LineOps.tagCalls(edited)) do
+        if call.name == "t" then
+            for _, target in ipairs(LineOps.overrideTokens(call.value:match("(\\.*)%)$") or "")) do
+                if numeric[canonical(target.name)] or target.name == "clip" then return nil, "animated_geometry" end
+            end
+        end
+    end
+    if LineOps.hasDrawing(edited) then return nil, "drawing" end
+    local function dimensions(text)
+        local scale, previous = 2, nil
+        for _=1,10 do
+            LineOps.checkCancelled()
+            local ok, bounds = pcall(measure, Editor.measurementText(text, style, styles, scale))
+            if not ok or not bounds or not bounds.w or bounds.w <= 0 then return nil end
+            local measured = bounds.w/scale
+            if bounds.x >= 16 and bounds.y >= 16 and bounds.x+bounds.w < bounds.res_x-8 and bounds.y+bounds.h < bounds.res_y-8 then
+
+
+                local height = bounds.h/scale
+                if previous and math.abs(measured-previous.w) <= math.max(2/scale, measured*0.005)
+                    and math.abs(height-previous.h) <= math.max(2/scale, height*0.005) then
+                    return previous.w, previous.h, previous.quantum
+                end
+                previous = {w=measured, h=height, quantum=1/scale}
+            else
+                previous = nil
+            end
+            scale = scale/2
+        end
+    end
+    local target, targetHeight, quantum = dimensions(original)
+    if not target then return nil, "measurement" end
+    local current, currentHeight = dimensions(edited)
+    if not current then return nil, "measurement" end
+    local function errorRatio(w,h) return math.max(w/target, h/targetHeight)-1 end
+    local tolerance = math.max(quantum*1.5/math.min(target,targetHeight), 0.01)
+    if math.abs(errorRatio(current,currentHeight)) <= tolerance then
+        return edited, {factor=1, before=target, after=current, height_before=targetHeight, height_after=currentHeight}
+    end
+    local lo, hi = 0.02, math.max(2, math.min(16, math.min(target/current,targetHeight/currentHeight)*2))
+    local best, report, errorValue
+    for _=1,16 do
+        local factor = (lo+hi)/2
+        local ok, candidate = pcall(Editor.resizeFont, edited, style, styles, factor)
+        if not ok then return nil, "font_size" end
+        local measured, height, step = dimensions(candidate)
+        if not measured then return nil, "measurement" end
+        local ratio = errorRatio(measured,height)
+        local err = math.abs(ratio)
+        if not errorValue or err < errorValue then
+            best, errorValue = candidate, err
+            report = {factor=factor, before=target, after=measured, height_before=targetHeight, height_after=height}
+        end
+        if err <= math.max(tolerance, step*1.5/math.min(target,targetHeight)) then return best, report end
+        if ratio > 0 then hi = factor else lo = factor end
+    end
+    return nil, "fit_range"
+end
+RheaOps.Tools.signsEditor = Editor
+
 local function groupVisible(lines, opts)
     local order, groups = {}, {}
-    local stats = {omit_vec = 0, omit_cap = 0}
+    local stats = {omit_vec=0, omit_cap=0}
     local capLimit = math.max(1, Core.finiteNumber(opts.cap_limit) or 150)
     lines:runCallback(function(_, line, i)
         LineOps.checkCancelled()
-        if not line.text or line.text == "" then return end
+        if line.comment or not line.text or line.text == "" then return end
         if opts.skip_vec and Rhea.isVectorLine(line.text) then
-            stats.omit_vec = stats.omit_vec + 1
+            stats.omit_vec = stats.omit_vec+1
             return
         end
-        local cleanText = RheaFoundation.stripAutoMarkers(line.text)
-        local ass = RheaFoundation.tryParseLine(cleanText)
-        if not ass then return end
-        local visible = RheaFoundation.visibleFromASS(ass)
+        local model = Editor.analyze(line.text)
+        local visible = model.plain
         if visible == "" then return end
-        if opts.use_cap and #Rhea.tokenizeVisible(visible) > capLimit then
-            stats.omit_cap = stats.omit_cap + 1
+        if opts.use_cap and #model.units > capLimit then
+            stats.omit_cap = stats.omit_cap+1
             return
         end
-        if not groups[visible] then groups[visible] = {}; order[#order + 1] = visible end
+        if not groups[visible] then groups[visible]={}; order[#order+1]=visible end
         local group = groups[visible]
-        group[#group + 1] = {visible = visible, line = line, idx = i, isGBC = line.text:find("{*", 1, true) ~= nil}
+        group[#group+1] = {visible=visible, line=line, idx=i, isGBC=#model.names>0}
     end, true)
     return groups, order, stats
 end
@@ -3086,12 +3253,19 @@ local function main(sub, sel)
         {class="label", x=0, y=0, width=4, height=1, label=L("signs_editor_title")},
         {class="checkbox", x=0, y=1, width=3, name="skip_vec", label=L("signs_skip_vec"), value=true},
         {class="checkbox", x=0, y=2, width=3, name="auto_gbc", label=L("signs_auto_gbc"), value=true},
-        {class="checkbox", x=0, y=3, width=2, name="use_cap", label=L("signs_use_cap"), value=false},
-        {class="intedit", x=2, y=3, width=1, name="cap_limit", value=150, min=1},
+        {class="checkbox", x=0, y=3, width=4, name="auto_lerp", label=L("signs_lerp"), value=true},
+        {class="checkbox", x=0, y=4, width=2, name="use_cap", label=L("signs_use_cap"), value=false},
+        {class="intedit", x=2, y=4, width=1, name="cap_limit", value=150, min=1},
     }
     local continue, cancel = L("btn_continue"), L("btn_cancel")
     local btn1, res1 = aegisub.dialog.display(cfgDlg, {continue, cancel}, {ok=continue, close=cancel})
     if btn1 ~= continue then return false end
+    local styles = Rhea.styleMap(sub)
+    local resX, resY = LineOps.scriptResolution(sub)
+    if aegisub.video_size then
+        local vx, vy = aegisub.video_size()
+        resX, resY = vx or resX, vy or resY
+    end
     local lines = LineCollection(sub, sel)
     local groups, order, stats = groupVisible(lines, res1)
     if #order == 0 then
@@ -3116,6 +3290,9 @@ local function main(sub, sel)
         {class="textbox", x=25, y=1, width=24, height=12, name="modified", text=originalText},
         {class="label", x=0, y=13, width=49, height=1, label=info},
         {class="checkbox", x=0, y=14, width=49, name="do_gbc", label=L("signs_regen_gbc"), value=res1.auto_gbc},
+        {class="checkbox", x=0, y=15, width=49, name="do_lerp", label=L("signs_lerp"), value=res1.auto_lerp},
+        {class="checkbox", x=0, y=16, width=49, name="fit_width", label=L("signs_fit"), value=false},
+        {class="label", x=0, y=17, width=49, height=2, label=L("signs_fit_hint")},
     }
     local apply = L("btn_apply")
     while true do
@@ -3130,21 +3307,57 @@ local function main(sub, sel)
         if #modifiedLines ~= #order then
             showMsg(string.format(L("signs_line_mismatch"), #order, #modifiedLines))
         else
-            local changed = false
+            local pending, fitSkipped = {}, 0
+            local failed, fitCache = nil, {}
             for i, vis in ipairs(order) do
                 local newVis = modifiedLines[i]
-                for _, item in ipairs(groups[vis]) do
-                    LineOps.checkCancelled()
-                    if newVis ~= vis or (item.isGBC and res2.do_gbc) then
-                        local _, processed = processLine(item.line, newVis, item.isGBC and res2.do_gbc)
-                        assert(processed, L("signs_no_editable"))
-                        changed = true
+                if newVis ~= vis then
+                    for _, item in ipairs(groups[vis]) do
+                        LineOps.checkCancelled()
+                        local text, reason = Editor.replace(item.line.text, newVis,
+                            {gradients=res2.do_gbc, lerp=res2.do_lerp})
+                        if not text then failed = reason; break end
+                        if res2.fit_width and newVis ~= "" then
+                            local style = styles[item.line.style]
+                            local function measure(probeText)
+                                local probe = Rhea.cloneLine(item.line)
+                                probe.text = probeText
+                                local data = RheaFoundation.parseLine(probe)
+                                local bounds = data:getLineBounds(false)
+                                if bounds and bounds[1] then
+                                    return {x=bounds[1].x, y=bounds[1].y, w=bounds.w, h=bounds.h,
+                                        res_x=resX, res_y=resY}
+                                end
+                            end
+                            local ok, fitted = pcall(function()
+                                local key = item.line.style .. "\31" .. Editor.measurementText(item.line.text, style, styles, 1)
+                                    .. "\31" .. Editor.measurementText(text, style, styles, 1)
+                                local cached = fitCache[key]
+                                if cached then
+                                    return cached.factor == 1 and text or Editor.resizeFont(text, style, styles, cached.factor)
+                                end
+                                local output, report = Editor.fit(item.line.text, text, style, styles, measure)
+                                if output then fitCache[key] = report end
+                                return output
+                            end)
+                            LineOps.checkCancelled()
+                            if ok and fitted then text = fitted else fitSkipped = fitSkipped+1 end
+                        end
+                        pending[#pending+1] = {line=item.line, text=text}
                     end
                 end
+                if failed then break end
             end
-            if not changed then return false end
-            Rhea.Lines.atomic(sub, function() lines:replaceLines() end)
-            break
+            if failed then
+                showMsg(L("signs_plain_only"))
+            else
+                if #pending == 0 then return false end
+                LineOps.checkCancelled()
+                for _, item in ipairs(pending) do item.line.text = item.text end
+                Rhea.Lines.atomic(sub, function() lines:replaceLines() end)
+                if fitSkipped > 0 then showMsg(string.format(L("signs_fit_skipped"), fitSkipped)) end
+                break
+            end
         end
     end
     aegisub.set_undo_point("Signs Editor")
@@ -4038,13 +4251,13 @@ FastSigns settings, and the Shapes controls.
 Toolbox:
 Remove redundant zero tags cleans only selected lines, respecting styles, resets
 and earlier overrides. Animated targets and positioning tags are retained.
-Font and Style Manager replaces fonts in styles and optional \fn tags,
+Font Manager replaces fonts in styles and optional \fn tags,
 batch-edits style fields and colors, clones styles, and
-refreshes the detected font and style lists. In Frame Fades and Cleanup, In sets fade-in from
+refreshes the detected font and style lists. In Frame Fades, In sets fade-in from
 the current video frame, Out sets fade-out, and Clean removes internal fade edges at
 exact shared timing boundaries between selected groups. Fade-in and fade-out
 preserve the other duration and unrelated tags.
-Shuffle Line Text redistributes text among selected dialogue rows without moving
+Text Shuffler redistributes text among selected dialogue rows without moving
 their timing or metadata. Leave the dropdown empty to skip it.
 
 Split at Visual Changes (Toolbox): splits one line at visual changes inside a rectangular
@@ -4094,7 +4307,7 @@ Eliminar tags cero redundantes limpia solo las líneas seleccionadas, respetando
 estilos, resets y tags previos. Conserva los destinos de animación y la posición.
 El gestor de fuentes y estilos cambia fuentes en estilos y tags \fn opcionales,
 edita campos y colores en lote, clona
-estilos y actualiza las listas detectadas. En Frame Fades and Cleanup, Entrada fija la entrada
+estilos y actualiza las listas detectadas. En Frame Fades, Entrada fija la entrada
 desde el frame actual, Salida fija la salida y Limpiar elimina los bordes internos del
 limite temporal exacto entre grupos seleccionados. La entrada y la salida no
 alteran la otra duracion ni los demas tags. Mezclar
@@ -4149,7 +4362,7 @@ Remover tags zero redundantes limpa apenas as linhas selecionadas, respeitando
 estilos, resets e tags anteriores. Preserva destinos de animação e posições.
 O gerenciador de fontes e estilos troca fontes em estilos e etiquetas \fn
 opcionais, edita campos e cores em lote, clona estilos
-e atualiza as listas detectadas. Em Frame Fades and Cleanup, Entrada define a entrada desde o
+e atualiza as listas detectadas. Em Frame Fades, Entrada define a entrada desde o
 frame atual, Saida define a saida e Limpar remove as bordas internas no limite de tempo
 exato entre grupos selecionados. A entrada e a saida nao alteram a outra duracao
 nem as demais tags. Embaralhar texto das
@@ -4202,9 +4415,9 @@ local choiceKeys = {
     ["Balanced"] = "sh_intensity_balanced",
     ["Fidelity"] = "sh_intensity_fidelity",
     ["Aggressive"] = "sh_intensity_aggressive",
-    ["Font and Style Manager"] = "tool_font_manager",
-    ["Frame Fades and Cleanup"] = "tool_fade_suite",
-    ["Shuffle Line Text"] = "tool_shuffle_line_text",
+    ["Font Manager"] = "tool_font_manager",
+    ["Frame Fades"] = "tool_fade_suite",
+    ["Text Shuffler"] = "tool_shuffle_line_text",
     ["Style to Tags"] = "tool_style_tags",
     ["Remove Redundant Zero Tags"] = "tool_zero_tags",
 }
@@ -4240,9 +4453,9 @@ end
 Rhea.Actions = {
     Tools = {
         Shapes = "Shapes",
-        FontStyles = "Font and Style Manager",
-        Fades = "Frame Fades and Cleanup",
-        Shuffle = "Shuffle Line Text",
+        FontStyles = "Font Manager",
+        Fades = "Frame Fades",
+        Shuffle = "Text Shuffler",
     },
     Shapes = {
         Unify = "Unify Drawing Pivots",
@@ -4254,7 +4467,7 @@ Rhea.Actions = {
     Fades = {
         In = "Fade In from Current Frame",
         Out = "Fade Out from Current Frame",
-        Clean = "Continuous Fade Cleanup",
+        Clean = "Remove Inner Fades",
     },
 }
 Rhea.Actions.Shapes.Items = {
@@ -6133,7 +6346,7 @@ RheaOps.FontStyles = (function()
 local FontStyles = {}
 local fontLanguages = {
     en = {
-        title = "Font and Style Manager",
+        title = "Font Manager",
         button_swap = "Swap",
         button_refresh = "Refresh",
         button_edit = "Edit",
@@ -6213,10 +6426,10 @@ local fontLanguages = {
         edit_done = "%d style(s) updated.\n%d value(s) changed.",
         colors_done = "%d style(s) updated.\n%d color(s) changed.",
         clone_created = "Style created: %s",
-        undo_swap = "Font and Style Manager: swap font",
-        undo_edit = "Font and Style Manager: edit styles",
-        undo_colors = "Font and Style Manager: change colors",
-        undo_clone = "Font and Style Manager: clone style",
+        undo_swap = "Font Manager: swap font",
+        undo_edit = "Font Manager: edit styles",
+        undo_colors = "Font Manager: change colors",
+        undo_clone = "Font Manager: clone style",
     },
     es = {
         title = "Gestor de fuentes y estilos",
@@ -7101,7 +7314,7 @@ function Fades.applyFrameFade(subs, sel, mode, context)
             context,
             intro and "fade_undo_intro" or "fade_undo_outro",
             intro and "Rhea Signs: fade in from current frame" or "Rhea Signs: fade out from current frame",
-            intro and "Frame Fades and Cleanup - fade in" or "Frame Fades and Cleanup - fade out"
+            intro and "Frame Fades - fade in" or "Frame Fades - fade out"
         )
         return sel, true
     end)
@@ -7122,7 +7335,7 @@ function Fades.cleanup(subs, sel, context)
         return EventOps.continuousFadeCleanup(subs, indices)
     end)
     if changed > 0 then
-        undo(context, "fade_undo_cleanup", "Rhea Signs: continuous fade cleanup", "Frame Fades and Cleanup - continuous cleanup")
+        undo(context, "fade_undo_cleanup", "Rhea Signs: continuous fade cleanup", "Frame Fades - continuous cleanup")
     end
     return result, changed > 0
 end
@@ -7269,7 +7482,7 @@ return ZeroTags
 end)()
 RheaOps.FrameChanges = (function()
 local Context, UI, Line = AssContext, KiteUI, AMLine
-local Media, Util = require("kite.Media"), require("arch.Util")
+local Media, Util = require("kite.PyBridge").Media, require("arch.Util")
 local toolName = "Rhea Signs - Split at Visual Changes"
 local FC = {}
 local FREEZE, KEEP = "Congelar por tramo", "Conservar animación"
@@ -7532,7 +7745,7 @@ function FC.buildOutput(source, analysis, options, context, guide)
     if options.remove_guide then
         requireValue(guide and base.text:sub(guide.call.start, guide.call.finish) == guide.call.raw,
             "El clip guía ya no coincide con la línea analizada.")
-        base.text = base.text:sub(1, guide.call.start - 1) .. base.text:sub(guide.call.finish + 1)
+        base.text = LineOps.removeTagCalls(base.text, {clip=true})
     end
     local samplingSource = Core.copy(base)
     samplingSource.parentCollection = context
@@ -7657,11 +7870,91 @@ FC.defaults, FC.FREEZE, FC.KEEP = defaults, FREEZE, KEEP
 return FC
 end)()
 
+RheaOps.AEKeyframes = {main=function(subs, sel)
+    if not PyBridge then showMsg("After Effects Keyframes requires kite.PyBridge."); return end
+    local FPS = 24000 / 1001
+    if aegisub.ms_from_frame then
+        local ok0, first = pcall(aegisub.ms_from_frame, 0)
+        local ok1, last = pcall(aegisub.ms_from_frame, 1)
+        if ok0 and ok1 and type(first)=="number" and type(last)=="number" and last>first then FPS=1000/(last-first) end
+    end
+    local vw, vh = 1920, 1080
+    if aegisub and type(aegisub.video_size) == "function" then
+        local ok, first, second = pcall(aegisub.video_size)
+        if ok then
+            if type(first) == "table" then
+                vw = tonumber(first.width or first.x) or vw
+                vh = tonumber(first.height or first.y) or vh
+            else
+                vw = tonumber(first) or vw
+                vh = tonumber(second) or vh
+            end
+        end
+    end
+    local frameMs = 1000 / FPS
+    local outPos = { "Adobe After Effects 6.0 Keyframe Data\n", "\tUnits Per Second\t" .. FPS .. "\n",
+                      "\tSource Width\t" .. vw .. "\n", "\tSource Height\t" .. vh .. "\n",
+                      "\tSource Pixel Aspect Ratio\t1\n", "\tComp Pixel Aspect Ratio\t1\n\n",
+                      "Position\n\tFrame\tX pixels\tY pixels\tZ pixels\n" }
+    local outScale = { "\nScale\n\tFrame\tX percent\tY percent\tZ percent\n" }
+    local outRot   = { "\nRotation\n\tFrame\tDegrees\n" }
+    local gframe = 0
+    for _, idx in ipairs(sel) do
+        local line = subs[idx]
+        if type(line)=="table" and line.class=="dialogue" and line.start_time and line.end_time and line.end_time>line.start_time then
+            local text = tostring(line.text or "")
+            local nf = math.max(1, math.floor((line.end_time - line.start_time) / frameMs + 0.5))
+            local position = LineOps and LineOps.lastTagCall(text, "pos") or nil
+            local positionArgs = position and LineOps.splitArguments(position.value) or {}
+            local x = tonumber(positionArgs[1]) or vw / 2
+            local y = tonumber(positionArgs[2]) or vh / 2
+            local move = LineOps and LineOps.lastTagCall(text, "move") or nil
+            local moveArgs = move and LineOps.splitArguments(move.value) or {}
+            local mx1, my1, mx2, my2 = tonumber(moveArgs[1]), tonumber(moveArgs[2]), tonumber(moveArgs[3]), tonumber(moveArgs[4])
+            local mt1 = tonumber(moveArgs[5]) or 0
+            local mt2 = tonumber(moveArgs[6]) or (line.end_time - line.start_time)
+            local function positionAt(elapsed)
+                if not (mx1 and my1 and mx2 and my2) then return x, y end
+                if mt2 <= mt1 then return elapsed < mt1 and mx1 or mx2, elapsed < mt1 and my1 or my2 end
+                local ratio = math.max(0, math.min(1, (elapsed - mt1) / (mt2 - mt1)))
+                return mx1 + (mx2 - mx1) * ratio, my1 + (my2 - my1) * ratio
+            end
+            local function numericTag(name, fallback)
+                local call = LineOps and LineOps.lastTagCall(text, name) or nil
+                return call and tonumber(call.value) or fallback
+            end
+            local fscx = numericTag("fscx", 100)
+            local fscy = numericTag("fscy", 100)
+            local frz = numericTag("frz", 0)
+            for localFrame = 0, nf - 1 do
+                local px, py = positionAt(localFrame * frameMs)
+                table.insert(outPos,   string.format("\t%d\t%s\t%s\t0\n", gframe, px, py))
+                table.insert(outScale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
+                table.insert(outRot,   string.format("\t%d\t%s\n", gframe, frz))
+                gframe = gframe + 1
+            end
+        end
+    end
+    table.insert(outRot, "\nEnd of Keyframe Data")
+    local payload = table.concat(outPos) .. table.concat(outScale) .. table.concat(outRot)
+    if aegisub.dialog and type(aegisub.dialog.save) == "function" then
+        local savePath = aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false)
+        if not savePath or savePath == "" then return end
+        local ok, message = PyBridge.writeFile(savePath, payload)
+        if ok then showMsg("After Effects Keyframes: " .. savePath); return end
+        showMsg("Cannot write: " .. savePath .. "\n" .. tostring(message or ""))
+        return
+    end
+    if aegisub.log then aegisub.log(payload) end
+end}
+
 RheaOps.StyleTags = {main=function(subs, sel, _, context) return AssContext.styleBake.run(subs,sel,context) end}
+Rhea.Actions.Tools.AEKeyframes = "After Effects Keyframes"
 Rhea.Actions.Tools.StyleTags = "Style to Tags"
 Rhea.Actions.Tools.FrameChanges = "Split at Visual Changes"
 Rhea.Actions.Tools.ZeroTags = "Remove Redundant Zero Tags"
 RheaOps.ToolboxActions = {
+    Rhea.Actions.Tools.AEKeyframes,
     Rhea.Actions.Tools.FrameChanges,
     Rhea.Actions.Tools.StyleTags,
     Rhea.Actions.Tools.ZeroTags,
@@ -7670,6 +7963,7 @@ RheaOps.ToolboxActions = {
     Rhea.Actions.Tools.Shuffle,
 }
 RheaOps.Registry = {
+    [Rhea.Actions.Tools.AEKeyframes] = RheaOps.AEKeyframes,
     [Rhea.Actions.Tools.FrameChanges] = RheaOps.FrameChanges,
     [Rhea.Actions.Tools.StyleTags] = RheaOps.StyleTags,
     [Rhea.Actions.Tools.ZeroTags] = RheaOps.ZeroTags,
@@ -8144,17 +8438,32 @@ function Rhea.Macros.shapes(action)
     end
 end
 KiteUI.actions.rename(script_namespace, {
+    [Rhea.Macros.hotkeyPath("Frame Fades and Cleanup")] = Rhea.Macros.hotkeyPath("Frame Fades"),
+    [Rhea.Macros.hotkeyPath("Font and Style Manager")] = Rhea.Macros.hotkeyPath("Font Manager"),
+    [Rhea.Macros.hotkeyPath("Shuffle Line Text")] = Rhea.Macros.hotkeyPath("Text Shuffler"),
+    [Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/In")] = Rhea.Macros.hotkeyPath("Frame Fades/In"),
+    [Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Out")] = Rhea.Macros.hotkeyPath("Frame Fades/Out"),
+    [Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Clean")] = Rhea.Macros.hotkeyPath("Frame Fades/Clean"),
+
     [Rhea.Macros.hotkeyPath("TagOps")] = Rhea.Macros.hotkeyPath("Tag Editor"),
-    [Rhea.Macros.hotkeyPath("Fast Fades")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup"),
+    [Rhea.Macros.hotkeyPath("Fast Fades")] = Rhea.Macros.hotkeyPath("Frame Fades"),
     [Rhea.Macros.hotkeyPath("Fast Signs")] = Rhea.Macros.hotkeyPath("Sign Builder"),
     [Rhea.Macros.hotkeyPath("Tools/Frame Changes")] = Rhea.Macros.hotkeyPath("Tools/Split at Visual Changes"),
     [Rhea.Macros.hotkeyPath("Shapes/Unify Positions")] = Rhea.Macros.hotkeyPath("Shapes/Unify Drawing Pivots"),
-    [Rhea.Macros.hotkeyPath("Fast Fades/In")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/In"),
-    [Rhea.Macros.hotkeyPath("Fast Fades/Out")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Out"),
-    [Rhea.Macros.hotkeyPath("Fast Fades/Clean")] = Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Clean"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/In")] = Rhea.Macros.hotkeyPath("Frame Fades/In"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/Out")] = Rhea.Macros.hotkeyPath("Frame Fades/Out"),
+    [Rhea.Macros.hotkeyPath("Fast Fades/Clean")] = Rhea.Macros.hotkeyPath("Frame Fades/Clean"),
 })
 
+KiteUI.actions.rename("kite.ChronoSuite", {
+    [": Kite Hotkeys :/Chrono Suite/After Effects Keyframes"] = Rhea.Macros.hotkeyPath("Tools/After Effects Keyframes"),
+    ["Chrono Suite/Tools/After Effects Keyframes"] = Rhea.Macros.hotkeyPath("Tools/After Effects Keyframes"),
+    [": Kite Hotkeys :/Chrono Suite/AE Export"] = Rhea.Macros.hotkeyPath("Tools/After Effects Keyframes"),
+    ["Chrono Suite/Tools/AE Export"] = Rhea.Macros.hotkeyPath("Tools/After Effects Keyframes"),
+}, script_namespace)
+
 local rheaMacros = {
+    { Rhea.Macros.hotkeyPath("Tools/After Effects Keyframes"), "Export After Effects keyframe data", Rhea.Macros.tool(Rhea.Actions.Tools.AEKeyframes) },
     { Rhea.Macros.hotkeyPath("Tools/Split at Visual Changes"), "Split a line at visual changes in a video region", Rhea.Macros.tool(Rhea.Actions.Tools.FrameChanges) },
     { Rhea.Macros.hotkeyPath("Tools/Style to Tags"), "Convert style values to override tags", Rhea.Macros.tool(Rhea.Actions.Tools.StyleTags) },
     { Rhea.Macros.hotkeyPath("Tools/Remove Redundant Zero Tags"), "Remove harmless zero overrides from selected lines", Rhea.Macros.tool(Rhea.Actions.Tools.ZeroTags) },
@@ -8166,12 +8475,12 @@ local rheaMacros = {
     { Rhea.Macros.hotkeyPath("Shapes/Unify Drawing Pivots"), "Unify ASS drawing pivots", Rhea.Macros.shapes(Rhea.Actions.Shapes.Unify) },
     { Rhea.Macros.hotkeyPath("Shapes/Place on Perimeter"), "Repeat multilayer shapes along a perimeter", Rhea.Macros.shapes(Rhea.Actions.Shapes.Perimeter) },
     { Rhea.Macros.hotkeyPath("Shapes/Shape Color Optimizer"), "Optimize drawing colors", Rhea.Macros.shapes(Rhea.Actions.Shapes.Optimize) },
-    { Rhea.Macros.hotkeyPath("Font and Style Manager"), "Manage fonts and styles", Rhea.Macros.tool(Rhea.Actions.Tools.FontStyles) },
-    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup"), "Open frame fades and continuous cleanup", Rhea.Macros.tool(Rhea.Actions.Tools.Fades) },
-    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/In"), "Set fade in from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.In) },
-    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Out"), "Set fade out from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.Out) },
-    { Rhea.Macros.hotkeyPath("Frame Fades and Cleanup/Clean"), "Clean continuous fades", Rhea.Macros.fade(Rhea.Actions.Fades.Clean) },
-    { Rhea.Macros.hotkeyPath("Shuffle Line Text"), "Shuffle selected line text", Rhea.Macros.tool(Rhea.Actions.Tools.Shuffle) },
+    { Rhea.Macros.hotkeyPath("Font Manager"), "Manage fonts and styles", Rhea.Macros.tool(Rhea.Actions.Tools.FontStyles) },
+    { Rhea.Macros.hotkeyPath("Frame Fades"), "Open frame fades and continuous cleanup", Rhea.Macros.tool(Rhea.Actions.Tools.Fades) },
+    { Rhea.Macros.hotkeyPath("Frame Fades/In"), "Set fade in from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.In) },
+    { Rhea.Macros.hotkeyPath("Frame Fades/Out"), "Set fade out from the current frame", Rhea.Macros.fade(Rhea.Actions.Fades.Out) },
+    { Rhea.Macros.hotkeyPath("Frame Fades/Clean"), "Clean continuous fades", Rhea.Macros.fade(Rhea.Actions.Fades.Clean) },
+    { Rhea.Macros.hotkeyPath("Text Shuffler"), "Shuffle selected line text", Rhea.Macros.tool(Rhea.Actions.Tools.Shuffle) },
 }
 for _, entry in ipairs(rheaMacros) do
     local callback = entry[3]
@@ -8187,3 +8496,49 @@ for _, entry in ipairs(rheaMacros) do
 end
 depRec:registerMacros(rheaMacros, false)
 require("kite.UI").publishActions()
+
+end
+local registrations = {}
+local registerMacro = aegisub.register_macro
+local function loadScript()
+    registrations = {}
+    aegisub.register_macro = function(name, description, callback, validate, active)
+        registrations[#registrations+1] = {name, description, callback, validate, active}
+    end
+    local ok, message = pcall(initializeScript)
+    aegisub.register_macro = registerMacro
+    local available, control = pcall(require, "l0.DependencyControl")
+    if available and control.updater then control.updater:releaseLock() end
+    return ok, message
+end
+local loaded, failure = loadScript()
+if loaded then
+    for _, action in ipairs(registrations) do registerMacro(unpack(action)) end
+else
+    registerMacro(script_name, script_description, function(subs, selection, active)
+        if not loaded then
+            local available, control = pcall(require, "l0.DependencyControl")
+            if not available then error(control, 0) end
+            local loader = require("l0.DependencyControl.ModuleLoader")
+            for _, task in pairs(control.updater.tasks[control.Domain.ScriptType.Module]) do
+                if not task.updated and not task.running then loader.removeDummyRef(task.record) end
+            end
+            loaded, failure = loadScript()
+            if not loaded then error(failure, 0) end
+        end
+        local choices, actions = {}, {}
+        for _, action in ipairs(registrations) do
+            if not action[4] or action[4](subs, selection, active) then
+                choices[#choices+1] = action[1]
+                actions[action[1]] = action[3]
+            end
+        end
+        if #choices == 0 then return selection, active end
+        if #choices == 1 then return actions[choices[1]](subs, selection, active) end
+        local button, values = aegisub.dialog.display({
+            {class="dropdown", name="action", items=choices, value=choices[1], x=0,y=0,width=1,height=1}
+        }, {"Run","Cancel"}, {ok="Run",close="Cancel"})
+        if button == "Run" then return actions[values.action](subs, selection, active) end
+        return selection, active
+    end)
+end

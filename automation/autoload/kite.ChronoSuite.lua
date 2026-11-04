@@ -1,7 +1,8 @@
+local function initializeScript()
 script_name        = "Chrono Suite"
 script_description = "Suite for subtitle timing, QC, cleanup, and workflow toolkit"
 script_author      = "Kiterow"
-script_version     = "1.6.1"
+script_version     = "1.8.0"
 script_namespace   = "kite.ChronoSuite"
 
 include("karaskel.lua")
@@ -93,44 +94,47 @@ if DependencyControl then
     local ok, rec = pcall(DependencyControl, {
         feed        = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
         {
-            { "kite.UI", version = "1.5.2",
+            { "kite.UI", version = "2.0.3",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Timing", version = "1.4.1",
+            { "kite.Timing", version = "1.5.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.PyBridge", version = "1.7.1",
+            { "kite.PyBridge", version = "2.0.1",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Media", version = "1.4.0",
+            { "kite.PyBridge", version = "2.0.1",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.Core", version = "1.1.0",
+            { "kite.Core", version = "2.0.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.LineOps", version = "1.7.0",
+            { "kite.Core", version = "2.0.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
-            { "kite.EventOps", version = "1.3.0",
+            { "kite.EventOps", version = "1.4.0",
               url  = "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
               feed = "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json" },
         },
     })
-    if ok and rec then
+    if not ok then error(rec, 0) end
+    if rec then
         depRec = rec
+        depRec:requireModules()
         local okMods, mKiteUI, mTiming, mPyBridge, mMedia, mCore, mLineOps, mEventOps = pcall(function() return depRec:requireModules() end)
+        if not okMods then error(mKiteUI, 0) end
         if okMods then
             KiteUI, Timing = mKiteUI, mTiming
-            Kite.PyBridge, Kite.Media, Kite.Core, Kite.LineOps, Kite.EventOps = mPyBridge, mMedia, mCore, mLineOps, mEventOps
+            Kite.PyBridge, Kite.Media, Kite.Core, Kite.LineOps, Kite.EventOps = mPyBridge, mMedia.Media, mCore, mLineOps.LineOps, mEventOps
         end
     end
 end
 KiteUI     = KiteUI     or safeRequire("kite.UI")
 Timing     = Timing     or safeRequire("kite.Timing")
 Kite.PyBridge = Kite.PyBridge or safeRequire("kite.PyBridge")
-Kite.Media = Kite.Media or safeRequire("kite.Media")
+Kite.Media = Kite.Media or (safeRequire("kite.PyBridge") or {}).Media
 Kite.Core = Kite.Core or safeRequire("kite.Core")
-Kite.LineOps = Kite.LineOps or safeRequire("kite.LineOps")
+Kite.LineOps = Kite.LineOps or (safeRequire("kite.Core") or {}).LineOps
 Kite.EventOps = Kite.EventOps or safeRequire("kite.EventOps")
 
 local unicode = safeRequire("aegisub.unicode") or {}
@@ -144,35 +148,6 @@ end
 
 local defaultConfig = {
     language          = "en",
-
-    scxvid_path       = "",
-    ffmpeg_path       = "",
-    scxvid_suffix     = "_keyframes.log",
-
-    lazyt_mode            = "Full Timing",
-    lazyt_lead_in_ms      = 120,
-    lazyt_lead_out_ms     = 420,
-    lazyt_max_lead_out_ms = 800,
-    lazyt_max_lead_in_ms  = 400,
-    lazyt_kf_end_range_ms = 800,
-    lazyt_kf_start_range_ms = 400,
-    lazyt_kf_back_ms      = 100,
-    lazyt_duration_floor_ms = 500,
-    lazyt_cps_flag        = 28,
-    lazyt_skip_signs      = true,
-    lazyt_show_stats      = true,
-    lazyt_style_filter    = "All",
-    lazyt_extra_style     = "",
-    lazyt_smooth_ms       = 10,
-    lazyt_auto_otsu       = true,
-    lazyt_fill_gap_ms     = 60,
-    lazyt_min_island_ms   = 60,
-    lazyt_outer_search_ms = 0,
-    lazyt_edge_spill      = true,
-    at_detector           = "Lazy",
-    lzt_method            = "Cluster (±ms)",
-    lzt_limit             = 800,
-    lzt_silences_only     = false,
     lead_step_ms      = 100,
     chain_max_ms      = 2000,
 
@@ -203,15 +178,6 @@ local defaultConfig = {
     preset_gap_short_ms = 300,
     preset_gap_large_ms = 800,
     preset_overtime_ms = 5500,
-
-    scream_avg_db        = -13,
-    scream_sample_db     = -17,
-    scream_loud_ratio    = 35,
-    scream_min_samples   = 3,
-    scream_robust_z      = 0.50,
-    scream_clean_previous = true,
-    scream_reuse_log     = true,
-    scream_scope         = "All dialogue",
 }
 
 local currentConfig = {}
@@ -236,760 +202,10 @@ end
 
 loadConfig()
 
-local LANG = {
-    en = {
-        title_suite      = "═══ CHRONO SUITE ═══════════════════",
-        title_markers    = "═══ AUDIT MARKERS ════════════════════",
-        title_utilities  = "═══ UTILITY TOOLS ════════════════",
-        title_data_import  = "─── DATA IMPORT ─────────",
-        title_tools      = "─── Extra Tools ─",
-        lbl_apply_to     = "Apply to:",            lbl_filter      = "Filter:",
-        lbl_preset       = "Preset:",              lbl_kf_mode     = "KF Mode:", lbl_kf_dir = "KF Dir:",
-        lbl_short_ms     = "Short (ms):",          lbl_long_ms     = "Long (ms):",
-        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
-        lbl_overtime     = "Overtime (ms):",       lbl_min_cps     = "Min CPS:",
-        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Short gap (ms):",
-        lbl_max_width    = "Max Width (px):",      lbl_marker_dd   = "Single Marker:",
-        lbl_section_case  = "CASE:",
-        lbl_section_punct = "PUNCT/TEXT:",
-        lbl_section_tags  = "TAGS/COMM:",
-        lbl_section_smart = "SMART:",
-        lbl_section_split = "SPLIT/JOIN:",
-        lbl_section_time  = "TIME/SORT:",
-        lbl_section_kara  = "KARAOKE:",
-        lbl_data_import_mode = "Import Mode:",
-        lbl_suite_tool    = "Extra Tool:",
-        lbl_selection     = "Selection: %d lines",
-        chk_clear_old     = "Clear previous markers",
-        chk_gap_continuous= "Mark continuous (0ms)",
-        chk_gap_ignore_kf = "Ignore gap on KF",
-        chk_kf_seal       = "Keyframe seal",
-        chk_data_import_cmt = "Text as {...}",
-        chk_data_import_same_layers = "Same Layers",
-        chk_data_import_skip= "(empty box → skip Data Import)",
-        btn_execute       = "EXECUTE",
-        btn_autotiming    = "Auto Timing",
-        btn_browse        = "Browse...",
-        btn_extract_kf    = "Extract KF",
-        btn_cancel        = "Cancel",
-        btn_ok            = "OK",
-        btn_save          = "Save",
-        btn_process       = "Execute",
-        err_no_selection  = "No selection.",
-        err_filter_zero   = "Filter resulted in 0 lines.",
-        err_no_video      = "No video loaded.",
-        err_invalid_twin  = "Twin KF must be a number ≥ 0",
-        err_invalid_miss  = "Miss KF must be a number ≥ 0",
-        err_invalid_ov    = "Overtime must be a number ≥ 0",
-        msg_audit_done    = "Audit completed.\n\nLines audited: %d\nLines flagged: %d\n\nIssues:\n%s",
-        msg_avg_cps       = "Average CPS (%d lines): %.2f",
-        lbl_section_cps_gap          = "── CPS / Gap ──",
-        lbl_section_filters_header   = "──── AUDIT TAG & STRUCTURE FILTERS ──────────────────────────",
-        lbl_section_text_markers_hdr = "──── AUDIT TEXT MARKERS ─────────────────────────────────────",
-        lbl_dropdown_skip_hint       = "(empty dropdown = skip section)",
-        chk_has_n        = "\\N break [LINE-BREAK]",
-        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
-        chk_has_clip     = "\\clip [CLIP-TAG]",
-        chk_has_fad      = "\\fad [FADE-TAG]",
-        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
-        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
-        chk_has_comment  = "Comment {} [COMMENT-BLOCK]",
-        chk_has_num      = "Digits [HAS-DIGITS]",
-        chk_full_italic  = "Italic line [FULL-ITALIC]",
-        chk_has_cjk      = "CJK / kana [HAS-CJK]",
-        chk_dbl_space    = "Double space [DOUBLE-SPACE]",
-        chk_edge_space   = "Edge space [EDGE-SPACE]",
-        chk_uppercase      = "Uppercase [UPPERCASE]",
-        chk_3liner         = "3-Liner [THREE-LINES]",
-        chk_missing_punct  = "No end punctuation [NO-END-PUNCT]",
-        chk_punct_balance  = "Unpaired punctuation [UNPAIRED-PUNCT]",
-        chk_orphan_word    = "Short last line [SHORT-LAST-LINE]",
-        chk_orphan_tag     = "Broken tag [BROKEN-TAG]",
-        chk_overlap        = "Overlap [OVERLAP]",
-        chk_unstyled       = "Unstyled [DEFAULT-STYLE]",
-        chk_double_italics = "Dbl Italics [ITALIC-ERROR]",
-        chk_parentheses    = "Parentheses [PARENTHESES]",
-        chk_name_prefix    = "Name Prefix [NAME-PREFIX]",
-        chk_sentences      = "Sentences [MULTI-SENTENCE]",
-
-        lazyt_lbl_mode     = "Mode:",
-        lazyt_lbl_json     = "Waveform JSON:",
-        lazyt_chk_reload   = "Reload waveform cache",
-        lazyt_lbl_outer    = "Search ± (ms):",
-        lazyt_sec_detect   = "── Voice detection (waveform peaks) ──",
-        lazyt_lbl_smooth   = "Smoothing (ms):",
-        lazyt_chk_otsu     = "Auto threshold (Otsu)",
-        lazyt_lbl_bridge   = "Bridge gaps ≤ (ms):",
-        lazyt_lbl_island   = "Drop islands < (ms):",
-        lazyt_chk_spill    = "Trim small edge spill",
-        lazyt_sec_margins  = "── Margins · post-timing ──",
-        lazyt_lbl_leads    = "Lead-in / out (ms):",
-        lazyt_lbl_kfrange  = "KF snap end / start (ms):",
-        lazyt_lbl_chain    = "Chain max out / in (ms):",
-        lazyt_lbl_cut      = "Voice-cut limit (ms):",
-        lazyt_lbl_cps      = "CPS flag above:",
-        lazyt_lbl_floor    = "Duration floor (ms):",
-        lazyt_chk_signs    = "Skip sign/karaoke/fx styles",
-        lazyt_chk_stats    = "Show statistics",
-        lazyt_lbl_style    = "Style filter:",
-        lazyt_sum          = "Timed: %d/%d spoken | KF snaps: %d | Joins: %d | Flagged: %d",
-        lazyt_no_voice     = "No voice found in the waveform.",
-        lazyt_hint         = "Full/Post need keyframes. Raw only follows detected voice. Markers land in Effect as [TM-...].",
-        lazyt_open_title   = "Select the waveform JSON (peaks)",
-        lazyt_json_filter  = "JSON (*.json)|*.json|All files (*.*)|*.*",
-        lazyt_err_parse    = "Could not read the waveform JSON:\n%s",
-        lazyt_err_no_wave  = "This mode needs a waveform JSON (peaks). Pick one to continue.",
-        at_title           = "Auto Timing — %s",
-        at_lbl_detector    = "Method:",
-        at_msg_done        = "Auto Timing · %s\n%s",
-        at_hint            = "Lazy = JSON. Busy = Kite Timing files (+ JSON).",
-        at_hint_mode       = "Full=method+KFs. Raw=method only. Post=current+KFs. Legacy=no KFs.",
-        at_lbl_data        = "Busy files:",
-        at_busy_hint       = "Busy uses signal files from Kite Timing. Waveform JSON can be added in the main window.",
-        at_chk_discover    = "Find signal files next to the subtitle",
-        at_chk_discover_legacy = "Find silence files next to the subtitle",
-        at_lbl_sil         = "Silences 30/40/50:",
-        at_lbl_vad         = "VAD intervals:",
-        at_lbl_flux        = "Flux events:",
-        at_lbl_env         = "RMS/dB envelope:",
-        at_sec_legacy      = "── Legacy ──",
-        at_legacy_hint     = "Legacy uses silence files and does not use video keyframes.",
-        at_lbl_method      = "Method:",
-        at_lbl_limit       = "Limit (ms):",
-        at_chk_silonly     = "Silences only (ignore method)",
-        at_data_title      = "Pick Busy files (matched by name)",
-        at_legacy_data_title = "Pick Legacy silence files",
-        at_err_module      = "Busy and Legacy need the Kite Timing module. Install or update it with DependencyControl.",
-        at_err_busy_input  = "Busy needs a waveform JSON or at least one Busy file.",
-        at_err_sil         = "Legacy needs at least one silence file.",
-        at_legacy_done     = "Legacy: %d lines modified.",
-        btn_data           = "Busy Files...",
-        btn_legacy         = "Legacy...",
-        btn_run_legacy     = "Execute",
-        msg_config_saved   = "Config saved.",
-
-        data_import_paste_hint = "Paste 'Dialogue:' lines (or use one of the modes).",
-    },
-    es = {
-        title_suite      = "═══ CHRONO SUITE ═══════════════════",
-        title_markers    = "═══ MARCADORES AUDITORIA ═════════════════",
-        title_utilities  = "═══ UTILIDADES ═══════════════",
-        title_data_import  = "─── IMPORTAR DATOS ──────",
-        title_tools      = "─── Herramientas Extra ",
-        lbl_apply_to     = "Aplicar a:",           lbl_filter      = "Filtro:",
-        lbl_preset       = "Preset:",              lbl_kf_mode     = "Modo KF:", lbl_kf_dir = "Dir KF:",
-        lbl_short_ms     = "Corto (ms):",          lbl_long_ms     = "Largo (ms):",
-        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
-        lbl_overtime     = "Sobretiempo (ms):",    lbl_min_cps     = "Min CPS:",
-        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Gap corto (ms):",
-        lbl_max_width    = "Ancho máx (px):",      lbl_marker_dd   = "Marcador único:",
-        lbl_section_case  = "CAJA:",
-        lbl_section_punct = "PUNT/TEXTO:",
-        lbl_section_tags  = "TAGS/COMENT:",
-        lbl_section_smart = "INTELIG:",
-        lbl_section_split = "DIVIDIR/UNIR:",
-        lbl_section_time  = "TIEMPO/ORDEN:",
-        lbl_section_kara  = "KARAOKE:",
-        lbl_data_import_mode = "Modo Importación:",
-        lbl_suite_tool    = "Herramienta:",
-        lbl_selection     = "Selección: %d líneas",
-        chk_clear_old     = "Limpiar marcadores previos",
-        chk_gap_continuous= "Marcar continuas (0ms)",
-        chk_gap_ignore_kf = "Ignorar gap en KF",
-        chk_kf_seal       = "Sello de keyframe",
-        chk_data_import_cmt = "Texto en {...}",
-        chk_data_import_same_layers = "Same Layers",
-        chk_data_import_skip= "(caja vacía → omitir Importar Datos)",
-        btn_execute       = "EJECUTAR",
-        btn_autotiming    = "Auto Timing",
-        btn_browse        = "Buscar...",
-        btn_extract_kf    = "Extraer KF",
-        btn_cancel        = "Cancel",
-        btn_ok            = "OK",
-        btn_save          = "Guardar",
-        btn_process       = "Execute",
-        err_no_selection  = "Sin selección.",
-        err_filter_zero   = "El filtro resultó en 0 líneas.",
-        err_no_video      = "No hay vídeo cargado.",
-        err_invalid_twin  = "Twin KF debe ser un número ≥ 0",
-        err_invalid_miss  = "Miss KF debe ser un número ≥ 0",
-        err_invalid_ov    = "Sobretiempo debe ser un número ≥ 0",
-        msg_audit_done    = "Auditoría completada.\n\nLíneas auditadas: %d\nLíneas marcadas: %d\n\nProblemas:\n%s",
-        msg_avg_cps       = "CPS promedio (%d líneas): %.2f",
-        lbl_section_cps_gap          = "── CPS / Gap ──",
-        lbl_section_filters_header   = "──── FILTROS DE TAGS Y ESTRUCTURA (AUDIT) ────────────────────",
-        lbl_section_text_markers_hdr = "──── MARCADORES DE TEXTO (AUDIT) ────────────────────────────",
-        lbl_dropdown_skip_hint       = "(dropdown vacío = saltar sección)",
-        chk_has_n        = "Salto \\N [LINE-BREAK]",
-        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
-        chk_has_clip     = "\\clip [CLIP-TAG]",
-        chk_has_fad      = "\\fad [FADE-TAG]",
-        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
-        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
-        chk_has_comment  = "Comentario {} [COMMENT-BLOCK]",
-        chk_has_num      = "Dígitos [HAS-DIGITS]",
-        chk_full_italic  = "Línea cursiva [FULL-ITALIC]",
-        chk_has_cjk      = "CJK / kana [HAS-CJK]",
-        chk_dbl_space    = "Espacio doble [DOUBLE-SPACE]",
-        chk_edge_space   = "Espacio bordes [EDGE-SPACE]",
-        chk_uppercase      = "Mayúsculas [UPPERCASE]",
-        chk_3liner         = "3 Líneas [THREE-LINES]",
-        chk_missing_punct  = "Sin puntuación final [NO-END-PUNCT]",
-        chk_punct_balance  = "Puntuación sin pareja [UNPAIRED-PUNCT]",
-        chk_orphan_word    = "Última línea corta [SHORT-LAST-LINE]",
-        chk_orphan_tag     = "Tag roto [BROKEN-TAG]",
-        chk_overlap        = "Solapamiento [OVERLAP]",
-        chk_unstyled       = "Sin estilo [DEFAULT-STYLE]",
-        chk_double_italics = "Dbl Cursiva [ITALIC-ERROR]",
-        chk_parentheses    = "Paréntesis [PARENTHESES]",
-        chk_name_prefix    = "Nombre [NAME-PREFIX]",
-        chk_sentences      = "Oraciones [MULTI-SENTENCE]",
-        lazyt_lbl_mode     = "Modo:",
-        lazyt_lbl_json     = "JSON de onda:",
-        lazyt_chk_reload   = "Recargar caché de onda",
-        lazyt_lbl_outer    = "Buscar ± (ms):",
-        lazyt_sec_detect   = "── Detección de voz (picos de onda) ──",
-        lazyt_lbl_smooth   = "Suavizado (ms):",
-        lazyt_chk_otsu     = "Umbral automático (Otsu)",
-        lazyt_lbl_bridge   = "Unir huecos ≤ (ms):",
-        lazyt_lbl_island   = "Quitar islas < (ms):",
-        lazyt_chk_spill    = "Recortar derrames de borde",
-        lazyt_sec_margins  = "── Márgenes · post-timing ──",
-        lazyt_lbl_leads    = "Lead-in / out (ms):",
-        lazyt_lbl_kfrange  = "Snap KF fin / inicio (ms):",
-        lazyt_lbl_chain    = "Cadena máx out / in (ms):",
-        lazyt_lbl_cut      = "Corte de voz máx (ms):",
-        lazyt_lbl_cps      = "Marcar CPS sobre:",
-        lazyt_lbl_floor    = "Duración mínima (ms):",
-        lazyt_chk_signs    = "Omitir estilos sign/karaoke/fx",
-        lazyt_chk_stats    = "Mostrar estadísticas",
-        lazyt_lbl_style    = "Filtro de estilo:",
-        lazyt_sum          = "Cronometradas: %d/%d habladas | Snaps KF: %d | Uniones: %d | Marcadas: %d",
-        lazyt_no_voice     = "No se encontró voz en la onda.",
-        lazyt_hint         = "Completo/Post necesitan keyframes. Bruto solo sigue la voz detectada. Las marcas van al Effect como [TM-...].",
-        lazyt_open_title   = "Elige el JSON de onda (picos)",
-        lazyt_json_filter  = "JSON (*.json)|*.json|Todos los archivos (*.*)|*.*",
-        lazyt_err_parse    = "No pude leer el JSON de onda:\n%s",
-        lazyt_err_no_wave  = "Este modo necesita un JSON de onda (picos). Elige uno para continuar.",
-        at_title           = "Auto Timing — %s",
-        at_lbl_detector    = "Método:",
-        at_msg_done        = "Auto Timing · %s\n%s",
-        at_hint            = "Lazy = JSON. Busy = archivos Kite Timing (+ JSON).",
-        at_hint_mode       = "Completo=método+KFs. Bruto=solo método. Post=actual+KFs. Legacy=sin KFs.",
-        at_lbl_data        = "Archivos Busy:",
-        at_busy_hint       = "Busy usa archivos de señales de Kite Timing. El JSON de onda se suma desde la ventana principal.",
-        at_chk_discover    = "Buscar archivos Busy junto al subtítulo",
-        at_chk_discover_legacy = "Buscar silencios junto al subtítulo",
-        at_lbl_sil         = "Silencios 30/40/50:",
-        at_lbl_vad         = "Intervalos VAD:",
-        at_lbl_flux        = "Eventos flux:",
-        at_lbl_env         = "Envelope RMS/dB:",
-        at_sec_legacy      = "── Legacy ──",
-        at_legacy_hint     = "Legacy usa archivos de silencios y no usa keyframes del video.",
-        at_lbl_method      = "Método:",
-        at_lbl_limit       = "Límite (ms):",
-        at_chk_silonly     = "Solo silencios (ignora el método)",
-        at_data_title      = "Elige archivos Busy (por nombre)",
-        at_legacy_data_title = "Elige silencios para Legacy",
-        at_err_module      = "Busy y Legacy necesitan el módulo Kite Timing. Instálalo o actualízalo con DependencyControl.",
-        at_err_busy_input  = "Busy necesita un JSON de onda o al menos un archivo Busy.",
-        at_err_sil         = "Legacy necesita al menos un archivo de silencios.",
-        at_legacy_done     = "Legacy: %d líneas modificadas.",
-        btn_data           = "Archivos Busy...",
-        btn_legacy         = "Legacy...",
-        btn_run_legacy     = "Execute",
-        msg_config_saved   = "Configuración guardada.",
-        data_import_paste_hint = "Pega líneas 'Dialogue:' (o usa uno de los modos).",
-    },
-    pt = {
-        title_suite      = "═══ CHRONO SUITE ═══════════════════",
-        title_markers    = "═══ MARCADORES AUDITORIA ═════════════════",
-        title_utilities  = "═══ UTILIDADES ═══════════════",
-        title_data_import  = "─── IMPORTAR DADOS ──────",
-        title_tools      = "─── Ferramentas Extra",
-        lbl_apply_to     = "Aplicar em:",          lbl_filter      = "Filtro:",
-        lbl_preset       = "Preset:",              lbl_kf_mode     = "Modo KF:", lbl_kf_dir = "Dir KF:",
-        lbl_short_ms     = "Curto (ms):",          lbl_long_ms     = "Longo (ms):",
-        lbl_twin_ms      = "Twin KF (ms):",        lbl_miss_ms     = "Miss KF (ms):",
-        lbl_overtime     = "Sobretempo (ms):",     lbl_min_cps     = "Min CPS:",
-        lbl_max_cps      = "Max CPS:",             lbl_gap_ms      = "Gap curto (ms):",
-        lbl_max_width    = "Largura máx (px):",    lbl_marker_dd   = "Marcador único:",
-        lbl_section_case  = "CAIXA:",
-        lbl_section_punct = "PONT/TEXTO:",
-        lbl_section_tags  = "TAGS/COMENT:",
-        lbl_section_smart = "INTELIG:",
-        lbl_section_split = "DIVIDIR/UNIR:",
-        lbl_section_time  = "TEMPO/ORDEM:",
-        lbl_section_kara  = "KARAOKE:",
-        lbl_data_import_mode = "Modo Importação:",
-        lbl_suite_tool    = "Ferramenta:",
-        lbl_selection     = "Seleção: %d linhas",
-        chk_clear_old     = "Limpar marcadores prévios",
-        chk_gap_continuous= "Marcar contínuas (0ms)",
-        chk_gap_ignore_kf = "Ignorar gap em KF",
-        chk_kf_seal       = "Selo de keyframe",
-        chk_data_import_cmt = "Texto em {...}",
-        chk_data_import_same_layers = "Same Layers",
-        chk_data_import_skip= "(caixa vazia → ignorar Importar Dados)",
-        btn_execute       = "EXECUTAR",
-        btn_autotiming    = "Auto Timing",
-        btn_browse        = "Procurar...",
-        btn_extract_kf    = "Extrair KF",
-        btn_cancel        = "Cancel",
-        btn_ok            = "OK",
-        btn_save          = "Salvar",
-        btn_process       = "Execute",
-        err_no_selection  = "Sem seleção.",
-        err_filter_zero   = "O filtro resultou em 0 linhas.",
-        err_no_video      = "Nenhum vídeo carregado.",
-        err_invalid_twin  = "Twin KF deve ser um número ≥ 0",
-        err_invalid_miss  = "Miss KF deve ser um número ≥ 0",
-        err_invalid_ov    = "Sobretempo deve ser um número ≥ 0",
-        msg_audit_done    = "Auditoria concluída.\n\nLinhas auditadas: %d\nLinhas marcadas: %d\n\nProblemas:\n%s",
-        msg_avg_cps       = "CPS médio (%d linhas): %.2f",
-        lbl_section_cps_gap          = "── CPS / Gap ──",
-        lbl_section_filters_header   = "──── FILTROS DE TAGS E ESTRUTURA (AUDIT) ─────────────────────",
-        lbl_section_text_markers_hdr = "──── MARCADORES DE TEXTO (AUDIT) ─────────────────────────────",
-        lbl_dropdown_skip_hint       = "(dropdown vazio = saltar seção)",
-        chk_has_n        = "Quebra \\N [LINE-BREAK]",
-        chk_has_pos      = "\\pos/\\move [POSITION-TAG]",
-        chk_has_clip     = "\\clip [CLIP-TAG]",
-        chk_has_fad      = "\\fad [FADE-TAG]",
-        chk_has_t        = "\\t transform [TRANSFORM-TAG]",
-        chk_has_k        = "\\k karaoke [KARAOKE-TAG]",
-        chk_has_comment  = "Comentário {} [COMMENT-BLOCK]",
-        chk_has_num      = "Dígitos [HAS-DIGITS]",
-        chk_full_italic  = "Linha itálica [FULL-ITALIC]",
-        chk_has_cjk      = "CJK / kana [HAS-CJK]",
-        chk_dbl_space    = "Espaço duplo [DOUBLE-SPACE]",
-        chk_edge_space   = "Espaço bordas [EDGE-SPACE]",
-        chk_uppercase      = "Maiúsculas [UPPERCASE]",
-        chk_3liner         = "3 Linhas [THREE-LINES]",
-        chk_missing_punct  = "Sem pontuação final [NO-END-PUNCT]",
-        chk_punct_balance  = "Pontuação sem par [UNPAIRED-PUNCT]",
-        chk_orphan_word    = "Última linha curta [SHORT-LAST-LINE]",
-        chk_orphan_tag     = "Tag quebrada [BROKEN-TAG]",
-        chk_overlap        = "Sobreposição [OVERLAP]",
-        chk_unstyled       = "Sem estilo [DEFAULT-STYLE]",
-        chk_double_italics = "Dbl Itálico [ITALIC-ERROR]",
-        chk_parentheses    = "Parênteses [PARENTHESES]",
-        chk_name_prefix    = "Nome [NAME-PREFIX]",
-        chk_sentences      = "Frases [MULTI-SENTENCE]",
-        lazyt_lbl_mode     = "Modo:",
-        lazyt_lbl_json     = "JSON da onda:",
-        lazyt_chk_reload   = "Recarregar cache da onda",
-        lazyt_lbl_outer    = "Buscar ± (ms):",
-        lazyt_sec_detect   = "── Detecção de voz (picos da onda) ──",
-        lazyt_lbl_smooth   = "Suavização (ms):",
-        lazyt_chk_otsu     = "Limiar automático (Otsu)",
-        lazyt_lbl_bridge   = "Unir lacunas ≤ (ms):",
-        lazyt_lbl_island   = "Remover ilhas < (ms):",
-        lazyt_chk_spill    = "Aparar derrames de borda",
-        lazyt_sec_margins  = "── Margens · pós-timing ──",
-        lazyt_lbl_leads    = "Lead-in / out (ms):",
-        lazyt_lbl_kfrange  = "Snap KF fim / início (ms):",
-        lazyt_lbl_chain    = "Cadeia máx out / in (ms):",
-        lazyt_lbl_cut      = "Corte de voz máx (ms):",
-        lazyt_lbl_cps      = "Marcar CPS acima de:",
-        lazyt_lbl_floor    = "Duração mínima (ms):",
-        lazyt_chk_signs    = "Pular estilos sign/karaokê/fx",
-        lazyt_chk_stats    = "Mostrar estatísticas",
-        lazyt_lbl_style    = "Filtro de estilo:",
-        lazyt_sum          = "Cronometradas: %d/%d faladas | Snaps KF: %d | Uniões: %d | Marcadas: %d",
-        lazyt_no_voice     = "Nenhuma voz encontrada na onda.",
-        lazyt_hint         = "Completo/Pós precisam de keyframes. Bruto só segue a voz detectada. As marcas vão ao Effect como [TM-...].",
-        lazyt_open_title   = "Escolha o JSON da onda (picos)",
-        lazyt_json_filter  = "JSON (*.json)|*.json|Todos os arquivos (*.*)|*.*",
-        lazyt_err_parse    = "Não consegui ler o JSON da onda:\n%s",
-        lazyt_err_no_wave  = "Este modo precisa de um JSON da onda (picos). Escolha um para continuar.",
-        at_title           = "Auto Timing — %s",
-        at_lbl_detector    = "Método:",
-        at_msg_done        = "Auto Timing · %s\n%s",
-        at_hint            = "Lazy = JSON. Busy = arquivos Kite Timing (+ JSON).",
-        at_hint_mode       = "Completo=método+KFs. Bruto=só método. Pós=atual+KFs. Legacy=sem KFs.",
-        at_lbl_data        = "Arquivos Busy:",
-        at_busy_hint       = "Busy usa arquivos de sinais do Kite Timing. O JSON da onda pode ser somado na janela principal.",
-        at_chk_discover    = "Buscar arquivos Busy junto da legenda",
-        at_chk_discover_legacy = "Buscar silêncios junto da legenda",
-        at_lbl_sil         = "Silêncios 30/40/50:",
-        at_lbl_vad         = "Intervalos VAD:",
-        at_lbl_flux        = "Eventos flux:",
-        at_lbl_env         = "Envelope RMS/dB:",
-        at_sec_legacy      = "── Legacy ──",
-        at_legacy_hint     = "Legacy usa arquivos de silêncios e não usa keyframes do vídeo.",
-        at_lbl_method      = "Método:",
-        at_lbl_limit       = "Limite (ms):",
-        at_chk_silonly     = "Só silêncios (ignora o método)",
-        at_data_title      = "Escolha arquivos Busy (por nome)",
-        at_legacy_data_title = "Escolha silêncios para Legacy",
-        at_err_module      = "Busy e Legacy precisam do módulo Kite Timing. Instale ou atualize com DependencyControl.",
-        at_err_busy_input  = "Busy precisa de um JSON da onda ou ao menos um arquivo Busy.",
-        at_err_sil         = "Legacy precisa de ao menos um arquivo de silêncios.",
-        at_legacy_done     = "Legacy: %d linhas modificadas.",
-        btn_data           = "Arquivos Busy...",
-        btn_legacy         = "Legacy...",
-        btn_run_legacy     = "Execute",
-        msg_config_saved   = "Configuração salva.",
-        data_import_paste_hint = "Cole linhas 'Dialogue:' (ou use um dos modos).",
-    },
-}
-
-local extraLang = {
-    en = {
-        btn_config="Config", btn_help="Help", help_btn_close="Cancel",
-        cfg_title="Chrono Suite Config", cfg_lbl_language="Language:",
-        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="SCXvid path:", cfg_lbl_ffmpeg_path="FFmpeg path:", cfg_lbl_log_suffix="Log suffix:",
-        cfg_lbl_leadutil="Lead-In / Lead-Out / Chain", cfg_lbl_lead_step="Step (ms):", cfg_lbl_chain_cap="Chain max (ms):",
-        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in max:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out max:", cfg_lbl_lead_out_chain="Chain out:", cfg_lbl_chain_gap_max="Chain gap:",
-        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Snap range (frames):", cfg_lbl_snap_protect="Directional range (ms):",
-        cfg_lbl_presets="Audit Presets", cfg_lbl_preset_start="Start T/M:", cfg_lbl_preset_end="End T/M:", cfg_lbl_preset_full_kf="Full T/M:", cfg_lbl_preset_full_time="Full S/L:", cfg_lbl_preset_full_read="Full CPS/W:", cfg_lbl_preset_full_gap="Full Gap S/L:", cfg_lbl_preset_duration="Duration S/L:", cfg_lbl_preset_cps="CPS Max:", cfg_lbl_preset_gaps="Gaps S/L:", cfg_lbl_preset_overtime="Overtime:",
-        cfg_msg_saved="Config saved.", cfg_msg_lang_changed="Language changed. Reopen the dialog.",
-        msg_bidir_done="Bidirectional snapping done.\n\nLines modified: %d\nStarts snapped: %d\nEnds snapped: %d\nRange: ±%d frames",
-        err_no_keyframes="No keyframes loaded.",
-        title_markers="=== AUDIT MARKERS ===", title_utilities="=== UTILITY TOOLS ===", title_data_import="--- DATA IMPORT ---", title_tools="--- EXTRA TOOLS ---",
-        lbl_section_case="CASE:", lbl_section_punct="PUNCT/TEXT:", lbl_section_tags="TAGS/COMMENTS:", lbl_section_smart="SMART:", lbl_section_split="SPLIT/JOIN:", lbl_section_time="TIME/SORT:", lbl_suite_tool="Extra Tool:", lbl_large_gap="Large gap (ms):",
-        chk_kf_seal="Keyframe seal", chk_data_import_skip="(empty box = skip Data Import)",
-        chk_has_n="Line break [LINE-BREAK]", chk_has_pos="Position tag [POSITION-TAG]", chk_has_clip="Clip tag [CLIP-TAG]", chk_has_fad="Fade tag [FADE-TAG]", chk_has_t="Transform tag [TRANSFORM-TAG]", chk_has_k="Karaoke tag [KARAOKE-TAG]", chk_has_comment="Comment block [COMMENT-BLOCK]", chk_has_num="Digits [HAS-DIGITS]", chk_full_italic="Full italic [FULL-ITALIC]", chk_dbl_space="Double space [DOUBLE-SPACE]", chk_edge_space="Edge space [EDGE-SPACE]",
-        chk_3liner="Three lines [THREE-LINES]", chk_missing_punct="No end punctuation [NO-END-PUNCT]", chk_punct_balance="Unpaired punctuation [UNPAIRED-PUNCT]", chk_orphan_word="Short last line [SHORT-LAST-LINE]", chk_orphan_tag="Broken tag [BROKEN-TAG]", chk_unstyled="Default style [DEFAULT-STYLE]", chk_double_italics="Italic error [ITALIC-ERROR]", chk_parentheses="Parentheses [PARENTHESES]", chk_name_prefix="Name prefix [NAME-PREFIX]", chk_sentences="Multiple sentences [MULTI-SENTENCE]",
-    },
-    es = {
-        btn_config="Config", btn_help="Ayuda", help_btn_close="Cancel",
-        cfg_title="Config de Chrono Suite", cfg_lbl_language="Idioma:",
-        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="Ruta de SCXvid:", cfg_lbl_ffmpeg_path="Ruta de FFmpeg:", cfg_lbl_log_suffix="Sufijo del log:",
-        cfg_lbl_leadutil="Lead-In / Lead-Out / Cadena", cfg_lbl_lead_step="Paso (ms):", cfg_lbl_chain_cap="Cadena máx (ms):",
-        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in máximo:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out máximo:", cfg_lbl_lead_out_chain="Salida en cadena:", cfg_lbl_chain_gap_max="Gap de cadena:",
-        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Rango de snap (frames):", cfg_lbl_snap_protect="Rango direccional (ms):",
-        cfg_lbl_presets="Presets de auditoría", cfg_lbl_preset_start="Inicio T/M:", cfg_lbl_preset_end="Final T/M:", cfg_lbl_preset_full_kf="Completa T/M:", cfg_lbl_preset_full_time="Completa C/L:", cfg_lbl_preset_full_read="Completa CPS/An:", cfg_lbl_preset_full_gap="Completa Gap C/L:", cfg_lbl_preset_duration="Duración C/L:", cfg_lbl_preset_cps="CPS máx:", cfg_lbl_preset_gaps="Gaps C/L:", cfg_lbl_preset_overtime="Sobretiempo:",
-        cfg_msg_saved="Configuración guardada.", cfg_msg_lang_changed="Idioma cambiado. Reabre el diálogo.",
-        msg_bidir_done="Bidirectional Snapping finalizado.\n\nLíneas modificadas: %d\nInicios ajustados: %d\nFinales ajustados: %d\nRango: ±%d frames",
-        err_no_keyframes="No hay keyframes cargados.",
-        title_markers="=== MARCADORES DE AUDITORÍA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DATOS ---", title_tools="--- HERRAMIENTAS EXTRA ---",
-        lbl_apply_to="Aplicar a:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap largo (ms):", lbl_section_case="CAJA:", lbl_section_punct="PUNT/TEXTO:", lbl_section_tags="TAGS/COMENTARIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TIEMPO/ORDEN:", lbl_suite_tool="Herramienta:", lbl_selection="Selección: %d líneas",
-        chk_clear_old="Limpiar marcadores previos", chk_gap_continuous="Marcar continuas (0 ms)", chk_gap_ignore_kf="Ignorar gap si cae en KF", chk_kf_seal="Sello de keyframe", chk_data_import_skip="(caja vacía = saltar Importar Datos)",
-        chk_has_n="Salto de línea [LINE-BREAK]", chk_has_pos="Tag de posición [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformación [TRANSFORM-TAG]", chk_has_k="Tag de karaoke [KARAOKE-TAG]", chk_has_comment="Bloque de comentario [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda en cursiva [FULL-ITALIC]", chk_dbl_space="Doble espacio [DOUBLE-SPACE]", chk_edge_space="Espacio al borde [EDGE-SPACE]",
-        chk_uppercase="Mayúsculas [UPPERCASE]", chk_3liner="Tres líneas [THREE-LINES]", chk_missing_punct="Sin puntuación final [NO-END-PUNCT]", chk_punct_balance="Puntuación sin pareja [UNPAIRED-PUNCT]", chk_orphan_word="Última línea corta [SHORT-LAST-LINE]", chk_orphan_tag="Tag roto [BROKEN-TAG]", chk_overlap="Solapamiento [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Error de cursiva [ITALIC-ERROR]", chk_parentheses="Paréntesis [PARENTHESES]", chk_name_prefix="Prefijo de nombre [NAME-PREFIX]", chk_sentences="Varias oraciones [MULTI-SENTENCE]",
-        msg_config_saved="Configuración guardada.", data_import_paste_hint="Pega líneas 'Dialogue:' o elige un modo de importación.",
-    },
-    pt = {
-        btn_config="Config", btn_help="Ajuda", help_btn_close="Cancel",
-        cfg_title="Config do Chrono Suite", cfg_lbl_language="Idioma:",
-        cfg_lbl_scxvid="SCXvid", cfg_lbl_scxvid_path="Caminho do SCXvid:", cfg_lbl_ffmpeg_path="Caminho do FFmpeg:", cfg_lbl_log_suffix="Sufixo do log:",
-        cfg_lbl_leadutil="Lead-In / Lead-Out / Cadeia", cfg_lbl_lead_step="Passo (ms):", cfg_lbl_chain_cap="Cadeia máx (ms):",
-        cfg_lbl_kite="Kite Timing", cfg_lbl_lead_in_base="Lead-in base:", cfg_lbl_lead_in_max="Lead-in máximo:", cfg_lbl_lead_out_base="Lead-out base:", cfg_lbl_lead_out_max="Lead-out máximo:", cfg_lbl_lead_out_chain="Saída em cadeia:", cfg_lbl_chain_gap_max="Gap da cadeia:",
-        cfg_lbl_bidir="Bidirectional Snapping", cfg_lbl_bidir_snap="Alcance de snap (frames):", cfg_lbl_snap_protect="Alcance direcional (ms):",
-        cfg_lbl_presets="Presets de auditoria", cfg_lbl_preset_start="Início T/M:", cfg_lbl_preset_end="Fim T/M:", cfg_lbl_preset_full_kf="Completa T/M:", cfg_lbl_preset_full_time="Completa C/L:", cfg_lbl_preset_full_read="Completa CPS/Lg:", cfg_lbl_preset_full_gap="Completa Gap C/L:", cfg_lbl_preset_duration="Duração C/L:", cfg_lbl_preset_cps="CPS máx:", cfg_lbl_preset_gaps="Gaps C/L:", cfg_lbl_preset_overtime="Sobretempo:",
-        cfg_msg_saved="Configuração salva.", cfg_msg_lang_changed="Idioma alterado. Reabra o diálogo.",
-        msg_bidir_done="Bidirectional Snapping concluído.\n\nLinhas modificadas: %d\nInícios ajustados: %d\nFinais ajustados: %d\nAlcance: ±%d frames",
-        err_no_keyframes="Nenhum keyframe carregado.",
-        title_markers="=== MARCADORES DE AUDITORIA ===", title_utilities="=== UTILIDADES ===", title_data_import="--- IMPORTAR DADOS ---", title_tools="--- FERRAMENTAS EXTRA ---",
-        lbl_apply_to="Aplicar em:", lbl_filter="Filtro:", lbl_marker_dd="Marcador único:", lbl_large_gap="Gap longo (ms):", lbl_section_case="CAIXA:", lbl_section_punct="PONT/TEXTO:", lbl_section_tags="TAGS/COMENTÁRIOS:", lbl_section_smart="SMART:", lbl_section_split="DIVIDIR/UNIR:", lbl_section_time="TEMPO/ORDEM:", lbl_suite_tool="Ferramenta:", lbl_selection="Seleção: %d linhas",
-        chk_clear_old="Limpar marcadores anteriores", chk_gap_continuous="Marcar contínuas (0 ms)", chk_gap_ignore_kf="Ignorar gap se cair em KF", chk_kf_seal="Selo de keyframe", chk_data_import_skip="(caixa vazia = pular Importar Dados)",
-        chk_has_n="Quebra de linha [LINE-BREAK]", chk_has_pos="Tag de posição [POSITION-TAG]", chk_has_clip="Tag de clip [CLIP-TAG]", chk_has_fad="Tag de fade [FADE-TAG]", chk_has_t="Tag de transformação [TRANSFORM-TAG]", chk_has_k="Tag de karaokê [KARAOKE-TAG]", chk_has_comment="Bloco de comentário [COMMENT-BLOCK]", chk_has_num="Dígitos [HAS-DIGITS]", chk_full_italic="Toda em itálico [FULL-ITALIC]", chk_dbl_space="Espaço duplo [DOUBLE-SPACE]", chk_edge_space="Espaço nas bordas [EDGE-SPACE]",
-        chk_uppercase="Maiúsculas [UPPERCASE]", chk_3liner="Três linhas [THREE-LINES]", chk_missing_punct="Sem pontuação final [NO-END-PUNCT]", chk_punct_balance="Pontuação sem par [UNPAIRED-PUNCT]", chk_orphan_word="Última linha curta [SHORT-LAST-LINE]", chk_orphan_tag="Tag quebrada [BROKEN-TAG]", chk_overlap="Sobreposição [OVERLAP]", chk_unstyled="Estilo Default [DEFAULT-STYLE]", chk_double_italics="Erro de itálico [ITALIC-ERROR]", chk_parentheses="Parênteses [PARENTHESES]", chk_name_prefix="Prefixo de nome [NAME-PREFIX]", chk_sentences="Várias frases [MULTI-SENTENCE]",
-        msg_config_saved="Configuração salva.", data_import_paste_hint="Cole linhas 'Dialogue:' ou escolha um modo de importação.",
-    },
-}
-
-local localePatch = {
-    en = {
-        err_no_active_dialogue   = "No valid active dialogue lines found.",
-        err_no_sync_point        = "Data Import — Songs: no sync point found.\nNeed Comment line with layer 50.",
-        err_scxvid_not_found     = "SCXvid not found:\n%s",
-        err_ffmpeg_not_found     = "FFmpeg not found:\n%s",
-        err_cannot_create_batch  = "Error: cannot create temp batch file",
-        err_cannot_create_directory = "Error: cannot create the working directory",
-        err_cannot_create_shell  = "Error: cannot create temp shell script",
-        err_no_lines_selected    = "No lines selected.",
-        err_not_inside_fold      = "Active line is not inside a fold.\nMove to a line within a fold group.",
-        err_no_fold_group        = "Could not find complete fold group.",
-        err_cannot_write_file    = "Could not write to:\n%s",
-        err_shift_min_two        = "Align to First Start requires at least 2 lines.",
-        err_shift_first_two      = "Align to First Start requires the first two selected lines to be dialogue lines.",
-        err_tolerance_positive   = "Tolerance must be a positive number.",
-        err_paste_mpvqc          = "Paste mpvQC text first.",
-        err_no_mpvqc_comments    = "No mpvQC comments found.",
-        msg_process_done         = "Process completed.\nLog: %s",
-        err_process_failed       = "Process failed.\n\n%s",
-        msg_ae_saved             = "AE keyframe data saved to:\n%s",
-        msg_kite_done            = "Kite Timing: %d changes from %d selected lines.",
-        msg_replacer_done        = "Text Replacer: %d lines modified.",
-        msg_mpvqc_done           = "mpv QC done.\nLines modified: %d",
-        msg_remover_done         = "Text and Tag Cleanup done.\nLines modified: %d\nLines deleted: %d",
-        err_remover_none         = "Select at least one remover option.",
-        lbl_include_partial      = "Include partially overlapping lines",
-        lbl_paste_dialogue       = "Paste text or Dialogue/Comment lines:",
-        lbl_import_as_comments   = "Import plain text as {…} comments",
-        lbl_original_text        = "ORIGINAL TEXT",
-        lbl_replacement_text     = "REPLACEMENT TEXT",
-        lbl_replacer_help        = "Each line in Original matches the corresponding line in Replacement. Tags preserved.",
-        lbl_mpvqc_title          = "mpv QC",
-        lbl_mpvqc_tolerance      = "Tolerance (ms):",
-        lbl_mpvqc_paste          = "Paste mpvQC text:",
-        lbl_remover_title        = "Text and Tag Cleanup",
-        lbl_remover_text         = "Visible text",
-        lbl_remover_tags         = "Override tags",
-        lbl_remover_comments     = "Comments",
-        chk_rem_n                = "Remove \\N",
-        chk_rem_h                = "Remove \\h",
-        chk_rem_double_space     = "Double spaces",
-        chk_rem_edge_space       = "Edge spaces",
-        chk_rem_excl             = "Exclamation signs",
-        chk_rem_quest            = "Question signs",
-        chk_rem_combo            = "Mixed ¡¿?! signs",
-        chk_rem_final_commas     = "Final commas",
-        chk_rem_all_commas       = "All commas",
-        chk_rem_quotes           = "Quotes",
-        chk_rem_apostrophes      = "Apostrophes",
-        chk_rem_stutter          = "Stutter X-X",
-        chk_rem_dup_letters      = "Duplicate letters",
-        chk_rem_leading_ellipsis = "Leading ellipsis",
-        chk_rem_ellipsis         = "All ellipsis",
-        chk_rem_italic_tags      = "\\i tags",
-        chk_rem_q_tags           = "\\q tags",
-        chk_rem_an8              = "\\an8",
-        chk_rem_comment_lines    = "Comment lines",
-        chk_rem_inline_comments  = "Inline comments {...}",
-        btn_import               = "Import",
-        btn_replace_all          = "Replace All",
-        btn_apply                = "Execute",
-    },
-    es = {
-        err_no_active_dialogue   = "No se encontraron líneas de diálogo activas válidas.",
-        err_no_sync_point        = "Importar datos — Songs: no se encontró punto de sincronización.\nSe requiere línea Comment con layer 50.",
-        err_scxvid_not_found     = "SCXvid no encontrado:\n%s",
-        err_ffmpeg_not_found     = "FFmpeg no encontrado:\n%s",
-        err_cannot_create_batch  = "Error: no se pudo crear el archivo batch temporal",
-        err_cannot_create_directory = "Error: no se pudo crear el directorio de trabajo",
-        err_cannot_create_shell  = "Error: no se pudo crear el script shell temporal",
-        err_no_lines_selected    = "Sin líneas seleccionadas.",
-        err_not_inside_fold      = "La línea activa no está dentro de un fold.\nMuévete a una línea dentro de un grupo fold.",
-        err_no_fold_group        = "No se encontró un grupo fold completo.",
-        err_cannot_write_file    = "No se pudo escribir en:\n%s",
-        err_shift_min_two        = "Align to First Start requiere al menos 2 líneas.",
-        err_shift_first_two      = "Align to First Start requiere que las dos primeras líneas seleccionadas sean diálogo.",
-        err_tolerance_positive   = "La tolerancia debe ser un número positivo.",
-        err_paste_mpvqc          = "Pega primero el texto de mpvQC.",
-        err_no_mpvqc_comments    = "No se encontraron comentarios de mpvQC.",
-        msg_process_done         = "Proceso finalizado.\nLog: %s",
-        err_process_failed       = "El proceso falló.\n\n%s",
-        msg_ae_saved             = "Datos AE guardados en:\n%s",
-        msg_kite_done            = "Kite Timing: %d cambios en %d líneas seleccionadas.",
-        msg_replacer_done        = "Text Replacer: %d líneas modificadas.",
-        msg_mpvqc_done           = "mpv QC finalizado.\nLíneas modificadas: %d",
-        msg_remover_done         = "Text and Tag Cleanup finalizado.\nLíneas modificadas: %d\nLíneas eliminadas: %d",
-        err_remover_none         = "Selecciona al menos una opcion de limpieza.",
-        lbl_include_partial      = "Incluir líneas con superposición parcial",
-        lbl_paste_dialogue       = "Pega texto o líneas Dialogue/Comment:",
-        lbl_import_as_comments   = "Importar texto plano como comentarios {…}",
-        lbl_original_text        = "TEXTO ORIGINAL",
-        lbl_replacement_text     = "TEXTO DE REEMPLAZO",
-        lbl_replacer_help        = "Cada línea de Original corresponde a la misma línea en Reemplazo. Los tags se conservan.",
-        lbl_mpvqc_title          = "mpv QC",
-        lbl_mpvqc_tolerance      = "Tolerancia (ms):",
-        lbl_mpvqc_paste          = "Pega el texto de mpvQC:",
-        lbl_remover_title        = "Text and Tag Cleanup",
-        lbl_remover_text         = "Texto visible",
-        lbl_remover_tags         = "Override tags",
-        lbl_remover_comments     = "Comentarios",
-        chk_rem_n                = "Quitar \\N",
-        chk_rem_h                = "Quitar \\h",
-        chk_rem_double_space     = "Espacios dobles",
-        chk_rem_edge_space       = "Espacios al borde",
-        chk_rem_excl             = "Signos de exclamacion",
-        chk_rem_quest            = "Signos de interrogacion",
-        chk_rem_combo            = "Signos mixtos ¡¿?!",
-        chk_rem_final_commas     = "Comas finales",
-        chk_rem_all_commas       = "Todas las comas",
-        chk_rem_quotes           = "Comillas",
-        chk_rem_apostrophes      = "Apostrofos",
-        chk_rem_stutter          = "Tartamudeo X-X",
-        chk_rem_dup_letters      = "Letras duplicadas",
-        chk_rem_leading_ellipsis = "Puntos suspensivos iniciales",
-        chk_rem_ellipsis         = "Todos los puntos suspensivos",
-        chk_rem_italic_tags      = "Tags \\i",
-        chk_rem_q_tags           = "Tags \\q",
-        chk_rem_an8              = "\\an8",
-        chk_rem_comment_lines    = "Lineas comentadas",
-        chk_rem_inline_comments  = "Comentarios inline {...}",
-        btn_import               = "Importar",
-        btn_replace_all          = "Reemplazar todo",
-        btn_apply                = "Execute",
-    },
-    pt = {
-        err_no_active_dialogue   = "Nenhuma linha de diálogo ativa válida encontrada.",
-        err_no_sync_point        = "Importar dados — Songs: ponto de sincronia não encontrado.\nNecessário linha Comment com layer 50.",
-        err_scxvid_not_found     = "SCXvid não encontrado:\n%s",
-        err_ffmpeg_not_found     = "FFmpeg não encontrado:\n%s",
-        err_cannot_create_batch  = "Erro: não foi possível criar o arquivo batch temporário",
-        err_cannot_create_directory = "Erro: não foi possível criar o diretório de trabalho",
-        err_cannot_create_shell  = "Erro: não foi possível criar o script shell temporário",
-        err_no_lines_selected    = "Nenhuma linha selecionada.",
-        err_not_inside_fold      = "A linha ativa não está dentro de um fold.\nVá para uma linha dentro de um grupo fold.",
-        err_no_fold_group        = "Grupo fold completo não encontrado.",
-        err_cannot_write_file    = "Não foi possível gravar em:\n%s",
-        err_shift_min_two        = "Align to First Start requer pelo menos 2 linhas.",
-        err_shift_first_two      = "Align to First Start requer que as duas primeiras linhas selecionadas sejam diálogo.",
-        err_tolerance_positive   = "A tolerância deve ser um número positivo.",
-        err_paste_mpvqc          = "Cole primeiro o texto do mpvQC.",
-        err_no_mpvqc_comments    = "Nenhum comentário do mpvQC encontrado.",
-        msg_process_done         = "Processo concluído.\nLog: %s",
-        err_process_failed       = "O processo falhou.\n\n%s",
-        msg_ae_saved             = "Dados AE salvos em:\n%s",
-        msg_kite_done            = "Kite Timing: %d alterações em %d linhas selecionadas.",
-        msg_replacer_done        = "Text Replacer: %d linhas modificadas.",
-        msg_mpvqc_done           = "mpv QC concluído.\nLinhas modificadas: %d",
-        msg_remover_done         = "Text and Tag Cleanup concluido.\nLinhas modificadas: %d\nLinhas apagadas: %d",
-        err_remover_none         = "Selecione pelo menos uma opcao de limpeza.",
-        lbl_include_partial      = "Incluir linhas com sobreposição parcial",
-        lbl_paste_dialogue       = "Cole texto ou linhas Dialogue/Comment:",
-        lbl_import_as_comments   = "Importar texto puro como comentários {…}",
-        lbl_original_text        = "TEXTO ORIGINAL",
-        lbl_replacement_text     = "TEXTO DE SUBSTITUIÇÃO",
-        lbl_replacer_help        = "Cada linha em Original corresponde à mesma linha em Substituição. Tags são preservados.",
-        lbl_mpvqc_title          = "mpv QC",
-        lbl_mpvqc_tolerance      = "Tolerância (ms):",
-        lbl_mpvqc_paste          = "Cole o texto do mpvQC:",
-        lbl_remover_title        = "Text and Tag Cleanup",
-        lbl_remover_text         = "Texto visivel",
-        lbl_remover_tags         = "Override tags",
-        lbl_remover_comments     = "Comentarios",
-        chk_rem_n                = "Remover \\N",
-        chk_rem_h                = "Remover \\h",
-        chk_rem_double_space     = "Espacos duplos",
-        chk_rem_edge_space       = "Espacos nas bordas",
-        chk_rem_excl             = "Sinais de exclamacao",
-        chk_rem_quest            = "Sinais de interrogacao",
-        chk_rem_combo            = "Sinais mistos ¡¿?!",
-        chk_rem_final_commas     = "Virgulas finais",
-        chk_rem_all_commas       = "Todas as virgulas",
-        chk_rem_quotes           = "Aspas",
-        chk_rem_apostrophes      = "Apostrofos",
-        chk_rem_stutter          = "Gagueira X-X",
-        chk_rem_dup_letters      = "Letras duplicadas",
-        chk_rem_leading_ellipsis = "Reticencias iniciais",
-        chk_rem_ellipsis         = "Todas as reticencias",
-        chk_rem_italic_tags      = "Tags \\i",
-        chk_rem_q_tags           = "Tags \\q",
-        chk_rem_an8              = "\\an8",
-        chk_rem_comment_lines    = "Linhas comentadas",
-        chk_rem_inline_comments  = "Comentarios inline {...}",
-        btn_import               = "Importar",
-        btn_replace_all          = "Substituir tudo",
-        btn_apply                = "Execute",
-    },
-}
-
-for code, tbl in pairs(extraLang) do
-    LANG[code] = LANG[code] or {}
-    for k, v in pairs(tbl) do LANG[code][k] = v end
-end
-
-for code, tbl in pairs(localePatch) do
-    LANG[code] = LANG[code] or {}
-    for k, v in pairs(tbl) do LANG[code][k] = v end
-end
-
-local emphasisLang = {
-    en = {
-        chk_strong_excl     = "Strong exclamation [STRONG-EXCL]",
-        chk_strong_quest    = "Strong question [STRONG-QUEST]",
-        chk_mixed_emphasis  = "Mixed emphasis [MIXED-EMPHASIS]",
-        chk_semicolon       = "Semicolon [SEMICOLON]",
-        chk_stutter         = "Stutter [STUTTER]",
-        btn_scream          = "Scream",
-        scream_title        = "Scream Detector",
-        scream_lbl_avg      = "Average line dB:",
-        scream_lbl_sample   = "Strong sample dB:",
-        scream_lbl_ratio    = "Strong sample ratio (%):",
-        scream_lbl_min      = "Minimum samples:",
-        scream_lbl_z        = "Robust z-score:",
-        scream_chk_clean    = "Clear previous SCREAM marks",
-        scream_chk_reuse    = "Reuse existing analysis log",
-        scream_btn_analyze  = "Analyze",
-        scream_msg_no_media = "Scream Detector: no audio or video file is loaded.",
-        scream_msg_no_folder= "Scream Detector: could not find a folder for the analysis files.",
-        scream_msg_no_batch = "Scream Detector: could not create the analysis workspace.",
-        scream_msg_running  = "Scream Detector: running FFmpeg analysis.\nThis can take a while.",
-        scream_msg_no_log   = "Scream Detector: no audio samples found in the analysis log.\nLog: %s",
-        scream_msg_done     = "Scream Detector: marked %d of %d lines.\nSamples: %d\nMedian avg: %.2f dB | MAD: %.2f dB",
-        scream_help         = "Scream Detector marks lines whose interval is statistically loud.\n\n"
-                              .. "Average line dB: mean power inside each subtitle interval (closer to 0 is stricter).\n"
-                              .. "Strong sample dB: samples above this value count as strong evidence.\n"
-                              .. "Strong sample ratio: minimum percent of strong samples per interval.\n"
-                              .. "Minimum samples: ignore lines with too little audio evidence.\n"
-                              .. "Robust z-score: compares each line against median/MAD of the current set.\n"
-                              .. "Reuse log skips FFmpeg if the analysis log already exists.",
-    },
-    es = {
-        chk_strong_excl     = "Exclamación fuerte [STRONG-EXCL]",
-        chk_strong_quest    = "Interrogación fuerte [STRONG-QUEST]",
-        chk_mixed_emphasis  = "Énfasis mixto [MIXED-EMPHASIS]",
-        chk_semicolon       = "Punto y coma [SEMICOLON]",
-        chk_stutter         = "Tartamudeo [STUTTER]",
-        btn_scream          = "Grito",
-        scream_title        = "Detector de Gritos",
-        scream_lbl_avg      = "Promedio dB:",
-        scream_lbl_sample   = "Muestra fuerte dB:",
-        scream_lbl_ratio    = "Ratio muestra fuerte (%):",
-        scream_lbl_min      = "Muestras mínimas:",
-        scream_lbl_z        = "z-score robusto:",
-        scream_chk_clean    = "Limpiar marcas SCREAM previas",
-        scream_chk_reuse    = "Reutilizar log de análisis existente",
-        scream_btn_analyze  = "Analizar",
-        scream_msg_no_media = "Scream Detector: no hay audio o vídeo cargado.",
-        scream_msg_no_folder= "Scream Detector: no se encontró carpeta para los archivos de análisis.",
-        scream_msg_no_batch = "Scream Detector: no se pudo crear el espacio de análisis.",
-        scream_msg_running  = "Scream Detector: ejecutando análisis de FFmpeg.\nPuede tardar un rato.",
-        scream_msg_no_log   = "Scream Detector: no se encontraron muestras en el registro de análisis.\nRegistro: %s",
-        scream_msg_done     = "Scream Detector: marcadas %d de %d líneas.\nMuestras: %d\nMediana promedio: %.2f dB | MAD: %.2f dB",
-        scream_help         = "Scream Detector marca líneas cuyo intervalo es estadísticamente fuerte.\n\n"
-                              .. "Promedio dB: potencia media en el intervalo de cada subtítulo (más cerca de 0 es más estricto).\n"
-                              .. "Muestra fuerte dB: muestras por encima de este valor cuentan como evidencia fuerte.\n"
-                              .. "Ratio muestra fuerte: porcentaje mínimo de muestras fuertes por intervalo.\n"
-                              .. "Muestras mínimas: ignora líneas con muy poca evidencia.\n"
-                              .. "z-score robusto: compara cada línea contra mediana/MAD del conjunto actual.\n"
-                              .. "Reutilizar log evita correr FFmpeg si ya existe el log de análisis.",
-    },
-    pt = {
-        chk_strong_excl     = "Exclamação forte [STRONG-EXCL]",
-        chk_strong_quest    = "Interrogação forte [STRONG-QUEST]",
-        chk_mixed_emphasis  = "Ênfase mista [MIXED-EMPHASIS]",
-        chk_semicolon       = "Ponto e vírgula [SEMICOLON]",
-        chk_stutter         = "Gagueira [STUTTER]",
-        btn_scream          = "Grito",
-        scream_title        = "Detector de Gritos",
-        scream_lbl_avg      = "Média dB:",
-        scream_lbl_sample   = "Amostra forte dB:",
-        scream_lbl_ratio    = "Razão amostra forte (%):",
-        scream_lbl_min      = "Amostras mínimas:",
-        scream_lbl_z        = "z-score robusto:",
-        scream_chk_clean    = "Limpar marcas SCREAM anteriores",
-        scream_chk_reuse    = "Reutilizar log de análise existente",
-        scream_btn_analyze  = "Analisar",
-        scream_msg_no_media = "Scream Detector: nenhum áudio ou vídeo carregado.",
-        scream_msg_no_folder= "Scream Detector: não foi encontrada pasta para os arquivos de análise.",
-        scream_msg_no_batch = "Scream Detector: não foi possível criar o espaço de análise.",
-        scream_msg_running  = "Scream Detector: executando análise do FFmpeg.\nPode demorar.",
-        scream_msg_no_log   = "Scream Detector: nenhuma amostra encontrada no registro de análise.\nRegistro: %s",
-        scream_msg_done     = "Scream Detector: marcadas %d de %d linhas.\nAmostras: %d\nMediana média: %.2f dB | MAD: %.2f dB",
-        scream_help         = "Scream Detector marca linhas cujo intervalo é estatisticamente forte.\n\n"
-                              .. "Média dB: potência média no intervalo de cada legenda (mais perto de 0 é mais estrito).\n"
-                              .. "Amostra forte dB: amostras acima deste valor contam como evidência forte.\n"
-                              .. "Razão amostra forte: porcentagem mínima de amostras fortes por intervalo.\n"
-                              .. "Amostras mínimas: ignora linhas com pouca evidência.\n"
-                              .. "z-score robusto: compara cada linha contra mediana/MAD do conjunto atual.\n"
-                              .. "Reutilizar log evita rodar FFmpeg se o log de análise já existir.",
-    },
-}
-
-for code, tbl in pairs(emphasisLang) do
-    LANG[code] = LANG[code] or {}
-    for k, v in pairs(tbl) do LANG[code][k] = v end
-end
-
-local function L(key)
-    return (LANG[currentLang] and LANG[currentLang][key]) or LANG.en[key] or key
-end
+local L, UI = require("kite.Timing").Locale.new(function() return currentLang end)
+UI.labels.en["Import Lines"] = "Import lines"
+UI.labels.es["Import Lines"] = "Importar líneas"
+UI.labels.pt["Import Lines"] = "Importar linhas"
 
 local function resolveConfig()
     currentLang = currentConfig.language or currentLang or "en"
@@ -1012,190 +228,6 @@ local function showMsg(msg)
         aegisub.dialog.display({{class="label", label=msg, x=0, y=0, width=width, height=height}}, {L("btn_ok")})
     end
 end
-local UI = {
-    labels = {
-        en = {
-            ["en"]="English", ["es"]="Spanish", ["pt"]="Portuguese",
-            ["All Selected"]="All selected", ["By Style"]="By style", ["By Actor"]="By actor", ["By Effect"]="By effect", ["By Layer"]="By layer",
-            ["Ends Only"]="Ends only", ["Start Only"]="Start only", ["Full Audit"]="Full audit", ["Duration"]="Duration", ["CPS"]="CPS", ["Short Gaps"]="Short gaps", ["Large Gaps"]="Large gaps", ["Both Gaps"]="Both gaps", ["Overtime"]="Overtime",
-            ["End Only"]="End only", ["Both"]="Both", ["End only"]="End only", ["Start only"]="Start only",
-            ["KF Back"]="Back", ["KF Forward"]="Forward", ["KF Both"]="Both",
-            ["Import Effects"]="Import effects", ["Import Actor"]="Import actor", ["Import Tags"]="Import tags", ["Song Sync"]="Song sync",
-            ["Full Timing"]="Full + polish", ["Post-Timing"]="Post current", ["Raw Timing"]="Raw voice",
-            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Table (±ms)",
-            ["Only changes"]="Only changes", ["Only 0ms"]="Only 0 ms", ["None"]="None",
-            ["All"]="All", ["All Default"]="All Default", ["Default+Alt"]="Default + Alt",
-            ["Number Effects"]="Number effects", ["Add Identifier"]="Add identifier",
-            ["UPPERCASE"]="Uppercase", ["THREE-LINES"]="Three lines", ["NO-END-PUNCT"]="No end punctuation", ["UNPAIRED-PUNCT"]="Unpaired punctuation",
-            ["SHORT-LAST-LINE"]="Short last line", ["BROKEN-TAG"]="Broken tag", ["OVERLAP"]="Overlap", ["DEFAULT-STYLE"]="Default style",
-            ["ITALIC-ERROR"]="Italic error", ["PARENTHESES"]="Parentheses", ["NAME-PREFIX"]="Name prefix", ["MULTI-SENTENCE"]="Multiple sentences",
-            ["TOO-WIDE"]="Too wide", ["TOO-SHORT"]="Too short", ["TOO-LONG"]="Too long", ["TOO-LONG-TIME"]="Too long duration",
-            ["FAST-CPS"]="Fast CPS", ["SLOW-CPS"]="Slow CPS", ["SHORT-GAP"]="Short gap", ["LARGE-GAP"]="Large gap", ["END-ON-KF/START-ON-KF"]="On keyframe",
-            ["NEAR-END-KF/NEAR-START-KF"]="Near keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Missed keyframe",
-            ["LINE-BREAK"]="Line break", ["POSITION-TAG"]="Position tag", ["CLIP-TAG"]="Clip tag", ["DRAWING-CLIP"]="Drawing + clip", ["FADE-TAG"]="Fade tag",
-            ["TRANSFORM-TAG"]="Transform tag", ["KARAOKE-TAG"]="Karaoke tag", ["COMMENT-BLOCK"]="Comment block", ["HAS-DIGITS"]="Digits",
-            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Full italic", ["DOUBLE-SPACE"]="Double space", ["EDGE-SPACE"]="Edge space",
-            ["Toggle \\an8"]="Toggle \\an8", ["Toggle Italics"]="Toggle italics", ["Uppercase"]="Uppercase", ["Lowercase"]="Lowercase",
-            ["Title Case"]="Title case", ["Sentence Case"]="Sentence case", ["Capitalize First"]="Capitalize first", ["Lowercase First"]="Lowercase first",
-            ["Normalize Ellipsis"]="Normalize ellipsis", ["Add Ellipsis"]="Add ellipsis", ["Erase Leading Ellipsis"]="Erase leading ellipsis", ["Erase Inner Ellipsis"]="Erase inner ellipsis",
-            ["Ellipsis to Comma"]="Ellipsis to comma", ["Ellipsis to Period"]="Ellipsis to period",
-            ["Unify Quotes"]="Unify quotes", ["Normalize Dashes"]="Normalize dashes", ["Trim Trailing Spaces"]="Trim trailing spaces",
-            ["Remove Duplicate Letters"]="Remove duplicate letters", ["Normalize Stutter"]="Normalize stutter", ["Extract Tags"]="Extract tags",
-            ["Reinsert Tags"]="Reinsert tags", ["Remove Tags"]="Remove tags", ["Merge Tags"]="Merge tags", ["Remove Inline Comments"]="Remove inline comments", ["Extract Actors and Split"]="Extract actors and split",
-            ["Swap Text and Comments"]="Swap text and comments", ["Delete Comment Lines"]="Delete comment lines", ["Comments to Top"]="Comments to top",
-            ["Comments to Bottom"]="Comments to bottom", ["Effects to Top"]="Effects to top", ["Fold by Identifier"]="Fold by identifier", ["Add Stutter"]="Add stutter",
-            ["Add Ah Prefix"]="Add Ah prefix", ["Bidirectional Snapping"]="Bidirectional snapping", ["Start Snap Back"]="Start snap back", ["Start Snap Forward"]="Start snap forward", ["End Snap Back"]="End snap back", ["End Snap Forward"]="End snap forward", ["Remove Honorifics"]="Remove honorifics",
-            ["Caption Clarifier"]="Caption clarifier", ["Complete Sentences"]="Complete sentences", ["Erase Blank Lines"]="Erase blank lines", ["Remove \\N"]="Remove \\N",
-            ["Current Frame to Effect"]="Current frame to Effect", ["Copy Fold"]="Copy fold", ["Smart Break"]="Smart break", ["Split by Sentence"]="Split by sentence",
-            ["Split by Comma"]="Split by comma", ["Line Merge and Cleanup"]="Line merge and cleanup", ["Join Same Text"]="Join same text", ["Join Overlaps"]="Join overlaps", ["Join Overlap Sentences"]="Join overlap sentences", ["Divide by \\N"]="Divide by \\N",
-            ["Copy Times"]="Copy times", ["Select Time Range"]="Select time range", ["Sort by Text Length"]="Sort by text length", ["Sort by CPS"]="Sort by CPS",
-            ["Sort Odd Even"]="Sort odd/even", ["Count CPS"]="Count CPS", ["Import Text"]="Import text", ["Kite Timing"]="Kite timing",
-            ["Add Lead-In Left"]="Add lead-in left", ["Add Lead-In Right"]="Add lead-in right", ["Add Lead-Out Left"]="Add lead-out left", ["Add Lead-Out Right"]="Add lead-out right", ["Chain Left"]="Chain left", ["Chain Right"]="Chain right",
-            ["Align to First Start"]="Align to first start", ["Romaji Karaoker (Word → \\k)"]="Romaji karaoker (word → \\k)",
-            ["Text and Tag Cleanup"]="Text and tag cleanup", ["Properties and Cleanup"]="Properties and cleanup", ["After Effects Keyframes"]="After Effects keyframes", ["Text Replacer"]="Text replacer", ["mpv QC"]="mpv QC",
-        },
-        es = {
-            ["en"]="Inglés", ["es"]="Español", ["pt"]="Portugués",
-            ["All Selected"]="Toda la selección", ["By Style"]="Por estilo", ["By Actor"]="Por actor", ["By Effect"]="Por Effect", ["By Layer"]="Por capa",
-            ["Ends Only"]="Solo finales", ["Start Only"]="Solo inicios", ["Full Audit"]="Auditoría completa", ["Duration"]="Duración", ["CPS"]="CPS", ["Short Gaps"]="Gaps cortos", ["Large Gaps"]="Gaps largos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretiempo",
-            ["End Only"]="Solo final", ["Both"]="Ambos", ["End only"]="Solo final", ["Start only"]="Solo inicio",
-            ["KF Back"]="Atrás", ["KF Forward"]="Adelante", ["KF Both"]="Ambos",
-            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar actor", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronía de canción",
-            ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Post actual", ["Raw Timing"]="Voz bruta",
-            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Clúster (±ms)", ["Table (±ms)"]="Tabla (±ms)",
-            ["Only changes"]="Solo cambios", ["Only 0ms"]="Solo 0 ms", ["None"]="Ninguno",
-            ["All"]="Todo", ["All Default"]="Todo Default", ["Default+Alt"]="Default + Alt",
-            ["Number Effects"]="Numerar Effects", ["Add Identifier"]="Añadir identificador",
-            ["UPPERCASE"]="Mayúsculas", ["THREE-LINES"]="Tres líneas", ["NO-END-PUNCT"]="Sin puntuación final", ["UNPAIRED-PUNCT"]="Puntuación sin pareja",
-            ["SHORT-LAST-LINE"]="Última línea corta", ["BROKEN-TAG"]="Tag roto", ["OVERLAP"]="Solapamiento", ["DEFAULT-STYLE"]="Estilo Default",
-            ["ITALIC-ERROR"]="Error de cursiva", ["PARENTHESES"]="Paréntesis", ["NAME-PREFIX"]="Prefijo de nombre", ["MULTI-SENTENCE"]="Varias oraciones",
-            ["TOO-WIDE"]="Demasiado ancho", ["TOO-SHORT"]="Muy corta", ["TOO-LONG"]="Muy larga", ["TOO-LONG-TIME"]="Duración excesiva",
-            ["FAST-CPS"]="CPS alto", ["SLOW-CPS"]="CPS bajo", ["SHORT-GAP"]="Gap corto", ["LARGE-GAP"]="Gap largo", ["END-ON-KF/START-ON-KF"]="En keyframe",
-            ["NEAR-END-KF/NEAR-START-KF"]="Cerca de keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Keyframe omitido",
-            ["LINE-BREAK"]="Salto de línea", ["POSITION-TAG"]="Tag de posición", ["CLIP-TAG"]="Tag de clip", ["DRAWING-CLIP"]="Dibujo + clip", ["FADE-TAG"]="Tag de fade",
-            ["TRANSFORM-TAG"]="Tag de transformación", ["KARAOKE-TAG"]="Tag de karaoke", ["COMMENT-BLOCK"]="Bloque de comentario", ["HAS-DIGITS"]="Dígitos",
-            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda en cursiva", ["DOUBLE-SPACE"]="Doble espacio", ["EDGE-SPACE"]="Espacio al borde",
-            ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar cursiva", ["Uppercase"]="Mayúsculas", ["Lowercase"]="Minúsculas",
-            ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo oración", ["Capitalize First"]="Primera mayúscula", ["Lowercase First"]="Primera minúscula",
-            ["Normalize Ellipsis"]="Normalizar elipsis", ["Add Ellipsis"]="Añadir elipsis", ["Erase Leading Ellipsis"]="Borrar elipsis inicial", ["Erase Inner Ellipsis"]="Borrar elipsis interna",
-            ["Ellipsis to Comma"]="Elipsis a coma", ["Ellipsis to Period"]="Elipsis a punto",
-            ["Unify Quotes"]="Unificar comillas", ["Normalize Dashes"]="Normalizar guiones", ["Trim Trailing Spaces"]="Quitar espacios finales",
-            ["Remove Duplicate Letters"]="Quitar letras repetidas", ["Normalize Stutter"]="Normalizar tartamudeo", ["Extract Tags"]="Extraer tags",
-            ["Reinsert Tags"]="Reinsertar tags", ["Remove Tags"]="Quitar tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Quitar comentarios internos", ["Extract Actors and Split"]="Extraer actores y dividir",
-            ["Swap Text and Comments"]="Intercambiar texto y comentarios", ["Delete Comment Lines"]="Borrar líneas comentadas", ["Comments to Top"]="Comentarios arriba",
-            ["Comments to Bottom"]="Comentarios abajo", ["Effects to Top"]="Con Effect arriba", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Añadir tartamudeo",
-            ["Add Ah Prefix"]="Añadir Ah inicial", ["Bidirectional Snapping"]="Snap bidireccional", ["Start Snap Back"]="Inicio a KF previo", ["Start Snap Forward"]="Inicio a KF siguiente", ["End Snap Back"]="Final a KF previo", ["End Snap Forward"]="Final a KF siguiente", ["Remove Honorifics"]="Comentar honoríficos",
-            ["Caption Clarifier"]="Limpiar acotaciones", ["Complete Sentences"]="Completar oraciones", ["Erase Blank Lines"]="Borrar líneas vacías", ["Remove \\N"]="Quitar \\N",
-            ["Current Frame to Effect"]="Fotograma actual a Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Salto inteligente", ["Split by Sentence"]="Dividir por oración",
-            ["Split by Comma"]="Dividir por coma", ["Line Merge and Cleanup"]="Combinar y limpiar líneas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir solapes", ["Join Overlap Sentences"]="Unir solapes en frase", ["Divide by \\N"]="Dividir por \\N",
-            ["Copy Times"]="Copiar tiempos", ["Select Time Range"]="Seleccionar por intervalo", ["Sort by Text Length"]="Ordenar por longitud del texto", ["Sort by CPS"]="Ordenar por CPS",
-            ["Sort Odd Even"]="Ordenar impar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
-            ["Add Lead-In Left"]="Lead-in izquierda", ["Add Lead-In Right"]="Lead-in derecha", ["Add Lead-Out Left"]="Lead-out izquierda", ["Add Lead-Out Right"]="Lead-out derecha", ["Chain Left"]="Encadenar izquierda", ["Chain Right"]="Encadenar derecha",
-            ["Align to First Start"]="Alinear al inicio de la primera", ["Romaji Karaoker (Word → \\k)"]="Karaoke romaji (palabra → \\k)",
-            ["Text and Tag Cleanup"]="Limpiar texto y tags", ["Properties and Cleanup"]="Propiedades y limpieza", ["After Effects Keyframes"]="Fotogramas para After Effects", ["Text Replacer"]="Reemplazar texto", ["mpv QC"]="mpv QC",
-        },
-        pt = {
-            ["en"]="Inglês", ["es"]="Espanhol", ["pt"]="Português",
-            ["All Selected"]="Toda a seleção", ["By Style"]="Por estilo", ["By Actor"]="Por ator", ["By Effect"]="Por Effect", ["By Layer"]="Por camada",
-            ["Ends Only"]="Só finais", ["Start Only"]="Só inícios", ["Full Audit"]="Auditoria completa", ["Duration"]="Duração", ["CPS"]="CPS", ["Short Gaps"]="Gaps curtos", ["Large Gaps"]="Gaps longos", ["Both Gaps"]="Ambos gaps", ["Overtime"]="Sobretempo",
-            ["End Only"]="Só final", ["Both"]="Ambos", ["End only"]="Só final", ["Start only"]="Só início",
-            ["KF Back"]="Para trás", ["KF Forward"]="Para frente", ["KF Both"]="Ambos",
-            ["Import Effects"]="Importar Effects", ["Import Actor"]="Importar ator", ["Import Tags"]="Importar tags", ["Song Sync"]="Sincronia da música",
-            ["Full Timing"]="Completo + ajuste", ["Post-Timing"]="Pós atual", ["Raw Timing"]="Voz bruta",
-            ["Lazy"]="Lazy", ["Busy"]="Busy", ["LazyFusion"]="LazyFusion", ["Cluster (±ms)"]="Cluster (±ms)", ["Table (±ms)"]="Tabela (±ms)",
-            ["Only changes"]="Só mudanças", ["Only 0ms"]="Só 0 ms", ["None"]="Nenhum",
-            ["All"]="Tudo", ["All Default"]="Tudo Default", ["Default+Alt"]="Default + Alt",
-            ["Number Effects"]="Numerar Effects", ["Add Identifier"]="Adicionar identificador",
-            ["UPPERCASE"]="Maiúsculas", ["THREE-LINES"]="Três linhas", ["NO-END-PUNCT"]="Sem pontuação final", ["UNPAIRED-PUNCT"]="Pontuação sem par",
-            ["SHORT-LAST-LINE"]="Última linha curta", ["BROKEN-TAG"]="Tag quebrada", ["OVERLAP"]="Sobreposição", ["DEFAULT-STYLE"]="Estilo Default",
-            ["ITALIC-ERROR"]="Erro de itálico", ["PARENTHESES"]="Parênteses", ["NAME-PREFIX"]="Prefixo de nome", ["MULTI-SENTENCE"]="Várias frases",
-            ["TOO-WIDE"]="Larga demais", ["TOO-SHORT"]="Curta demais", ["TOO-LONG"]="Longa demais", ["TOO-LONG-TIME"]="Duração excessiva",
-            ["FAST-CPS"]="CPS alto", ["SLOW-CPS"]="CPS baixo", ["SHORT-GAP"]="Gap curto", ["LARGE-GAP"]="Gap longo", ["END-ON-KF/START-ON-KF"]="Em keyframe",
-            ["NEAR-END-KF/NEAR-START-KF"]="Perto de keyframe", ["MISSED-END-KF/MISSED-START-KF"]="Keyframe perdido",
-            ["LINE-BREAK"]="Quebra de linha", ["POSITION-TAG"]="Tag de posição", ["CLIP-TAG"]="Tag de clip", ["DRAWING-CLIP"]="Desenho + clip", ["FADE-TAG"]="Tag de fade",
-            ["TRANSFORM-TAG"]="Tag de transformação", ["KARAOKE-TAG"]="Tag de karaokê", ["COMMENT-BLOCK"]="Bloco de comentário", ["HAS-DIGITS"]="Dígitos",
-            ["HAS-CJK"]="CJK / kana", ["FULL-ITALIC"]="Toda em itálico", ["DOUBLE-SPACE"]="Espaço duplo", ["EDGE-SPACE"]="Espaço nas bordas",
-            ["Toggle \\an8"]="Alternar \\an8", ["Toggle Italics"]="Alternar itálico", ["Uppercase"]="Maiúsculas", ["Lowercase"]="Minúsculas",
-            ["Title Case"]="Tipo título", ["Sentence Case"]="Tipo frase", ["Capitalize First"]="Primeira maiúscula", ["Lowercase First"]="Primeira minúscula",
-            ["Normalize Ellipsis"]="Normalizar reticências", ["Add Ellipsis"]="Adicionar reticências", ["Erase Leading Ellipsis"]="Apagar reticências iniciais", ["Erase Inner Ellipsis"]="Apagar reticências internas",
-            ["Ellipsis to Comma"]="Reticências para vírgula", ["Ellipsis to Period"]="Reticências para ponto",
-            ["Unify Quotes"]="Unificar aspas", ["Normalize Dashes"]="Normalizar travessões", ["Trim Trailing Spaces"]="Remover espaços finais",
-            ["Remove Duplicate Letters"]="Remover letras repetidas", ["Normalize Stutter"]="Normalizar gaguejo", ["Extract Tags"]="Extrair tags",
-            ["Reinsert Tags"]="Reinserir tags", ["Remove Tags"]="Remover tags", ["Merge Tags"]="Unir tags", ["Remove Inline Comments"]="Remover comentários internos", ["Extract Actors and Split"]="Extrair atores e dividir",
-            ["Swap Text and Comments"]="Trocar texto e comentários", ["Delete Comment Lines"]="Apagar linhas comentadas", ["Comments to Top"]="Comentários acima",
-            ["Comments to Bottom"]="Comentários abaixo", ["Effects to Top"]="Com Effect acima", ["Fold by Identifier"]="Fold por identificador", ["Add Stutter"]="Adicionar gaguejo",
-            ["Add Ah Prefix"]="Adicionar Ah inicial", ["Bidirectional Snapping"]="Snap bidirecional", ["Start Snap Back"]="Inicio ao KF anterior", ["Start Snap Forward"]="Inicio ao KF seguinte", ["End Snap Back"]="Fim ao KF anterior", ["End Snap Forward"]="Fim ao KF seguinte", ["Remove Honorifics"]="Comentar honoríficos",
-            ["Caption Clarifier"]="Limpar indicações", ["Complete Sentences"]="Completar frases", ["Erase Blank Lines"]="Apagar linhas vazias", ["Remove \\N"]="Remover \\N",
-            ["Current Frame to Effect"]="Quadro atual para Effect", ["Copy Fold"]="Copiar fold", ["Smart Break"]="Quebra inteligente", ["Split by Sentence"]="Dividir por frase",
-            ["Split by Comma"]="Dividir por vírgula", ["Line Merge and Cleanup"]="Combinar e limpar linhas", ["Join Same Text"]="Unir texto igual", ["Join Overlaps"]="Unir sobreposições", ["Join Overlap Sentences"]="Unir sobreposições em frase", ["Divide by \\N"]="Dividir por \\N",
-            ["Copy Times"]="Copiar tempos", ["Select Time Range"]="Selecionar por intervalo", ["Sort by Text Length"]="Ordenar por tamanho do texto", ["Sort by CPS"]="Ordenar por CPS",
-            ["Sort Odd Even"]="Ordenar ímpar/par", ["Count CPS"]="Contar CPS", ["Import Text"]="Importar texto", ["Kite Timing"]="Kite timing",
-            ["Add Lead-In Left"]="Lead-in esquerda", ["Add Lead-In Right"]="Lead-in direita", ["Add Lead-Out Left"]="Lead-out esquerda", ["Add Lead-Out Right"]="Lead-out direita", ["Chain Left"]="Encadear esquerda", ["Chain Right"]="Encadear direita",
-            ["Align to First Start"]="Alinhar ao início da primeira", ["Romaji Karaoker (Word → \\k)"]="Karaokê romaji (palavra → \\k)",
-            ["Text and Tag Cleanup"]="Limpar texto e tags", ["Properties and Cleanup"]="Propriedades e limpeza", ["After Effects Keyframes"]="Quadros para After Effects", ["Text Replacer"]="Substituir texto", ["mpv QC"]="mpv QC",
-        },
-    },
-}
-UI.labels.en["FINAL-COMMA"] = "Final comma"
-UI.labels.es["FINAL-COMMA"] = "Final con coma"
-UI.labels.pt["FINAL-COMMA"] = "Final com virgula"
-UI.labels.en["Pivot \\N"] = "Pivot \\N"
-UI.labels.es["Pivot \\N"] = "Pivotear \\N"
-UI.labels.pt["Pivot \\N"] = "Pivotar \\N"
-UI.labels.en["STRONG-EXCL"]     = "Strong exclamation"
-UI.labels.es["STRONG-EXCL"]     = "Exclamación fuerte"
-UI.labels.pt["STRONG-EXCL"]     = "Exclamação forte"
-UI.labels.en["STRONG-QUEST"]    = "Strong question"
-UI.labels.es["STRONG-QUEST"]    = "Interrogación fuerte"
-UI.labels.pt["STRONG-QUEST"]    = "Interrogação forte"
-UI.labels.en["MIXED-EMPHASIS"]  = "Mixed emphasis"
-UI.labels.es["MIXED-EMPHASIS"]  = "Énfasis mixto"
-UI.labels.pt["MIXED-EMPHASIS"]  = "Ênfase mista"
-UI.labels.en["SEMICOLON"]       = "Semicolon"
-UI.labels.es["SEMICOLON"]       = "Punto y coma"
-UI.labels.pt["SEMICOLON"]       = "Ponto e vírgula"
-UI.labels.en["Smart Split"] = "Smart Split"
-UI.labels.en["Shift Following Lines"] = "Shift Following Lines"
-UI.labels.en["STUTTER"]         = "Stutter"
-UI.labels.es["Smart Split"] = "División inteligente"
-UI.labels.es["Shift Following Lines"] = "Desplazar posteriores"
-UI.labels.es["STUTTER"]         = "Tartamudeo"
-UI.labels.pt["Smart Split"] = "Divisão inteligente"
-UI.labels.pt["Shift Following Lines"] = "Deslocar seguintes"
-UI.labels.pt["STUTTER"]         = "Gagueira"
-UI.labels.en["SCREAM"]          = "Scream"
-UI.labels.es["SCREAM"]          = "Grito"
-UI.labels.pt["SCREAM"]          = "Grito"
-UI.labels.en["All dialogue"]    = "All dialogue"
-UI.labels.es["All dialogue"]    = "Todo el diálogo"
-UI.labels.pt["All dialogue"]    = "Todo o diálogo"
-UI.labels.en["Selected lines"]  = "Selected lines"
-UI.labels.es["Selected lines"]  = "Líneas seleccionadas"
-UI.labels.pt["Selected lines"]  = "Linhas selecionadas"
-function UI.text(key)
-    return (UI.labels[currentLang] and UI.labels[currentLang][key]) or (UI.labels.en and UI.labels.en[key]) or key
-end
-function UI.options(values, current)
-    local data = { items = {}, map = {}, value = "" }
-    local n = 0
-    for _, key in ipairs(values) do
-        local shown = ""
-        if key ~= "" then n = n + 1; shown = tostring(n) .. ". " .. UI.text(key) end
-        data.items[#data.items+1] = shown
-        data.map[shown] = key
-        if key == current then data.value = shown end
-    end
-    return data
-end
-function UI.utilityOptions(section, current)
-    local values = {}
-    for _, it in ipairs(section.items) do values[#values+1] = it.name or "" end
-    return UI.options(values, current)
-end
-function UI.from(data, shown)
-    if not data then return shown end
-    return data.map[shown] ~= nil and data.map[shown] or shown
-end
 local suiteHelp = {
     en = [[
 CHRONO SUITE · USER GUIDE
@@ -1203,7 +235,7 @@ __________________________
 
 A suite of timing, audit, cleanup, import, and editing utilities for
 Aegisub. The interface consists of a main panel and auxiliary dialogs
-(Auto Timing, Extract KF, Data Import, Config, and Help). The main
+(Cleanup, Joinator, Final Data, Config, and Help). The main
 panel operates on the current selection and is split into two columns:
 Audit Markers (left) and Utility Tools (right), with Data Import and
 Extra Tools at the bottom. Most audit results are written to the Effect
@@ -1214,9 +246,9 @@ field.
 _____________
 
 The panel is organized around the current selection. Actions are
-triggered by pressing EXECUTE. The Auto Timing, Extract KF, Config,
-and Help buttons open their dialogs directly. Auto Timing respects the
-Apply to / Filter pair.
+triggered by pressing EXECUTE. Cleanup, Joinator and Final Data
+open directly and respect Apply to / Filter. Auto Timing and Extract KF
+are available in Hephaestus Fansubber / Automatons.
 
    1.1. Apply to: defines the subset on which the panel sections act.
    1.2. Filter: text or numeric value paired with Apply to.
@@ -1225,7 +257,7 @@ Apply to / Filter pair.
    1.4. Utility Tools: seven independent sections (Case, Punct/Text,
         Tags/Comments, Smart, Split/Join, Time/Sort, and Karaoke).
    1.5. Data Import: import data from text pasted into the box.
-   1.6. Extra Tools: five independent tools.
+   1.6. Tools: Text Replacer and mpv QC. The other editors have direct buttons.
 
 An empty dropdown skips its section during execution.
 
@@ -1487,10 +519,12 @@ empty box skips this section.
    8.1. Import Effects: copies the source Effect by time overlap.
    8.2. Import Text: copies visible text by time overlap.
    8.3. Import Actor: copies actor by best time overlap.
-   8.4. Import Tags: replaces the complete initial override block from the
-        one source with greatest positive overlap. Ties keep pasted order.
-        A winning source without tags clears initial tags. No overlap leaves
-        the target unchanged. Target comments and inline tags are retained.
+   8.4. Import Tags: merges initial tags from the source with greatest positive
+        overlap. Ties keep pasted order. Only matching initial tags are replaced;
+        clip/iclip are alternatives. Other formatting, text, drawings, comments
+        and inline tags are retained. No tags or no overlap leaves the target unchanged.
+   Import Lines: replaces each selected dialogue with the pasted ASS group, keeping
+        the destination start and end. Import options do not alter this exact copy.
    8.5. Song Sync: duplicates or synchronizes groups using a Comment
         line on layer 50 as the sync anchor. The selected line's Effect
         is copied into each imported line's Effect; source Effects are
@@ -1505,7 +539,7 @@ empty box skips this section.
 9. EXTRA TOOLS
 ______________
 
-   9.1. After Effects Keyframes: exports motion data compatible with After Effects.
+   After Effects Keyframes is available in Rhea Signs / Tools.
    9.2. Text Replacer: replaces visible text while preserving override
         tags.
    9.3. mpv QC: reads notes exported from mpvQC in the format
@@ -1516,7 +550,8 @@ ______________
    9.4. Text and Tag Cleanup: removes selected visible signs, spacing
         tokens, comments, and known override tags without toggling them
         back on when absent.
-   9.5. Properties and Cleanup: edits script credits and title. The
+   9.5. Final Data: paste eight lines in the displayed field order. Empty lines
+        keep empty fields in place. The
         optional cleanup affects the whole file, removing project paths,
         extradata, comments, Actor, Effect and empty dialogue lines.
 
@@ -1640,7 +675,7 @@ ___________
 Discord: https://discord.gg/Egq8us4xZC
 
 Integrated tools (1.6):
-Extra Tools / Line Merge and Cleanup uses direct buttons: Join, Keep Second (two rows),
+Joinator uses direct buttons: Join, Keep Second (two rows),
 Keep Last, No Inner ... and One Phrase. Keep modes copy the chosen text exactly.
 The first row supplies other fields; times span every selected dialogue row.
 One Phrase also accepts one row: Hola. ¿Cómo estás? becomes Hola, ¿cómo estás?
@@ -1659,7 +694,7 @@ ___________________________
 
 Suite de timing, auditoría, limpieza, importación y utilidades de
 edición para Aegisub. La interfaz se compone de un panel principal y
-diálogos auxiliares (Auto Timing, Extraer KF, Importar Datos, Config
+diálogos auxiliares (Cleanup, Joinator, Final Data, Config
 y Ayuda). El panel principal opera sobre la selección actual y se
 divide en dos columnas: Marcadores de Auditoría (izquierda) y
 Utilidades (derecha), con Importar Datos y Herramientas Extra en la
@@ -1671,8 +706,9 @@ en el campo Effect.
 __________________
 
 El panel se organiza en torno a la selección actual. Las acciones se
-ejecutan al pulsar EJECUTAR. Los botones Auto Timing, Extraer KF,
-Config y Ayuda abren directamente sus respectivos diálogos.
+ejecutan al pulsar EJECUTAR. Cleanup, Joinator y Final Data
+se abren directamente y respetan Aplicar a / Filtro. Auto Timing y
+Extraer KF están en Hephaestus Fansubber / Automatons.
 
    1.1. Aplicar a: define el subconjunto sobre el que actúan las
         secciones del panel.
@@ -1684,7 +720,7 @@ Config y Ayuda abren directamente sus respectivos diálogos.
         Tags/Comentarios, Smart, Dividir/Unir, Tiempo/Orden y Karaoke).
    1.5. Importar Datos: importación desde texto pegado en la caja
         correspondiente.
-   1.6. Herramientas Extra: cinco herramientas independientes.
+   1.6. Tools: Reemplazar texto y mpv QC. Los demás editores tienen botones.
 
 Un desplegable vacío omite la sección durante la ejecución.
 
@@ -1961,10 +997,12 @@ vacía omite esta sección.
    8.2. Import Text: copia el texto visible por superposición temporal.
    8.3. Import Actor: copia el actor por la mejor superposición
         temporal.
-   8.4. Import Tags: sustituye todos los tags iniciales por los de la fuente
-        con mayor solapamiento positivo. Un empate conserva el orden pegado.
-        Si la fuente ganadora no tiene tags, elimina los iniciales del destino.
-        Sin solapamiento no cambia nada. Conserva comentarios y tags internos.
+   8.4. Import Tags: combina los tags iniciales de la fuente con mayor solapamiento
+        positivo. Un empate conserva el orden pegado. Solo sustituye tags iniciales
+        coincidentes; clip/iclip son alternativas. Conserva el resto del formato,
+        texto, dibujos, comentarios y tags internos. Sin tags o solapamiento no cambia nada.
+   Import Lines: sustituye cada diálogo seleccionado por el grupo ASS pegado,
+        conservando los tiempos del destino. Las casillas de importación no alteran la copia.
    8.5. Song Sync: duplica o sincroniza grupos a partir de una línea
         Comment con layer 50 como punto de sincronización. El Effect de
         la línea seleccionada se copia al Effect de cada línea importada;
@@ -1979,8 +1017,7 @@ vacía omite esta sección.
 9. HERRAMIENTAS EXTRA
 _____________________
 
-   9.1. After Effects Keyframes: exporta datos de movimiento compatibles con After
-        Effects.
+   After Effects Keyframes está en Rhea Signs / Tools.
    9.2. Text Replacer: reemplaza texto visible conservando los
         override tags.
    9.3. mpv QC: lee notas exportadas desde mpvQC con formato
@@ -2111,7 +1148,7 @@ ___________
 Discord: https://discord.gg/Egq8us4xZC
 
 Herramientas integradas (1.6):
-Extra Tools / Line Merge and Cleanup tiene botones directos: Unir, Conservar segunda (dos
+Joinator tiene botones directos: Unir, Conservar segunda (dos
 filas), Conservar última, Sin ... internos y Una frase. Conservar copia el texto
 elegido exacto. Los demás campos son de la primera fila; el tiempo abarca todas.
 Una frase también acepta una sola fila: Hola. ¿Cómo estás? → Hola, ¿cómo estás?
@@ -2130,7 +1167,7 @@ ___________________________
 
 Conjunto de timing, auditoria, limpeza, importação e utilidades de
 edição para o Aegisub. A interface é composta por um painel principal
-e diálogos auxiliares (Auto Timing, Extrair KF, Importar Dados,
+e diálogos auxiliares (Cleanup, Joinator, Final Data,
 Config e Ajuda). O painel principal opera sobre a seleção atual e se
 divide em duas colunas: Marcadores de Auditoria (esquerda) e
 Utilidades (direita), com Importar Dados e Ferramentas Extras na
@@ -2142,8 +1179,9 @@ no campo Effect.
 ___________________
 
 O painel se organiza em torno da seleção atual. As ações são
-executadas ao pressionar EXECUTAR. Os botões Auto Timing, Extrair
-KF, Config e Ajuda abrem diretamente seus respectivos diálogos.
+executadas ao pressionar EXECUTAR. Cleanup, Joinator e Final Data
+abrem diretamente e respeitam Aplicar em / Filtro. Auto Timing e Extrair KF
+estão em Hephaestus Fansubber / Automatons.
 
    1.1. Aplicar em: define o subconjunto sobre o qual as seções do
         painel atuam.
@@ -2155,7 +1193,7 @@ KF, Config e Ajuda abrem diretamente seus respectivos diálogos.
         Tags/Comentários, Smart, Dividir/Unir, Tempo/Ordem e Karaokê).
    1.5. Importar Dados: importação a partir de texto colado na caixa
         correspondente.
-   1.6. Ferramentas Extras: cinco ferramentas independentes.
+   1.6. Tools: Substituir texto e mpv QC. Os outros editores têm botões.
 
 Um dropdown vazio salta sua seção durante a execução.
 
@@ -2424,10 +1462,12 @@ Dados. A caixa vazia salta esta seção.
         temporal.
    8.2. Import Text: copia o texto visível por sobreposição temporal.
    8.3. Import Actor: copia o ator pela melhor sobreposição temporal.
-   8.4. Import Tags: substitui os tags iniciais pelos da fonte com maior
-        sobreposição positiva. Empates seguem a ordem colada. Uma fonte sem
-        tags limpa os iniciais. Sem sobreposição não altera a linha.
-        Comentários e tags internos do destino são preservados.
+   8.4. Import Tags: combina os tags iniciais da fonte com maior sobreposição
+        positiva. Empates seguem a ordem colada. Só substitui tags iniciais
+        correspondentes; clip/iclip são alternativas. Preserva a restante formatação,
+        texto, desenhos, comentários e tags internos. Sem tags ou sobreposição não altera a linha.
+   Import Lines: substitui cada diálogo selecionado pelo grupo ASS colado,
+        mantendo os tempos do destino. As opções de importação não alteram a cópia.
    8.5. Song Sync: duplica ou sincroniza grupos a partir de uma linha
         Comment com layer 50 como ponto de sincronia. O Effect da linha
         selecionada é copiado ao Effect de cada linha importada; os
@@ -2442,8 +1482,7 @@ Dados. A caixa vazia salta esta seção.
 9. FERRAMENTAS EXTRAS
 _____________________
 
-   9.1. After Effects Keyframes: exporta dados de movimento compatíveis com o After
-        Effects.
+   After Effects Keyframes está em Rhea Signs / Tools.
    9.2. Text Replacer: substitui texto visível preservando os
         override tags.
    9.3. mpv QC: lê notas exportadas do mpvQC no formato
@@ -2574,7 +1613,7 @@ ___________
 Discord: https://discord.gg/Egq8us4xZC
 
 Ferramentas integradas (1.6):
-Extra Tools / Line Merge and Cleanup tem botões diretos: Unir, Manter segunda (duas linhas),
+Joinator tem botões diretos: Unir, Manter segunda (duas linhas),
 Manter última, Sem ... internos e Uma frase. Manter copia o texto escolhido exato.
 Os demais campos vêm da primeira linha; os tempos abrangem toda a seleção.
 Uma frase aceita uma linha: Hola. ¿Cómo estás? → Hola, ¿cómo estás?
@@ -2589,42 +1628,34 @@ Segue a ordem das linhas, preserva durações e rejeita tempos negativos.
 ]],
 }
 local function showHelp()
-    aegisub.dialog.display({{class="textbox", text=suiteHelp[currentLang] or suiteHelp.en, x=0, y=0, width=45, height=25}}, {L("help_btn_close")})
+    aegisub.dialog.display({{class="textbox", text="Auto Timing, Scream Detector and SCXvid: Hephaestus Fansubber / Automatons / Auto Timing.\n\n" .. (suiteHelp[currentLang] or suiteHelp.en), x=0, y=0, width=45, height=25}}, {L("help_btn_close")})
 end
 
 local function showConfigDialog()
     resolveConfig()
     local cfgUi = {
         language = UI.options({"en","es","pt"}, currentConfig.language),
-        scream_scope = UI.options({ "All dialogue", "Selected lines" }, currentConfig.scream_scope),
     }
     local dlg = {
         { class="label", label=L("cfg_lbl_language"), x=0, y=0, width=2, height=1 },
         { class="dropdown", name="language", items=cfgUi.language.items, value=cfgUi.language.value, x=2, y=0, width=2, height=1 },
-        { class="label", label=L("cfg_lbl_scxvid"), x=0, y=1, width=4, height=1 },
-        { class="label", label=L("cfg_lbl_scxvid_path"), x=0, y=2, width=1, height=1 },
-        { class="edit", name="scxvid_path", value=currentConfig.scxvid_path, x=1, y=2, width=3 },
-        { class="label", label=L("cfg_lbl_ffmpeg_path"), x=0, y=3, width=1, height=1 },
-        { class="edit", name="ffmpeg_path", value=currentConfig.ffmpeg_path, x=1, y=3, width=3 },
-        { class="label", label=L("cfg_lbl_log_suffix"), x=0, y=4, width=1, height=1 },
-        { class="edit", name="scxvid_suffix", value=currentConfig.scxvid_suffix, x=1, y=4, width=1 },
-        { class="label", label=L("cfg_lbl_leadutil"), x=0, y=5, width=4, height=1 },
-        { class="label", label=L("cfg_lbl_lead_step"), x=0, y=6, width=1, height=1 },
-        { class="intedit", name="lead_step_ms", value=currentConfig.lead_step_ms, x=1, y=6, width=1, min=1 },
-        { class="label", label=L("cfg_lbl_chain_cap"), x=2, y=6, width=1, height=1 },
-        { class="intedit", name="chain_max_ms", value=currentConfig.chain_max_ms, x=3, y=6, width=1, min=0 },
-        { class="label", label=L("cfg_lbl_kite"), x=0, y=7, width=4, height=1 },
-        { class="intedit", name="kt_lead_in_base", value=currentConfig.kt_lead_in_base, x=0, y=8, width=1, min=0 },
-        { class="intedit", name="kt_lead_in_max", value=currentConfig.kt_lead_in_max, x=1, y=8, width=1, min=0 },
-        { class="intedit", name="kt_lead_out_base", value=currentConfig.kt_lead_out_base, x=2, y=8, width=1, min=0 },
-        { class="intedit", name="kt_lead_out_max", value=currentConfig.kt_lead_out_max, x=3, y=8, width=1, min=0 },
-        { class="intedit", name="kt_lead_out_chain", value=currentConfig.kt_lead_out_chain, x=0, y=9, width=1, min=0 },
-        { class="intedit", name="kt_chain_gap_max", value=currentConfig.kt_chain_gap_max, x=1, y=9, width=1, min=0 },
-        { class="label", label=L("cfg_lbl_bidir"), x=0, y=10, width=4, height=1 },
-        { class="label", label=L("cfg_lbl_bidir_snap"), x=0, y=11, width=2, height=1 },
-        { class="intedit", name="bidir_snap_f", value=currentConfig.bidir_snap_f, x=2, y=11, width=1, min=0 },
-        { class="label", label=L("cfg_lbl_snap_protect"), x=0, y=12, width=2, height=1 },
-        { class="intedit", name="edge_snap_protect_ms", value=currentConfig.edge_snap_protect_ms, x=2, y=12, width=1, min=0 },
+        { class="label", label=L("cfg_lbl_leadutil"), x=0, y=1, width=4, height=1 },
+        { class="label", label=L("cfg_lbl_lead_step"), x=0, y=2, width=1, height=1 },
+        { class="intedit", name="lead_step_ms", value=currentConfig.lead_step_ms, x=1, y=2, width=1, min=1 },
+        { class="label", label=L("cfg_lbl_chain_cap"), x=2, y=2, width=1, height=1 },
+        { class="intedit", name="chain_max_ms", value=currentConfig.chain_max_ms, x=3, y=2, width=1, min=0 },
+        { class="label", label=L("cfg_lbl_kite"), x=0, y=3, width=4, height=1 },
+        { class="intedit", name="kt_lead_in_base", value=currentConfig.kt_lead_in_base, x=0, y=4, width=1, min=0 },
+        { class="intedit", name="kt_lead_in_max", value=currentConfig.kt_lead_in_max, x=1, y=4, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_base", value=currentConfig.kt_lead_out_base, x=2, y=4, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_max", value=currentConfig.kt_lead_out_max, x=3, y=4, width=1, min=0 },
+        { class="intedit", name="kt_lead_out_chain", value=currentConfig.kt_lead_out_chain, x=0, y=5, width=1, min=0 },
+        { class="intedit", name="kt_chain_gap_max", value=currentConfig.kt_chain_gap_max, x=1, y=5, width=1, min=0 },
+        { class="label", label=L("cfg_lbl_bidir"), x=0, y=6, width=4, height=1 },
+        { class="label", label=L("cfg_lbl_bidir_snap"), x=0, y=7, width=2, height=1 },
+        { class="intedit", name="bidir_snap_f", value=currentConfig.bidir_snap_f, x=2, y=7, width=1, min=0 },
+        { class="label", label=L("cfg_lbl_snap_protect"), x=0, y=8, width=2, height=1 },
+        { class="intedit", name="edge_snap_protect_ms", value=currentConfig.edge_snap_protect_ms, x=2, y=8, width=1, min=0 },
         { class="label", label=L("cfg_lbl_presets"), x=4, y=1, width=4, height=1 },
         { class="label", label=L("cfg_lbl_preset_start"), x=4, y=2, width=2, height=1 },
         { class="intedit", name="preset_start_twin_ms", value=currentConfig.preset_start_twin_ms, x=6, y=2, width=1, min=0 },
@@ -2654,33 +1685,12 @@ local function showConfigDialog()
         { class="label", label=L("cfg_lbl_preset_gaps"), x=4, y=11, width=2, height=1 },
         { class="intedit", name="preset_gap_short_ms", value=currentConfig.preset_gap_short_ms, x=6, y=11, width=1, min=0 },
         { class="intedit", name="preset_gap_large_ms", value=currentConfig.preset_gap_large_ms, x=7, y=11, width=1, min=0 },
-        { class="label", label=L("scream_title"), x=4, y=13, width=4, height=1 },
-        { class="label", label=L("scream_lbl_avg"), x=4, y=14, width=3, height=1 },
-        { class="edit", name="scream_avg_db", value=tostring(currentConfig.scream_avg_db), x=7, y=14, width=2, height=1 },
-        { class="label", label=L("scream_lbl_sample"), x=4, y=15, width=3, height=1 },
-        { class="edit", name="scream_sample_db", value=tostring(currentConfig.scream_sample_db), x=7, y=15, width=2, height=1 },
-        { class="label", label=L("scream_lbl_ratio"), x=4, y=16, width=3, height=1 },
-        { class="intedit", name="scream_loud_ratio", value=currentConfig.scream_loud_ratio, x=7, y=16, width=2, min=0, max=100 },
-        { class="label", label=L("scream_lbl_min"), x=4, y=17, width=3, height=1 },
-        { class="intedit", name="scream_min_samples", value=currentConfig.scream_min_samples, x=7, y=17, width=2, min=1 },
-        { class="label", label=L("scream_lbl_z"), x=4, y=18, width=3, height=1 },
-        { class="edit", name="scream_robust_z", value=tostring(currentConfig.scream_robust_z), x=7, y=18, width=2, height=1 },
         { class="label", label=L("lbl_apply_to"), x=4, y=19, width=3, height=1 },
-        { class="dropdown", name="scream_scope", items=cfgUi.scream_scope.items, value=cfgUi.scream_scope.value, x=7, y=19, width=2, height=1 },
-        { class="checkbox", name="scream_clean_previous", label=L("scream_chk_clean"), value=currentConfig.scream_clean_previous, x=4, y=20, width=5, height=1 },
-        { class="checkbox", name="scream_reuse_log", label=L("scream_chk_reuse"), value=currentConfig.scream_reuse_log, x=4, y=21, width=5, height=1 },
     }
     local pressed, result = aegisub.dialog.display(dlg, {L("btn_save"), L("btn_cancel")}, {ok=L("btn_save"), close=L("btn_cancel")})
     if pressed == L("btn_save") then
         local oldLang = currentConfig.language
         result.language = UI.from(cfgUi.language, result.language)
-        result.scream_scope = UI.from(cfgUi.scream_scope, result.scream_scope)
-        if result.scream_scope ~= "Selected lines" then result.scream_scope = "All dialogue" end
-        result.scream_avg_db = tonumber(result.scream_avg_db) or currentConfig.scream_avg_db
-        result.scream_sample_db = tonumber(result.scream_sample_db) or currentConfig.scream_sample_db
-        result.scream_loud_ratio = math.max(0, math.min(100, tonumber(result.scream_loud_ratio) or currentConfig.scream_loud_ratio))
-        result.scream_min_samples = math.max(1, tonumber(result.scream_min_samples) or currentConfig.scream_min_samples)
-        result.scream_robust_z = math.max(0, tonumber(result.scream_robust_z) or currentConfig.scream_robust_z)
         for k, v in pairs(result) do currentConfig[k] = v end
         local saved, message = saveConfig()
         resolveConfig()
@@ -2688,6 +1698,7 @@ local function showConfigDialog()
         if oldLang ~= currentConfig.language then showMsg(L("cfg_msg_lang_changed")) end
     end
 end
+
 
 local function normalizeString(v) if type(v)=="string" then return v end if v==nil then return "" end return tostring(v) end
 local function normalizeNumber(v, fallback)
@@ -3144,7 +2155,6 @@ end
 
 local auditLines, applyPreset, singleMarkerItems
 local TextOperations, TagOperations, SmartOperations, TimingOperations, MarkerOperations
-local autoTimer
 
 local function getKeyframes()
     if aegisub and type(aegisub.keyframes) == "function" then
@@ -5409,7 +4419,7 @@ function TimingOperations.importText(subs, sel)
     local btn, res = aegisub.dialog.display({
         { class="label",    label=L("lbl_paste_dialogue"), x=0, y=0, width=8, height=1 },
         { class="textbox",  name="content", text="", x=0, y=1, width=80, height=16 },
-        { class="checkbox", name="as_comment", label=L("lbl_import_as_comments"), value=false, x=0, y=17, width=8, height=1 }
+        { class="checkbox", name="as_comment", label=L("lbl_import_as_comments"), value=false, x=0, y=13, width=8, height=1 }
     }, { L("btn_import"), L("btn_cancel") })
     if btn ~= L("btn_import") then return end
     local entries = splitImportLines(res.content)
@@ -5489,14 +4499,6 @@ local floor, ceil, min, max, abs, log = math.floor, math.ceil, math.min, math.ma
 local trim, clamp = trimText, Core.clamp
 local settings = UI.settings(script_namespace .. ".SmartSplit", script_version, {main={mode="Continuo", wave_path=""}})
 local cache = {}
-local integerArray
-do
-    local lpeg = require("lpeg")
-    local P, S, R = lpeg.P, lpeg.S, lpeg.R
-    local space = S(" \t\r\n")^0
-    local integer = P("-")^-1 * (P("0") + R("19") * R("09")^0)
-    integerArray = P("[") * space * (integer * space * (P(",") * space * integer * space)^0)^-1 * P("]") * -P(1)
-end
 local CANCEL = {}
 local function checkCancelled()
     if aegisub.progress and aegisub.progress.is_cancelled and aegisub.progress.is_cancelled() then error(CANCEL, 0) end
@@ -5566,74 +4568,7 @@ end
 
 
 function Split.readWave(path)
-    progress("Smart Split: leyendo onda...", 0)
-    local file, message = io.open(path, "rb")
-    if not file then error(message, 0) end
-    local content = file:read("*a")
-    file:close()
-    if not content then error("No se pudo leer el JSON de onda.", 0) end
-    local arrays = {}
-    local skeleton = content:gsub('("peaks"%s*:%s*)(%b[])', function(key, array)
-        checkCancelled()
-        if not integerArray:match(array) then error("Lista de picos inválida en un nivel de la onda.", 0) end
-        arrays[#arrays+1] = array
-        return key .. '"Smart SplitPeaks' .. #arrays .. '"'
-    end)
-    content = nil
-    checkCancelled()
-    local json = require("json")
-    local ok, meta = pcall(json.decode, skeleton, json.decode.strict)
-    skeleton = nil
-    if not ok or type(meta) ~= "table" or meta.type ~= "waveform" or meta.version ~= 1 then
-        error("JSON inválido: se necesita una onda Wave2json versión 1.", 0)
-    end
-    if meta.pointLayout ~= "interleavedMinMax" or type(meta.levels) ~= "table" then
-        error("La onda debe contener niveles con pares mínimo/máximo.", 0)
-    end
-    local best
-    for _, level in ipairs(meta.levels) do
-        local pm, count = Core.finiteNumber(level.pointMs), Core.finiteNumber(level.points)
-        local index = type(level.peaks) == "string" and tonumber(level.peaks:match("^Smart SplitPeaks(%d+)$"))
-        if not pm or pm <= 0 or not count or count < 1 or count ~= floor(count) or not index or not arrays[index] then
-            error("Un nivel contiene resolución, puntos o picos inválidos.", 0)
-        end
-        if not best or pm < best.pm then best = {pm=pm, count=count, index=index} end
-    end
-    if not best then error("La onda no contiene niveles.", 0) end
-    local duration = Core.finiteNumber(meta.durationMs)
-    local origin = meta.sourceStartMs == nil and 0 or Core.finiteNumber(meta.sourceStartMs)
-    if not origin or origin < 0 or not duration or duration <= 0 or
-        abs(best.count * best.pm - duration) > best.pm + 0.001 then
-        error("La duración o el desplazamiento temporal de la onda es inválido.", 0)
-    end
-    if meta.sourceEndMs ~= nil then
-        local finish = Core.finiteNumber(meta.sourceEndMs)
-        if not finish or finish <= origin or abs((finish-origin)-duration) > best.pm + 1 then
-            error("El rango de origen no corresponde a la duración de la onda.", 0)
-        end
-    end
-    local array = arrays[best.index]:sub(2, -2)
-    arrays, meta = nil, nil
-    collectgarbage("collect")
-    if array:match("^%s*,") or array:match(",%s*$") or array:match(",%s*,") then
-        error("Lista de picos inválida.", 0)
-    end
-    local prefix, count, pending, sum = {[0]=0}, 0, nil, 0
-    for token in array:gmatch("[^,]+") do
-        token = trim(token)
-        local value = token:match("^%-?%d+$") and Core.finiteNumber(token)
-        if not value or value < -32768 or value > 32767 then error("Pico inválido: se requieren enteros s16.", 0) end
-        if pending == nil then pending = value else
-            if pending > value then error("Un par de picos tiene el mínimo mayor que el máximo.", 0) end
-            count = count+1
-            sum = sum + max(abs(pending), abs(value))
-            prefix[count] = sum
-            pending = nil
-            if count % 100000 == 0 then progress("Smart Split: leyendo picos...", 15*count/best.count) end
-        end
-    end
-    if pending ~= nil or count ~= best.count then error("La cantidad de pares no coincide con points.", 0) end
-    return {prefix=prefix, n=count, point_ms=best.pm, origin=origin, duration=duration}
+    return require("kite.Timing").Waveform.read(path, progress, checkCancelled)
 end
 
 local function runs(mask)
@@ -6128,7 +5063,7 @@ function TimingOperations.joinDialog(subs, sel)
         showMsg(mode == "second" and "Keep Second: select exactly two dialogue lines." or "Select at least two dialogue lines.")
         return sel
     end
-    return Kite.LineOps.transaction(subs, "Chrono Suite - Line Merge and Cleanup", function()
+    return Kite.LineOps.transaction(subs, "Chrono Suite - Joinator", function()
         Kite.LineOps.checkCancelled()
         return TimingOperations.joinLines(subs, indices, mode)
     end)
@@ -6727,6 +5662,46 @@ local function antActor(subs, sel, raw, sameLayers)
 end
 
 local DataImportOps = {}
+function DataImportOps.importLines(subs, sel, raw)
+    local source = {}
+    for row in normalizeString(raw):gmatch("[^\r\n]+") do
+        Kite.LineOps.checkCancelled()
+        if trimWS(row) ~= "" then
+            local kind, fields = splitEventLine(row:gsub("^%s+", ""))
+            if not kind or not parseTime(fields[2]) or not parseTime(fields[3]) then
+                error("Import Lines: invalid ASS row " .. (#source + 1) .. ". Copy complete subtitle rows.", 0)
+            end
+            source[#source+1] = {
+                class="dialogue", comment=kind=="Comment", layer=tonumber(fields[1]) or 0,
+                style=fields[4], actor=fields[5], margin_l=tonumber(fields[6]) or 0,
+                margin_r=tonumber(fields[7]) or 0, margin_t=tonumber(fields[8]) or 0,
+                effect=fields[9], text=fields[10],
+            }
+        end
+    end
+    if #source == 0 then return sel end
+    local indices = Kite.LineOps.normalizeIndices(subs, sel, isEditableDialogue)
+    if #indices == 0 then return sel end
+    return Kite.LineOps.transaction(subs, function()
+        for n=#indices,1,-1 do
+            local index = indices[n]
+            local target = subs[index]
+            for k=#source,1,-1 do
+                Kite.LineOps.checkCancelled()
+                local line = Kite.Core.copy(source[k])
+                line.start_time, line.end_time = target.start_time, target.end_time
+                if k == 1 then subs[index] = line else subs.insert(index+1,line) end
+            end
+        end
+        local selected = {}
+        for n,index in ipairs(indices) do
+            local first = index + (n-1)*(#source-1)
+            for offset=0,#source-1 do selected[#selected+1]=first+offset end
+        end
+        return selected
+    end)
+end
+
 function DataImportOps.splitInitial(text)
     local comments, tags, cursor = {}, {}, 1
     text = normalizeString(text)
@@ -6739,9 +5714,20 @@ function DataImportOps.splitInitial(text)
     return table.concat(comments), table.concat(tags), text:sub(cursor)
 end
 
+local importTagPeers = {clip="iclip", iclip="clip", pos="move", move="pos", fad="fade", fade="fad", c="1c", ["1c"]="c", fr="frz", frz="fr", a="an", an="a"}
 function DataImportOps.mergeInitialTags(text, importedInner)
-    local comments, _, rest = DataImportOps.splitInitial(text)
-    local merged = comments .. (importedInner ~= "" and "{" .. importedInner .. "}" or "") .. rest
+    text = normalizeString(text)
+    if importedInner == "" then return text, false end
+    local names = {}
+    for _, tag in ipairs(Kite.LineOps.overrideTokens(importedInner)) do
+        if tag.name ~= "t" then
+            names[tag.name] = true
+            names[importTagPeers[tag.name] or tag.name] = true
+        end
+    end
+    local comments, initial, rest = DataImportOps.splitInitial(text)
+    initial = Kite.LineOps.mapTagCalls("{" .. initial .. "}", names, function() return "" end)
+    local merged = comments .. initial:sub(1, -2) .. importedInner .. "}" .. rest
     return merged, merged ~= normalizeString(text)
 end
 
@@ -6891,1579 +5877,6 @@ local function ktFindKfBackward(orig, maxMs, kfs)
     local best
     for _, k in ipairs(kfs) do if k >= fl and k < f0 then best = k end; if k >= f0 then break end end
     if best then return toMs(best) end
-end
-
-local function collectStyles(subs, sel)
-    local st, seen = { "All", "All Default", "Default+Alt" }, {}
-    for _, i in ipairs(sel) do
-        if subs[i].class == "dialogue" and not seen[subs[i].style] then
-            seen[subs[i].style] = true; st[#st+1] = subs[i].style
-        end
-    end
-    return st
-end
-
-do
-
-local VTMOD
-
-local function getVT()
-if VTMOD then return VTMOD end
-
-local DEFAULTS = {
-    lead_in_ms        = defaultConfig.lazyt_lead_in_ms,
-    lead_out_ms       = defaultConfig.lazyt_lead_out_ms,
-    max_lead_out_ms   = defaultConfig.lazyt_max_lead_out_ms,
-    max_lead_in_ms    = defaultConfig.lazyt_max_lead_in_ms,
-    kf_end_range_ms   = defaultConfig.lazyt_kf_end_range_ms,
-    kf_start_range_ms = defaultConfig.lazyt_kf_start_range_ms,
-    kf_back_ms        = defaultConfig.lazyt_kf_back_ms,
-    duration_floor_ms = defaultConfig.lazyt_duration_floor_ms,
-    cps_flag          = defaultConfig.lazyt_cps_flag,
-    skip_signs        = defaultConfig.lazyt_skip_signs,
-    show_stats        = defaultConfig.lazyt_show_stats,
-    style_filter      = defaultConfig.lazyt_style_filter,
-    extra_style       = defaultConfig.lazyt_extra_style,
-
-    smooth_ms          = defaultConfig.lazyt_smooth_ms,
-    auto_otsu          = defaultConfig.lazyt_auto_otsu,
-    fill_gap_ms        = defaultConfig.lazyt_fill_gap_ms,
-    min_island_ms      = defaultConfig.lazyt_min_island_ms,
-    outer_search_ms    = defaultConfig.lazyt_outer_search_ms,
-    edge_spill_cleanup = defaultConfig.lazyt_edge_spill,
-
-    hist_bins                  = 96,
-    floor_percentile           = 5,
-    peak_percentile            = 95,
-    sensitivity_per_mille      = 120,
-    edge_near_ms               = 20,
-    spill_mass_per_mille       = 300,
-    spill_gap_factor_per_mille = 1000,
-    min_voice_ms               = 50,
-}
-
-local configKeys = {
-    lead_in_ms        = "lazyt_lead_in_ms",
-    lead_out_ms       = "lazyt_lead_out_ms",
-    max_lead_out_ms   = "lazyt_max_lead_out_ms",
-    max_lead_in_ms    = "lazyt_max_lead_in_ms",
-    kf_end_range_ms   = "lazyt_kf_end_range_ms",
-    kf_start_range_ms = "lazyt_kf_start_range_ms",
-    kf_back_ms        = "lazyt_kf_back_ms",
-    duration_floor_ms = "lazyt_duration_floor_ms",
-    cps_flag          = "lazyt_cps_flag",
-    skip_signs        = "lazyt_skip_signs",
-    show_stats        = "lazyt_show_stats",
-    style_filter      = "lazyt_style_filter",
-    extra_style       = "lazyt_extra_style",
-    smooth_ms          = "lazyt_smooth_ms",
-    auto_otsu          = "lazyt_auto_otsu",
-    fill_gap_ms        = "lazyt_fill_gap_ms",
-    min_island_ms      = "lazyt_min_island_ms",
-    outer_search_ms    = "lazyt_outer_search_ms",
-    edge_spill_cleanup = "lazyt_edge_spill",
-}
-
-local TUNE = {
-    stack_eps_ms    = 40,
-    keep_min_out_ms = 200,
-    flash_gap_ms    = 250,
-    cap_grace_ms    = 120,
-    frame_grace_ms  = 45,
-    min_event_ms    = 10,
-}
-
-local guiBounds = {
-    lead_in_ms        = { min = 0 },
-    lead_out_ms       = { min = 0 },
-    max_lead_out_ms   = { min = 0 },
-    max_lead_in_ms    = { min = 0 },
-    kf_end_range_ms   = { min = 0 },
-    kf_start_range_ms = { min = 0 },
-    kf_back_ms        = { min = 0 },
-    cps_flag          = { min = 1 },
-    duration_floor_ms = { min = 0 },
-    smooth_ms         = { min = 1 },
-    fill_gap_ms       = { min = 0 },
-    min_island_ms     = { min = 1 },
-    outer_search_ms   = { min = 0 },
-}
-
-local function trim(s)
-    return trimText(s or "")
-end
-
-local function round(x)
-    return roundNumber(tonumber(x) or 0)
-end
-
-local function clamp(x, lo, hi)
-    if x < lo then return lo end
-    if x > hi then return hi end
-    return x
-end
-
-local function lowerBound(list, value)
-    local lo, hi = 1, #list + 1
-    while lo < hi do
-        local mid = math.floor((lo + hi) / 2)
-        if list[mid] < value then lo = mid + 1 else hi = mid end
-    end
-    return lo
-end
-
-local function overlapLength(a0, a1, b0, b1)
-    return math.min(a1, b1) - math.max(a0, b0)
-end
-
-local function progress(task, pct)
-    if aegisub and aegisub.progress then
-        if task and aegisub.progress.task then pcall(aegisub.progress.task, task) end
-        if pct and aegisub.progress.set then pcall(aegisub.progress.set, pct) end
-    end
-end
-
-local function saveAutoTimingConfig(c)
-    for key, configKey in pairs(configKeys) do currentConfig[configKey] = c[key] end
-    return saveConfig()
-end
-
-local function normalizeAutoTimingConfig(c)
-    for k, v in pairs(DEFAULTS) do
-        if c[k] == nil or type(c[k]) ~= type(v) then c[k] = v end
-    end
-    for k, b in pairs(guiBounds) do
-        c[k] = math.max(b.min, round(normalizeNumber(c[k]) or DEFAULTS[k]))
-    end
-    if c.max_lead_out_ms < c.lead_out_ms then c.max_lead_out_ms = c.lead_out_ms end
-    if c.max_lead_in_ms < c.lead_in_ms then c.max_lead_in_ms = c.lead_in_ms end
-    return c
-end
-
-local function getAutoTimingConfig()
-    local c = {}
-    for k, v in pairs(DEFAULTS) do c[k] = v end
-    for key, configKey in pairs(configKeys) do
-        if currentConfig[configKey] ~= nil then c[key] = currentConfig[configKey] end
-    end
-    return normalizeAutoTimingConfig(c)
-end
-
-local function visibleAutoTimingText(text)
-    if Kite.LineOps then return trim(Kite.LineOps.visibleText(text)) end
-    local s = tostring(text or "")
-    s = s:gsub("{[^}]*}", "")
-    s = s:gsub("\\[Nn]", " ")
-    s = s:gsub("\\h", " ")
-    return trim(s)
-end
-
-local function utf8Length(s)
-    s = tostring(s or "")
-    local _, continuation = s:gsub("[\128-\191]", "")
-    return #s - continuation
-end
-
-local function readableCharacters(text)
-    local clean = visibleAutoTimingText(text)
-    clean = clean:gsub("[%s%p]", "")
-    clean = clean:gsub("\194\191", ""):gsub("\194\161", ""):gsub("\226\128\166", "")
-    return utf8Length(clean)
-end
-
-local function styleMatches(style, flt, extra)
-    flt = tostring(flt or "All")
-    if flt == "" or flt == "All" then return true end
-    style = tostring(style or "")
-    local extraHit = extra ~= nil and extra ~= "" and style == extra
-    local lowerStyle = style:lower()
-    if flt == "All Default" then return lowerStyle:find("defa", 1, true) ~= nil or extraHit end
-    if flt == "Default+Alt" then
-        return lowerStyle:find("defa", 1, true) ~= nil or lowerStyle:find("alt", 1, true) ~= nil or extraHit
-    end
-    return style == flt or extraHit
-end
-
-local function isSpoken(line, cfg)
-    if not line or line.comment then return false end
-    local raw = tostring(line.text or "")
-    if Kite.LineOps and Kite.LineOps.hasDrawing(raw) then return false end
-    if visibleAutoTimingText(raw) == "" then return false end
-    local effect = tostring(line.effect or ""):lower()
-    if effect:find("template", 1, true) or effect:find("karaoke", 1, true) or effect:find("code", 1, true) then return false end
-    if cfg.skip_signs then
-        local style = tostring(line.style or ""):lower()
-        if style:find("sign", 1, true) or style:find("kara", 1, true) or style:find("fx", 1, true) then return false end
-    end
-    if not styleMatches(line.style, cfg.style_filter, cfg.extra_style) then return false end
-    return true
-end
-
-local parseWaveformJson = SmartOperations.Split.readWave
-
-local function smoothAt(wave, pointIndex, leftWindow, rightWindow)
-    local n = wave.n
-    if pointIndex < 1 then pointIndex = 1 end
-    if pointIndex > n then pointIndex = n end
-    local l = pointIndex - leftWindow
-    local r = pointIndex + rightWindow
-    if l < 1 then l = 1 end
-    if r > n then r = n end
-    return (wave.prefix[r] - wave.prefix[l - 1]) / (r - l + 1)
-end
-
-local function percentile(values, p)
-    local n = #values
-    if n == 0 then return 0 end
-    local tmp = {}
-    for i = 1, n do tmp[i] = values[i] end
-    table.sort(tmp)
-    if n == 1 then return tmp[1] end
-    local pos = 1 + (n - 1) * p / 100
-    local lo = math.floor(pos)
-    local hi = math.ceil(pos)
-    if lo < 1 then lo = 1 end
-    if hi > n then hi = n end
-    if lo == hi then return tmp[lo] end
-    local frac = pos - lo
-    return tmp[lo] * (1 - frac) + tmp[hi] * frac
-end
-
-local function otsuThreshold(values, bins)
-    local n = #values
-    if n == 0 then return 0 end
-    bins = math.max(16, bins or 96)
-    local lo = percentile(values, 1)
-    local hi = percentile(values, 99)
-    if hi <= lo then
-        local sum = 0
-        for i = 1, n do sum = sum + values[i] end
-        return sum / n
-    end
-    local hist = {}
-    for i = 1, bins do hist[i] = 0 end
-    local span = hi - lo
-    for i = 1, n do
-        local v = values[i]
-        if v < lo then v = lo end
-        if v > hi then v = hi end
-        local idx = math.floor(((v - lo) / span) * (bins - 1)) + 1
-        if idx < 1 then idx = 1 end
-        if idx > bins then idx = bins end
-        hist[idx] = hist[idx] + 1
-    end
-    local centers = {}
-    local total = 0
-    local sumTotal = 0
-    for i = 1, bins do
-        centers[i] = lo + (i - 0.5) * span / bins
-        total = total + hist[i]
-        sumTotal = sumTotal + hist[i] * centers[i]
-    end
-    if total == 0 then return (lo + hi) / 2 end
-    local wB = 0
-    local sumB = 0
-    local bestVar = -1
-    local bestThr = centers[1]
-    for i = 1, bins do
-        wB = wB + hist[i]
-        sumB = sumB + hist[i] * centers[i]
-        local wF = total - wB
-        if wB > 0 and wF > 0 then
-            local meanB = sumB / wB
-            local meanF = (sumTotal - sumB) / wF
-            local diff = meanB - meanF
-            local between = wB * wF * diff * diff
-            if between > bestVar then
-                bestVar = between
-                bestThr = centers[i]
-            end
-        end
-    end
-    return bestThr
-end
-
-local function buildRuns(mask)
-    local runs = {}
-    local n = #mask
-    local i = 1
-    while i <= n do
-        local v = mask[i]
-        local j = i + 1
-        while j <= n and mask[j] == v do j = j + 1 end
-        runs[#runs + 1] = { v = v, a = i, b = j - 1 }
-        i = j
-    end
-    return runs
-end
-
-local function morphMask(mask, fillGap, minIsland)
-    local runs = buildRuns(mask)
-    for r = 2, #runs - 1 do
-        local run = runs[r]
-        if (not run.v) and (run.b - run.a + 1) <= fillGap and runs[r - 1].v and runs[r + 1].v then
-            for i = run.a, run.b do mask[i] = true end
-        end
-    end
-    runs = buildRuns(mask)
-    for r = 1, #runs do
-        local run = runs[r]
-        if run.v and (run.b - run.a + 1) < minIsland then
-            for i = run.a, run.b do mask[i] = false end
-        end
-    end
-end
-
-local function buildComponents(mask, values, threshold, L0, pointMs)
-    local comps = {}
-    local runs = buildRuns(mask)
-    for r = 1, #runs do
-        local run = runs[r]
-        if run.v then
-            local mass = 0
-            local maxv = -1e100
-            for i = run.a, run.b do
-                local v = values[i]
-                local excess = v - threshold
-                if excess > 0 then mass = mass + excess end
-                if v > maxv then maxv = v end
-            end
-            local aMs = (L0 + run.a - 1) * pointMs
-            local bMs = (L0 + run.b) * pointMs
-            comps[#comps + 1] = {
-                a = aMs,
-                b = bMs,
-                duration = bMs - aMs,
-                mass = mass,
-                maxv = maxv
-            }
-        end
-    end
-    return comps
-end
-
-local function removeEdgeSpill(comps, startMs, endMs, cfg)
-    if #comps <= 1 or not cfg.edge_spill_cleanup then return comps end
-    local maxMass = 0
-    for i = 1, #comps do
-        if comps[i].mass > maxMass then maxMass = comps[i].mass end
-    end
-    if maxMass <= 0 then return comps end
-    local massRatio = (cfg.spill_mass_per_mille or 300) / 1000.0
-    local gapFactor = (cfg.spill_gap_factor_per_mille or 1000) / 1000.0
-    local edgeNear = cfg.edge_near_ms or 20
-    while #comps > 1 do
-        local first = comps[1]
-        local second = comps[2]
-        local gap = second.a - first.b
-        local nearEdge = first.a <= startMs + edgeNear
-        local separated = gap > gapFactor * math.max(1, first.duration)
-        local small = first.mass < massRatio * maxMass
-        if nearEdge and separated and small then
-            table.remove(comps, 1)
-        else
-            break
-        end
-    end
-    while #comps > 1 do
-        local last = comps[#comps]
-        local prev = comps[#comps - 1]
-        local gap = last.a - prev.b
-        local nearEdge = last.b >= endMs - edgeNear
-        local separated = gap > gapFactor * math.max(1, last.duration)
-        local small = last.mass < massRatio * maxMass
-        if nearEdge and separated and small then
-            table.remove(comps, #comps)
-        else
-            break
-        end
-    end
-    return comps
-end
-
-local function thresholdValues(values, cfg)
-    if cfg.auto_otsu then
-        return otsuThreshold(values, cfg.hist_bins)
-    end
-    local floor = percentile(values, cfg.floor_percentile or 5)
-    local peak = percentile(values, cfg.peak_percentile or 95)
-    local range = peak - floor
-    if range <= 0 then return floor end
-    return floor + (cfg.sensitivity_per_mille / 1000.0) * range
-end
-
-local function detectVoiceWaveform(it, wave, cfg)
-    local pointMs = wave.point_ms
-    local startMs = it.os
-    local endMs = it.oe
-    if endMs <= startMs then return nil end
-
-    local outer = cfg.outer_search_ms or 0
-    local origin = wave.origin or 0
-    local searchStart = math.max(origin, startMs - outer)
-    local searchEnd = math.min(origin + wave.n * pointMs, endMs + outer)
-    if searchEnd <= searchStart + 10 then return nil end
-
-    local L0 = math.floor((searchStart - origin) / pointMs)
-    local R0 = math.floor((searchEnd - origin) / pointMs)
-    if R0 > wave.n then R0 = wave.n end
-    if L0 < 0 then L0 = 0 end
-    local len = R0 - L0
-    if len <= 10 then return nil end
-
-    local smoothPoints = math.max(1, math.floor(cfg.smooth_ms / pointMs + 0.5))
-    local leftWindow = math.floor((smoothPoints - 1) / 2)
-    local rightWindow = (smoothPoints - 1) - leftWindow
-
-    local values = {}
-    local maxValue = 0
-    for j = 1, len do
-        local env = smoothAt(wave, L0 + j, leftWindow, rightWindow)
-        if cfg.auto_otsu then
-            values[j] = math.log(1 + env)
-        else
-            values[j] = env
-        end
-        if values[j] > maxValue then maxValue = values[j] end
-    end
-
-    if maxValue <= 0 then return nil end
-
-    local threshold = thresholdValues(values, cfg)
-    local mask = {}
-    for i = 1, len do mask[i] = values[i] >= threshold end
-
-    local fillGap = math.max(0, math.floor((cfg.fill_gap_ms or 60) / pointMs + 0.5))
-    local minIsland = math.max(1, math.floor((cfg.min_island_ms or 60) / pointMs + 0.5))
-    morphMask(mask, fillGap, minIsland)
-
-    local comps = buildComponents(mask, values, threshold, L0, pointMs)
-    for _, component in ipairs(comps) do component.a, component.b = component.a + origin, component.b + origin end
-    if #comps == 0 then return nil end
-    comps = removeEdgeSpill(comps, startMs, endMs, cfg)
-    if #comps == 0 then return nil end
-
-    local vs = clamp(comps[1].a, searchStart, searchEnd)
-    local ve = clamp(comps[#comps].b, searchStart, searchEnd)
-    if ve - vs < (cfg.min_voice_ms or 50) then return nil end
-    local weak = (vs <= searchStart + 1) or (ve >= searchEnd - 1)
-    return { vs = round(vs), ve = round(ve), weak = weak }
-end
-
-local function keyframeInRange(kfs, lo, hi, target)
-    if not kfs or #kfs == 0 or hi < lo then return nil end
-    local pos = lowerBound(kfs, lo)
-    local best, bestd
-    while pos <= #kfs do
-        local t = kfs[pos]
-        if t > hi then break end
-        local d = math.abs(t - target)
-        if not bestd or d < bestd then best, bestd = t, d end
-        pos = pos + 1
-    end
-    return best
-end
-
-local function addFlag(it, flag)
-    it.flags = it.flags or {}
-    for _, f in ipairs(it.flags) do if f == flag then return end end
-    it.flags[#it.flags + 1] = flag
-end
-
-local function stacked(a, b)
-    return overlapLength(a.os, a.oe, b.os, b.oe) > TUNE.stack_eps_ms
-end
-
-local function planPadding(items, kfs, kfset, cfg, stats)
-    stats = stats or {}
-    local vis, processed = {}, {}
-    for _, it in ipairs(items) do
-        if it.spoken then
-            vis[#vis + 1] = it
-            it.vpos = #vis
-            if it.use then processed[#processed + 1] = it end
-        end
-    end
-
-    local grace = TUNE.frame_grace_ms
-
-    for _, it in ipairs(processed) do
-        it.ideal_s = it.vs - cfg.lead_in_ms
-        it.ideal_e = it.ve + cfg.lead_out_ms
-        it.s, it.e = it.ideal_s, it.ideal_e
-        it.s_kf, it.e_kf = false, false
-        it.joined_l, it.joined_r = false, false
-        local origStartKf = keyframeInRange(kfs, it.os - grace, it.os + grace, it.os)
-        local origEndKf = keyframeInRange(kfs, it.oe - grace, it.oe + grace, it.oe)
-        local ks = keyframeInRange(kfs, it.vs - cfg.kf_start_range_ms, it.vs, it.vs)
-            or keyframeInRange(kfs, it.vs + 1, math.min(it.vs + cfg.kf_back_ms, it.ve - 1), it.vs + 1)
-        if not ks and origStartKf
-            and origStartKf >= it.vs - cfg.kf_start_range_ms - 2 * grace
-            and origStartKf <= it.vs + cfg.kf_back_ms then
-            ks = origStartKf
-        end
-        if ks then it.s, it.s_kf = ks, true end
-        local elo = math.max(it.ve - cfg.kf_back_ms, it.vs + 1)
-        local ke = keyframeInRange(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
-        if not ke and elo <= it.ve - 1 then
-            ke = keyframeInRange(kfs, elo, it.ve - 1, it.ve)
-        end
-        if not ke and origEndKf
-            and origEndKf > it.vs
-            and origEndKf <= it.ve + cfg.max_lead_out_ms + 2 * grace then
-            ke = origEndKf
-        end
-        if ke then it.e, it.e_kf = ke, true end
-        if it.s < 0 then it.s = 0 end
-    end
-
-    local function setBoundary(a, b, t)
-        t = round(t)
-        a.e, b.s = t, t
-        local on = kfset and kfset[t] or false
-        a.e_kf, b.s_kf = on, on
-        a.joined_r, b.joined_l = true, true
-        stats.joins = (stats.joins or 0) + 1
-    end
-
-    local function resolvePair(a, b, blocked, origChained)
-        if stacked(a, b) then return end
-        if b.vs < a.ve then
-            if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
-            return
-        end
-        if blocked then
-            if a.e > b.s then
-                a.e = clamp(b.s, a.ve, a.e)
-                a.e_kf = kfset and kfset[a.e] or false
-            end
-            if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
-            return
-        end
-        local vaE, vbS = a.ve, b.vs
-        local gap = b.s - a.e
-        if gap == 0 then
-            a.joined_r, b.joined_l = true, true
-            return
-        end
-
-        if gap < 0 then
-            local boundary
-            if a.e_kf and a.e <= vbS + cfg.kf_back_ms then boundary = a.e
-            elseif b.s_kf and b.s >= vaE - cfg.kf_back_ms then boundary = b.s
-            else
-                local r0 = math.max(vaE - cfg.kf_back_ms, math.min(a.e, b.s))
-                local r1 = math.min(vbS + cfg.kf_back_ms, math.max(a.e, b.s))
-                boundary = keyframeInRange(kfs, r0, r1, clamp(vbS - cfg.lead_in_ms, r0, r1))
-                if not boundary then
-                    local cand = vbS - cfg.lead_in_ms
-                    if cand - vaE >= TUNE.keep_min_out_ms then
-                        boundary = cand
-                    else
-                        local padding = cfg.lead_out_ms + cfg.lead_in_ms
-                        if padding > 0 then
-                            boundary = vaE + (vbS - vaE) * cfg.lead_out_ms / padding
-                        else
-                            boundary = vaE + (vbS - vaE) / 2
-                        end
-                    end
-                    boundary = clamp(boundary, vaE, vbS)
-                end
-            end
-            setBoundary(a, b, boundary)
-            return
-        end
-
-        local outRoom = math.max(0, cfg.max_lead_out_ms - (a.e - vaE))
-        local inRoom = math.max(0, cfg.max_lead_in_ms - (vbS - b.s))
-        local joinable = gap <= outRoom + inRoom
-        local flashy = gap <= TUNE.flash_gap_ms
-        local wanted = joinable or flashy or origChained
-        local graceMs = (flashy or origChained) and TUNE.cap_grace_ms or 0
-
-        local zoneKf
-        if b.s - a.e > 2 then
-            zoneKf = keyframeInRange(kfs, a.e + 1, b.s - 1, clamp(vbS - cfg.lead_in_ms, a.e + 1, b.s - 1))
-        end
-
-        if a.e_kf and b.s_kf then
-            if flashy then
-                if b.s - vaE <= cfg.max_lead_out_ms + TUNE.cap_grace_ms then
-                    setBoundary(a, b, b.s)
-                elseif vbS - a.e <= cfg.max_lead_in_ms + TUNE.cap_grace_ms then
-                    setBoundary(a, b, a.e)
-                end
-            end
-            return
-        end
-        if a.e_kf then
-            if wanted and not zoneKf and vbS - a.e <= cfg.max_lead_in_ms + graceMs then
-                setBoundary(a, b, a.e)
-            end
-            return
-        end
-        if b.s_kf then
-            if zoneKf and zoneKf - vaE <= cfg.max_lead_out_ms then
-                a.e = zoneKf
-                a.e_kf = true
-            elseif wanted and b.s - vaE <= cfg.max_lead_out_ms + graceMs then
-                setBoundary(a, b, b.s)
-            end
-            return
-        end
-        if zoneKf then
-            if wanted and zoneKf - vaE <= cfg.max_lead_out_ms + graceMs
-                and vbS - zoneKf <= cfg.max_lead_in_ms + graceMs then
-                setBoundary(a, b, zoneKf)
-            end
-            return
-        end
-        if not wanted then return end
-        if b.s - vaE <= cfg.max_lead_out_ms + graceMs then
-            setBoundary(a, b, b.s)
-        elseif joinable then
-            setBoundary(a, b, vaE + cfg.max_lead_out_ms)
-        elseif flashy then
-            setBoundary(a, b, clamp(b.s, vaE, vbS))
-        end
-    end
-
-    for i = 1, #processed - 1 do
-        local a, b = processed[i], processed[i + 1]
-        local blocked = false
-        for k = a.vpos + 1, b.vpos - 1 do
-            local m = vis[k]
-            if not m.use and m.oe > a.ve and m.os < b.vs then blocked = true; break end
-        end
-        local origGap = b.os - a.oe
-        local origChained = origGap <= grace and origGap >= -TUNE.stack_eps_ms
-        resolvePair(a, b, blocked, origChained)
-    end
-
-    for _, it in ipairs(processed) do
-        local p = vis[it.vpos - 1]
-        if p and not p.use and not stacked(p, it) and it.s < p.oe then
-            it.s = math.min(math.max(it.s, p.oe), it.vs)
-            it.s_kf = kfset and kfset[it.s] or false
-        end
-        local nx = vis[it.vpos + 1]
-        if nx and not nx.use and not stacked(it, nx) and it.e > nx.os then
-            it.e = math.max(math.min(it.e, nx.os), it.ve)
-            it.e_kf = kfset and kfset[it.e] or false
-        end
-    end
-
-    local futureStarts = {}
-    for i = #processed, 1, -1 do
-        futureStarts[i] = math.min(processed[i].s, futureStarts[i + 1] or math.huge)
-    end
-    for i = 1, #processed do
-        if Kite.LineOps then Kite.LineOps.checkCancelled() end
-        local a = processed[i]
-        for j = i + 1, #processed do
-            if a.e <= futureStarts[j] then break end
-            local b = processed[j]
-            if not stacked(a, b) and a.e > b.s then
-                a.e = math.max(b.s, a.ve)
-                a.e_kf = kfset and kfset[a.e] or false
-                if a.e > b.s then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
-            end
-        end
-    end
-
-    for _, it in ipairs(processed) do
-        if not it.e_kf and not it.joined_r then
-            local z = keyframeInRange(kfs, it.ve, it.ve + cfg.kf_end_range_ms, it.ve)
-            if z and z ~= it.e then
-                local nx = vis[it.vpos + 1]
-                local lim
-                if nx and not stacked(it, nx) then lim = (nx.use and nx.s) or nx.os end
-                local ok = true
-                if lim then
-                    if z > lim then ok = false
-                    elseif z < lim and lim - z < TUNE.flash_gap_ms then ok = false end
-                end
-                if ok then it.e = z; it.e_kf = true end
-            end
-        end
-    end
-
-    for _, it in ipairs(processed) do
-        if it.chars and it.chars > 0 then
-            local short = cfg.duration_floor_ms - (it.e - it.s)
-            if short > 0 then
-                local pall = vis[it.vpos - 1]
-                local leftLim = 0
-                if pall and not stacked(pall, it) then leftLim = (pall.use and pall.e) or pall.oe end
-                local nall = vis[it.vpos + 1]
-                local rightLim = math.huge
-                if nall and not stacked(it, nall) then rightLim = (nall.use and nall.s) or nall.os end
-                if not it.e_kf then
-                    local give = math.min(short, math.max(0, rightLim - it.e))
-                    it.e = it.e + give; short = short - give
-                end
-                if short > 0 and not it.s_kf then
-                    local give = math.min(short, math.max(0, it.s - leftLim))
-                    it.s = it.s - give; short = short - give
-                end
-                if short > 0 then addFlag(it, "SHORT") end
-            end
-        end
-    end
-
-    for i = 1, #vis - 1 do
-        local a, b = vis[i], vis[i + 1]
-        if (a.use or b.use) and b.os >= a.oe - TUNE.stack_eps_ms then
-            local ae = a.use and a.e or a.oe
-            local bs = b.use and b.s or b.os
-            if ae > bs then
-                if a.use then
-                    a.e = math.max(bs, a.ve)
-                    a.e_kf = kfset and kfset[a.e] or false
-                    ae = a.e
-                end
-                if ae > bs and b.use then
-                    b.s = math.min(ae, b.vs)
-                    b.s_kf = kfset and kfset[b.s] or false
-                    bs = b.s
-                end
-                if ae > bs then addFlag(a, "OVERLAP"); addFlag(b, "OVERLAP") end
-            end
-        end
-    end
-
-    for _, it in ipairs(processed) do
-        if it.s_kf then stats.snaps = (stats.snaps or 0) + 1 end
-        if it.e_kf then stats.snaps = (stats.snaps or 0) + 1 end
-    end
-    return processed
-end
-
-local function addCpsFlags(items, cfg)
-    for _, it in ipairs(items) do
-        if it.use and it.chars > 0 and it.e and it.s and it.e > it.s then
-            local cps = it.chars * 1000 / (it.e - it.s)
-            if cps > cfg.cps_flag then
-                addFlag(it, string.format("CPS %d", round(cps)))
-            end
-        end
-    end
-end
-
-local function cleanMarks(effect)
-    local s = trim(effect)
-    s = s:gsub("%s*%[TM%-[^%]]*%]", "")
-    return trim(s)
-end
-
-local function collectAutoTimingItems(subs, sel, cfg)
-    local items = {}
-    for _, idx in ipairs(sel or {}) do
-        local line = subs[idx]
-        if line and line.class == "dialogue" and not line.comment then
-            local osMs = tonumber(line.start_time) or 0
-            local oeMs = tonumber(line.end_time) or 0
-            local oldMarks = {}
-            for m in tostring(line.effect or ""):gmatch("%[TM%-([^%]%s]+)") do
-                oldMarks[m] = true
-            end
-            items[#items + 1] = {
-                idx = idx, line = line, os = osMs, oe = oeMs,
-                spoken = oeMs > osMs and isSpoken(line, cfg),
-                chars = readableCharacters(line.text),
-                old_marks = oldMarks,
-                flags = {},
-            }
-        end
-    end
-    table.sort(items, function(a, b)
-        if a.os == b.os then return a.idx < b.idx end
-        return a.os < b.os
-    end)
-    return items
-end
-
-local function dialogueOrdinals(subs)
-    local ord, n = {}, 0
-    for i = 1, #subs do
-        if subs[i].class == "dialogue" then
-            n = n + 1
-            ord[i] = n
-        end
-    end
-    return ord
-end
-
-local function applyAutoTimingItems(subs, items)
-    local flagged = {}
-    for _, it in ipairs(items) do
-        if it.spoken then
-            local line = it.line
-            if it.use and it.s and it.e then
-                local ns = round(it.s)
-                local ne = math.max(round(it.e), ns + TUNE.min_event_ms)
-                line.start_time = ns
-                line.end_time = ne
-            end
-            local eff = cleanMarks(line.effect)
-            if #it.flags > 0 then
-                local tags = {}
-                for _, fl in ipairs(it.flags) do tags[#tags + 1] = "[TM-" .. fl .. "]" end
-                eff = (eff == "" and "" or eff .. " ") .. table.concat(tags, " ")
-                flagged[#flagged + 1] = it
-            end
-            line.effect = eff
-            subs[it.idx] = line
-        end
-    end
-    return flagged
-end
-
-local function runAutoTimingPipeline(subs, sel, cfg, mode, detect, kfs, kfset)
-    local items = collectAutoTimingItems(subs, sel, cfg)
-    if #items == 0 then return nil, "no_lines" end
-
-    local stats = { matched = 0, spoken = 0, used = 0 }
-    progress("Detecting voice...", 5)
-    for k, it in ipairs(items) do
-        if it.spoken then
-            stats.spoken = stats.spoken + 1
-            if mode == 2 then
-                if it.old_marks["NOVOICE"] then
-                    addFlag(it, "NOVOICE")
-                else
-                    it.vs, it.ve = it.os, it.oe
-                    it.use = true
-                    if it.old_marks["WEAK"] then addFlag(it, "WEAK") end
-                end
-            else
-                local v = detect(it)
-                if v then
-                    it.vs, it.ve = v.vs, v.ve
-                    it.use = true
-                    if v.weak then addFlag(it, "WEAK") end
-                    stats.matched = stats.matched + 1
-                else
-                    addFlag(it, "NOVOICE")
-                end
-            end
-            if it.use then stats.used = stats.used + 1 end
-        end
-        progress(nil, 5 + math.floor(45 * k / #items))
-    end
-
-    if mode ~= 2 and stats.matched == 0 then return nil, "no_voice" end
-
-    progress("Planning timing...", 55)
-    if mode == 1 then
-        local prev
-        for _, it in ipairs(items) do
-            if it.use then
-                it.s, it.e = it.vs, it.ve
-                if prev and not stacked(prev, it) and it.s < prev.e then
-                    addFlag(prev, "OVERLAP"); addFlag(it, "OVERLAP")
-                end
-                prev = it
-            end
-        end
-    else
-        planPadding(items, kfs, kfset, cfg, stats)
-    end
-    addCpsFlags(items, cfg)
-
-    progress("Applying...", 85)
-    local ordinals = dialogueOrdinals(subs)
-    local flagged
-    if Kite.LineOps and Kite.LineOps.transaction then
-        Kite.LineOps.transaction(subs, function() flagged = applyAutoTimingItems(subs, items) end)
-    else
-        flagged = applyAutoTimingItems(subs, items)
-    end
-    progress(nil, 100)
-    return { items = items, flagged = flagged, stats = stats, ordinals = ordinals }
-end
-
-local VT = {
-    GUI_BOUNDS = guiBounds,
-    normalize_cfg = normalizeAutoTimingConfig,
-    style_ok = styleMatches,
-    get_cfg = getAutoTimingConfig,
-    save_cfg = saveAutoTimingConfig,
-    parse_waveform_json = parseWaveformJson,
-    detect_voice_waveform = detectVoiceWaveform,
-    run_pipeline = runAutoTimingPipeline,
-}
-
-VTMOD = VT
-
-return VTMOD
-end
-
-local atDetectors = { "Lazy", "Busy" }
-local atModes = { "Full Timing", "Raw Timing", "Post-Timing" }
-local atModeSet = {}
-for _, m in ipairs(atModes) do atModeSet[m] = true end
-local lztMethods = { "LazyFusion", "Cluster (±ms)", "Table (±ms)" }
-local lazyNumeric = {
-    "lead_in_ms", "lead_out_ms", "max_lead_out_ms", "max_lead_in_ms",
-    "kf_end_range_ms", "kf_start_range_ms", "kf_back_ms", "duration_floor_ms", "cps_flag",
-    "smooth_ms", "fill_gap_ms", "min_island_ms", "outer_search_ms",
-}
-local dataKeys = { "sil30", "sil40", "sil50", "vad", "flux", "env" }
-local legacyKeys = { "sil30", "sil40", "sil50" }
-local atWave = { path = nil, data = nil }
-local busyPaths = { sil30 = "", sil40 = "", sil50 = "", vad = "", flux = "", env = "" }
-local busyDiscovered = false
-
-local function atKeyframesMs()
-    local kf = getKeyframes()
-    if not kf or #kf == 0 then return nil end
-    local ms, seen = {}, {}
-    for _, fr in ipairs(kf) do
-        local t = frameToMs(fr)
-        if t and not seen[t] then seen[t] = true; ms[#ms + 1] = t end
-    end
-    table.sort(ms)
-    if #ms == 0 then return nil end
-    local set = {}
-    for _, t in ipairs(ms) do set[t] = true end
-    return ms, set
-end
-
-local function atGetWave(VT, jsonField, forceReload)
-    local path = (jsonField ~= "" and jsonField) or atWave.path or ""
-    if forceReload or path == "" then
-        local picked = aegisub.dialog.open(L("lazyt_open_title"), "", path, L("lazyt_json_filter"), false, true)
-        if not picked or picked == "" then return nil, "cancel" end
-        path = picked
-    end
-    if forceReload or atWave.data == nil or atWave.path ~= path then
-        local ok, waveOrErr = pcall(VT.parse_waveform_json, path)
-        if not ok or type(waveOrErr) ~= "table" then
-            showMsg(string.format(L("lazyt_err_parse"), tostring(waveOrErr)))
-            return nil, "parse"
-        end
-        atWave.path, atWave.data = path, waveOrErr
-    end
-    return atWave.data
-end
-
-local function atWaveEnvelope(wave)
-    local pm = wave.point_ms
-    local step = math.max(1, math.floor(10 / pm + 0.5))
-    local ts, vs = {}, {}
-    local i = 1
-    while i <= wave.n do
-        local lo = math.max(1, i - step)
-        local hi = math.min(wave.n, i + step)
-        ts[#ts + 1] = (wave.origin or 0) + (i - 1) * pm
-        vs[#vs + 1] = (wave.prefix[hi] - wave.prefix[lo - 1]) / (hi - lo + 1)
-        i = i + step
-    end
-    return { t = ts, v = vs }
-end
-
-local function atDiscoverBusyPaths()
-    if not Timing or busyDiscovered then return end
-    busyDiscovered = true
-    local p = {}
-    for _, k in ipairs(Timing.pathKeys or dataKeys) do p[k] = "" end
-    local ok = pcall(Timing.discoverPaths, p)
-    if ok then
-        for _, k in ipairs(dataKeys) do
-            if (busyPaths[k] or "") == "" and p[k] and p[k] ~= "" then busyPaths[k] = p[k] end
-        end
-    end
-end
-
-local function atBusyHasInput(wave)
-    if wave then return true end
-    for _, k in ipairs(dataKeys) do if (busyPaths[k] or "") ~= "" then return true end end
-    return false
-end
-
-local function atMakeBusyDetect(cfg, wave, kfs)
-    local paths = {}
-    for _, k in ipairs(dataKeys) do paths[k] = busyPaths[k] or "" end
-    if wave then paths.waveEnv = atWaveEnvelope(wave) end
-    local sig = Timing.buildSignals(paths)
-    if #sig.sources == 0 and not sig.env then return nil end
-    return function(it)
-        local v = Timing.detectVoice({ os = it.os, oe = it.oe }, sig, cfg, kfs, false)
-        if not v then v = Timing.detectVoice({ os = it.os, oe = it.oe }, sig, cfg, kfs, true) end
-        return v
-    end
-end
-
-local function atLegacySelection(VT, subs, sel, cfg)
-    local out = {}
-    for _, i in ipairs(sel) do
-        local l = subs[i]
-        if l and l.class == "dialogue" and not l.comment
-            and VT.style_ok(l.style, cfg.style_filter, cfg.extra_style) then
-            local skip = false
-            if cfg.skip_signs then
-                local st = tostring(l.style or ""):lower()
-                skip = st:find("sign", 1, true) ~= nil or st:find("kara", 1, true) ~= nil or st:find("fx", 1, true) ~= nil
-            end
-            if not skip then out[#out + 1] = i end
-        end
-    end
-    return out
-end
-
-local function atRunLegacy(VT, subs, sel, cfg)
-    if not Timing then showMsg(L("at_err_module")); return end
-    local silencesOnly = currentConfig.lzt_silences_only and true or false
-    local opts = {
-        method = currentConfig.lzt_method,
-        limit = tonumber(currentConfig.lzt_limit) or 800,
-        silences_only = silencesOnly,
-        apply_start = true, apply_end = true,
-        enable_tagging = true, tag_mode = "Both", tag_scope = "Both",
-    }
-    local tsel = atLegacySelection(VT, subs, sel, cfg)
-    local modified = Timing.lzt.run(subs, tsel, busyPaths, opts)
-    if modified == nil then showMsg(L("at_err_sil")); return end
-    aegisub.set_undo_point("Chrono Suite - Auto Timing (Legacy)")
-    showMsg(string.format(L("at_legacy_done"), modified))
-    return true
-end
-
-local function atBusyDialog()
-    if not Timing then showMsg(L("at_err_module")); return end
-    atDiscoverBusyPaths()
-    while true do
-        local d = {
-            { class="label", label=L("at_lbl_data"), x=0, y=0, width=8, height=1 },
-            { class="checkbox", name="discover", label=L("at_chk_discover"), value=false, x=0, y=1, width=8, height=1 },
-            { class="label", label=L("at_lbl_sil"), x=0, y=2, width=2, height=1 },
-            { class="edit", name="sil30", value=busyPaths.sil30, x=2, y=2, width=6, height=1 },
-            { class="edit", name="sil40", value=busyPaths.sil40, x=0, y=3, width=4, height=1 },
-            { class="edit", name="sil50", value=busyPaths.sil50, x=4, y=3, width=4, height=1 },
-            { class="label", label=L("at_lbl_vad"), x=0, y=4, width=2, height=1 },
-            { class="edit", name="vad", value=busyPaths.vad, x=2, y=4, width=6, height=1 },
-            { class="label", label=L("at_lbl_flux"), x=0, y=5, width=2, height=1 },
-            { class="edit", name="flux", value=busyPaths.flux, x=2, y=5, width=6, height=1 },
-            { class="label", label=L("at_lbl_env"), x=0, y=6, width=2, height=1 },
-            { class="edit", name="env", value=busyPaths.env, x=2, y=6, width=6, height=1 },
-            { class="label", label=L("at_busy_hint"), x=0, y=7, width=8, height=1 },
-        }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_ok"), L("btn_browse"), L("btn_cancel") }, { close = L("btn_cancel") })
-        if not pressed or pressed == L("btn_cancel") then return end
-        for _, k in ipairs(dataKeys) do busyPaths[k] = normalizeString(r[k]) end
-        if r.discover then busyDiscovered = false; atDiscoverBusyPaths() end
-        if pressed == L("btn_browse") then
-            local dir = Timing and select(1, Timing.scriptDirAndBase()) or ""
-            local ok, got = pcall(aegisub.dialog.open, L("at_data_title"), "", dir or "", "*.txt;*.log;*.tsv;*.csv", true, true)
-            if ok and got then
-                local picks = type(got) == "table" and got or { got }
-                for _, p in ipairs(picks) do
-                    local slot = Timing and Timing.classifyDataFile((tostring(p):match("[^/\\]+$")) or p)
-                    if slot and busyPaths[slot] ~= nil then busyPaths[slot] = p end
-                end
-            end
-        else
-            saveConfig()
-            return "ok"
-        end
-    end
-end
-
-local function atLegacyDialog()
-    if not Timing then showMsg(L("at_err_module")); return end
-    atDiscoverBusyPaths()
-    local methodUi = UI.options(lztMethods, currentConfig.lzt_method)
-    while true do
-        local d = {
-            { class="label", label=L("at_sec_legacy"), x=0, y=0, width=8, height=1 },
-            { class="label", label=L("at_legacy_hint"), x=0, y=1, width=8, height=1 },
-            { class="checkbox", name="discover", label=L("at_chk_discover_legacy"), value=false, x=0, y=2, width=8, height=1 },
-            { class="label", label=L("at_lbl_sil"), x=0, y=3, width=2, height=1 },
-            { class="edit", name="sil30", value=busyPaths.sil30, x=2, y=3, width=6, height=1 },
-            { class="edit", name="sil40", value=busyPaths.sil40, x=0, y=4, width=4, height=1 },
-            { class="edit", name="sil50", value=busyPaths.sil50, x=4, y=4, width=4, height=1 },
-            { class="label", label=L("at_lbl_method"), x=0, y=5, width=2, height=1 },
-            { class="dropdown", name="method", items=methodUi.items, value=methodUi.value, x=2, y=5, width=4, height=1 },
-            { class="label", label=L("at_lbl_limit"), x=6, y=5, width=1, height=1 },
-            { class="intedit", name="limit", value=tonumber(currentConfig.lzt_limit) or 800, min=0, x=7, y=5, width=1, height=1 },
-            { class="checkbox", name="silonly", label=L("at_chk_silonly"), value=currentConfig.lzt_silences_only and true or false, x=0, y=6, width=8, height=1 },
-        }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_run_legacy"), L("btn_browse"), L("btn_cancel") }, { close = L("btn_cancel") })
-        if not pressed or pressed == L("btn_cancel") then return end
-        for _, k in ipairs(legacyKeys) do busyPaths[k] = normalizeString(r[k]) end
-        currentConfig.lzt_method = UI.from(methodUi, r.method)
-        currentConfig.lzt_limit = tonumber(r.limit) or currentConfig.lzt_limit
-        currentConfig.lzt_silences_only = r.silonly and true or false
-        if r.discover then busyDiscovered = false; atDiscoverBusyPaths() end
-        if pressed == L("btn_browse") then
-            local dir = Timing and select(1, Timing.scriptDirAndBase()) or ""
-            local ok, got = pcall(aegisub.dialog.open, L("at_legacy_data_title"), "", dir or "", "*.txt;*.log;*.tsv;*.csv", true, true)
-            if ok and got then
-                local picks = type(got) == "table" and got or { got }
-                for _, p in ipairs(picks) do
-                    local slot = Timing and Timing.classifyDataFile((tostring(p):match("[^/\\]+$")) or p)
-                    if slot and (slot == "sil30" or slot == "sil40" or slot == "sil50") then busyPaths[slot] = p end
-                end
-            end
-        else
-            saveConfig()
-            return "legacy"
-        end
-    end
-end
-
-local function atRunPipeline(VT, subs, tsel, cfg, modeNum, detect, kfs, kfset)
-    local res, why = VT.run_pipeline(subs, tsel, cfg, modeNum, detect, kfs, kfset)
-    if not res then return nil, why end
-    local s = res.stats
-    local txt = string.format(L("lazyt_sum"), s.used or 0, s.spoken or 0, s.snaps or 0, s.joins or 0, #res.flagged)
-    local rows = {}
-    for i, it in ipairs(res.flagged) do
-        if i > 15 then rows[#rows + 1] = string.format("(+%d)", #res.flagged - 15); break end
-        rows[#rows + 1] = string.format("#%d %s", res.ordinals[it.idx] or it.idx, table.concat(it.flags, ","))
-    end
-    if #rows > 0 then txt = txt .. "\n" .. table.concat(rows, "\n") end
-    return txt, nil, #res.flagged
-end
-
-autoTimer = function(subs, sel)
-    resolveConfig()
-    if not sel or #sel == 0 then showMsg(L("err_no_selection")); return end
-    local VT = getVT()
-    if not atModeSet[currentConfig.lazyt_mode] then currentConfig.lazyt_mode = "Full Timing" end
-    if currentConfig.at_detector ~= "Busy" then currentConfig.at_detector = "Lazy" end
-    local cfg = VT.get_cfg()
-
-    local subsName
-    if aegisub.file_name then
-        local ok, n = pcall(aegisub.file_name)
-        if ok and n and n ~= "" then
-            subsName = n:match("[^/\\]+$") or n
-            if #subsName > 38 then subsName = "..." .. subsName:sub(-35) end
-        end
-    end
-
-    local styles = collectStyles(subs, sel)
-    do
-        local present = {}
-        for _, s in ipairs(styles) do present[s] = true end
-        if cfg.style_filter ~= "" and not present[cfg.style_filter] then styles[#styles + 1] = cfg.style_filter end
-    end
-    local B = VT.GUI_BOUNDS
-
-    while true do
-        local modeUi = UI.options(atModes, currentConfig.lazyt_mode)
-        local detUi = UI.options(atDetectors, currentConfig.at_detector)
-        local styleUi = UI.options(styles, cfg.style_filter)
-        local d = {
-            { class="label", label=string.format(L("at_title"), subsName or "?"), x=0, y=0, width=4, height=1 },
-            { class="label", label=L("lazyt_lbl_mode"), x=4, y=0, width=1, height=1 },
-            { class="dropdown", name="mode", items=modeUi.items, value=modeUi.value, x=5, y=0, width=2, height=1 },
-            { class="label", label=L("at_lbl_detector"), x=7, y=0, width=2, height=1 },
-            { class="dropdown", name="detector", items=detUi.items, value=detUi.value, x=9, y=0, width=3, height=1 },
-
-            { class="label", label=L("lazyt_lbl_json"), x=0, y=1, width=3, height=1 },
-            { class="edit", name="json", value=(atWave.path or ""), x=3, y=1, width=9, height=1 },
-            { class="checkbox", name="reload_json", label=L("lazyt_chk_reload"), value=false, x=0, y=2, width=4, height=1 },
-            { class="label", label=L("lazyt_lbl_outer"), x=4, y=2, width=2, height=1 },
-            { class="intedit", name="outer_search_ms", value=cfg.outer_search_ms, min=B.outer_search_ms.min, max=B.outer_search_ms.max, x=6, y=2, width=2, height=1 },
-
-            { class="label", label=L("lazyt_sec_detect"), x=0, y=3, width=12, height=1 },
-            { class="label", label=L("lazyt_lbl_smooth"), x=0, y=4, width=2, height=1 },
-            { class="intedit", name="smooth_ms", value=cfg.smooth_ms, min=B.smooth_ms.min, max=B.smooth_ms.max, x=2, y=4, width=1, height=1 },
-            { class="checkbox", name="auto_otsu", label=L("lazyt_chk_otsu"), value=cfg.auto_otsu, x=3, y=4, width=3, height=1 },
-            { class="label", label=L("lazyt_lbl_bridge"), x=6, y=4, width=2, height=1 },
-            { class="intedit", name="fill_gap_ms", value=cfg.fill_gap_ms, min=B.fill_gap_ms.min, max=B.fill_gap_ms.max, x=8, y=4, width=1, height=1 },
-            { class="label", label=L("lazyt_lbl_island"), x=9, y=4, width=2, height=1 },
-            { class="intedit", name="min_island_ms", value=cfg.min_island_ms, min=B.min_island_ms.min, max=B.min_island_ms.max, x=11, y=4, width=1, height=1 },
-            { class="checkbox", name="edge_spill_cleanup", label=L("lazyt_chk_spill"), value=cfg.edge_spill_cleanup, x=0, y=5, width=6, height=1 },
-
-            { class="label", label=L("lazyt_sec_margins"), x=0, y=6, width=12, height=1 },
-            { class="label", label=L("lazyt_lbl_leads"), x=0, y=7, width=3, height=1 },
-            { class="intedit", name="lead_in_ms", value=cfg.lead_in_ms, min=B.lead_in_ms.min, max=B.lead_in_ms.max, x=3, y=7, width=2, height=1 },
-            { class="intedit", name="lead_out_ms", value=cfg.lead_out_ms, min=B.lead_out_ms.min, max=B.lead_out_ms.max, x=5, y=7, width=2, height=1 },
-            { class="label", label=L("lazyt_lbl_chain"), x=7, y=7, width=3, height=1 },
-            { class="intedit", name="max_lead_out_ms", value=cfg.max_lead_out_ms, min=B.max_lead_out_ms.min, max=B.max_lead_out_ms.max, x=10, y=7, width=1, height=1 },
-            { class="intedit", name="max_lead_in_ms", value=cfg.max_lead_in_ms, min=B.max_lead_in_ms.min, max=B.max_lead_in_ms.max, x=11, y=7, width=1, height=1 },
-            { class="label", label=L("lazyt_lbl_kfrange"), x=0, y=8, width=3, height=1 },
-            { class="intedit", name="kf_end_range_ms", value=cfg.kf_end_range_ms, min=B.kf_end_range_ms.min, max=B.kf_end_range_ms.max, x=3, y=8, width=2, height=1 },
-            { class="intedit", name="kf_start_range_ms", value=cfg.kf_start_range_ms, min=B.kf_start_range_ms.min, max=B.kf_start_range_ms.max, x=5, y=8, width=2, height=1 },
-            { class="label", label=L("lazyt_lbl_cut"), x=7, y=8, width=3, height=1 },
-            { class="intedit", name="kf_back_ms", value=cfg.kf_back_ms, min=B.kf_back_ms.min, max=B.kf_back_ms.max, x=10, y=8, width=2, height=1 },
-            { class="label", label=L("lazyt_lbl_floor"), x=0, y=9, width=3, height=1 },
-            { class="intedit", name="duration_floor_ms", value=cfg.duration_floor_ms, min=B.duration_floor_ms.min, max=B.duration_floor_ms.max, x=3, y=9, width=2, height=1 },
-            { class="label", label=L("lazyt_lbl_cps"), x=7, y=9, width=3, height=1 },
-            { class="intedit", name="cps_flag", value=cfg.cps_flag, min=B.cps_flag.min, max=B.cps_flag.max, x=10, y=9, width=2, height=1 },
-
-            { class="checkbox", name="skip_signs", label=L("lazyt_chk_signs"), value=cfg.skip_signs, x=0, y=10, width=5, height=1 },
-            { class="checkbox", name="show_stats", label=L("lazyt_chk_stats"), value=cfg.show_stats, x=5, y=10, width=4, height=1 },
-            { class="label", label=L("lazyt_lbl_style"), x=0, y=11, width=3, height=1 },
-            { class="dropdown", name="style_filter", items=styleUi.items, value=styleUi.value, x=3, y=11, width=4, height=1 },
-            { class="edit", name="extra_style", value=cfg.extra_style, x=7, y=11, width=5, height=1 },
-            { class="label", label=L("at_hint"), x=0, y=12, width=12, height=1 },
-            { class="label", label=L("at_hint_mode"), x=0, y=13, width=12, height=1 },
-        }
-        local pressed, r = aegisub.dialog.display(d, { L("btn_process"), L("btn_browse"), L("btn_data"), L("btn_legacy"), L("btn_save"), L("btn_cancel") }, { close = L("btn_cancel") })
-        if not pressed or pressed == L("btn_cancel") then return end
-
-        currentConfig.lazyt_mode = UI.from(modeUi, r.mode)
-        currentConfig.at_detector = UI.from(detUi, r.detector)
-        cfg.style_filter = UI.from(styleUi, r.style_filter)
-        cfg.extra_style = normalizeString(r.extra_style)
-        for _, k in ipairs(lazyNumeric) do cfg[k] = r[k] end
-        cfg.auto_otsu = r.auto_otsu and true or false
-        cfg.edge_spill_cleanup = r.edge_spill_cleanup and true or false
-        cfg.skip_signs = r.skip_signs and true or false
-        cfg.show_stats = r.show_stats and true or false
-        VT.normalize_cfg(cfg)
-        local jsonField = normalizeString(r.json)
-        local enteredPath = jsonField ~= "" and jsonField or nil
-        if atWave.path ~= enteredPath then atWave.path, atWave.data = enteredPath, nil end
-
-        if pressed == L("btn_save") then
-            local saved, message = VT.save_cfg(cfg)
-            showMsg(saved and L("msg_config_saved") or tostring(message or "Could not save configuration."))
-        elseif pressed == L("btn_browse") then
-            local picked = aegisub.dialog.open(L("lazyt_open_title"), "", jsonField ~= "" and jsonField or (atWave.path or ""), L("lazyt_json_filter"), false, true)
-            if picked and picked ~= "" then atWave.path = picked; atWave.data = nil end
-        elseif pressed == L("btn_data") then
-            atBusyDialog()
-        elseif pressed == L("btn_legacy") then
-            local action = atLegacyDialog()
-            if action == "legacy" then
-                if atRunLegacy(VT, subs, sel, cfg) then return sel end
-            end
-        else
-            VT.save_cfg(cfg)
-            local modeKey = currentConfig.lazyt_mode
-            local modeNum = (modeKey == "Full Timing") and 3 or (modeKey == "Post-Timing") and 2 or 1
-            local busy = (currentConfig.at_detector == "Busy")
-            local kfs, kfset = {}, {}
-            local ready = true
-            if modeNum ~= 1 then
-                kfs, kfset = atKeyframesMs()
-                if not kfs then showMsg(L("err_no_keyframes")); ready = false; kfs, kfset = {}, {} end
-            end
-            local detect
-            if ready and modeNum ~= 2 then
-                local wave
-                if busy then
-                    if jsonField ~= "" or atWave.path then
-                        wave = atGetWave(VT, jsonField, r.reload_json and true or false)
-                    end
-                    if not Timing then showMsg(L("at_err_module")); ready = false
-                    elseif not atBusyHasInput(wave) then
-                        local action = atBusyDialog()
-                        if action ~= "ok" or not atBusyHasInput(wave) then showMsg(L("at_err_busy_input")); ready = false end
-                    else
-                        detect = atMakeBusyDetect(cfg, wave, kfs)
-                        if not detect then showMsg(L("at_err_busy_input")); ready = false end
-                    end
-                    if ready and not detect then
-                        detect = atMakeBusyDetect(cfg, wave, kfs)
-                        if not detect then showMsg(L("at_err_busy_input")); ready = false end
-                    end
-                else
-                    wave = atGetWave(VT, jsonField, r.reload_json and true or false)
-                    if not wave then ready = false
-                    else detect = function(it) return VT.detect_voice_waveform(it, wave, cfg) end end
-                end
-            end
-            if ready then
-                local txt, why, nflag = atRunPipeline(VT, subs, sel, cfg, modeNum, detect, kfs, kfset)
-                if txt then
-                    aegisub.set_undo_point("Chrono Suite - Auto Timing")
-                    if cfg.show_stats or (nflag or 0) > 0 then
-                        showMsg(string.format(L("at_msg_done"), UI.text(currentConfig.at_detector) .. " / " .. UI.text(currentConfig.lazyt_mode), txt))
-                    end
-                    return sel
-                else
-                    showMsg(why == "no_lines" and L("err_no_selection") or L("lazyt_no_voice"))
-                end
-            end
-        end
-    end
-end
-end
-
-local runScxvid, screamDetector
-do
-function runScxvid()
-    resolveConfig()
-    if not Kite.PyBridge or not Kite.Media then showMsg("Chrono Suite requires kite.PyBridge and kite.Media."); return end
-    local video = Kite.Media.projectPath("video")
-    if not video then showMsg(L("err_no_video")); return end
-    local scxConfigured = trimText(currentConfig.scxvid_path)
-    local ffmpegConfigured = trimText(currentConfig.ffmpeg_path)
-    local scx = scxConfigured ~= "" and scxConfigured or (Kite.PyBridge.isWindows and "scxvid.exe" or "scxvid")
-    local ffmpeg = ffmpegConfigured ~= "" and ffmpegConfigured or "ffmpeg"
-    if scxConfigured ~= "" and not Kite.PyBridge.fileExists(scxConfigured) then showMsg(string.format(L("err_scxvid_not_found"), scxConfigured)); return end
-    if ffmpegConfigured ~= "" and not Kite.PyBridge.fileExists(ffmpegConfigured) then showMsg(string.format(L("err_ffmpeg_not_found"), ffmpegConfigured)); return end
-    local directory = Kite.PyBridge.parentPath(video) or (Kite.LineOps and Kite.LineOps.subtitleFolder()) or Kite.PyBridge.tempRoot()
-    if not directory then showMsg(L("err_cannot_create_directory")); return end
-    local fileName = video:gsub("^.*[\\/]", "")
-    local baseName = fileName:gsub("%.[^.]+$", "")
-    local suffix = trimText(currentConfig.scxvid_suffix)
-    if suffix == "" then suffix = "_keyframes.log" end
-    local outLog = Kite.PyBridge.joinPath(directory, baseName .. suffix)
-    Kite.PyBridge.removeFile(outLog)
-    local ffmpegArgs = {
-        "-hide_banner", "-nostdin", "-loglevel", "warning", "-i", video,
-        "-map", "0:v:0", "-f", "yuv4mpegpipe",
-        "-vf", "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2",
-        "-pix_fmt", "yuv420p", "-fps_mode", "drop", "-"
-    }
-    local pipeline = Kite.PyBridge.commandLine(ffmpeg, ffmpegArgs) .. " | " .. Kite.PyBridge.commandLine(scx, { outLog })
-    if aegisub.progress and aegisub.progress.task then aegisub.progress.task("Extracting SCXvid keyframes...") end
-    local ok, diagnostic = Kite.PyBridge.run(pipeline)
-    if ok and (Kite.Media.fileSize(outLog) or 0) > 0 then
-        showMsg(string.format(L("msg_process_done"), outLog))
-    else
-        showMsg(string.format(L("err_process_failed"), tostring(diagnostic or "") .. "\n" .. outLog))
-    end
-end
-
-local Scream = { MARKER = "[SCREAM]" }
-
-function Scream.analysisFolder(media)
-    local folder = Kite.LineOps and Kite.LineOps.subtitleFolder and Kite.LineOps.subtitleFolder() or nil
-    folder = folder or (Kite.PyBridge and Kite.PyBridge.parentPath(media)) or (Kite.PyBridge and Kite.PyBridge.tempRoot())
-    if not folder then return nil end
-    local ok = Kite.PyBridge.ensureDir(folder)
-    if not ok then return nil end
-    return folder
-end
-
-function Scream.analysisLog(media)
-    local folder = Scream.analysisFolder(media)
-    if not folder then return nil end
-    return Kite.PyBridge.joinPath(folder, "chrono_suite_scream.log")
-end
-
-function Scream.median(values) return require("kite.Core").median(values, true) or 0 end
-
-function Scream.dbToPower(db) return 10 ^ (db / 10) end
-function Scream.powerToDb(power)
-    if not power or power <= 0 then return -120 end
-    return 10 * math.log(power) / math.log(10)
-end
-
-function Scream.annotateSpans(samples)
-    local gaps = {}
-    for i = 2, #samples do
-        local gap = samples[i].time - samples[i - 1].time
-        if gap > 0 then gaps[#gaps+1] = gap end
-    end
-    local medianGap = Scream.median(gaps)
-    if medianGap <= 0 then medianGap = 40 end
-    for i, sample in ipairs(samples) do
-        local left  = i > 1 and (sample.time - samples[i - 1].time) or medianGap
-        local right = i < #samples and (samples[i + 1].time - sample.time) or medianGap
-        if left  <= 0 then left  = medianGap end
-        if right <= 0 then right = medianGap end
-        if left  > medianGap * 3 then left  = medianGap end
-        if right > medianGap * 3 then right = medianGap end
-        sample.start  = sample.time - left  / 2
-        sample["end"] = sample.time + right / 2
-    end
-end
-
-function Scream.parseLog(path)
-    local f = io.open(path, "r"); if not f then return {} end
-    local samples, timeMs = {}, nil
-    for line in f:lines() do
-        local t = line:match("pts_time:([%-%d%.]+)")
-        if t then timeMs = tonumber(t) and tonumber(t) * 1000 or nil end
-        local peak = line:match("lavfi%.astats%.Overall%.Peak_level=([%-%d%.]+)")
-        if peak and timeMs then
-            local db = tonumber(peak)
-            if db then samples[#samples+1] = { time = timeMs, db = db, power = Scream.dbToPower(db) } end
-        end
-    end
-    f:close()
-    table.sort(samples, function(a, b) return a.time < b.time end)
-    Scream.annotateSpans(samples)
-    return samples
-end
-
-function Scream.firstSampleIndex(samples, t)
-    local lo, hi = 1, #samples + 1
-    while lo < hi do
-        local mid = math.floor((lo + hi) / 2)
-        if samples[mid].time < t then lo = mid + 1 else hi = mid end
-    end
-    return lo
-end
-
-function Scream.scoreLine(line, samples, cfg)
-    local startT, endT = line.start_time or 0, line.end_time or 0
-    local count, loud, powerSum, peakDb = 0, 0, 0, -120
-    for k = Scream.firstSampleIndex(samples, startT), #samples do
-        local sample = samples[k]
-        if sample.start > endT then break end
-        if sample.start >= startT and sample["end"] <= endT then
-            count = count + 1
-            powerSum = powerSum + sample.power
-            if sample.db >= cfg.scream_sample_db then loud = loud + 1 end
-            if sample.db > peakDb then peakDb = sample.db end
-        end
-    end
-    if count == 0 then
-        return { samples = 0, avg_db = -120, peak_db = -120, loud_ratio = 0, robust_z = 0 }
-    end
-    return {
-        samples    = count,
-        avg_db     = Scream.powerToDb(powerSum / count),
-        peak_db    = peakDb,
-        loud_ratio = loud / count,
-        robust_z   = 0,
-    }
-end
-
-function Scream.robustStats(scores)
-    local values = {}
-    for _, s in ipairs(scores) do if s.samples > 0 then values[#values+1] = s.avg_db end end
-    local med = Scream.median(values)
-    if #values < 5 then return med, 0, 0 end
-    local deviations = {}
-    for _, v in ipairs(values) do deviations[#deviations+1] = math.abs(v - med) end
-    local mad = Scream.median(deviations)
-    local sigma = mad * 1.4826
-    if sigma < 0.25 then sigma = 0 end
-    return med, mad, sigma
-end
-
-function Scream.passes(score, cfg, sigma)
-    if score.samples < cfg.scream_min_samples then return false end
-    if score.avg_db < cfg.scream_avg_db then return false end
-    if score.loud_ratio < (cfg.scream_loud_ratio / 100) then return false end
-    if cfg.scream_robust_z > 0 and sigma > 0 and score.robust_z < cfg.scream_robust_z then return false end
-    return true
-end
-
-function Scream.stripMarker(effect)
-    return trimText(normalizeString(effect):gsub("%s*%[SCREAM%]", ""))
-end
-
-function Scream.runAnalysis(media, logPath)
-    local configured = trimText(currentConfig.ffmpeg_path)
-    if configured ~= "" and not Kite.PyBridge.fileExists(configured) then
-        return false, string.format(L("err_ffmpeg_not_found"), configured)
-    end
-    local ffmpeg = configured ~= "" and configured or "ffmpeg"
-    Kite.PyBridge.removeFile(logPath)
-    local filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.Peak_level:file='" .. Kite.Media.filterPath(logPath) .. "'"
-    local nullOutput = Kite.PyBridge.isWindows and "NUL" or "/dev/null"
-    local args = {
-        "-hide_banner", "-nostdin", "-loglevel", "warning", "-y", "-i", media,
-        "-map", "0:a:0", "-vn", "-af", filter, "-f", "null", nullOutput
-    }
-    return Kite.PyBridge.run(Kite.PyBridge.commandLine(ffmpeg, args))
-end
-
-function Scream.configDialog()
-    resolveConfig()
-    local scopeUi = UI.options({ "All dialogue", "Selected lines" }, currentConfig.scream_scope)
-    local dlg = {
-        { class = "label", label = L("scream_title"),     x = 0, y = 0, width = 10, height = 1 },
-        { class = "label", label = L("scream_lbl_avg"),    x = 0, y = 1, width = 6, height = 1 },
-        { class = "edit",  name  = "scream_avg_db",        value = tostring(currentConfig.scream_avg_db),    x = 6, y = 1, width = 4, height = 1 },
-        { class = "label", label = L("scream_lbl_sample"), x = 0, y = 2, width = 6, height = 1 },
-        { class = "edit",  name  = "scream_sample_db",     value = tostring(currentConfig.scream_sample_db), x = 6, y = 2, width = 4, height = 1 },
-        { class = "label", label = L("scream_lbl_ratio"),  x = 0, y = 3, width = 6, height = 1 },
-        { class = "intedit", name = "scream_loud_ratio",   value = currentConfig.scream_loud_ratio, min = 0, max = 100, x = 6, y = 3, width = 4, height = 1 },
-        { class = "label", label = L("scream_lbl_min"),    x = 0, y = 4, width = 6, height = 1 },
-        { class = "intedit", name = "scream_min_samples", value = currentConfig.scream_min_samples, min = 1, x = 6, y = 4, width = 4, height = 1 },
-        { class = "label", label = L("scream_lbl_z"),      x = 0, y = 5, width = 6, height = 1 },
-        { class = "edit",  name  = "scream_robust_z",      value = tostring(currentConfig.scream_robust_z),  x = 6, y = 5, width = 4, height = 1 },
-        { class = "label", label = L("lbl_apply_to"),      x = 0, y = 6, width = 6, height = 1 },
-        { class = "dropdown", name = "scream_scope", items = scopeUi.items, value = scopeUi.value, x = 6, y = 6, width = 4, height = 1 },
-        { class = "checkbox", name = "scream_clean_previous", label = L("scream_chk_clean"), value = currentConfig.scream_clean_previous, x = 0, y = 7, width = 10, height = 1 },
-        { class = "checkbox", name = "scream_reuse_log",      label = L("scream_chk_reuse"), value = currentConfig.scream_reuse_log,      x = 0, y = 8, width = 10, height = 1 },
-    }
-    local btn, res = aegisub.dialog.display(dlg, { L("scream_btn_analyze"), L("btn_cancel") }, { close = L("btn_cancel") })
-    if not btn or btn == L("btn_cancel") then return nil end
-    local scope = UI.from(scopeUi, res.scream_scope)
-    if scope ~= "Selected lines" then scope = "All dialogue" end
-    local cfg = {
-        scream_avg_db        = tonumber(res.scream_avg_db)        or currentConfig.scream_avg_db,
-        scream_sample_db     = tonumber(res.scream_sample_db)     or currentConfig.scream_sample_db,
-        scream_loud_ratio    = math.max(0, math.min(100, tonumber(res.scream_loud_ratio) or currentConfig.scream_loud_ratio)),
-        scream_min_samples   = math.max(1, tonumber(res.scream_min_samples) or currentConfig.scream_min_samples),
-        scream_robust_z      = math.max(0, tonumber(res.scream_robust_z) or currentConfig.scream_robust_z),
-        scream_clean_previous = res.scream_clean_previous == true,
-        scream_reuse_log     = res.scream_reuse_log == true,
-        scream_scope         = scope,
-    }
-    for k, v in pairs(cfg) do currentConfig[k] = v end
-    saveConfig()
-    return cfg
-end
-
-function screamDetector(subs, sel)
-    resolveConfig()
-    if not Kite.PyBridge or not Kite.Media or not Kite.LineOps then showMsg("Chrono Suite requires kite.PyBridge, kite.Media and kite.LineOps."); return end
-    local media = Kite.Media.projectPath("audio", { fallbackVideo = true })
-    if not media then showMsg(L("scream_msg_no_media")); return end
-    local cfg = Scream.configDialog()
-    if not cfg then return end
-    local logPath = Scream.analysisLog(media)
-    if not logPath then showMsg(L("scream_msg_no_folder")); return end
-    local sourcePath = logPath .. ".source"
-    local cachedSource = Kite.PyBridge.readFile(sourcePath)
-    if not cfg.scream_reuse_log or cachedSource ~= media or not Kite.PyBridge.fileExists(logPath) then
-        showMsg(L("scream_msg_running"))
-        Kite.PyBridge.removeFile(sourcePath)
-        local ok, diagnostic = Scream.runAnalysis(media, logPath)
-        if not ok then showMsg(string.format(L("err_process_failed"), tostring(diagnostic or ""))); return end
-        Kite.PyBridge.writeFile(sourcePath, media)
-    end
-    local samples = Scream.parseLog(logPath)
-    if #samples == 0 then showMsg(string.format(L("scream_msg_no_log"), logPath)); return end
-    local lookup, restrictToSel = {}, cfg.scream_scope == "Selected lines"
-    if restrictToSel and sel then for _, idx in ipairs(sel) do lookup[idx] = true end end
-    if restrictToSel and (not sel or #sel == 0) then showMsg(L("err_no_selection")); return end
-    local candidates, scores, scanned = {}, {}, 0
-    for i = 1, #subs do
-        local line = subs[i]
-        if isDialogue(line) and not line.comment and (not restrictToSel or lookup[i]) then
-            scanned = scanned + 1
-            local score = Scream.scoreLine(line, samples, cfg)
-            candidates[#candidates + 1] = { index = i, score = score }
-            scores[#scores + 1] = score
-        end
-    end
-    if scanned == 0 then showMsg(L("err_no_selection")); return end
-    local medianDb, madDb, sigmaDb = Scream.robustStats(scores)
-    for _, candidate in ipairs(candidates) do
-        if sigmaDb > 0 then candidate.score.robust_z = (candidate.score.avg_db - medianDb) / sigmaDb end
-    end
-    local changes, marked = {}, 0
-    for _, candidate in ipairs(candidates) do
-        local line = subs[candidate.index]
-        local before = normalizeString(line.effect)
-        local after = before
-        if cfg.scream_clean_previous then after = Scream.stripMarker(after) end
-        if Scream.passes(candidate.score, cfg, sigmaDb) then
-            after = Scream.stripMarker(after)
-            after = trimText(after == "" and Scream.MARKER or (after .. " " .. Scream.MARKER))
-            marked = marked + 1
-        end
-        if after ~= before then changes[#changes + 1] = { index = candidate.index, effect = after } end
-    end
-    if #changes > 0 then
-        Kite.LineOps.transaction(subs, "Chrono Suite - Scream Detector", function()
-            for _, change in ipairs(changes) do
-                local line = subs[change.index]
-                line.effect = change.effect
-                subs[change.index] = line
-            end
-        end)
-    end
-    showMsg(string.format(L("scream_msg_done"), marked, scanned, #samples, medianDb, madDb))
-    return true
-end
 end
 
 local function ktCalcLeadIn(origStart, boundary, kfs, cfg)
@@ -8792,78 +6205,6 @@ local function foldCopy(subs, sel)
     return newSelection
 end
 
-local function aeKeyframeExport(subs, sel)
-    if not Kite.PyBridge then showMsg("After Effects Keyframes requires kite.PyBridge."); return end
-    local FPS = getFps()
-    local vw, vh = 1920, 1080
-    if aegisub and type(aegisub.video_size) == "function" then
-        local ok, first, second = pcall(aegisub.video_size)
-        if ok then
-            if type(first) == "table" then
-                vw = tonumber(first.width or first.x) or vw
-                vh = tonumber(first.height or first.y) or vh
-            else
-                vw = tonumber(first) or vw
-                vh = tonumber(second) or vh
-            end
-        end
-    end
-    local frameMs = 1000 / FPS
-    local outPos = { "Adobe After Effects 6.0 Keyframe Data\n", "\tUnits Per Second\t" .. FPS .. "\n",
-                      "\tSource Width\t" .. vw .. "\n", "\tSource Height\t" .. vh .. "\n",
-                      "\tSource Pixel Aspect Ratio\t1\n", "\tComp Pixel Aspect Ratio\t1\n\n",
-                      "Position\n\tFrame\tX pixels\tY pixels\tZ pixels\n" }
-    local outScale = { "\nScale\n\tFrame\tX percent\tY percent\tZ percent\n" }
-    local outRot   = { "\nRotation\n\tFrame\tDegrees\n" }
-    local gframe = 0
-    for _, idx in ipairs(sel) do
-        local line = subs[idx]
-        if isDialogue(line) and validateDuration(line) then
-            local text = normalizeString(line.text)
-            local nf = math.max(1, math.floor((line.end_time - line.start_time) / frameMs + 0.5))
-            local position = Kite.LineOps and Kite.LineOps.lastTagCall(text, "pos") or nil
-            local positionArgs = position and Kite.LineOps.splitArguments(position.value) or {}
-            local x = tonumber(positionArgs[1]) or vw / 2
-            local y = tonumber(positionArgs[2]) or vh / 2
-            local move = Kite.LineOps and Kite.LineOps.lastTagCall(text, "move") or nil
-            local moveArgs = move and Kite.LineOps.splitArguments(move.value) or {}
-            local mx1, my1, mx2, my2 = tonumber(moveArgs[1]), tonumber(moveArgs[2]), tonumber(moveArgs[3]), tonumber(moveArgs[4])
-            local mt1 = tonumber(moveArgs[5]) or 0
-            local mt2 = tonumber(moveArgs[6]) or (line.end_time - line.start_time)
-            local function positionAt(elapsed)
-                if not (mx1 and my1 and mx2 and my2) then return x, y end
-                if mt2 <= mt1 then return elapsed < mt1 and mx1 or mx2, elapsed < mt1 and my1 or my2 end
-                local ratio = math.max(0, math.min(1, (elapsed - mt1) / (mt2 - mt1)))
-                return mx1 + (mx2 - mx1) * ratio, my1 + (my2 - my1) * ratio
-            end
-            local function numericTag(name, fallback)
-                local call = Kite.LineOps and Kite.LineOps.lastTagCall(text, name) or nil
-                return call and tonumber(call.value) or fallback
-            end
-            local fscx = numericTag("fscx", 100)
-            local fscy = numericTag("fscy", 100)
-            local frz = numericTag("frz", 0)
-            for localFrame = 0, nf - 1 do
-                local px, py = positionAt(localFrame * frameMs)
-                table.insert(outPos,   string.format("\t%d\t%s\t%s\t0\n", gframe, px, py))
-                table.insert(outScale, string.format("\t%d\t%s\t%s\t%s\n", gframe, fscx, fscy, fscx))
-                table.insert(outRot,   string.format("\t%d\t%s\n", gframe, frz))
-                gframe = gframe + 1
-            end
-        end
-    end
-    table.insert(outRot, "\nEnd of Keyframe Data")
-    local payload = table.concat(outPos) .. table.concat(outScale) .. table.concat(outRot)
-    if aegisub.dialog and type(aegisub.dialog.save) == "function" then
-        local savePath = aegisub.dialog.save("Save AE keyframe data", "", "ae_keyframes.txt", "*.txt", false)
-        if not savePath or savePath == "" then return end
-        local ok, message = Kite.PyBridge.writeFile(savePath, payload)
-        if ok then showMsg(string.format(L("msg_ae_saved"), savePath)); return end
-        showMsg(string.format(L("err_cannot_write_file"), savePath) .. "\n" .. tostring(message or ""))
-        return
-    end
-    if aegisub.log then aegisub.log(payload) end
-end
 
 local function normalizeStutter(subs, sel)
     for _, i in ipairs(sel) do
@@ -9411,14 +6752,15 @@ function RemoverOps.gui(subs, sel)
     return remapSelectionAfterDeletion(subs, sel, deleteSet)
 end
 
+local primaryTools = {
+    { name = "Joinator", func = TimingOperations.joinDialog, returnsSelection = true, mutates = false },
+    { name = "Text and Tag Cleanup", button = "Cleanup", func = RemoverOps.gui, returnsSelection = true },
+    { name = "Final Data", func = function(subs, sel) return Kite.EventOps.properties.run(subs, sel, {language=currentConfig.language}) end, mutates=false, returnsSelection=true },
+}
 local suiteTools = {
     { name = "" },
-    { name = "Properties and Cleanup", func = function(subs, sel) return require("kite.EventOps").properties.run(subs, sel, {language=currentConfig.language}) end, mutates=false, returnsSelection=true },
-    { name = "Line Merge and Cleanup", func = TimingOperations.joinDialog, returnsSelection = true, mutates = false },
-    { name = "After Effects Keyframes", func = aeKeyframeExport, mutates = false },
-    { name = "Text Replacer",       func = remplacer },
+    { name = "Text Replacer", func = remplacer },
     { name = "mpv QC", func = mpvQcTool },
-    { name = "Text and Tag Cleanup", func = RemoverOps.gui, returnsSelection = true },
 }
 local suiteToolNames = {}
 for _, t in ipairs(suiteTools) do suiteToolNames[#suiteToolNames+1] = t.name end
@@ -9460,7 +6802,7 @@ local function rowMasterGui(subs, sel, active)
             sec_time = UI.utilityOptions(utilitySections[6], state.sec_time),
             sec_kara = UI.utilityOptions(utilitySections[7], state.sec_kara),
             single_marker = UI.options(singleMarkerItems, state.single_marker),
-            mm = UI.options({ "Import Effects","Import Text","Import Actor","Import Tags","Song Sync" }, state.mm),
+            mm = UI.options({ "Import Effects","Import Text","Import Actor","Import Tags","Import Lines","Song Sync" }, state.mm),
             ct = UI.options(suiteToolNames, state.ct),
         }
         local d = {
@@ -9567,7 +6909,7 @@ local function rowMasterGui(subs, sel, active)
             { class="dropdown", name="ct", items=ui.ct.items, value=ui.ct.value,              x=4, y=20, width=20, height=1 },
         }
 
-        local buttons = { L("btn_execute"), L("btn_autotiming"), L("btn_extract_kf"), L("btn_scream"), L("btn_config"), L("btn_help"), L("btn_cancel") }
+        local buttons = { L("btn_execute"), "Cleanup", "Joinator", "Final Data", L("btn_config"), L("btn_help"), L("btn_cancel") }
         local b, r = aegisub.dialog.display(d, buttons, {close=L("btn_cancel")})
         if b == L("btn_cancel") or not b then return end
 
@@ -9588,22 +6930,22 @@ local function rowMasterGui(subs, sel, active)
 
         for k, v in pairs(r) do state[k] = v end
 
-        if b == L("btn_autotiming") then
-            local tsel = getTargetedSelection(subs, sel, { mode = r.tm, value = r.tv })
-            if #tsel == 0 then
-                showMsg(L("err_filter_zero"))
-            else
-                if autoTimer(subs, tsel) then return sel end
-            end
-        elseif b == L("btn_extract_kf") then
-            runScxvid()
-            return sel
-        elseif b == L("btn_scream") then
-            if screamDetector(subs, sel) then return sel end
-        elseif b == L("btn_config") then
+        if b == L("btn_config") then
             showConfigDialog()
         elseif b == L("btn_help") then
             showHelp()
+        elseif b == "Joinator" or b == "Cleanup" or b == "Final Data" then
+            local targeted = getTargetedSelection(subs, sel, {mode=r.tm,value=r.tv})
+            if #targeted == 0 then showMsg(L("err_filter_zero"))
+            else
+                for _, tool in ipairs(primaryTools) do
+                    if b == (tool.button or UI.text(tool.name)) then
+                        local result = tool.func(subs, targeted)
+                        if tool.mutates ~= false then aegisub.set_undo_point("Chrono Suite - " .. tool.name) end
+                        return result
+                    end
+                end
+            end
         elseif b == L("btn_execute") then
             local twinVal = tonumber(r.twin_kf_ms)
             if not twinVal or twinVal < 0 then showMsg(L("err_invalid_twin")) else
@@ -9671,6 +7013,7 @@ local function rowMasterGui(subs, sel, active)
                                 elseif r.mm == "Import Text"   then antLines(subs,   currentSel, r.mr, r.mc, r.same_layers)
                                 elseif r.mm == "Import Actor"   then antActor(subs,   currentSel, r.mr, r.same_layers)
                                 elseif r.mm == "Import Tags"    then DataImportOps.importTags(subs, currentSel, r.mr, r.same_layers)
+                                elseif r.mm == "Import Lines" then currentSel = DataImportOps.importLines(subs, currentSel, r.mr); returnsSelection = true
                                 elseif r.mm == "Song Sync"   then antSongs(subs,   currentSel, r.mr) end
                             end
 
@@ -9740,9 +7083,6 @@ local macros = {
     { macroPath(""),                   script_description,                  rowMasterGui },
     { macroPath("Config"),             "Chrono Suite settings",             showConfigDialog },
     { macroPath("Help"),               "Chrono Suite help",                 showHelp },
-    { macroPath("Autotiming"),         "Auto-time lines from waveform or signal files with keyframe-aware polishing", autoTimer, hotkeyName = "Autotiming" },
-    { macroPath("Extract KF (SCXvid)"),"Generate keyframes via SCXvid",     runScxvid, hotkeyName = "Extract KF (SCXvid)" },
-    { macroPath("Scream Detector"),     "Mark loud dialogue intervals",      screamDetector, hotkeyName = "Scream Detector" },
 
     { macroPath("Audit/Markers"),       "Run audit markers with current config", function(subs, sel)
             resolveConfig()
@@ -9809,7 +7149,10 @@ local function makeSuiteToolMacro(tool)
     end
 end
 
-for _, tool in ipairs(suiteTools) do
+local shortcutTools = {}
+for _, tool in ipairs(primaryTools) do shortcutTools[#shortcutTools+1] = tool end
+for _, tool in ipairs(suiteTools) do shortcutTools[#shortcutTools+1] = tool end
+for _, tool in ipairs(shortcutTools) do
     if tool.name and tool.name ~= "" and tool.func then
         local process = makeSuiteToolMacro(tool)
         local newPath = HotkeyMenu.path(tool.name)
@@ -9818,20 +7161,24 @@ for _, tool in ipairs(suiteTools) do
     end
 end
 
+for _, name in ipairs({"Line Merge and Cleanup", "Properties and Cleanup"}) do
+    local target = name == "Line Merge and Cleanup" and "Joinator" or "Final Data"
+    HotkeyMenu.addMigration(HotkeyMenu.path(name), HotkeyMenu.path(target))
+    HotkeyMenu.addMigration(macroPath("Tools/" .. name), HotkeyMenu.path(target))
+end
+
 HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Split Join/Smart Break"), HotkeyMenu.path("Utility/Smart/Smart Break"))
 HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Punctuation/Stutter Manager"), HotkeyMenu.path("Utility/Punctuation/Normalize Stutter"))
 
 HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Smart/Frame Effect"), HotkeyMenu.path("Utility/Smart/Current Frame to Effect"))
 HotkeyMenu.addMigration(HotkeyMenu.path("Utility/Timing/Shift First"), HotkeyMenu.path("Utility/Timing/Align to First Start"))
 
-HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
-HotkeyMenu.addMigration("Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
-HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
-HotkeyMenu.addMigration("Chrono Suite/Tools/Join Lines", ": Kite Hotkeys :/Chrono Suite/Line Merge and Cleanup")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Joinator")
+HotkeyMenu.addMigration("Chrono Suite/Utility/Split Join/Join Lines", ": Kite Hotkeys :/Chrono Suite/Joinator")
+HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Join Lines", ": Kite Hotkeys :/Chrono Suite/Joinator")
+HotkeyMenu.addMigration("Chrono Suite/Tools/Join Lines", ": Kite Hotkeys :/Chrono Suite/Joinator")
 HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Remover Assistant", ": Kite Hotkeys :/Chrono Suite/Text and Tag Cleanup")
 HotkeyMenu.addMigration("Chrono Suite/Tools/Remover Assistant", ": Kite Hotkeys :/Chrono Suite/Text and Tag Cleanup")
-HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/AE Export", ": Kite Hotkeys :/Chrono Suite/After Effects Keyframes")
-HotkeyMenu.addMigration("Chrono Suite/Tools/AE Export", ": Kite Hotkeys :/Chrono Suite/After Effects Keyframes")
 HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Tags/Actor Parser", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Extract Actors and Split")
 HotkeyMenu.addMigration("Chrono Suite/Utility/Tags/Actor Parser", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Extract Actors and Split")
 HotkeyMenu.addMigration(": Kite Hotkeys :/Chrono Suite/Utility/Tags/Swap Comment", ": Kite Hotkeys :/Chrono Suite/Utility/Tags/Swap Text and Comments")
@@ -9848,3 +7195,49 @@ HotkeyMenu.addMigration("Chrono Suite/Utility/Smart/Start Frame to Effect", ": K
 HotkeyMenu.migrate()
 
 require("kite.UI").publishActions()
+
+end
+local registrations = {}
+local registerMacro = aegisub.register_macro
+local function loadScript()
+    registrations = {}
+    aegisub.register_macro = function(name, description, callback, validate, active)
+        registrations[#registrations+1] = {name, description, callback, validate, active}
+    end
+    local ok, message = pcall(initializeScript)
+    aegisub.register_macro = registerMacro
+    local available, control = pcall(require, "l0.DependencyControl")
+    if available and control.updater then control.updater:releaseLock() end
+    return ok, message
+end
+local loaded, failure = loadScript()
+if loaded then
+    for _, action in ipairs(registrations) do registerMacro(unpack(action)) end
+else
+    registerMacro(script_name, script_description, function(subs, selection, active)
+        if not loaded then
+            local available, control = pcall(require, "l0.DependencyControl")
+            if not available then error(control, 0) end
+            local loader = require("l0.DependencyControl.ModuleLoader")
+            for _, task in pairs(control.updater.tasks[control.Domain.ScriptType.Module]) do
+                if not task.updated and not task.running then loader.removeDummyRef(task.record) end
+            end
+            loaded, failure = loadScript()
+            if not loaded then error(failure, 0) end
+        end
+        local choices, actions = {}, {}
+        for _, action in ipairs(registrations) do
+            if not action[4] or action[4](subs, selection, active) then
+                choices[#choices+1] = action[1]
+                actions[action[1]] = action[3]
+            end
+        end
+        if #choices == 0 then return selection, active end
+        if #choices == 1 then return actions[choices[1]](subs, selection, active) end
+        local button, values = aegisub.dialog.display({
+            {class="dropdown", name="action", items=choices, value=choices[1], x=0,y=0,width=1,height=1}
+        }, {"Run","Cancel"}, {ok="Run",close="Cancel"})
+        if button == "Run" then return actions[values.action](subs, selection, active) end
+        return selection, active
+    end)
+end
