@@ -993,15 +993,15 @@
       "url": "https://github.com/Kiterowx/Kite-Aegisub-Scripts",
       "channels": {
         "main": {
-          "version": "3.8.2",
-          "released": "2026-11-03",
+          "version": "3.8.3",
+          "released": "2026-11-06",
           "default": true,
           "files": [
             {
               "name": ".lua",
               "url": "https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/automation/include/kite/MotionEngine.lua",
               "localFilePath": "automation/include/kite/MotionEngine.lua",
-              "sha1": "C7691DE57788BB84048B992ED38A6686CD7EEC46"
+              "sha1": "A69CE187CC59D4B2CD97D86EBAAF59337DE8D0C3"
             }
           ],
           "requiredModules": [

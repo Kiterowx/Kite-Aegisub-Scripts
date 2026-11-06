@@ -2,7 +2,7 @@ package.preload["Yutils"] = function() return require("tstools.Yutils") end
 
 local DependencyControl = require("l0.DependencyControl")
 local depctrl = DependencyControl({
-    name="kite.MotionEngine", moduleName="kite.MotionEngine", version="3.8.2", author="Kiterow",
+    name="kite.MotionEngine", moduleName="kite.MotionEngine", version="3.8.3", author="Kiterow",
     description="Shared motion engine for Moka Motion and AutoMotion", url="https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
         {"tstools.Yutils", version = "1.0.0", feed = "https://raw.githubusercontent.com/TypesettingTools/Yutils/master/DependencyControl.json"},
@@ -23,7 +23,7 @@ local depctrl = DependencyControl({
 depctrl:requireModules()
 local script_name = "Moka Motion"
 local script_description = "Motion engine for Moka Motion and AutoMotion"
-local script_version = "3.8.2"
+local script_version = "3.8.3"
 local script_namespace = "kite.MokaMotion"
 local LineCollection = require("a-mo.LineCollection")
 local Tags = require("a-mo.Tags")
@@ -203,7 +203,20 @@ PinKey = function(line)
     return "pin_" .. tostring(marker)
   end
   marker = line:match("^Effects%s+Corner Pin #1%s+Corner Pin%-([%d]+)%s*$")
-  return marker and "corner_" .. tostring(marker) or nil
+  if marker then
+    return "corner_" .. tostring(marker)
+  end
+  local effect, corner = line:match("^Effects%s+(.-) #1%s+(.-)%s+#%d+%s*$")
+  return effect and ({
+    ["Corner Pin Upper Left"] = "corner_0001",
+    ["Corner Pin Upper Right"] = "corner_0002",
+    ["Corner Pin Lower Left"] = "corner_0003",
+    ["Corner Pin Lower Right"] = "corner_0004",
+    ["CC Power Pin Top Left"] = "pin_0002",
+    ["CC Power Pin Top Right"] = "pin_0003",
+    ["CC Power Pin Bottom Left"] = "pin_0004",
+    ["CC Power Pin Bottom Right"] = "pin_0005"
+  })[effect .. " " .. corner] or nil
 end
 local AddRow
 AddRow = function(section, frame, values, line_number)
@@ -655,7 +668,7 @@ ParsePowerPinData = function(input)
     return nil, err
   end
   local order, format
-  if sections.pin_0002 then
+  if tostring(input or ""):find("CC Power Pin #1", 1, true) then
     order = {
       "pin_0002",
       "pin_0003",
@@ -1591,13 +1604,16 @@ ReadInputOrPath = function(input)
   return raw, nil
 end
 local ParseInput
-ParseInput = function(input)
+ParseInput = function(input, expectedKind)
   local text, sourcePath = ReadInputOrPath(input)
   text = tostring(text or ""):gsub("^\239\187\191", "")
   local track, err
   if text:find("shake_shape_data 4.0", 1, true) then
     track, err = ParseShakeShapeData(text)
   elseif text:find("CC Power Pin #1", 1, true) or text:find("Corner Pin #1", 1, true) then
+    if expectedKind == "transform" then
+      return nil, "Use Perspective/Apply Power Pin for CC Power Pin or Corner Pin data."
+    end
     track, err = ParsePowerPinData(text)
   elseif text:find("vertices", 1, true) or text:find("Bezier(", 1, true) then
     track, err = ParseShapeData(text)
@@ -5872,7 +5888,7 @@ MotionMain = function(inverse)
           return sel
         end
         draft = options
-        local track, parseError = ParseInput(options.input)
+        local track, parseError = ParseInput(options.input, "transform")
         if not (track and track.kind == "transform") then
           ShowMessage("Moka Motion / " .. tostring(inverse and 'Revert Motion' or 'Apply Motion'), parseError or "The pasted data is not a Transform export.")
           _continue_0 = true
