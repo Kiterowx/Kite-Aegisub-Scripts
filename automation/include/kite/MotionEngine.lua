@@ -2,7 +2,7 @@ package.preload["Yutils"] = function() return require("tstools.Yutils") end
 
 local DependencyControl = require("l0.DependencyControl")
 local depctrl = DependencyControl({
-    name="kite.MotionEngine", moduleName="kite.MotionEngine", version="3.8.3", author="Kiterow",
+    name="kite.MotionEngine", moduleName="kite.MotionEngine", version="3.9.0", author="Kiterow",
     description="Shared motion engine for Moka Motion and AutoMotion", url="https://github.com/Kiterowx/Kite-Aegisub-Scripts", feed="https://raw.githubusercontent.com/Kiterowx/Kite-Aegisub-Scripts/main/DependencyControl.json",
     {
         {"tstools.Yutils", version = "1.0.0", feed = "https://raw.githubusercontent.com/TypesettingTools/Yutils/master/DependencyControl.json"},
@@ -23,7 +23,7 @@ local depctrl = DependencyControl({
 depctrl:requireModules()
 local script_name = "Moka Motion"
 local script_description = "Motion engine for Moka Motion and AutoMotion"
-local script_version = "3.8.3"
+local script_version = "3.9.0"
 local script_namespace = "kite.MokaMotion"
 local LineCollection = require("a-mo.LineCollection")
 local Tags = require("a-mo.Tags")
@@ -191,32 +191,57 @@ local sectionNames = {
   ["position"] = "position",
   ["scale"] = "scale",
   ["rotation"] = "rotation",
+  ["z rotation"] = "rotation",
   ["anchor point"] = "anchor",
   ["opacity"] = "opacity"
 }
-local PinKey
-PinKey = function(line)
-  line = line:gsub("^Effects%s+ADBE%s+", "Effects ")
-  line = line:gsub("(#1)%s+ADBE%s+", "%1 ")
-  local marker = line:match("^Effects%s+CC Power Pin #1%s+CC Power Pin%-([%d]+)%s*$")
-  if marker then
-    return "pin_" .. tostring(marker)
+local AE = {}
+local function ChannelHeader(line)
+  local label = line:lower():gsub("%s+", " "):gsub("^transform ", "")
+  if sectionNames[label] then
+    return sectionNames[label]
   end
-  marker = line:match("^Effects%s+Corner Pin #1%s+Corner Pin%-([%d]+)%s*$")
-  if marker then
-    return "corner_" .. tostring(marker)
+  local rest = label:match("^effects (.+)$")
+  if not rest then return end
+  rest = rest:gsub("^adbe ", "")
+  local family, property = rest:match("^(cc power pin) (.+)$")
+  if not family then family, property = rest:match("^(corner pin) (.+)$") end
+  if not family then return end
+  local instance, field = property:match("^#(%d+) (.+)$")
+  property = (field or property):gsub("^adbe ", ""):gsub(" #%d+$", "")
+  local group = family .. " #" .. (instance or "1")
+  local prefix = family == "corner pin" and "corner_" or "pin_"
+  local id = property:match("^" .. family .. "%-(%d+)$")
+  if id then return prefix .. id, group end
+  local vertical, horizontal = property:match("^(%a+) (%a+)$")
+  local row = ({upper = 0, top = 0, lower = 2, bottom = 2})[vertical]
+  local col = ({left = 0, right = 1})[horizontal]
+  if row and col then
+    local first = family == "corner pin" and 1 or 2
+    return prefix .. string.format("%04d", first + row + col), group
   end
-  local effect, corner = line:match("^Effects%s+(.-) #1%s+(.-)%s+#%d+%s*$")
-  return effect and ({
-    ["Corner Pin Upper Left"] = "corner_0001",
-    ["Corner Pin Upper Right"] = "corner_0002",
-    ["Corner Pin Lower Left"] = "corner_0003",
-    ["Corner Pin Lower Right"] = "corner_0004",
-    ["CC Power Pin Top Left"] = "pin_0002",
-    ["CC Power Pin Top Right"] = "pin_0003",
-    ["CC Power Pin Bottom Left"] = "pin_0004",
-    ["CC Power Pin Bottom Right"] = "pin_0005"
-  })[effect .. " " .. corner] or nil
+  return nil, group
+end
+function AE.is3DHeader(line)
+  local label = line:lower():gsub("%s+", " "):gsub("^transform ", "")
+  return label == "x rotation" or label == "y rotation" or label == "orientation"
+end
+function AE.inventory(text)
+  local groups, seen = {}, {}
+  local hasTransform, exports, hasLayerGeometry = false, 0, false
+  for _, line in ipairs(SplitLines(text)) do
+    local stripped = trim(line)
+    if stripped:match("^Adobe After Effects") then exports = exports + 1 end
+    local name, group = ChannelHeader(stripped)
+    if group and not seen[group] then
+      groups[#groups + 1], seen[group] = group, true
+    elseif name == "position" or name == "scale" or name == "rotation" then
+      hasTransform = true
+    elseif name == "anchor" or AE.is3DHeader(stripped) then
+      hasLayerGeometry = true
+    end
+  end
+  return groups, hasTransform, exports, hasLayerGeometry
 end
 local AddRow
 AddRow = function(section, frame, values, line_number)
@@ -224,7 +249,7 @@ AddRow = function(section, frame, values, line_number)
     return nil, "Non-finite or non-integer frame on line " .. tostring(line_number) .. ": " .. tostring(frame)
   end
   if section.by_frame[frame] then
-    return nil, "Duplicate frame " .. tostring(frame) .. " in " .. tostring(section.name) .. " (line " .. tostring(line_number) .. ")."
+    return nil, "Duplicate frame " .. tostring(frame) .. " in " .. tostring(section.name) .. " (line " .. tostring(line_number) .. "). Keep one value for this frame or export a single layer."
   end
   local row = {
     frame = frame,
@@ -235,85 +260,84 @@ AddRow = function(section, frame, values, line_number)
   section.rows[#section.rows + 1] = row
   return true
 end
-local ParseKeyframeSections
-ParseKeyframeSections = function(input)
-  local sections = { }
-  local diagnostics = { }
-  local unknown = { }
-  local NoteUnknown
-  NoteUnknown = function(label)
-    if unknown[label] then
-      return
-    end
-    unknown[label] = true
-    diagnostics[#diagnostics + 1] = "Unrecognized AE channel/section: " .. tostring(label) .. "."
+local function ReadChannelRow(section, text, line, recover)
+  local frameText, rest = text:match("^(%S+)%s*(.*)$")
+  local frame = KiteCore.finiteNumber(frameText)
+  if not (frame and frame == math.floor(frame) and frame + 1 > frame and frame - 1 < frame) then
+    return nil, "Invalid source frame on line " .. line .. ". Correct the frame number or copy the channel again."
   end
-  local current = nil
-  for line_number, raw in ipairs(SplitLines(input)) do
-    local _continue_0 = false
-    repeat
-      local stripped = trim(raw)
-      local lower = stripped:lower()
-      local name = sectionNames[lower] or PinKey(stripped)
-      if name then
-        local _update_0 = name
-        sections[_update_0] = sections[_update_0] or {
-          name = name,
-          rows = { },
-          by_frame = { }
-        }
-        current = sections[name]
-        _continue_0 = true
-        break
-      end
-      if current and raw:match("^%s+") then
-        if stripped:match("^[%+%-]?[%d%.]") then
-          local values = { }
-          for token in stripped:gmatch("%S+") do
-            local number = KiteCore.finiteNumber(token)
-            if not (number) then
-              return nil, "Invalid numeric value on line " .. tostring(line_number) .. ": " .. tostring(token)
-            end
-            values[#values + 1] = number
-          end
-          if #values < 2 then
-            return nil, "Missing channel values on line " .. tostring(line_number) .. "."
-          end
-          local frame = values[1]
-          local rowValues
-          do
-            local _accum_0 = { }
-            local _len_0 = 1
-            for i = 2, #values do
-              _accum_0[_len_0] = values[i]
-              _len_0 = _len_0 + 1
-            end
-            rowValues = _accum_0
-          end
-          local ok, err = AddRow(current, frame, rowValues, line_number)
-          if not (ok) then
-            return nil, err
-          end
-        end
-        _continue_0 = true
-        break
-      end
-      if stripped ~= "" and not raw:match("^%s+") then
-        local allowedHeader = lower == "end of keyframe data" or lower:match("^adobe after effects") or lower:match("^units per second") or lower:match("^source width") or lower:match("^source height") or lower:match("^source pixel aspect ratio") or lower:match("^comp pixel aspect ratio")
-        if not allowedHeader and (stripped:match("^Effects%s+") or stripped:match("^[%a][%a%s]+$")) then
-          NoteUnknown(stripped)
-        end
-      end
-      if stripped ~= "" then
-        current = nil
-      end
-      _continue_0 = true
-    until true
-    if not _continue_0 then
+  local values, problem = {}, nil
+  for token in rest:gmatch("%S+") do
+    local number = KiteCore.finiteNumber(token)
+    if not number then
+      problem = "Invalid numeric value on line " .. line .. ": " .. token
       break
+    end
+    values[#values + 1] = number
+  end
+  local pinNumber = tonumber(section.name:match("^pin_(%d+)$"))
+  local cornerNumber = tonumber(section.name:match("^corner_(%d+)$"))
+  local pair = section.name == "position" or section.name == "anchor" or
+    (pinNumber and pinNumber >= 2 and pinNumber <= 5) or (cornerNumber and cornerNumber >= 1 and cornerNumber <= 4)
+  if text:find("\t *\t") or #values < (pair and 2 or 1) then
+    problem = problem or ("Missing channel values on line " .. line .. ".")
+  end
+  if problem then
+    if not recover then return nil, problem end
+    section.damaged = section.damaged or {}
+    section.damaged[frame] = true
+    return true
+  end
+  local previous = section.by_frame[frame]
+  if recover and previous and #previous.values == #values then
+    local identical = true
+    for i, value in ipairs(values) do
+      if previous.values[i] ~= value then identical = false end
+    end
+    if identical then return true end
+  end
+  return AddRow(section, frame, values, line)
+end
+local ParseKeyframeSections
+ParseKeyframeSections = function(input, scope, selectedGroup, recover)
+  local sections, diagnostics, unknown = {}, {}, {}
+  local current
+  for line, raw in ipairs(SplitLines(input)) do
+    local stripped = trim(raw)
+    local name, group = ChannelHeader(stripped)
+    if name or group then
+      current = nil
+      local selected = scope == nil or (scope == "pin" and group == selectedGroup) or
+        ((scope == "transform" or scope == "geometry") and not group and not (scope == "geometry" and name == "opacity"))
+      if name and selected then
+        sections[name] = sections[name] or {name = name, rows = {}, by_frame = {}}
+        current = sections[name]
+      elseif not name and selected and not unknown[stripped] then
+        unknown[stripped] = true
+        diagnostics[#diagnostics + 1] = "Unrecognized AE channel/section: " .. stripped .. "."
+      end
+    elseif current and stripped:match("^[%+%-]?[%d%.]") then
+      local ok, err = ReadChannelRow(current, stripped, line, recover)
+      if not ok then return nil, err end
+    elseif current and raw:match("^%s+") and stripped:match("^%S+%s+[%+%-]?[%d%.]") then
+      return nil, "Invalid source frame on line " .. line .. ". Correct the frame number or copy the channel again."
+    elseif stripped ~= "" and not raw:match("^%s+") then
+      local lower = stripped:lower()
+      if not (lower == "end of keyframe data" or lower:match("^adobe after effects") or lower:match("^units per second")
+          or lower:match("^source ") or lower:match("^comp pixel aspect ratio") or lower:match("^frame%s"))
+          and not unknown[stripped] and (lower:match("^effects%s+") or lower:match("^[%a][%a%s]+$")) then
+        unknown[stripped] = true
+        diagnostics[#diagnostics + 1] = "Unrecognized AE channel/section: " .. stripped .. "."
+      end
+      if not lower:match("^frame%s") then current = nil end
     end
   end
   for _, section in pairs(sections) do
+    if section.damaged then
+      local count = 0
+      for _ in pairs(section.damaged) do count = count + 1 end
+      diagnostics[#diagnostics + 1] = section.name .. " has " .. count .. " frame(s) with unreadable values."
+    end
     table.sort(section.rows, function(a, b)
       return a.frame < b.frame
     end)
@@ -324,6 +348,9 @@ local RequireSectionArity
 RequireSectionArity = function(section, count, label)
   if not (section) then
     return true
+  end
+  if #section.rows == 0 then
+    return nil, label .. " has a header but no samples. Restore its values or remove the empty channel."
   end
   local _list_0 = section.rows
   for _index_0 = 1, #_list_0 do
@@ -346,6 +373,9 @@ AllFrames = function(sections, names)
     local name = names[_index_0]
     local section = sections[name]
     if section then
+      for frame in pairs(section.damaged or {}) do
+        if not seen[frame] then seen[frame], out[#out + 1] = true, frame end
+      end
       local _list_0 = section.rows
       for _index_1 = 1, #_list_0 do
         local row = _list_0[_index_1]
@@ -359,10 +389,17 @@ AllFrames = function(sections, names)
   table.sort(out)
   return out
 end
+function AE.checkSpan(first, last, observations)
+  local count = last - first + 1
+  if count - observations > math.max(65536, observations * 16) then
+    return nil, "Source frames " .. first .. ".." .. last .. " would expand to " .. count .. " samples. Check for a mistyped frame number or export a shorter range."
+  end
+  return true
+end
 local InterpolatedValues
 InterpolatedValues = function(section, frame, defaults)
   if not (section and #section.rows > 0) then
-    return CopyTable(defaults, false)
+    return CopyTable(defaults), false
   end
   local exact = section.by_frame[frame]
   if exact then
@@ -481,13 +518,35 @@ UnwrapRotationSection = function(section)
   return out, diagnostics
 end
 local ParseTransformData
-ParseTransformData = function(input)
-  local sections, err, parseDiagnostics = ParseKeyframeSections(input)
+ParseTransformData = function(input, geometry, recover)
+  local sections, err, parseDiagnostics = ParseKeyframeSections(input, geometry and "geometry" or "transform", nil, recover)
   if not (sections) then
     return nil, err
   end
-  if not (sections.position or sections.scale or sections.rotation) then
-    return nil, "No Position, Scale, or Rotation section was found."
+  if geometry then
+    for _, line in ipairs(SplitLines(input)) do
+      if AE.is3DHeader(trim(line)) then
+        return nil, "3D orientation requires a projected four-corner export. Export After Effects Corner Pin from Mocha."
+      end
+    end
+  end
+  local defaultsUsed = {}
+  if recover then
+    local defaults = {position = "source center for Position", scale = "100% Scale", rotation = "zero Rotation"}
+    if geometry then defaults.anchor = "layer center for Anchor Point" end
+    for _, name in ipairs({"position", "scale", "rotation", "anchor", "opacity"}) do
+      if sections[name] and #sections[name].rows == 0 then
+        if defaults[name] then defaultsUsed[#defaultsUsed + 1] = defaults[name] end
+        sections[name] = nil
+      end
+    end
+  end
+  local recovery
+  if #defaultsUsed > 0 then
+    recovery = "Empty tracking channels. Use " .. table.concat(defaultsUsed, ", ") .. "."
+  end
+  if not (sections.position or sections.scale or sections.rotation or (geometry and sections.anchor)) then
+    return nil, "Include at least one Position, Scale or Rotation channel with samples. Export After Effects Transform Data from Mocha."
   end
   local _list_0 = {
     {
@@ -524,6 +583,15 @@ ParseTransformData = function(input)
       return nil, err
     end
   end
+  if geometry then
+    for _, name in ipairs({"position", "anchor"}) do
+      for _, row in ipairs(sections[name] and sections[name].rows or {}) do
+        if (row.values[3] or 0) ~= 0 then
+          return nil, "3D layer coordinates require a projected four-corner export. Export After Effects Corner Pin from Mocha."
+        end
+      end
+    end
+  end
   local uniform_scale_rows = 0
   if sections.scale then
     local _list_1 = sections.scale.rows
@@ -547,7 +615,10 @@ ParseTransformData = function(input)
     return nil, "The tracking sections contain no numeric samples."
   end
   local first_frame, last_frame = frames[1], frames[#frames]
-  local diagnostics, samples, had_gap = { }, { }, false
+  local withinSpan, spanError = AE.checkSpan(first_frame, last_frame, #frames)
+  if not withinSpan then return nil, spanError end
+  local diagnostics, samples, had_gap = { }, { }, recovery ~= nil
+  if recovery then diagnostics[#diagnostics + 1] = recovery end
   local _list_1 = parseDiagnostics or { }
   for _index_0 = 1, #_list_1 do
     local item = _list_1[_index_0]
@@ -629,7 +700,7 @@ ParseTransformData = function(input)
         y = anchor[2] or 0
       },
       opacity = opacity[1] or 100,
-      interpolated = #gaps > 0
+      interpolated = recovery ~= nil or #gaps > 0
     }
   end
   local ambiguous_rotation = rotation_section and rotation_section.ambiguous and next(rotation_section.ambiguous) ~= nil
@@ -651,6 +722,7 @@ ParseTransformData = function(input)
     first_frame = first_frame,
     last_frame = last_frame,
     has_interpolation = had_gap,
+    recovery = recovery,
     has_ambiguous_rotation = ambiguous_rotation,
     channels = {
       position = sections.position ~= nil,
@@ -661,49 +733,91 @@ ParseTransformData = function(input)
     }
   }
 end
-local ParsePowerPinData
-ParsePowerPinData = function(input)
-  local sections, err, parseDiagnostics = ParseKeyframeSections(input)
-  if not (sections) then
-    return nil, err
+function AE.project(quad, sample, channels, meta)
+  local anchorX = channels.anchor and sample.anchor.x or meta.source_width / 2
+  local anchorY = channels.anchor and sample.anchor.y or meta.source_height / 2
+  local angle = math.rad(-sample.rotation)
+  local cos, sin = math.cos(angle), math.sin(angle)
+  local sourcePAR, compPAR = meta.source_par or 1, meta.comp_par or 1
+  for _, point in ipairs(quad) do
+    local x = (point.x - anchorX) * sample.scale.x / 100 * sourcePAR
+    local y = (point.y - anchorY) * sample.scale.y / 100
+    point.x = sample.position.x + (x * cos - y * sin) / compPAR
+    point.y = sample.position.y + x * sin + y * cos
   end
+end
+function AE.similarityQuad(first, second, par)
+  local dx, dy = 1, 0
+  if second then dx, dy = second.x - first.x, second.y - first.y end
+  local right = {x = first.x + dx, y = first.y + dy}
+  local lower = {x = first.x - dy / par, y = first.y + dx * par}
+  return {first, right, {x = lower.x + dx, y = lower.y + dy}, lower}
+end
+local ParsePowerPinData
+ParsePowerPinData = function(input, recover, selectedGroup, groups, hasTransform)
+  if not groups then
+    local found, motion, _, geometry = AE.inventory(input)
+    groups, hasTransform = found, motion or geometry
+  end
+  if #groups > 1 and not selectedGroup then
+    return nil, "Multiple Corner Pin effects were found. Choose one effect or export a single tracked layer."
+  end
+  selectedGroup = selectedGroup or groups[1]
+  local sections, err, parseDiagnostics = ParseKeyframeSections(input, "pin", selectedGroup, recover)
+  if not sections then return nil, err end
   local order, format
-  if tostring(input or ""):find("CC Power Pin #1", 1, true) then
-    order = {
-      "pin_0002",
-      "pin_0003",
-      "pin_0005",
-      "pin_0004"
-    }
+  if selectedGroup and selectedGroup:match("^cc power pin") then
+    order = {"pin_0002", "pin_0003", "pin_0005", "pin_0004"}
     format = "After Effects CC Power Pin"
   else
-    order = {
-      "corner_0001",
-      "corner_0002",
-      "corner_0004",
-      "corner_0003"
-    }
+    order = {"corner_0001", "corner_0002", "corner_0004", "corner_0003"}
     format = "After Effects Corner Pin"
   end
-  for _index_0 = 1, #order do
-    local name = order[_index_0]
-    if not sections[name] then
-      return nil, "Incomplete Power Pin data: " .. tostring(name) .. " is missing."
+  local missing, known = {}, {}
+  for i, name in ipairs(order) do
+    if not sections[name] or #sections[name].rows == 0 then
+      missing[#missing + 1] = i
+    else
+      local ok, message = RequireSectionArity(sections[name], 2, name)
+      if not ok then return nil, message end
+      known[#known + 1] = i
     end
   end
-  for _index_0 = 1, #order do
-    local name = order[_index_0]
-    local ok
-    ok, err = RequireSectionArity(sections[name], 2, name)
-    if not (ok) then
-      return nil, err
+  local estimated = missing[1]
+  local recovery
+  if estimated then
+    local labels = {"upper left", "upper right", "lower right", "lower left"}
+    if #known == 0 or not recover then
+      return nil, "Incomplete Power Pin data: " .. order[estimated] .. " is missing. " ..
+        (#missing == 1 and "Apply Power Pin can estimate the " .. labels[estimated] .. " corner from the other three." or
+        "Only " .. (4 - #missing) .. " corners have samples. Export all four corners from Mocha." ..
+        (hasTransform and " Apply Motion can use the Transform channels in this export." or ""))
+    end
+    if #known == 3 then
+      recovery = "Estimate the " .. labels[estimated] .. " corner from the other three as a parallelogram. Perspective convergence on that corner is unknown."
+    elseif #known == 2 then
+      recovery = "Two corners have samples. Use their translation, rotation and uniform scale. Perspective convergence is unknown."
+    else
+      recovery = "One corner has samples. Follow its translation. Rotation, scale and perspective from the corners are unknown."
     end
   end
   local frames = AllFrames(sections, order)
-  if #frames == 0 then
-    return nil, "Power Pin data contains no numeric samples."
-  end
   local first_frame, last_frame = frames[1], frames[#frames]
+  local meta = ParseMeta(input)
+  local transform
+  if hasTransform then
+    transform, err = ParseTransformData(input, true, recover)
+    if not transform then return nil, err end
+    if not (transform.channels.anchor and transform.channels.position) and not (meta.source_width and meta.source_height) then
+      return nil, "Mixed Corner Pin needs source width and height for the default layer center. Include the AE header or export standard Corner Pin from Mocha."
+    end
+    if transform.recovery then recovery = recovery and (recovery .. "\n" .. transform.recovery) or transform.recovery end
+    format = format .. " + Transform"
+    first_frame = math.min(first_frame, transform.first_frame)
+    last_frame = math.max(last_frame, transform.last_frame)
+  end
+  local withinSpan, spanError = AE.checkSpan(first_frame, last_frame, #frames + (transform and #transform.samples or 0))
+  if not withinSpan then return nil, spanError end
   local samples, diagnostics = { }, { }
   local _list_0 = parseDiagnostics or { }
   for _index_0 = 1, #_list_0 do
@@ -724,42 +838,42 @@ ParsePowerPinData = function(input)
       diagnostics[#diagnostics + 1] = "Additional parameter " .. tostring(name) .. " was detected; it is reported but not applied to ASS."
     end
   end
+  local hadGap = false
+  if recovery then diagnostics[#diagnostics + 1] = recovery end
   for frame = first_frame, last_frame do
     LineOps.checkCancelled()
-    local quad = { }
-    local missing = { }
-    for _index_0 = 1, #order do
-      local name = order[_index_0]
-      local values, gap = InterpolatedValues(sections[name], frame, {
-        0,
-        0
-      })
-      if gap then
-        missing[#missing + 1] = name
-      end
-      quad[#quad + 1] = {
-        x = values[1],
-        y = values[2]
-      }
+    local quad, gaps = {}, {}
+    for _, i in ipairs(known) do
+      local name = order[i]
+      local values, gap = InterpolatedValues(sections[name], frame, {})
+      quad[i] = {x = values[1], y = values[2]}
+      if gap then gaps[#gaps + 1] = name end
     end
-    if #missing > 0 then
-      diagnostics[#diagnostics + 1] = "Frame " .. tostring(frame) .. " was interpolated in " .. tostring(table.concat(missing, ', ')) .. "."
+    if #known < 3 then
+      quad = AE.similarityQuad(quad[known[1]], quad[known[2]], meta.source_par or 1)
+    elseif estimated then
+      local nextPoint, opposite, previous = quad[estimated % 4 + 1], quad[(estimated + 1) % 4 + 1], quad[(estimated + 2) % 4 + 1]
+      quad[estimated] = {x = nextPoint.x + previous.x - opposite.x, y = nextPoint.y + previous.y - opposite.y}
     end
-    samples[#samples + 1] = {
-      source_frame = frame,
-      quad = quad,
-      interpolated = #missing > 0
-    }
+    local ambiguous
+    if transform then
+      local row = clamp(frame, transform.first_frame, transform.last_frame) - transform.first_frame + 1
+      local motion = transform.samples[row]
+      if motion.interpolated or motion.source_frame ~= frame then gaps[#gaps + 1] = "Transform" end
+      ambiguous = motion.ambiguous_rotation
+      AE.project(quad, motion, transform.channels, meta)
+    end
+    if #gaps > 0 then
+      diagnostics[#diagnostics + 1] = "Source frame " .. frame .. " uses interpolated or held values in " .. table.concat(gaps, ", ") .. "."
+    end
+    local interpolated = recovery ~= nil or #gaps > 0
+    hadGap = hadGap or interpolated
+    samples[#samples + 1] = {source_frame = frame, quad = quad, interpolated = interpolated, ambiguous_rotation = ambiguous}
   end
   return {
-    kind = "perspective",
-    format = format,
-    meta = ParseMeta(input),
-    samples = samples,
-    diagnostics = diagnostics,
-    first_frame = first_frame,
-    last_frame = last_frame,
-    has_interpolation = #diagnostics > 0
+    kind = "perspective", format = format, meta = meta, samples = samples,
+    diagnostics = diagnostics, first_frame = first_frame, last_frame = last_frame,
+    has_interpolation = hadGap, recovery = recovery, partial_pin = #known < 3 or nil
   }
 end
 local FindBalanced
@@ -1604,23 +1718,63 @@ ReadInputOrPath = function(input)
   return raw, nil
 end
 local ParseInput
-ParseInput = function(input, expectedKind)
+ParseInput = function(input, expectedKind, choose)
   local text, sourcePath = ReadInputOrPath(input)
   text = tostring(text or ""):gsub("^\239\187\191", "")
   local track, err
+  local shape = text:find("vertices", 1, true) or text:find("Bezier(", 1, true)
   if text:find("shake_shape_data 4.0", 1, true) then
     track, err = ParseShakeShapeData(text)
-  elseif text:find("CC Power Pin #1", 1, true) or text:find("Corner Pin #1", 1, true) then
-    if expectedKind == "transform" then
-      return nil, "Use Perspective/Apply Power Pin for CC Power Pin or Corner Pin data."
-    end
-    track, err = ParsePowerPinData(text)
-  elseif text:find("vertices", 1, true) or text:find("Bezier(", 1, true) then
+  elseif expectedKind == "shape" and shape then
     track, err = ParseShapeData(text)
-  elseif text:find("Adobe After Effects", 1, true) then
-    track, err = ParseTransformData(text)
   else
-    return nil, "Unrecognized format. Supported formats are AE Transform, Power Pin/Corner Pin, AE Mask Shape, legacy Bezier, and Shake SSF 4.0."
+    local groups, hasTransform, exports, hasLayerGeometry = AE.inventory(text)
+    if exports > 1 then
+      return nil, "Multiple AE exports were pasted together. Paste one tracked layer at a time."
+    elseif expectedKind == "transform" and hasTransform then
+      track, err = ParseTransformData(text, false, choose ~= nil)
+    elseif #groups > 0 then
+      if expectedKind == "transform" then
+        return nil, "Use Perspective/Apply Power Pin for CC Power Pin or Corner Pin data."
+      end
+      local group = groups[1]
+      if #groups > 1 then
+        if type(choose) ~= "function" then
+          return nil, "Multiple Corner Pin effects were found. Choose one in Apply Power Pin or export a single effect."
+        end
+        group = choose("Choose the Corner Pin effect to apply.", groups)
+        if not group then return nil end
+      end
+      track, err = ParsePowerPinData(text, choose ~= nil, group, groups, hasTransform or hasLayerGeometry)
+      if track then track.layer_motion = hasTransform or nil end
+      if track and track.partial_pin and hasTransform and type(choose) == "function" then
+        local action = choose(track.recovery .. "\nThis export also contains layer motion.", {"Use tracked corners", "Open Apply Motion"})
+        if not action then return nil end
+        if action == "Open Apply Motion" then track, err = ParseTransformData(text, false, true) end
+      end
+      if not track and (hasTransform or hasLayerGeometry) and type(choose) == "function" then
+        local pins = ParsePowerPinData(text, true, group, groups, false)
+        local motion = ParseTransformData(text, false, true)
+        local alternatives = {}
+        if motion then alternatives[#alternatives + 1] = "Open Apply Motion" end
+        if pins then alternatives[#alternatives + 1] = "Use corners only" end
+        if #alternatives > 0 then
+          local action = choose(err .. "\nChoose which component to use on its own.", alternatives)
+          if not action then return nil end
+          track = action == "Use corners only" and pins or motion
+          err = nil
+        end
+      end
+    elseif shape then
+      track, err = ParseShapeData(text)
+    elseif hasTransform or exports > 0 then
+      track, err = ParseTransformData(text, false, choose ~= nil)
+      if track and expectedKind == "perspective" and type(choose) == "function" then
+        if not choose("This export contains Transform data. Use it for position, scale and rotation.", {"Open Apply Motion"}) then return nil end
+      end
+    else
+      return nil, "Unrecognized tracking format. In Mocha, export After Effects Transform Data, Corner Pin, CC Power Pin, AE Mask Shape or Shake SSF 4.0."
+    end
   end
   if track then
     track.source_path = sourcePath
@@ -2189,7 +2343,7 @@ SelectionWindow = function(subs, sel)
   return window
 end
 local SliceTrack
-SliceTrack = function(track, sample_start, count, strict)
+SliceTrack = function(track, sample_start, count, strict, acceptInterpolation)
   if strict == nil then
     strict = true
   end
@@ -2251,11 +2405,11 @@ SliceTrack = function(track, sample_start, count, strict)
       if sample.source_frame ~= expected + i - 1 then
         return nil, "Temporal gap: expected source frame " .. tostring(expected + i - 1) .. ", received " .. tostring(sample.source_frame) .. "."
       end
-      if sample.interpolated then
+      if sample.interpolated and not acceptInterpolation then
         return nil, "Source frame " .. tostring(sample.source_frame) .. " was interpolated; disable strict synchronization to accept it."
       end
       if sample.ambiguous_rotation then
-        return nil, "Ambiguous Rotation at source frame " .. tostring(sample.source_frame) .. " (#{FormatNumber sample.ambiguous_rotation, 3)} degree jump); normalize the export or deliberately disable strict synchronization."
+        return nil, "Ambiguous Rotation at source frame " .. tostring(sample.source_frame) .. " (" .. FormatNumber(sample.ambiguous_rotation, 3) .. " degree jump). Normalize the export or disable strict synchronization."
       end
     end
   end
@@ -5868,8 +6022,103 @@ Core.OptimizeTransformReport = function(subs, report, enabled)
   end
   return report
 end
+function AE.choose(message, choices)
+  local controls = {{class = "label", label = message, x = 0, y = 0}}
+  local buttons = {}
+  if #choices > 2 then
+    controls[2] = {class = "dropdown", name = "choice", items = choices, value = choices[1], x = 0, y = 1}
+    buttons[1] = "Use selection"
+  else
+    for i, item in ipairs(choices) do buttons[i] = item end
+  end
+  buttons[#buttons + 1] = "Back"
+  local button, values = aegisub.dialog.display(controls, buttons, {close = "Back"})
+  if button == "Use selection" then return values.choice end
+  for _, item in ipairs(choices) do
+    if item == button then return item end
+  end
+end
+function AE.recoverQuads(track)
+  local valid, err = ValidateQuadTrack(track)
+  if valid then return track end
+  local firstValid, winding, damaged = nil, nil, 0
+  local usable = {}
+  for i, sample in ipairs(track.samples) do
+    local ok, _, area = ValidateQuad(sample.quad, 0.5)
+    if ok then
+      local sign = area > 0
+      if winding ~= nil and winding ~= sign then
+        return nil, err .. " Check the corner order or export this layer in separate ranges."
+      end
+      winding, firstValid, usable[i] = sign, firstValid or i, true
+    else
+      damaged = damaged + 1
+    end
+  end
+  if not firstValid then return nil, err .. " Export four distinct corners or use the Transform channels in Apply Motion if available." end
+  local message = err .. "\n" .. damaged .. " frame(s) have invalid corners. Hold the preceding valid quad, or the first valid quad for leading frames?"
+  if not AE.choose(message, {"Hold valid corners"}) then return nil end
+  local out, previous = CopyTable(track), track.samples[firstValid]
+  out.samples, out.has_interpolation = {}, true
+  for i, sample in ipairs(track.samples) do
+    if usable[i] then
+      previous = sample
+      out.samples[i] = sample
+    else
+      local held = CopyTable(sample)
+      held.quad, held.interpolated, held.held = previous.quad, true, true
+      out.samples[i] = held
+    end
+  end
+  return out
+end
+function AE.sliceForApply(track, start, count, strict)
+  local sliced, err = SliceTrack(track, start, count, false)
+  local first = tonumber(start) or 1
+  if not sliced then
+    if not (first >= 1 and first <= #track.samples and first == math.floor(first) and count > 0 and count == math.floor(count)) then
+      return nil, err
+    end
+    local shortage = first + count - 1 - #track.samples
+    if shortage <= 0 then return nil, err end
+    local choices = {"Hold last frame"}
+    if first == 1 then choices[#choices + 1] = "Hold first frame" end
+    local answer = AE.choose("The selection needs " .. shortage .. " more frame(s). Repeat the nearest sample at the missing end, or adjust the selection.", choices)
+    if not answer then return nil end
+    local prefix = answer == "Hold first frame" and shortage or 0
+    local padded = CopyTable(track)
+    padded.samples = {}
+    for i = 1, count do
+      LineOps.checkCancelled()
+      local row = first + i - 1 - prefix
+      local source = track.samples[clamp(row, 1, #track.samples)]
+      local sample = source
+      if row < 1 or row > #track.samples then
+        sample = CopyTable(source)
+        sample.source_frame = track.first_frame + row - 1
+        sample.interpolated, sample.held = true, true
+      end
+      padded.samples[i] = sample
+    end
+    track, first = padded, 1
+    sliced = padded
+  end
+  local recovered, firstEstimate, lastEstimate = 0, nil, nil
+  for _, sample in ipairs(sliced.samples) do
+    if sample.interpolated and not sample.held then
+      recovered = recovered + 1
+      firstEstimate, lastEstimate = firstEstimate or sample.source_frame, sample.source_frame
+    end
+  end
+  if recovered > 0 then
+    local message = recovered .. " frame(s) between source frames " .. firstEstimate .. " and " .. lastEstimate .. " need estimated values. Gaps between samples use linear interpolation. At the ends, the nearest value is held."
+    if track.recovery then message = track.recovery .. "\n" .. message end
+    if not AE.choose(message, {"Use estimates"}) then return nil end
+  end
+  return SliceTrack(track, first, count, strict, true)
+end
 local MotionMain
-MotionMain = function(inverse)
+MotionMain = function(inverse, initialDraft)
   if inverse == nil then
     inverse = false
   end
@@ -5879,7 +6128,7 @@ MotionMain = function(inverse)
       ShowMessage(script_name, err)
       return sel
     end
-    local draft = nil
+    local draft = initialDraft
     while true do
       local _continue_0 = false
       repeat
@@ -5888,16 +6137,16 @@ MotionMain = function(inverse)
           return sel
         end
         draft = options
-        local track, parseError = ParseInput(options.input, "transform")
+        local track, parseError = ParseInput(options.input, "transform", AE.choose)
         if not (track and track.kind == "transform") then
           ShowMessage("Moka Motion / " .. tostring(inverse and 'Revert Motion' or 'Apply Motion'), parseError or "The pasted data is not a Transform export.")
           _continue_0 = true
           break
         end
         local required = SampleCountForSelection(subs, window, options.mapping_mode)
-        local sliced, sliceError = SliceTrack(track, options.sample_start, required, options.strict_sync == true)
+        local sliced, sliceError = AE.sliceForApply(track, options.sample_start, required, options.strict_sync == true)
         if not (sliced) then
-          ShowMessage(script_name, sliceError)
+          if sliceError then ShowMessage(script_name, sliceError) end
           _continue_0 = true
           break
         end
@@ -5974,7 +6223,7 @@ ShapeMain = function(mode)
           return sel
         end
         draft = options
-        local track, parseError = ParseInput(options.input)
+        local track, parseError = ParseInput(options.input, "shape")
         if not (track and track.kind == "shape") then
           ShowMessage(script_name, parseError or "The pasted data is not shape or mask data.")
           _continue_0 = true
@@ -6031,15 +6280,18 @@ PowerPinMain = function(subs, sel, active)
         return sel
       end
       draft = options
-      local track, parseError = ParseInput(options.input)
+      local track, parseError = ParseInput(options.input, "perspective", AE.choose)
+      if track and track.kind == "transform" then
+        return MotionMain(false, options)(subs, sel, active)
+      end
       if not (track and track.kind == "perspective") then
-        ShowMessage(script_name, parseError or "The pasted data is not CC Power Pin or Corner Pin data.")
+        if parseError or track then ShowMessage(script_name, parseError or "Export After Effects Corner Pin or CC Power Pin from Mocha.") end
         _continue_0 = true
         break
       end
-      local sliced, sliceError = SliceTrack(track, options.sample_start, window.frame_count, options.strict_sync == true)
+      local sliced, sliceError = AE.sliceForApply(track, options.sample_start, window.frame_count, options.strict_sync == true)
       if not (sliced) then
-        ShowMessage(script_name, sliceError)
+        if sliceError then ShowMessage(script_name, sliceError) end
         _continue_0 = true
         break
       end
@@ -6050,9 +6302,16 @@ PowerPinMain = function(subs, sel, active)
         break
       end
       options.reference_frame = math.floor(clamp(options.reference_frame, 1, #sliced.samples))
-      local valid, validationError = ValidateQuadTrack(sliced)
-      if not (valid) then
-        ShowMessage(script_name, validationError)
+      local validationError
+      sliced, validationError = AE.recoverQuads(sliced)
+      if not sliced then
+        if validationError and track.layer_motion then
+          if AE.choose(validationError .. "\nUse this export's Transform channels instead?", {"Open Apply Motion"}) then
+            return MotionMain(false, options)(subs, sel, active)
+          end
+        elseif validationError then
+          ShowMessage(script_name, validationError)
+        end
         _continue_0 = true
         break
       end
@@ -6108,7 +6367,7 @@ InspectMain = function(subs, sel, active)
   if not (pressed == "Inspect") then
     return sel
   end
-  local track, err = ParseInput(values.input)
+  local track, err = ParseInput(values.input, nil, "inspect")
   if not (track) then
     ShowMessage("Moka Motion / Inspect", err)
     return sel

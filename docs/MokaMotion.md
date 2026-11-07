@@ -36,17 +36,17 @@ Motion and Shapes offer two mapping modes:
 | Mapping | Interpretation |
 | --- | --- |
 | Selection timeline | A single track follows the entire selected timeline, including gaps |
-| Restart on each line | Each selected line starts from the first sliced sample; enough samples for the longest selected line are required |
+| Restart on each line | Each line starts at the first sliced sample. The longest line sets the sample count |
 
-Power Pin uses the selection timeline. An export that is too short is rejected with the available and required sample counts. A single static mask can be held across the selected range without inventing intermediate motion.
+Power Pin uses the selection timeline. If the track is too short, **Hold last frame** extends its last sample to the end of the selection. When **First data row** is 1, **Hold first frame** can extend the track at the start. A static mask can span the whole selection.
 
-Strict synchronization is optional. It rejects missing/interpolated source frames, ambiguous rotation jumps, incompatible FPS/timecode phase and differing source/composition pixel aspect ratios. Rounded common rates such as 23.976 are recognized as 24000/1001. Per-line mapping and static shapes apply their own timing context. Disabling strict mode permits the reported interpolation or approximation; it does not supply information absent from the export.
+Motion and Power Pin ask before using estimated values in the selection. Accepting an estimate applies to that operation only. Strict synchronization still checks rotation ambiguity, timing and pixel aspect ratio. It also checks missing samples in shape exports. Rounded rates such as 23.976 are recognized as 24000/1001.
 
 An input, slicing, synchronization or application error returns to the Motion/Shapes/Power Pin form with its text and values intact. Cancel closes that draft. Successful subtitle application uses one undo point; failure or cancellation during application restores the original subtitle. The recovered output selection and first active row follow the inserted/replaced results.
 
 ## Apply and revert Transform motion
 
-AE Transform input can contain Position, Scale, Rotation, Anchor Point and Opacity. At least Position, Scale or Rotation must be present. A one-value Scale expands to X/Y. Missing Position uses the exported source center as the pivot. Missing samples interpolate between known values and are reported. Source frame numbers must be finite, representable integers; malformed numeric cells and duplicate frames are rejected.
+**Apply Motion** and **Revert Motion** read Position, Scale and Rotation even when the export also contains Corner Pin data. A single Scale value applies to both axes. If Position is absent, the source center serves as the pivot. For missing or unreadable samples with a known frame number, Moka offers linear interpolation between samples or holds the nearest value at either end. Identical duplicate rows are accepted. Conflicting values in the same channel and frame must be corrected in the export.
 
 Rotation wrapping distinguishes conventional angle-boundary crossings from explicitly cumulative revolutions. Ambiguous jumps are preserved and diagnosed instead of automatically choosing a shorter turn. Anchor Point is retained for diagnostics and is not applied twice. Opacity is read but does not change ASS geometry.
 
@@ -99,7 +99,9 @@ Clip output follows the selected text's temporal state. Drawing output creates i
 
 ## Apply Power Pin
 
-Moka recognizes the four CC Power Pin or Corner Pin channels and orders their corners for the perspective solver. All required channels must be present. It interpolates missing samples only when strict synchronization allows it, checks each quad and rejects invalid, crossed, concave or numerically degenerate geometry. Small valid subpixel quads are no longer rejected solely for having an area below one ASS square unit.
+For Mocha’s **Corner Pin with Motion Blur** export, **Apply Power Pin** combines the corners with the layer’s position, scale and rotation. It uses the exported anchor or the source center. Corners can be named or numbered. If the export contains several pin effects, choose one.
+
+Four tracked corners describe the full perspective. With three, Moka can estimate the fourth as a parallelogram. Two corners give translation, rotation and uniform scale. One gives translation. For frames with crossed or degenerate corners, **Hold valid corners** repeats the previous valid quad, or the first valid quad if the gap is at the start.
 
 **Perspective** controls the perspective composition. **Position**, **Border / shadow** and **Clips** control the linked components. **Origin mode** offers Keep `\org`, Force stable center and Try `\fax0`. The solver uses the document's PlayRes/LayoutRes relationship and loaded video dimensions. Each source uses a reference frame within its own time span. Unsupported reference states are reported before the final insertion.
 
@@ -151,4 +153,4 @@ Coordinate remapping uses `AssDrawing.mapCoordinates` for complete ASS paths, in
 
 ## Shared engine
 
-Moka Motion uses `kite.MotionEngine` to import and apply tracking data. [Auto Motion](AutoMotion.md), inside Hephaestus, calculates tracking from the video and applies it through the same engine. Moka retains its own macro and controls.
+Moka Motion uses `kite.MotionEngine` 3.9.0 to import tracking data. [Auto Motion](AutoMotion.md) uses the same module to apply tracks calculated from video.

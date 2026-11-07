@@ -70,7 +70,7 @@ The distribution includes **seven common modules**, plus Automatons and MotionEn
 | `kite.EventOps` | 1.4.0 | Event operations, cleanup and Final Data. |
 | `kite.Timing` | 1.5.0 | Timing, karaoke, waveform reading and localization. |
 | `kite.Automatons` | 1.2.1 | Fansub Automatons installation, diagnosis and configuration. |
-| `kite.MotionEngine` | 3.8.2 | Shared Moka Motion and Auto Motion engine. |
+| `kite.MotionEngine` | 3.9.0 | Shared Moka Motion and Auto Motion engine. |
 
 ## Migration
 

@@ -16,7 +16,7 @@ I develop these tools for typesetting, text editing, timing and media export in 
 | [Hephaestus Fansubber](docs/Hephaestus.md) | 1.2.1 | The five Autos and shared backend installation. |
 | [Hotkeys](docs/Hotkeys.md) | 2.0.4 | Shortcuts, favorites and shared preferences. |
 | [Kiri-Shot](docs/KiriShot.md) | 1.0.0 | PNG captures, sequences, masks and social video. |
-| [Moka Motion](docs/MokaMotion.md) | 3.8.2 | Import and apply tracking data through MotionEngine. |
+| [Moka Motion](docs/MokaMotion.md) | 3.8.2 | Apply Mocha tracking to subtitle position, scale, rotation and perspective. |
 | [Obake](docs/Obake.md) | 0.4.8 | Transform chains and transitions. |
 | [Rhea Signs](docs/RheaSigns.md) | 2.4.0 | Sign editing, tags, shapes, fonts, fades and After Effects Keyframes. |
 | [Selesub](docs/Selesub.md) | 2.2.0 | Filter, select and assign grouped field values with Fields. |

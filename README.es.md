@@ -16,7 +16,7 @@ Desarrollo estas herramientas para trabajar con carteles, texto, timing y export
 | [Hephaestus Fansubber](docs/es/Hephaestus.md) | 1.2.1 | Los cinco Autos y la instalación del backend compartido. |
 | [Hotkeys](docs/es/Hotkeys.md) | 2.0.4 | Atajos, favoritos y preferencias compartidas. |
 | [Kiri-Shot](docs/es/KiriShot.md) | 1.0.0 | Capturas PNG, secuencias, máscaras y vídeo social. |
-| [Moka Motion](docs/es/MokaMotion.md) | 3.8.2 | Importar y aplicar seguimiento mediante MotionEngine. |
+| [Moka Motion](docs/es/MokaMotion.md) | 3.8.2 | Aplicar el seguimiento de Mocha a la posición, escala, rotación y perspectiva de los subtítulos. |
 | [Obake](docs/es/Obake.md) | 0.4.8 | Cadenas de transformaciones y transiciones. |
 | [Rhea Signs](docs/es/RheaSigns.md) | 2.4.0 | Edición de carteles, etiquetas, dibujos, fuentes, fundidos y After Effects Keyframes. |
 | [Selesub](docs/es/Selesub.md) | 2.2.0 | Filtrar, seleccionar y asignar campos por grupos con Fields. |

@@ -72,7 +72,7 @@ Se distribuyen **siete módulos comunes**, más Automatons y MotionEngine.
 | `kite.EventOps` | 1.4.0 | Operaciones sobre eventos, limpieza y Final Data. |
 | `kite.Timing` | 1.5.0 | Timing, karaoke, lectura de waveform y localización compartida. |
 | `kite.Automatons` | 1.2.1 | Instalación, diagnóstico y configuración de Fansub Automatons. |
-| `kite.MotionEngine` | 3.8.2 | Motor común de Moka Motion y Auto Motion. |
+| `kite.MotionEngine` | 3.9.0 | Motor común de Moka Motion y Auto Motion. |
 
 ## Migración
 

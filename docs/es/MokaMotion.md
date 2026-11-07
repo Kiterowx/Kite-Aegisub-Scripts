@@ -34,17 +34,17 @@ Pega la exportación o escribe la ruta de un archivo de texto. El valor inicial 
 | Correspondencia | Uso |
 | --- | --- |
 | Selection timeline | Un seguimiento para toda la selección, incluidos los huecos. |
-| Restart on each line | Cada línea empieza en la primera muestra recortada. Se necesitan datos para la línea más larga. |
+| Restart on each line | Cada línea empieza en la primera muestra recortada. La línea más larga determina el número de muestras. |
 
-Motion y Shapes ofrecen ambos modos. Power Pin utiliza Selection timeline. Si faltan datos, se indican cantidades disponibles y necesarias. Una máscara estática puede mantenerse durante todo el intervalo.
+Motion y Shapes ofrecen ambos modos. Power Pin usa **Selection timeline**. Si faltan muestras para cubrir la selección, **Hold last frame** prolonga la última hasta el final. Si **First data row** es 1, **Hold first frame** permite prolongar la primera al inicio. Una máscara estática puede cubrir toda la selección.
 
-La sincronización estricta rechaza fotogramas ausentes o interpolados, saltos ambiguos de giro, fases incompatibles de FPS/códigos de tiempo y diferencias de proporción de píxel entre fuente y composición. Reconoce tasas redondeadas habituales, como 23.976 para 24000/1001. El reinicio por línea y las formas estáticas usan su contexto temporal correspondiente. Desactivar este control permite las aproximaciones notificadas.
+Motion y Power Pin piden confirmación antes de usar valores estimados dentro de la selección. La aceptación se aplica a esa operación. La sincronización estricta sigue comprobando los giros ambiguos, los tiempos y la proporción de píxel. En las máscaras también comprueba las muestras ausentes. Reconoce tasas redondeadas como 23.976 para 24000/1001.
 
 Los errores devuelven al formulario conservando texto y opciones. Cancel lo cierra. La aplicación tiene una acción de Deshacer; errores o cancelaciones restauran el subtítulo. La selección final sigue las filas generadas o reemplazadas.
 
 ## Aplicar e invertir Transform
 
-AE Transform admite Position, Scale, Rotation, Anchor Point y Opacity. Debe existir al menos Position, Scale o Rotation. Una escala única se usa en X/Y. Sin Position, el centro de origen exportado sirve de pivote. Las muestras ausentes se interpolan y se notifican. Los números de fotograma deben ser enteros finitos representables; se rechazan celdas numéricas inválidas y fotogramas duplicados.
+**Apply Motion** y **Revert Motion** leen Position, Scale y Rotation incluso si la exportación contiene datos de Corner Pin. Un único valor de Scale se aplica a ambos ejes. Si falta Position, el centro de la fuente sirve de pivote. Cuando falta una muestra o su valor es ilegible y se conoce el número de fotograma, Moka ofrece interpolar entre las muestras vecinas o mantener el valor más cercano en los extremos. Se aceptan filas duplicadas idénticas. Si un mismo canal tiene dos valores distintos para un fotograma, hay que corregir la exportación.
 
 El giro distingue cruces habituales de ±180/360 grados de vueltas acumuladas explícitas. Los saltos ambiguos se conservan y se notifican. Anchor Point se guarda para diagnóstico y no se aplica dos veces. Opacity se lee, pero no cambia la geometría ASS.
 
@@ -97,7 +97,9 @@ Los clips siguen el estado temporal del texto. Los dibujos reciben `\an7`, posic
 
 ## Power Pin
 
-Se reconocen las cuatro esquinas CC Power Pin o Corner Pin y se ordenan para resolver la perspectiva. Todos los canales deben existir. Solo se interpolan muestras ausentes si lo permite la sincronización estricta. Se rechazan cuadriláteros cruzados, cóncavos, inválidos o numéricamente degenerados; se admiten cuadriláteros subpíxel válidos.
+Para la exportación **Corner Pin with Motion Blur** de Mocha, **Apply Power Pin** combina las esquinas con la posición, la escala y la rotación de la capa. Usa el punto de anclaje exportado o el centro de la fuente. Las esquinas pueden identificarse por nombre o número. Si hay varios efectos Corner Pin o CC Power Pin, elige uno.
+
+Las cuatro esquinas permiten reproducir la perspectiva completa. Con tres, Moka puede estimar la cuarta formando un paralelogramo. Con dos se pueden seguir la traslación, el giro y la escala uniforme. Con una, la traslación. Si un fotograma tiene un cuadrilátero cruzado o degenerado, **Hold valid corners** repite el último válido, o el primero válido si el fallo está al inicio.
 
 **Perspective** controla la perspectiva; **Position**, **Border / shadow** y **Clips**, sus componentes asociados. **Origin mode** ofrece Keep `\org`, Force stable center y Try `\fax0`. El cálculo considera PlayRes/LayoutRes y el tamaño del vídeo. Cada fuente usa una referencia dentro de su propio intervalo. Los estados no admitidos se notifican antes de insertar.
 
@@ -145,4 +147,4 @@ En Windows los procesos externos no abren consola, admiten rutas Unicode, espaci
 
 ## Motor compartido
 
-Moka Motion usa `kite.MotionEngine` para importar y aplicar seguimiento. [Auto Motion](AutoMotion.md), dentro de Hephaestus, calcula el seguimiento desde el vídeo y lo aplica mediante el mismo motor. Moka conserva su macro y sus controles.
+Moka Motion usa `kite.MotionEngine` 3.9.0 para importar datos de seguimiento. [Auto Motion](AutoMotion.md) usa el mismo módulo para aplicar el seguimiento calculado a partir del vídeo.
